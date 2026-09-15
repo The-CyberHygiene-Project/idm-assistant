@@ -4,6 +4,7 @@
 - **Decided:** 2026-08-14
 - **Deciders:** Donald E. Shannon
 - **Applies to:** dc2 (does not retroactively change dc1)
+- **Companion document:** [`0001-mfa-lessons-learned.md`](0001-mfa-lessons-learned.md) — the MFA-specific incident narrative behind this decision
 
 > **Provenance.** Reconstructed 2026-09-14 from `project_kanidm_pivot.md` in the
 > dc2 planning set and the dc1 lessons-learned retrospective. Updated
@@ -34,9 +35,8 @@ Each incident consumed disproportionate time relative to the size of the estate
 being managed. The full retrospective and the concrete incidents behind this
 finding are in `dc1_Lessons_Learned_and_Architecture_Retrospective.md` in
 `cyberhygiene-documentation`. A companion, MFA-specific narrative
-(`MFA-Lessons-Learned-and-FreeIPA-Overkill-for-VSB.md`) documents the same
-pattern in detail for control 3.5.3 specifically — currently held in the
-project's private working archive pending a decision on public release.
+([`0001-mfa-lessons-learned.md`](0001-mfa-lessons-learned.md)) documents
+the same pattern in detail for control 3.5.3 specifically.
 
 The generalizable observation — and the one that matters to this project's
 audience of very small DIB businesses — is that enterprise-grade bundled

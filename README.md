@@ -16,6 +16,7 @@ Early planning stage. A Kanidm spike (throwaway VM, not committed hardware) has 
 
 - [`CLAUDE.md`](CLAUDE.md) — working rules and context for AI-assisted sessions in this repo (redaction rules, current build status, what's settled vs. open)
 - [`docs/adr/0001-replace-freeipa-with-kanidm.md`](docs/adr/0001-replace-freeipa-with-kanidm.md) — the architecture decision behind this repo, with evidence and open questions
+- [`docs/adr/0001-mfa-lessons-learned.md`](docs/adr/0001-mfa-lessons-learned.md) — companion narrative: the dc1 YubiKey/PKINIT MFA incident history behind that decision
 - [`docs/runbooks/kanidm-install.md`](docs/runbooks/kanidm-install.md) — the 9-step production install plan (currently blocked on a domain decision — see the runbook)
 - [cyberhygiene-documentation](https://github.com/The-CyberHygiene-Project/cyberhygiene-documentation) — dc1's full documentation, including the lessons-learned doc above
 - dc1's capture/inventory tooling (in progress) will classify what carries forward from dc1 into this repo
