@@ -1,0 +1,6 @@
+.DS_Store
+.superpowers/
+__pycache__/
+cases/
+probe/results/raw/
+*.iso
