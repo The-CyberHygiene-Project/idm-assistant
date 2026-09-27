@@ -17,6 +17,37 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-26-idm-diagnostic-lab-design.md` (rev 2, §4.1–4.4, milestone M2)
 
+## Why run this test: what we will know afterwards that we don't know now
+
+Kanidm is the proposed replacement for FreeIPA on dc2 (ADR 0001). The ADR leaves two questions open, and dc2 can't be finalised until they're answered. Kanidm **publishes no packages for Rocky or RHEL**, so "install it" really means "build it and package it yourself". Nobody on this project has yet done that on a machine hardened like dc2.
+
+| Question | What we know today | What we'll know after Plan 2 | Why it matters |
+|---|---|---|---|
+| **1. Can Kanidm be built and packaged for Rocky 9 at all?** (ADR Q1) | Only that the source compiles on the Mac and that upstream ships Debian/openSUSE packaging. | Yes or no, **on a FIPS + CUI-hardened Rocky 9.8 machine with no internet**, plus a written, repeatable recipe and a list of every defect hit and how it was fixed. | If it can't be done reliably, Kanidm isn't viable for dc2 and the ADR must be reopened. |
+| **2. Does the hardening get in the way?** | Unknown. FIPS mode and the CUI profile can break compilers, Go, cmake or rpmbuild. | Exactly which build tools (if any) fail under FIPS/CUI, and the cure for each. | dc2 is FIPS + CUI; a recipe that works only on a soft machine is worthless there. |
+| **3. Is Kanidm's cryptography FIPS-validated?** (ADR Q2) | Strong static evidence that it is **not**: Kanidm doesn't use Rocky's FIPS-validated OpenSSL; it carries its own crypto (non-FIPS AWS-LC, ring, RustCrypto). | A documented inventory of every crypto library in the build, plus a tested answer on whether a **FIPS-module variant** (AWS-LC FIPS) can be built, and what stays outside it even then. For example, Argon2 password hashing isn't a FIPS-approved algorithm at all. | This decides what the System Security Plan can truthfully claim for NIST SP 800-171 **3.13.11 (FIPS-validated cryptography for CUI)**: compliant, compliant with a variant build, or an accepted risk / POA&M item. |
+| **4. What exactly gets installed, and where?** | Upstream docs, which disagree with each other on some paths. | A concrete RPM file list (binaries, PAM/NSS modules, systemd units, config paths) that matches the compiled-in paths. | It becomes the **independent reference** against which Jeff's documentation-only dc2 build is checked (the acceptance test). |
+| **5. What does a build cost?** | Unknown. | Build time and machine size on real hardware. | Kanidm releases often, and every upgrade means a rebuild, so this is the recurring maintenance cost for dc2. |
+
+**What Plan 2 will *not* tell us** (that is Plan 3):
+- whether the server actually runs correctly under FIPS and SELinux;
+- whether logins, MFA and SSH keys work end to end on client machines;
+- how the TPM and disk-encryption options behave (see below).
+
+Plan 2 answers "can we produce trustworthy packages?". Plan 3 answers "do they work?".
+
+## Decisions recorded for this plan (ISSO, 2026-09-27)
+
+- **SELinux: enforcing on every VM**, and unixd is built with Kanidm's `selinux` feature.
+- **Build VM size: 12 vCPU / 16 GB, approved**, then shrunk to the spec's 6 / 8 afterwards.
+- **TPM: not in Plan 2** (the decision was delegated). Reasons:
+  - Kanidm's `tpm` feature only protects the credentials cached **on client machines**, not the server.
+  - Building it needs `tpm2-tss-devel`, which isn't on the DVD.
+  - Recording it as a Plan 3 experiment costs nothing now.
+
+  VMs will **never share aero's physical TPM**. The DVD ships **`swtpm`**, a software TPM that gives each VM its own private emulated TPM, so the experiment stays inside the lab.
+- **Disk encryption: none on build1** (a disposable build machine that must boot unattended). **Plan 3 experiment:** LUKS on a client or server VM, unlocked at boot by its virtual TPM using **`clevis-luks` + `clevis-pin-tpm2`** (both on the DVD). That's how dc2 could have encryption *and* unattended reboots, and it answers the "LUKS key held by the TPM" question safely before anyone tries it on real hardware.
+
 ## Global Constraints
 
 - **Offline:** build1 has no gateway and no DNS beyond the lab. All inputs come from the Mac (already verified: `lab/inputs/MANIFEST.txt`). cargo runs with `net.offline = true`.
@@ -30,7 +61,7 @@
 
   Each is logged in `lab/vm-deviations.md`.
 - **Build profile:** `KANIDM_BUILD_PROFILE=release_linux`, so paths are `/etc/kanidm/server.toml`, `/etc/kanidm/config`, `/etc/kanidm/unixd`, the UI at `/usr/share/kanidm/ui/hpkg`, and the admin socket at `/var/run/kanidmd/sock`. Packaging paths **must** match this profile.
-- **Features:** unixd is built with `unix,selinux`. SELinux labelling of the home directories it creates is needed on enforcing Rocky. `tpm` is **off**: the VMs have no TPM, and it would need CRB's `tpm2-tss-devel`. Record this.
+- **Features:** unixd is built with `unix,selinux`. SELinux labelling of the home directories it creates is needed on enforcing Rocky. `tpm` is **off** (see Decisions: virtual TPM + clevis is a Plan 3 experiment).
 - **Systemd units:** start from upstream's **`platform/opensuse/*.service`**, which have `StateDirectory` and `DynamicUser`.
 - **Independent cross-check:** don't read the dc2 repo's Kanidm runbooks. Findings go to `lab/adr0001-q1-packaging.md` and `lab/adr0001-q2-fips.md` in **this** (public) repo.
 - VM sizing for this plan: build1 gets **12 vCPU / 16 GB / 80 GB thin** while it's the only VM. Record this against the spec's 6/8 figure, and shrink it after Plan 2.
@@ -176,7 +207,7 @@ Expected: no output and exit 0. If a directive is rejected (e.g. an option this 
 | VM | Deviation | Why |
 |---|---|---|
 | build1 | install from local DVD (`cdrom`), not `url` to the internet | lab is offline |
-| build1 | **no LUKS** on the logical volumes | unattended boot of a disposable build VM |
+| build1 | **no LUKS** on the logical volumes | unattended boot of a disposable build VM (LUKS + virtual-TPM unlock via clevis is a Plan 3 experiment) |
 | build1 | static 192.168.100.20/24, no default route, no DNS | lab network |
 | build1 | `rootpw --lock`; `itadmin` SSH-key login + passwordless sudo | Mac drives the build over SSH |
 | build1 | chrony → 192.168.100.1 (aero) | lab time source |
@@ -736,7 +767,7 @@ Sections:
 4. **Defects found:** each with tool, error, cause and fix. Compare against the ADR's spike list: profile flag, `StateDirectory`, nsswitch ordering, POSIX password, and the unconfirmed fifth.
 5. **Choices made:** `release_linux`, `+selinux`, `-tpm`, opensuse units, binary-repack spec.
 6. **Timings.**
-7. **What Plan 3 must verify at runtime.**
+7. **What Plan 3 must verify at runtime**, including the virtual-TPM experiments (swtpm; Kanidm `tpm` feature; LUKS + clevis TPM2 unlock).
 
 - [ ] **Step 2: Pre-publication scan, then push**
 
