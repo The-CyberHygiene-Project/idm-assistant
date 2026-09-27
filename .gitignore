@@ -4,3 +4,5 @@ __pycache__/
 cases/
 probe/results/raw/
 *.iso
+.venv/
+.pytest_cache/
