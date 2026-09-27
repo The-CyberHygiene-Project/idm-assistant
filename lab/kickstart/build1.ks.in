@@ -6,7 +6,7 @@ poweroff
 lang en_US.UTF-8
 keyboard --vckeymap=us --xlayouts='us'
 timezone America/Denver --utc
-network --bootproto=static --device=link --ip=192.168.100.20 --netmask=255.255.255.0 --nodefroute --ipv6=ignore --activate --hostname=build1.lab.test
+network --bootproto=static --device=link --ip=192.168.100.20 --netmask=255.255.255.0 --nodefroute --noipv6 --activate --hostname=build1.lab.test
 firewall --enabled --service=ssh
 selinux --enforcing
 rootpw --lock
@@ -74,4 +74,7 @@ chmod 0440 /etc/sudoers.d/90-itadmin-lab
 sed -i -E 's/^(pool|server) .*/server 192.168.100.1 iburst/' /etc/chrony.conf
 # Mirror dc2-cui-tailoring.xml: dc2 UNSELECTS sysctl_user_max_user_namespaces.
 grep -rlE 'user\.max_user_namespaces' /etc/sysctl.d /etc/sysctl.conf 2>/dev/null | xargs -r sed -i '/user\.max_user_namespaces/d'
+rm -f /etc/sysctl.d/user_max_user_namespaces.conf
+# The initramfs was built earlier with the CUI sysctl files inside it; rebuild it, or the value still applies at boot.
+dracut -f --regenerate-all
 %end
