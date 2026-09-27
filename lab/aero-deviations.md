@@ -11,3 +11,5 @@ aero is a disposable, offline lab asset (no CUI, lab cable only). Fidelity setti
 
 **Observed on the standard build (not changed):** aero had a `cuda-rhel10-x86_64` repo enabled on a Rocky **9** host (EL10 CUDA repo on EL9), which looks like a misconfiguration worth checking on the other workstations. A Wazuh agent repo is present (the agent will be offline in the lab).
 | 2026-09-27 | enp49s0 enslaved to bridge br-lab (192.168.100.1/24); "Profile 1" autoconnect off | lab VMs share the cable subnet | `nmcli con delete br-lab-port br-lab; nmcli con mod "Profile 1" connection.autoconnect yes; nmcli con up "Profile 1"` |
+| 2026-09-27 | chrony: CUI `port 0` commented out; `allow 192.168.100.0/24` + `local stratum 10` added; ntp opened in firewalld (zone public) | aero is the lab's only time source | restore `port 0`, remove the two added lines, `firewall-cmd --permanent --remove-service=ntp` |
+| 2026-09-27 | clock set once from the Mac (`date -s`), was 13.4 s slow; RTC left in local-time mode as found | TOTP/TLS tests compare against the Mac | none needed |
