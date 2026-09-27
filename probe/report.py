@@ -1,4 +1,4 @@
-CATS = ["valid", "invalid_call", "prose_json", "prose", "error"]
+CATS = ["valid", "invalid_call", "truncated", "prose_json", "prose", "error"]
 
 
 def to_markdown(points, meta):

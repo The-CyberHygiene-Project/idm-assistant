@@ -30,6 +30,8 @@ _SCHEMAS = {t["function"]["name"]: t["function"]["parameters"] for t in TOOLS}
 def validate_call(name: str, arguments: str) -> tuple[bool, str]:
     if name not in _SCHEMAS:
         return False, f"unknown tool {name!r}"
+    if arguments is not None and not isinstance(arguments, str):
+        return False, f"arguments must be a JSON string, got {type(arguments).__name__}"
     try:
         args = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as e:

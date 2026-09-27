@@ -1,5 +1,6 @@
 """One chat-completions call to LM Studio (localhost only)."""
 import time
+import uuid
 
 import requests
 
@@ -14,9 +15,12 @@ TASK = ("Users report they cannot log in to client2 since this morning. Start di
 
 
 def build_request(model, pad_tokens, temperature):
-    return {"model": model, "temperature": temperature, "max_tokens": 1024, "tools": TOOLS,
+    # A unique first line per request stops LM Studio's prompt cache from warming repeats,
+    # so every call pays its own prefill (review finding: cached repeats hid cold timings).
+    nonce = f"[probe run {uuid.uuid4().hex[:12]}]\n"
+    return {"model": model, "temperature": temperature, "max_tokens": 4096, "tools": TOOLS,
             "tool_choice": "auto",
-            "messages": [{"role": "system", "content": SYSTEM + padding(pad_tokens)},
+            "messages": [{"role": "system", "content": nonce + SYSTEM + padding(pad_tokens)},
                          {"role": "user", "content": TASK}]}
 
 

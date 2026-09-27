@@ -33,3 +33,8 @@ def test_wrong_type_is_rejected():
 def test_arguments_that_are_not_json_are_rejected():
     ok, reason = validate_call("check_time_sync", "not json")
     assert not ok and "json" in reason.lower()
+
+
+def test_non_string_arguments_do_not_crash():
+    ok, reason = validate_call("check_time_sync", {"not": "a string"})
+    assert ok is False and "arguments" in reason

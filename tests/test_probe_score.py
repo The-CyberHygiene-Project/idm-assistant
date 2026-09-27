@@ -39,3 +39,15 @@ def test_transport_error_is_error():
 
 def test_empty_choices_is_error():
     assert score({"choices": []})["category"] == "error"
+
+
+def test_length_cutoff_without_a_call_is_truncated():
+    resp = {"choices": [{"message": {"content": "Let me think about sssd..."}, "finish_reason": "length"}]}
+    r = score(resp)
+    assert r["category"] == "truncated"
+
+
+def test_finish_reason_is_reported():
+    resp = {"choices": [{"message": {"tool_calls": [{"type": "function", "function": {
+        "name": "check_time_sync", "arguments": "{}"}}]}, "finish_reason": "tool_calls"}]}
+    assert score(resp)["finish_reason"] == "tool_calls"
