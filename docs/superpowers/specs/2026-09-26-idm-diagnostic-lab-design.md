@@ -1,290 +1,301 @@
-# Identity Diagnostic Assistant — Lab, Probe, and Collector (Parts A–C)
+# Identity Diagnostic Assistant: dc2-Stack Lab, Probe, and Collector (Parts A–C)
 
-**Date:** 2026-09-26 · **Status:** awaiting user review · **Owner:** D. Shannon (System Owner / ISSO)
-**Related:** `DIWAI-MFR-2026-08-20` (Local Assistant Viability), RAG library (`~/rag-library`)
+**Date:** 2026-09-26 (rev 2: retargeted from FreeIPA to the dc2 stack) · **Status:** awaiting user review
+**Owner:** D. Shannon (System Owner / ISSO)
+**Related:** ADR 0001 *Replace FreeIPA with four independent identity components* (Accepted
+2026-08-14; dc2 only); dc2 `TURNOVER.md`; `DIWAI-MFR-2026-08-20` (Local Assistant Viability)
 
 ## 1. Purpose
 
-Build and **prove**, in an isolated lab, the diagnostic loop for the highest-pain area of
-system administration: **Linux identity (FreeIPA / 389-ds)**, starting with
-**logins & MFA** and **certificates**.
+Build and **prove**, in an isolated FIPS lab, the diagnostic loop for the **dc2 identity
+stack** defined by ADR 0001:
+
+| Function | Component |
+|---|---|
+| Authentication / identity (PAM/NSS via `kanidm_unixd`) | **Kanidm** |
+| TLS / ACME (internal PKI) | **step-ca** |
+| SSH certificate authority | **separate SSH CA** (OpenSSH `ssh-keygen -s`, its own key and unit) |
+| DNS | **standalone BIND** |
 
 > **Symptom → "here's what's going on" → "let's confirm it" → targeted diagnostics →
 > approved repair → verified → recorded.**
 
-This is the first slice of a larger system (five parts, A–E). This spec covers
-**A (model probe), B (lab), and C (collector + playbooks)**, run **end to end from the
-command line**. The browser workbench (D) and the separate sysadmin knowledge library
-(E) follow once this works.
+FreeIPA and 389-ds are **out of scope**. They were set aside for complexity, and dc1 gets
+no playbooks (user decision).
+
+The lab also answers two of ADR 0001's **blocking** open questions, as an
+**independent cross-check**:
+- **Q1:** can `kanidm_unixd` (and Kanidm generally) be built and packaged for Rocky 9,
+  **offline**?
+- **Q2:** does Kanidm operate correctly on a **FIPS-enabled** Rocky host, and which of
+  its cryptographic operations fall outside the OS FIPS provider?
+
+It also gives dc2 the disposable "lab capacity" and "client estate" that TURNOVER lists
+as gaps, and it produces **operational data for ADR Q4**: every case is timed and logged.
 
 ### Success criteria
-1. Each of the six lab faults (§6) is **injected → detected by the collector → explained
-   correctly → repaired by an approved ticket → verified**, from a clean snapshot, in a
-   repeatable run.
-2. The model probe produces a **measured** answer to MFR open actions #2 and #4: which
-   local model, if any, reliably interprets findings and calls tools at realistic prompt
-   sizes. That answer becomes the **acceptance criterion for buying the in-boundary
-   compliance server**.
-3. Nothing in development touches dc1, the CyberInaBox boundary, or CUI.
+1. Kanidm is built, packaged (RPMs) and installed **offline on FIPS Rocky 9.8**, with
+   every step, defect and workaround recorded (Q1 report).
+2. A written **FIPS behaviour report** (Q2): what works, what fails, and which operations
+   use crypto outside the OS FIPS module. The compliance judgment is the ISSO's.
+3. Each lab scenario (§6) is **injected → detected → explained → repaired → verified**
+   from a clean snapshot, three times in a row.
+4. The model probe gives a measured answer to MFR open actions #2/#4, which becomes the
+   compliance-server acceptance criterion.
+5. Nothing touches dc1, dc2, the CyberInaBox boundary, CUI, or the internet.
 
-### Constraints (from the user)
-- **No connection to dc1** during development. The Mac cannot reach the Linux
-  environment. The end state is a **new compliance server inside dc1's boundary**, so
-  the code must be portable to it.
-- **No web tools** in the local AI environment; no internet egress from lab machines.
-- **aero** (the lab host) stays at the user's **standard workstation build**:
-  FIPS, SELinux enforcing, RHEL **NIST 800-171 (CUI)** hardening, `sudo` requires a
-  password. Deviations are reported, never "fixed" unasked; **no NOPASSWD** on aero.
-- **Accessibility:** minimal typing on aero. Every privileged step is a staged script
-  started with `sudo sh <name>`; files move from the Mac with `curl -o <name>
-  192.168.100.2/<name>` (no port number, no pipe characters).
-- Model origin: US/EU models only (no PRC-origin models).
+### Constraints
+- **aero has no network except the lab cable.** Wi-Fi is off (verified 2026-09-26). All
+  inputs are fetched on the Mac, checksum or GPG verified there, then carried over the
+  cable.
+- **aero is a disposable lab asset** (user, 2026-09-26): it may be wiped or reconfigured
+  at will. **Fidelity settings stay** because they make the lab behave like dc2: FIPS,
+  SELinux enforcing, the 800-171 (CUI) profile. **Lab-convenience changes are allowed and
+  recorded in `lab/aero-deviations.md`**, for example passwordless `sudo` for `itadmin`
+  (so the Mac can drive setup without typing on aero) and RTC in UTC. aero holds no CUI
+  and has no network except the lab cable.
+- **Independent cross-check of Jeff's acceptance test.** The lab's Kanidm build notes live
+  **only in this repo** (`lab/adr0001-*.md`), never in the dc2 repository documentation,
+  until Jeff has completed his documentation-only build-and-package.
+- **Lab domain is throwaway:** `kanidm.lab.test` (the reserved `.test` TLD). Kanidm's
+  domain/origin is a one-way door in production; in the lab it is reset freely. This
+  says nothing about DC20's future domain.
+- **No web tools** in the local AI environment. Models are US/EU origin only.
+- **Accessibility:** minimal typing on aero. With passwordless sudo approved, the Mac runs
+  host-prep steps over SSH. Otherwise they're staged scripts run as `sudo sh <name>`, with
+  files fetched via `curl -o <name> 192.168.100.2/<name>` (no port, no pipes).
 
 ## 2. Architecture
 
 ```
- Mac Studio (dev stand-in for the future compliance server)
-   ├─ LM Studio (local model, :1234, localhost only)
-   ├─ idm-assistant/            this repo
-   │    probe/        A  model probe
-   │    lab/          B  kickstarts, host-prep scripts, fault injectors
-   │    collector/    C  read-only collector (runs on IPA hosts)
-   │    engine/       C  findings rules, interpreter, repair runner
-   │    runbooks/     C  playbooks (symptom → checks → repairs)
-   └─ en0 192.168.100.2 ──── direct cable ──── aero enp49s0 → br-lab 192.168.100.1
-                                                  KVM/libvirt
-                                                  ├─ ipa1    192.168.100.10  (IPA + CA + DNS)
-                                                  ├─ ipa2    192.168.100.11  (replica + CA + DNS)
-                                                  └─ client1 192.168.100.12  (SSSD client)
+ Mac Studio (dev stand-in for the future in-boundary compliance server)
+   ├─ LM Studio (localhost only) · idm-assistant repo (probe/ lab/ collector/ engine/ runbooks/)
+   ├─ offline input store: Rocky 9.8 DVD ISO, Kanidm source + vendored crates,
+   │  step/step-ca RPMs, extra RPMs if the DVD lacks them. All verified, with a manifest.
+   └─ en0 192.168.100.2 ── cable ── aero br-lab 192.168.100.1  (KVM, chrony time source)
+                                      ├─ build1  .20  compile + package Kanidm (never a server)
+                                      ├─ srv1    .10  Kanidm · step-ca · SSH CA · BIND (4 separate units)
+                                      ├─ client1 .12  CHP-built client (chp-build.sh), then kanidm_unixd
+                                      └─ client2 .13  minimal reference client with kanidm_unixd
 ```
 
-- **Design principle (from MFR F-6/F-9):** *code runs the loop, the model interprets.*
-  Checks, parsing and repairs are deterministic code. The model receives a **short
-  findings summary** (target ≤ 2k tokens per call, fresh context per call) and returns
-  an explanation plus the **id** of a proposed repair from an allow-list. It never
-  writes shell commands and never runs anything.
-- **Portability:** the Mac plays the role of the future compliance server. It reaches
-  lab hosts over SSH exactly as that server would reach dc1 from inside the boundary.
+- **Principle (MFR F-6/F-9): code runs the loop, the model interprets.** Checks,
+  parsing, and repairs are deterministic. The model gets ≤ 2k tokens of **findings**
+  (never raw logs), in a fresh context each time. It returns an explanation plus a
+  **repair id** from an allow-list. It never writes or runs commands.
+- **One server, four independent services** mirrors dc2's "1 server, 5–7 workstations"
+  shape. No shared state between the services, so faults can be injected into each one
+  separately.
+- **Portability:** the Mac reaches lab hosts over SSH, as the compliance server would
+  reach dc2 from inside its boundary.
 
-## 3. Part A — Model probe (Mac only; can start immediately)
+## 3. Part A: Model probe (Mac only; can start now)
 
-`probe/` drives LM Studio's OpenAI-compatible API. It is repeatable, with **n ≥ 20 per
-point**.
+Unchanged in substance from rev 1:
+- **Tool-call reliability** at 1k / 4k / 8k / 15k / 25k tokens of context, n ≥ 20 per
+  point, each tool scored against **its own** schema (MFR correction #2).
+- **Interpretation quality** on 12 golden cases, drawn from the §6 scenarios once they
+  exist.
+- **Candidates:** Gemma 4 26B, Devstral Small 2 (installed); Llama 3.3 70B 4-bit
+  (download, ~40 GB, tested alone).
+- **Bar:** ≥ 90% at 15k tokens and ≥ 10/12 interpretation cases. If no model meets it,
+  the design still works, because code already does all tool calling (§5).
+- Runs only when LM Studio is idle. Results go to `probe/results/`.
 
-1. **Tool-call reliability vs prompt size** (repeats MFR F-6 on this host). A fixed
-   five-tool schema, with padding context at **1k / 4k / 8k / 15k / 25k** tokens. Score
-   = the first response is a *structured* tool call with a **valid tool name and a
-   schema-valid argument object**. Per MFR correction #2, each tool is validated
-   against **its own** schema, never one hard-coded field.
-2. **Interpretation quality.** Twelve golden cases: a findings JSON taken from the lab
-   (§6) plus the expected cause and repair id. Score = the cause keywords are present,
-   the correct repair id is chosen, and no invented clause, command or fact appears
-   (checked against the input).
-3. **Candidates** (all permitted origin):
-   - Gemma 4 26B A4B (MLX 4-bit, installed)
-   - Devstral Small 2 (4-bit, installed)
-   - **Llama 3.3 70B Instruct (4-bit MLX, ~40 GB)**: to download; tested alone, with no
-     other model loaded.
-4. **Output:** `probe/results/<date>.md`, with a table per model, raw logs kept, and
-   the machine state (other models loaded, memory pressure) recorded for each run.
-   Runs happen only when the user isn't using LM Studio.
+## 4. Part B: The lab
 
-**Acceptance bar (proposed):** ≥ 90% structured tool calls at 15k tokens **and** ≥ 10/12
-interpretation cases. A model that meets it is the compliance-server sizing target. If
-none does, the architecture falls back to *model interprets only, code does all tool
-calling*. That already is the design of Part C, so C succeeds either way.
+### 4.1 Offline inputs (prepared on the Mac; the M1 deliverable)
+| Input | Source | Verification |
+|---|---|---|
+| Rocky 9.8 x86_64 **DVD** ISO | Rocky mirror | SHA-256 against the signed CHECKSUM |
+| Kanidm source, one **pinned** release tag | upstream release tarball | upstream checksum/signature; recorded in the manifest |
+| Kanidm Rust dependencies | `cargo vendor` on the Mac | `Cargo.lock` hashes, vendored tree tarballed |
+| Rust toolchain | **Rocky AppStream** `rust`/`cargo` from the DVD if new enough for the pinned Kanidm; otherwise a pinned upstream toolchain tarball | the MSRV check is recorded |
+| Build dependencies (openssl-, pam-, sqlite-, systemd-devel, …) | DVD first; anything only in **CRB** is fetched as individual RPMs | Rocky GPG signature |
+| step-ca + step CLI | Smallstep release RPMs | upstream checksums |
+| BIND, OpenSSH, chrony | DVD | n/a |
 
-## 4. Part B — The lab on aero
+`lab/inputs/MANIFEST.txt` lists every file, its version and hash. It is part of the Q1
+evidence.
 
-### 4.1 Host preparation (staged scripts, run on aero as `sudo sh <name>`)
+### 4.2 Host preparation (staged scripts on aero, `sudo sh <name>`, each with `--check`)
 | Script | Does | Verifies |
 |---|---|---|
-| `b1-media` | copies the Rocky 9.8 DVD ISO (fetched and **checksum-verified on the Mac**) to `/data/iso/`, loop-mounts it, and defines a **local-only dnf repo** (BaseOS + AppStream) | `dnf repolist` shows only the local repo in use |
-| `b2-kvm` | installs `qemu-kvm libvirt virt-install` from the local repo and enables `virtqemud` | `virt-host-validate` passes the KVM checks |
-| `b3-storage` | creates `/data/libvirt/images`, labels it `virt_image_t` (`semanage fcontext` + `restorecon`), and makes it the default libvirt pool | the pool is active; `ls -Z` shows the label |
-| `b4-net` | creates bridge **`br-lab`** on `enp49s0` with 192.168.100.1/24 via `nmcli`, applied as one step (a fallback timer restores the old profile if the link drops) | the Mac can ping 192.168.100.1 again |
-| `b5-time` | makes aero's `chronyd` **serve time to 192.168.100.0/24** (`local stratum 10`), so the lab has one consistent clock without internet. aero's own RTC setting is reported and left unchanged | a VM can sync to 192.168.100.1 |
-| `b6-scap-report` | runs `oscap` with the **cui** profile in **report-only** mode | an HTML report is copied back to the Mac |
+| `b1-media` | copies the inputs to `/data/lab-inputs/`; the DVD becomes a local-only dnf repo; the lab RPMs become a second local repo | `dnf repolist` shows only local repos |
+| `b2-kvm` | installs `qemu-kvm libvirt virt-install` | `virt-host-validate` passes the KVM checks |
+| `b3-storage` | `/data/libvirt/images`, labelled `virt_image_t` | the pool is active |
+| `b4-net` | bridge `br-lab` on `enp49s0`, 192.168.100.1/24, applied as one step with automatic rollback | the Mac can ping .1 |
+| `b5-time` | aero's chronyd serves 192.168.100.0/24 (`local stratum 10`); aero's own RTC setting is reported and left as is | a VM syncs |
+| `b6-scap-report` | `oscap` **cui** profile, report-only | the HTML report is copied to the Mac |
 
-Every script starts with **`--check`** (dry run) and is idempotent.
-
-### 4.2 Lab VMs (built by kickstart; no clicking)
-| VM | vCPU | RAM | Disk (qcow2, thin) | Role |
+### 4.3 VMs (kickstart; FIPS `fips=1` + OpenSCAP cui profile at install; SELinux enforcing; no route off the lab)
+| VM | vCPU | RAM | Disk (thin) | Role |
 |---|---|---|---|---|
-| ipa1 | 4 | 8 GB | 40 GB | FreeIPA server + CA + integrated DNS (first master) |
-| ipa2 | 4 | 6 GB | 40 GB | replica with CA + DNS (for renewal-master and failover cases) |
-| client1 | 2 | 4 GB | 512 GB *virtual* (thin; PARTITIONS_3 512 GB layout) | **CHP-built** enrolled client (SSSD, PAM, MFA logins), see 4.3 |
+| build1 | 6 | 8 GB | 80 GB | Offline Kanidm compile + RPM packaging. Holds compilers; **never runs identity services** |
+| srv1 | 4 | 6 GB | 60 GB | Kanidm server · step-ca · SSH CA · BIND, as four separate systemd units with separate data dirs |
+| client1 | 2 | 4 GB | 512 GB *virtual* (PARTITIONS_3) | **CHP-built** (4.5), then `kanidm_unixd` |
+| client2 | 2 | 2 GB | 30 GB | minimal Rocky + `kanidm_unixd`; the reference client |
 
-The total is 18 GB of aero's 30 GB, so there's headroom for the host and later scenarios.
+The total is 20 GB of aero's 30 GB. After a clean build, `golden` snapshots of all four
+are taken; `lab reset` reverts them.
 
-- **Domain / realm:** `idm.lab.test` / `IDM.LAB.TEST` (the reserved `.test` TLD, so it
-  can never collide with a real domain).
-- **Kickstart:** the `fips=1` boot argument, the OpenSCAP **cui** profile applied at
-  install (`%addon com_redhat_oscap`), SELinux enforcing, a static IP on `br-lab`,
-  chrony pointed at 192.168.100.1, packages only from the local DVD repo, and no
-  internet route.
-- **IPA install:** unattended `ipa-server-install` (ipa1), `ipa-replica-install --setup-ca
-  --setup-dns` (ipa2), `ipa-client-install` (client1). Admin credentials are generated
-  on the Mac and stored in the Mac keychain, never in the repo.
-- **Test data:** five lab users (two with OTP tokens), one host group, HBAC and sudo
-  rules like a typical build. All fictitious.
-- **Golden snapshots:** `golden` taken after install + data. Every scenario starts with
-  `lab reset` (revert all three).
-- **Diagnostic account:** an IPA **`diag-reader`** role (read-only permissions for
-  users, lockout status, OTP tokens, certificates). The collector runs as a local
-  `diag` user whose **only** sudo right is to run the root-owned collector:
-  `diag ALL=(root) NOPASSWD: /usr/local/sbin/idm-collect`. That is acceptable in the
-  lab; **whether dc1 permits the same narrowly scoped rule is an ISSO decision**,
-  recorded in §9.
+### 4.4 Stack build (the Q1/Q2 work)
+1. **build1:** compile the pinned Kanidm **offline** (`cargo build --offline --release`
+   with the vendored tree), for the server, CLI, `kanidm_unixd` and `kanidm_unixd_tasks`.
+   Package them as RPMs from a spec file in `lab/kanidm-rpm/`, including systemd units
+   with the correct `StateDirectory` (known spike defect #2). The RPMs go to the local
+   lab repo.
+2. **srv1:** BIND (zone `kanidm.lab.test`); step-ca (internal root and intermediate;
+   ACME and a renewal timer); SSH CA (its own key, `TrustedUserCAKeys` published to the
+   clients); Kanidm server with a step-ca-issued TLS certificate; domain
+   `kanidm.lab.test`.
+3. **Clients:** install the unixd RPM, trust the step-ca root, and set nsswitch
+   ordering correctly (known spike defect #3). The **separate POSIX password** is set
+   for each lab user (spike finding #4).
+4. **Lab data:** 6 fictitious users (TOTP for 4, one with a WebAuthn-only primary
+   credential to exercise that path), POSIX groups, SSH user certificates with a short
+   lifetime.
+5. **Reports (this repo only, until Jeff's test is done):**
+   `lab/adr0001-q1-packaging.md` (every step, defect and workaround) and
+   `lab/adr0001-q2-fips.md`. The FIPS report covers: TLS through OpenSSL (the FIPS
+   provider applies); password hashing, TOTP and WebAuthn (are they Rust crypto
+   outside the FIPS module? observed and documented, not assumed); step-ca's Go crypto
+   under FIPS; and any failures or refusals seen **with FIPS on**.
+6. **SELinux:** the custom-built Kanidm daemons have no packaged policy. Denials are
+   recorded, and **the option of a minimal policy module vs running confined as a
+   generic service is reported to the ISSO**, not decided here.
 
-### 4.3 client1 is built with the user's CHP build kit (a test of the kit itself)
-client1 is built by **`chp-build.sh`** (CHP-SPEC v0.1, `~/Desktop/chp-build`, used from a
-**copy**; the user's kit is never modified in place):
-1. The kickstart installs Rocky 9.8 **Server with GUI**, **FIPS**, partitioned per
-   **`PARTITIONS_3.md`** (512 GB column) on a thin-provisioned disk. These are the
-   kit's stated preconditions; it never partitions or enables FIPS itself.
-2. `ipa-client-install` joins `IDM.LAB.TEST` (the kit expects to be told to join).
-3. A lab `PLACEHOLDERS.md` (`CHP_DOMAIN=idm.lab.test`, lab owner/system names,
-   `CHP_OFFLINE_TARGET=none`, …) is applied with `chp-apply-placeholders.sh`.
-4. `chp-build.sh preflight → plan → harden → verify → evidence` runs **without**
-   `--safe`. The disruptive negative tests are safe here because snapshots undo them.
-   The evidence bundle and the verify report are copied back to the Mac.
-5. Snapshot `golden` is taken **after** harden, so every scenario runs on a CHP-conformant
-   client.
+### 4.5 client1 is built with the user's CHP build kit (a test of the kit)
+`chp-build.sh` (CHP-SPEC v0.1, `~/Desktop/chp-build`) runs from a **copy**; the kit is
+never modified.
+1. A kickstart installs **Server with GUI**, FIPS, and the **PARTITIONS_3.md** 512 GB
+   layout (the kit's preconditions).
+2. A lab `PLACEHOLDERS.md` (`CHP_DOMAIN=kanidm.lab.test`, lab names, `CHP_OFFLINE_TARGET=none`)
+   is applied with `chp-apply-placeholders.sh`.
+3. `preflight → plan → harden → verify → evidence` runs **without `--safe`** (snapshots
+   make disruptive negative tests safe).
+4. **Known conflict to observe and record:** the kit configures **SSSD +
+   pam_google_authenticator** (sshd, login, gdm-password, sudo; no `nullok`), while ADR
+   0001's client path is **`kanidm_unixd` + Kanidm TOTP**. Adding `kanidm_unixd` to a
+   CHP-hardened host shows exactly where the two collide: authselect, PAM stack order,
+   double MFA prompts, and `verify_identity` results.
+5. Everything about the kit (failures, wrong assumptions, the SSSD-vs-unixd conflict)
+   goes to `lab/chp-findings.md` for the user.
 
-Consequences:
-- MFA on client1 is **pam_google_authenticator** on `sshd`, `login`, `gdm-password` and
-  `sudo` (no `nullok`), the **same mechanism as the dc1 MFA lockout**. Scenario **L2** is
-  first observed *naturally* (graphical login with MFA under SELinux) before any fault is
-  staged.
-- **Automation access:** the collector reaches client1 by SSH **public key** (the PAM
-  `auth` stack is not consulted for publickey) and runs through its NOPASSWD collector
-  rule (sudo's PAM `auth`, where MFA sits, is skipped for NOPASSWD). This must be
-  verified in M2 rather than assumed.
-- `chp-build.sh` is **not** run on ipa1/ipa2. Its `verify_identity` deliberately
-  flags `ipa-server` as a non-conforming all-in-one identity product.
-- **Open design question for the user:** CHP uses Google Authenticator, while the dc1
-  remediation plan favoured **FreeIPA native OTP**. On an IPA-joined host these are two
-  separate MFA systems. The lab records how they interact (a finding for CHP-SPEC).
-- **Findings about the kit itself** (failures, wrong assumptions, unclear steps) are
-  recorded in `lab/chp-findings.md` for the user. The kit is not patched by this
-  project.
+## 5. Part C: Collector, findings, interpreter, repairs
 
-## 5. Part C — Collector, findings, interpreter, repairs
+### 5.1 Collector (`collector/idm-collect`, POSIX sh, **read-only**)
+It runs on srv1 or a client and writes one redacted JSON report (≤ 200 KB).
 
-### 5.1 Collector (`collector/idm-collect`, POSIX sh, read-only)
-It runs on an IPA server or client. It writes **one JSON report** (with each section's
-raw text included) and prints its path. It **never changes state**.
-
-| Area | Commands |
+| Area | Evidence |
 |---|---|
-| Health | `ipa-healthcheck --output-type json --failures-only` (servers), `ipactl status` |
-| Certificates | `getcert list` (parsed: status, CA, expiry, key/cert paths), expiry of the httpd/LDAP/KDC/PKI certs via `openssl x509 -enddate`, the healthcheck `ipahealthcheck.ipa.certs` / `dogtag` sources |
-| Logins & MFA | `sssctl domain-status`, `sssctl config-check`, `faillock --user <u>`, `ipa user-status <u>` and `ipa user-show <u> --all` (lockout, `krbloginfailedcount`, auth types), `ipa otptoken-find --owner <u>`, `authselect current` |
-| SELinux | `getenforce`, `ausearch -m avc -ts recent` (denials only), `ls -Z` for known auth paths |
-| Kerberos & time | `chronyc tracking`, clock offset vs 192.168.100.1, `klist -k` (keytab principals, no keys), recent `krb5kdc` "clock skew" lines |
-| Logs | the last N lines of `journalctl` for `sssd`, `krb5kdc`, `ipa-otpd`, `dirsrv@*`, `httpd`, `pki-tomcatd@*`, filtered to warnings and errors |
-| Host | `df -h`, `free -m`, failed systemd units, uptime |
+| Kanidm server | `systemctl status kanidmd`, the server log (errors/warnings, `--since`), TLS expiry of its certificate, and a **read-only service-account** CLI query of the person or group in question (valid-from/expire, credential types present, **POSIX password set?**, account status) |
+| Clients / unixd | `kanidm-unix status` (online/offline), `getent passwd/group <u>`, nsswitch order, `authselect current` / PAM stack for sshd, login, gdm and sudo, the unixd and unixd-tasks journals |
+| Certificates | step-ca health and its renewal timer, expiry and chain of the Kanidm TLS cert, client trust store contains the step-ca root |
+| SSH CA | `sshd -T` TrustedUserCAKeys, `ssh-keygen -L` for the user's certificate (validity, principals), CA public key fingerprint consistency |
+| DNS | `named-checkconf`, `named-checkzone`, `dig` for the Kanidm host from the client |
+| Time | `chronyc tracking`, offset vs 192.168.100.1 (TOTP window, TLS not-before/not-after) |
+| SELinux | `getenforce`, recent AVCs for kanidm, sshd and named, `ls -Z` of the unixd socket and state dirs |
+| Host | disk, memory, failed units |
 
-**Redaction (mandatory, before the file is written):** password hashes, keytab key
-material, private keys, OTP secrets, and any line matching a configurable deny-list are
-removed. Usernames and hostnames are kept in the lab. For dc1 a **pseudonymization
-option** is included (and is an ISSO decision).
+**Redaction:** private keys, tokens, TOTP secrets, credential-reset tokens, and a
+configurable deny-list are removed. Pseudonymization is available (an ISSO decision for
+production).
 
-**Parameters:** `--user <name>` (focus a login case) and `--since <minutes>`. The
-report is capped at about 200 KB.
+**Access:** the Mac reaches hosts by SSH public key. The collector runs through a
+root-owned wrapper with a single-command sudo rule, `diag ALL=(root) NOPASSWD:
+/usr/local/sbin/idm-collect`. That's allowed in the lab; for dc2 it's an ISSO decision.
+On client1 the rule must be proven to bypass the kit's sudo MFA (M3).
 
-### 5.2 Findings engine (`engine/findings.py`, deterministic)
-It parses the report into **findings**: `{id, severity, summary, evidence[]}`, such as
-`CERT_EXPIRING(days=5, nickname=…)`, `CERT_EXPIRED`, `CA_SUBSYSTEM_EXPIRED`,
-`USER_LOCKED_IPA`, `USER_LOCKED_FAILLOCK`, `OTP_TOKEN_DISABLED`, `SELINUX_AVC(auth path)`,
-`SSSD_OFFLINE`, `CLOCK_SKEW(seconds)`, `SERVICE_DOWN(name)`. Every rule is unit-tested
-against captured lab reports.
+### 5.2 Findings engine (deterministic, unit-tested)
+Example ids: `POSIX_PW_MISSING`, `UNIXD_OFFLINE`, `NSS_ORDER_WRONG`, `ACCOUNT_EXPIRED`,
+`ACCOUNT_SOFTLOCKED`, `TOTP_TIME_SKEW`, `TLS_CERT_EXPIRED(kanidm)`, `ACME_RENEWAL_STOPPED`,
+`CLIENT_MISSING_CA_ROOT`, `SSH_USER_CERT_EXPIRED`, `SSH_CA_NOT_TRUSTED`, `DNS_RECORD_MISSING`,
+`SELINUX_AVC(component)`, `SERVICE_DOWN(unit)`.
 
-### 5.3 Interpreter (`engine/interpret.py`)
-It sends the model **only**: the user's symptom text (or text read from a screenshot),
-the findings list (not raw logs), and the matching runbook excerpt. The prompt is
-≤ 2k tokens and each call starts a fresh context. It asks for:
-1. **What's going on:** plain-language explanation, citing finding ids.
-2. **Confirmation:** which evidence supports it, and what would rule it out.
-3. **Next step:** either one extra read-only check (from a fixed list) or one
-   **repair id** from the allow-list.
+### 5.3 Interpreter
+Unchanged from rev 1: symptom + findings + runbook excerpt, ≤ 2k tokens, validated JSON
+out; an unknown repair id means "model unsure", and the runbook default is shown instead.
 
-The response is JSON that is validated. An invalid or unknown repair id is rejected
-and shown as "model unsure". The system then falls back to the runbook's default
-recommendation.
+### 5.4 Repairs (allow-listed; precheck → backup → apply → verify → undo; typed approval)
+| Repair id | Apply | Verify |
+|---|---|---|
+| `kanidm-cred-reset-token` | the admin issues a credential-reset token for the user (the user sets their POSIX password or TOTP themselves; **no password is ever set by the tool**) | `POSIX_PW_MISSING` is cleared after the user completes the reset |
+| `unixd-refresh` | clear/invalidate the unixd cache; restart unixd + tasks | `kanidm-unix status` online; `getent` resolves |
+| `nsswitch-restore` | restore the known-good nsswitch/authselect profile from backup | `getent` + a test login |
+| `time-resync` | `chronyc makestep` | offset < 1 s; TOTP accepted |
+| `kanidm-cert-renew` | `step ca renew` for the Kanidm cert; reload kanidmd | new expiry; the client TLS handshake is OK |
+| `acme-timer-restore` | re-enable and start the renewal timer | the timer is active; next-run time shown |
+| `client-ca-trust` | install the step-ca root; `update-ca-trust` | TLS to Kanidm verifies |
+| `ssh-user-cert-reissue` | sign a new short-lived user cert with the SSH CA | `ssh-keygen -L` shows it valid; SSH works |
+| `ssh-ca-trust-restore` | restore `TrustedUserCAKeys` from backup; reload sshd | `sshd -T` shows it; SSH works |
+| `selinux-restorecon` | `restorecon -Rv <path>` | no new AVC; the service works |
+| `account-unexpire` | extend or clear the account validity for the user | the account is valid; login works |
 
-### 5.4 Repairs (`engine/repairs/`, allow-listed)
-Each repair has five parts, run in this order: **precheck → backup → apply → verify →
-undo**. It runs over SSH via `sudo`, only after the user types `y`, and every step is
-logged to the case file.
-
-| Repair id | Apply | Verify | Undo / backup |
-|---|---|---|---|
-| `ipa-user-unlock` | `ipa user-unlock <u>` | `ipa user-status` shows 0 failures | none needed |
-| `faillock-reset` | `faillock --user <u> --reset` | `faillock` is clean | none needed |
-| `selinux-restorecon` | `restorecon -Rv <path>` | the file context matches policy; no new AVC | the prior contexts are saved to the case file |
-| `sssd-refresh` | `sss_cache -E; systemctl restart sssd` | `sssctl domain-status` is online; `id <u>` resolves | none needed |
-| `time-resync` | `chronyc makestep` | offset < 1 s; `kinit` works | none needed |
-| `cert-resubmit` | `getcert resubmit -i <id>` | status MONITORING; new expiry | the old cert/key are copied first |
-| `ipa-cert-fix` | `ipa-backup` first, then `ipa-cert-fix` | healthcheck certificate sources are clean | restore from `ipa-backup` |
+Exact Kanidm CLI verbs are confirmed against the pinned version in M4. Anything that
+can't be done read-only or reversibly becomes a *guided* ticket (instructions only)
+rather than an automated repair.
 
 ### 5.5 Case file
-Each case is `cases/<timestamp>-<slug>/`. It holds the symptom, the reports, the
-findings, the model's exchanges (prompt and response), approvals, and the output of
-each repair step. It is the audit record, and it doubles as the **hand-off brief for
-Claude Code** when escalating.
+`cases/<timestamp>-<slug>/` holds the symptom, reports, findings, model exchanges,
+approvals, repair output, and **wall-clock time per step**. It is the audit record, the
+ADR Q4 operational-data source, and the Claude Code hand-off brief.
 
-## 6. Scenarios (fault injection → expected outcome)
-Each has `lab/faults/<id>.sh` (inject, run from the Mac over SSH) and an expected
-`{finding ids, repair id}`.
-
-| Id | Inject | Expected finding | Expected repair |
+## 6. Scenarios (fault → expected finding → expected repair)
+| Id | Inject | Finding | Repair |
 |---|---|---|---|
-| **L1** | wrong OTP entered past the lockout threshold for `user2` | `USER_LOCKED_IPA` and/or `USER_LOCKED_FAILLOCK` | `ipa-user-unlock` (+ `faillock-reset`) |
-| **L2** | mislabel an auth file on client1 (`chcon -t user_home_t` on a file PAM must read) and attempt a login (the **dc1 MFA lockout** pattern) | `SELINUX_AVC` | `selinux-restorecon` |
-| **L3** | stop network reachability from client1 to both IPA servers, then restore it with a stale cache | `SSSD_OFFLINE` | `sssd-refresh` |
-| **L4** | move client1's clock +10 min (and stop chronyd) | `CLOCK_SKEW` | `time-resync` |
-| **C1** | issue a short-lived service cert via certmonger, then advance time past its expiry | `CERT_EXPIRED` / `CERT_EXPIRING` | `cert-resubmit` |
-| **C2** | advance the whole IPA server clock past the CA subsystem cert expiry (the classic "IPA won't start after 2 years") | `CA_SUBSYSTEM_EXPIRED`, `SERVICE_DOWN(pki-tomcatd)` | `ipa-cert-fix` |
+| **L1** | a user exists with a primary credential but **no POSIX password** (spike finding #4); try SSH/console login | `POSIX_PW_MISSING` | `kanidm-cred-reset-token` (guided) |
+| **L2** | put kanidm in the wrong position in nsswitch (spike defect #3) | `NSS_ORDER_WRONG` | `nsswitch-restore` |
+| **L3** | cut client2 → srv1 reachability, then restore it with a stale cache | `UNIXD_OFFLINE` | `unixd-refresh` |
+| **L4** | move a client clock +10 min | `TOTP_TIME_SKEW` (+ TLS not-yet-valid) | `time-resync` |
+| **L5** | expire a user's account validity on the server | `ACCOUNT_EXPIRED` | `account-unexpire` |
+| **L6** | mislabel the unixd state dir/socket, or relabel after an update | `SELINUX_AVC(kanidm_unixd)` | `selinux-restorecon` |
+| **C1** | issue the Kanidm TLS cert with a short lifetime, stop the ACME renewal timer, let it expire | `TLS_CERT_EXPIRED` + `ACME_RENEWAL_STOPPED` | `kanidm-cert-renew` + `acme-timer-restore` |
+| **C2** | remove the step-ca root from client2's trust store | `CLIENT_MISSING_CA_ROOT` | `client-ca-trust` |
+| **C3** | let a user's SSH certificate expire | `SSH_USER_CERT_EXPIRED` | `ssh-user-cert-reissue` |
+| **C4** | remove `TrustedUserCAKeys` from a client's sshd config | `SSH_CA_NOT_TRUSTED` | `ssh-ca-trust-restore` |
 
-A **scenario runner** (`lab/run <id>`) performs reset → inject → collect → findings →
-interpret → (auto-approve in test mode only) repair → verify. It records pass/fail for
-each stage. Running all six in a row gives the lab's **regression report**.
+Also **observed, not staged:** whatever the CHP-kit-vs-unixd collision produces on
+client1 (4.5) becomes additional scenarios.
 
 ## 7. Build order (milestones)
-
 | M | Deliverable | User action |
 |---|---|---|
-| M0 | repo skeleton; probe scripts; probe results for the two installed models | none (runs when LM Studio is idle) |
-| M1 | Rocky 9.8 DVD downloaded + verified on the Mac; host-prep scripts `b1`–`b6` | run 6 × `sudo sh <name>` on aero |
-| M2 | kickstarts; ipa1, ipa2 built; **client1 built with `chp-build.sh`** (4.3); golden snapshots; `lab/chp-findings.md` | one `sudo sh b7-build-lab` (long, unattended); enrol MFA for the lab users when the kit asks |
-| M3 | collector + findings + repairs for **C1 and L1** end to end | none |
-| M4 | L2–L4, C2; interpreter wired in; the scenario runner's regression report | none |
-| M5 | probe re-run incl. Llama 3.3 70B; **compliance-server acceptance criteria** written up | approve the 40 GB download |
+| M0 | repo skeleton; probe on the two installed models | none (LM Studio idle) |
+| M1 | offline inputs fetched + verified + manifest; host prep `b1`–`b6` | approve passwordless sudo on aero (one command), else 6 × `sudo sh <name>` |
+| M2 | build1 up; **Kanidm compiled + packaged offline on FIPS** → **Q1 report** | one `sudo sh` to build the VMs |
+| M3 | srv1 stack + client2; FIPS behaviour → **Q2 report**; golden snapshots | none |
+| M4 | client1 via CHP kit + unixd → `chp-findings.md` | enrol TOTP for lab users when the kit asks |
+| M5 | collector + findings + repairs for **L1 and C1** end to end | none |
+| M6 | remaining scenarios, interpreter, regression runner | none |
+| M7 | probe re-run incl. Llama 3.3 70B → compliance-server acceptance criteria | approve the 40 GB download |
 
 ## 8. Testing
-- **Unit:** findings rules against captured reports; redaction (secrets never appear);
-  the interpreter's JSON validation (unknown repair id rejected); the repair runner's
-  order (verify runs after apply, undo on verify failure).
-- **Integration:** the scenario runner in the lab. Each scenario is green from `golden`
-  three times in a row before it counts.
-- **Non-negotiables:** the collector changes no state (checked by comparing
-  before/after `ipa-healthcheck` and file hashes in the lab); no repair runs without
-  approval outside test mode.
+- **Unit:** findings rules against captured reports; redaction (no secret survives); the
+  interpreter rejects unknown repair ids; the repair runner's order (undo on verify
+  failure).
+- **Integration:** the scenario runner. Each scenario must be green from `golden` three
+  times in a row.
+- **Non-negotiables:** the collector changes no state (verified with before/after hashes
+  and service state); no repair runs without approval outside test mode; build1 never
+  runs identity services; srv1 never has compilers.
 
-## 9. Decisions recorded, and decisions deferred to the ISSO
-- **Recorded:** no internet for aero or the VMs (a local DVD repo instead); lab realm
-  `IDM.LAB.TEST`; the model never emits shell; allow-listed repairs only.
-- **Deferred (ISSO):**
-  1. May a narrowly scoped `NOPASSWD` rule for a root-owned, read-only collector exist
-     on dc1?
-  2. Is pseudonymization of usernames/hosts required in reports on the compliance
-     server?
-  3. Case-file retention and audit-log placement (AU family).
-  4. Hardware of the compliance server, decided **by** the M5 probe results.
+## 9. Decisions recorded, and decisions for the ISSO
+**Recorded:** dc2 stack only; independent cross-check (lab notes stay in this repo until
+Jeff's test is done); throwaway lab domain; no internet anywhere in the lab; the model
+never emits shell; allow-listed, human-approved repairs.
+
+**For the ISSO:**
+1. Is Kanidm's non-OS-module crypto (if Q2 confirms any) acceptable for dc2, and how is
+   it documented for 800-171A (3.13.11)?
+2. Should the Kanidm daemons get a custom SELinux policy module, or run as a generic
+   confined service?
+3. The single-command NOPASSWD collector rule on dc2.
+4. Pseudonymization in reports; case-file retention; audit-log placement.
+5. How the CHP kit should treat identity once the SSSD-vs-unixd findings are in.
+6. The compliance-server hardware, **per the M7 results**.
 
 ## 10. Out of scope (this slice)
-The browser workbench (D); the sysadmin RAG library (E); directory/replication and
-DNS/service scenarios; any access to dc1; Thunderbolt networking; automatic (unapproved)
-repairs.
+The browser workbench (D); the sysadmin RAG library (E); FreeIPA/389-ds; Nextcloud and
+public TLS (Let's Encrypt DNS-01); DC20's real domain; any access to dc1, dc2, or the
+internet from the lab; automatic (unapproved) repairs.
