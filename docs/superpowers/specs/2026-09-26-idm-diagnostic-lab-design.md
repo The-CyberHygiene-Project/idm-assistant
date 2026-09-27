@@ -1,6 +1,6 @@
 # Identity Diagnostic Assistant: dc2-Stack Lab, Probe, and Collector (Parts A–C)
 
-**Date:** 2026-09-26 (rev 2: retargeted from FreeIPA to the dc2 stack) · **Status:** awaiting user review
+**Date:** 2026-09-26 (rev 2: retargeted from FreeIPA to the dc2 stack) · **Status:** APPROVED by the user 2026-09-26 (incl. passwordless sudo on aero as a recorded lab deviation)
 **Owner:** D. Shannon (System Owner / ISSO)
 **Related:** ADR 0001 *Replace FreeIPA with four independent identity components* (Accepted
 2026-08-14; dc2 only); dc2 `TURNOVER.md`; `DIWAI-MFR-2026-08-20` (Local Assistant Viability)
