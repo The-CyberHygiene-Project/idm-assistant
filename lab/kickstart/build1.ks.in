@@ -1,0 +1,77 @@
+# build1: offline Kanidm build host (disposable). DERIVED FROM cyberhygiene-dc2/anaconda-ks.cfg.
+# Differences from dc2 are listed in lab/vm-deviations.md.
+text
+cdrom
+poweroff
+lang en_US.UTF-8
+keyboard --vckeymap=us --xlayouts='us'
+timezone America/Denver --utc
+network --bootproto=static --device=link --ip=192.168.100.20 --netmask=255.255.255.0 --nodefroute --ipv6=ignore --activate --hostname=build1.lab.test
+firewall --enabled --service=ssh
+selinux --enforcing
+rootpw --lock
+user --name=itadmin --groups=wheel
+sshkey --username=itadmin "@SSH_PUBKEY@"
+bootloader --append="fips=1"
+zerombr
+ignoredisk --only-use=vda
+clearpart --all --initlabel --drives=vda
+part /boot --fstype=xfs --size=1024
+part pv.01 --size=1 --grow
+volgroup rl_build1 pv.01
+logvol /              --vgname=rl_build1 --name=root          --fstype=xfs --size=15360
+logvol /home          --vgname=rl_build1 --name=home          --fstype=xfs --size=35840
+logvol /tmp           --vgname=rl_build1 --name=tmp           --fstype=xfs --size=5120
+logvol /var           --vgname=rl_build1 --name=var           --fstype=xfs --size=10240
+logvol /var/log       --vgname=rl_build1 --name=var_log       --fstype=xfs --size=3072
+logvol /var/log/audit --vgname=rl_build1 --name=var_log_audit --fstype=xfs --size=3072
+logvol /var/tmp       --vgname=rl_build1 --name=var_tmp       --fstype=xfs --size=3072
+logvol swap           --vgname=rl_build1 --name=swap          --size=4096
+
+%addon com_redhat_kdump --disable
+%end
+
+%addon com_redhat_oscap
+    content-type = scap-security-guide
+    profile = xccdf_org.ssgproject.content_profile_cui
+%end
+
+%packages
+@^minimal-environment
+audit
+chrony
+crypto-policies
+firewalld
+openscap-scanner
+scap-security-guide
+openssh-server
+sudo
+gcc
+gcc-c++
+make
+clang
+clang-devel
+cmake
+golang
+perl-FindBin
+pkgconf-pkg-config
+pam-devel
+systemd-devel
+libselinux-devel
+rpm-build
+rpmdevtools
+rpmlint
+tar
+xz
+rsync
+%end
+
+%post --log=/root/ks-post.log
+set -x
+printf 'itadmin ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/90-itadmin-lab
+chmod 0440 /etc/sudoers.d/90-itadmin-lab
+# Lab time source is aero.
+sed -i -E 's/^(pool|server) .*/server 192.168.100.1 iburst/' /etc/chrony.conf
+# Mirror dc2-cui-tailoring.xml: dc2 UNSELECTS sysctl_user_max_user_namespaces.
+grep -rlE 'user\.max_user_namespaces' /etc/sysctl.d /etc/sysctl.conf 2>/dev/null | xargs -r sed -i '/user\.max_user_namespaces/d'
+%end
