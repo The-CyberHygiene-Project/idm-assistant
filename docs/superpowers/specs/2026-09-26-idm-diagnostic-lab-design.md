@@ -113,9 +113,9 @@ Every script starts with **`--check`** (dry run) and is idempotent.
 |---|---|---|---|---|
 | ipa1 | 4 | 8 GB | 40 GB | FreeIPA server + CA + integrated DNS (first master) |
 | ipa2 | 4 | 6 GB | 40 GB | replica with CA + DNS (for renewal-master and failover cases) |
-| client1 | 2 | 2 GB | 20 GB | enrolled client (SSSD, PAM, OTP logins) |
+| client1 | 2 | 4 GB | 512 GB *virtual* (thin; PARTITIONS_3 512 GB layout) | **CHP-built** enrolled client (SSSD, PAM, MFA logins), see 4.3 |
 
-The total is 16 GB of aero's 30 GB, so there's headroom for the host and later scenarios.
+The total is 18 GB of aero's 30 GB, so there's headroom for the host and later scenarios.
 
 - **Domain / realm:** `idm.lab.test` / `IDM.LAB.TEST` (the reserved `.test` TLD, so it
   can never collide with a real domain).
@@ -136,6 +136,39 @@ The total is 16 GB of aero's 30 GB, so there's headroom for the host and later s
   `diag ALL=(root) NOPASSWD: /usr/local/sbin/idm-collect`. That is acceptable in the
   lab; **whether dc1 permits the same narrowly scoped rule is an ISSO decision**,
   recorded in §9.
+
+### 4.3 client1 is built with the user's CHP build kit (a test of the kit itself)
+client1 is built by **`chp-build.sh`** (CHP-SPEC v0.1, `~/Desktop/chp-build`, used from a
+**copy**; the user's kit is never modified in place):
+1. The kickstart installs Rocky 9.8 **Server with GUI**, **FIPS**, partitioned per
+   **`PARTITIONS_3.md`** (512 GB column) on a thin-provisioned disk. These are the
+   kit's stated preconditions; it never partitions or enables FIPS itself.
+2. `ipa-client-install` joins `IDM.LAB.TEST` (the kit expects to be told to join).
+3. A lab `PLACEHOLDERS.md` (`CHP_DOMAIN=idm.lab.test`, lab owner/system names,
+   `CHP_OFFLINE_TARGET=none`, …) is applied with `chp-apply-placeholders.sh`.
+4. `chp-build.sh preflight → plan → harden → verify → evidence` runs **without**
+   `--safe`. The disruptive negative tests are safe here because snapshots undo them.
+   The evidence bundle and the verify report are copied back to the Mac.
+5. Snapshot `golden` is taken **after** harden, so every scenario runs on a CHP-conformant
+   client.
+
+Consequences:
+- MFA on client1 is **pam_google_authenticator** on `sshd`, `login`, `gdm-password` and
+  `sudo` (no `nullok`), the **same mechanism as the dc1 MFA lockout**. Scenario **L2** is
+  first observed *naturally* (graphical login with MFA under SELinux) before any fault is
+  staged.
+- **Automation access:** the collector reaches client1 by SSH **public key** (the PAM
+  `auth` stack is not consulted for publickey) and runs through its NOPASSWD collector
+  rule (sudo's PAM `auth`, where MFA sits, is skipped for NOPASSWD). This must be
+  verified in M2 rather than assumed.
+- `chp-build.sh` is **not** run on ipa1/ipa2. Its `verify_identity` deliberately
+  flags `ipa-server` as a non-conforming all-in-one identity product.
+- **Open design question for the user:** CHP uses Google Authenticator, while the dc1
+  remediation plan favoured **FreeIPA native OTP**. On an IPA-joined host these are two
+  separate MFA systems. The lab records how they interact (a finding for CHP-SPEC).
+- **Findings about the kit itself** (failures, wrong assumptions, unclear steps) are
+  recorded in `lab/chp-findings.md` for the user. The kit is not patched by this
+  project.
 
 ## 5. Part C — Collector, findings, interpreter, repairs
 
@@ -225,7 +258,7 @@ each stage. Running all six in a row gives the lab's **regression report**.
 |---|---|---|
 | M0 | repo skeleton; probe scripts; probe results for the two installed models | none (runs when LM Studio is idle) |
 | M1 | Rocky 9.8 DVD downloaded + verified on the Mac; host-prep scripts `b1`–`b6` | run 6 × `sudo sh <name>` on aero |
-| M2 | kickstarts; ipa1, ipa2 and client1 built; golden snapshots | one `sudo sh b7-build-lab` (long, unattended) |
+| M2 | kickstarts; ipa1, ipa2 built; **client1 built with `chp-build.sh`** (4.3); golden snapshots; `lab/chp-findings.md` | one `sudo sh b7-build-lab` (long, unattended); enrol MFA for the lab users when the kit asks |
 | M3 | collector + findings + repairs for **C1 and L1** end to end | none |
 | M4 | L2–L4, C2; interpreter wired in; the scenario runner's regression report | none |
 | M5 | probe re-run incl. Llama 3.3 70B; **compliance-server acceptance criteria** written up | approve the 40 GB download |
