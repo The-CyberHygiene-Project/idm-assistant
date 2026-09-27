@@ -1,0 +1,6 @@
+Rocky-9.8-x86_64-dvd.iso|9.8|15194259456|d2bcbb64c2d67511adf80d40cd9543391a33aea5860a355b1d26d7f55236d01f|https://download.rockylinux.org/pub/rocky/9.8/isos/x86_64|sha256 vs CHECKSUM, CHECKSUM gpg-signed 21CB256AE16FC54C6E652949702D426D350D275D
+rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz|1.96.0|197935124|c295047583a56238ea06b43f849f4b877fa12bfd4c7103f8d9a74c94c9c4e108|https://static.rust-lang.org/dist|gpg 108F66205EAEB0AAA8DD5E1C85AB96E6FA1BE5FE + sha256
+step-ca-0.30.2-1.x86_64.rpm|0.30.2|17272124|58fc771efc6c0c2e9ffc48f031a2ff41c1f2c8dd6faba44ceaa453df27183f4f|https://github.com/smallstep/certificates/releases/download/v0.30.2|sha256 vs release checksums.txt
+step-cli-0.31.0-1.x86_64.rpm|0.31.0|15396425|71a7f17d99e0e10209458553aab5561d51040b88c929691136dacb8ec2f849c6|https://github.com/smallstep/cli/releases/download/v0.31.0|sha256 vs release checksums.txt
+kanidm-1.11.2.tar.gz|1.11.2|8957231|a8ed31203e5f8c036b9cb261c85ddac19291bc6ca16981495495cd9621c56529|github kanidm/kanidm tag v1.11.2|sha256 == pinned KANIDM_SHA (tag archive is unsigned)
+kanidm-1.11.2-vendor.tar.gz|1.11.2|135948564|579b442a783cb09b73f648fff3afd4e8858794b4cff46d1d187603a17bb6757a|cargo vendor --locked|crate hashes enforced by Cargo.lock at build time
