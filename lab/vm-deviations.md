@@ -13,4 +13,8 @@
 | srv1, client2 | installed from `lab/kickstart/base.ks.in` (derived from build1's kickstart): same FIPS/CUI/tailoring/sudo/chrony choices; smaller LVM layout (/var grows) | 30–60 GB lab disks |
 | srv1, client2 | `lab-local` repo with `gpgcheck=0` (DVD repos keep gpgcheck=1); vendor online repos disabled | our lab RPMs are unsigned (ISSO-approved 2026-09-27); integrity from BUILD-RECORD sha256 |
 | client2 | software TPM 2.0 (swtpm, `tpm-crb`) and a second 2 GB disk (`vdb`) for the LUKS/clevis experiment | Plan 3 Task 11 (swtpm was already on aero as a libvirt dependency) |
+| client2 | **lab-only SELinux module `kanidm_lab`** (+ fcontext `/var/run/kanidm-unixd(/.*)?` → `kanidm_unixd_var_run_t`); ISSO option A, 2026-09-27 | Kanidm ships no SELinux policy; 315 AVCs blocked NSS/PAM clients from the unixd socket. Revert: `semodule -r kanidm_lab; semanage fcontext -d '/var/run/kanidm-unixd(/.*)?'` |
+| client2 | authselect `custom/kanidm` = copy of the CUI `custom/hardening` profile + Kanidm (features with-faillock, without-nullok kept) | Kanidm client integration; revert: `authselect select custom/hardening with-faillock without-nullok` |
+| srv1 | `expect` installed (DVD) | scripted Kanidm CLI logins; not a compiler |
+| srv1, client2 | snapshots `os-ready`, `golden`; `lab/reset.sh` reverts to golden **and restarts chronyd** (a reverted VM's clock is rewound; chrony flags the jump "too variable") | repeatable scenarios |
 | all | `sysctl_user_max_user_namespaces` left as dc2 tailoring has it (unselected) | mirror dc2 |

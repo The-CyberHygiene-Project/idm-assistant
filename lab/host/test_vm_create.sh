@@ -46,4 +46,9 @@ t "complete VM (golden snapshot): 'already exists', exit 0" "(( rc == 0 )) && gr
 t "success: extra virt-install args are passed through, VM started" "(( rc == 0 )) && grep -q -- '--tpm emulator,model=tpm-crb,version=2.0' '$stub/log' && grep -q 'started t1' '$stub/log'"
 : > "$stub/log"; out=$(EXISTS=1 GOLDEN=1 run_b7); rc=$?
 t "b7 wrapper still recognises a complete build1" "(( rc == 0 )) && grep -q 'already exists' <<<\"\$out\""
+run_reset() { STUBLOG="$stub/log" PATH="$stub:/usr/bin:/usr/sbin" bash "$here/lab-reset.sh" "$@" 2>&1; }
+: > "$stub/log"; out=$(GOLDEN=1 run_reset srv1 client2); rc=$?
+t "lab-reset: reverts every named VM with golden, exit 0" "(( rc == 0 )) && grep -q 'reverted srv1' '$stub/log' && grep -q 'reverted client2' '$stub/log'"
+: > "$stub/log"; out=$(GOLDEN=0 run_reset srv1 client2); rc=$?
+t "lab-reset: refuses (names the VM) and reverts nothing if a VM lacks golden" "(( rc != 0 )) && grep -q 'srv1 has no golden' <<<\"\$out\" && ! grep -q reverted '$stub/log'"
 exit $fails
