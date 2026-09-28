@@ -1,0 +1,19 @@
+[Unit]
+Description=step-ca (kanidm.lab.test lab CA)
+After=network-online.target
+[Service]
+User=step
+Group=step
+Environment=STEPPATH=/etc/step-ca
+# Upstream Go ignores the host FIPS mode; enable Go's FIPS 140-3 module explicitly (Plan 3 evidence: fips140=only refuses MD5).
+Environment=GODEBUG=fips140=on
+ExecStart=/usr/bin/step-ca /etc/step-ca/config/ca.json --password-file /etc/step-ca/password
+Restart=on-failure
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=full
+ReadWritePaths=/etc/step-ca/db
+ProtectHome=yes
+PrivateTmp=yes
+[Install]
+WantedBy=multi-user.target
