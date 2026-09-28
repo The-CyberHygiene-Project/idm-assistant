@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+# kanidm-delete.exp KIND NAME (on srv1, idm_admin session): `kanidm KIND delete NAME` asks y/n on a terminal and panics
+# without one, so answer it here. Multi-line expect blocks on purpose (a one-line block is ONE literal pattern).
+set timeout 20
+log_user 0
+spawn kanidm [lindex $argv 0] delete [lindex $argv 1] -D idm_admin
+expect {
+  -re {(?i)(y/n|\[y|are you sure|confirm)} { send -- "y\r"; exp_continue }
+  -re {(?i)(error|not found|no matching)[^\r\n]*} { puts stderr "delete failed: $expect_out(0,string)"; exit 1 }
+  eof {}
+  timeout { puts stderr "delete: timeout"; exit 1 }
+}
+catch wait r
+exit [lindex $r 3]

@@ -69,3 +69,50 @@
 - nsswitch ordering (#3), POSIX password (#4), whatever #5 turns out to be.
 - TLS with a step-ca certificate. Runtime FIPS behaviour of the non-FIPS AWS-LC (see `adr0001-q2-fips.md`).
 - Virtual-TPM experiments: `swtpm`, the Kanidm `tpm` feature, LUKS + `clevis` TPM2 unlock.
+
+## 8. Runtime (Plan 3, 2026-09-27): the RPMs installed and running on dc2-hardened VMs
+
+**Result:** our RPMs install from the lab repo and run on **srv1** (Kanidm server) and **client2** (unixd, PAM/NSS). Both VMs have FIPS on, SELinux enforcing, the CUI profile, and **fapolicyd enforcing throughout**. **fapolicyd logged 0 denials** on both. The Plan 2 expectation holds: RPM-installed binaries are trusted and run; hand-copied ones would be blocked.
+
+The end-to-end chain works:
+- BIND;
+- step-ca, which issues Kanidm's TLS certificate over ACME, with auto-renewal proven (the served serial changes);
+- Kanidm;
+- client2 login over SSH with the POSIX password, and with an SSH certificate from the separate SSH CA.
+
+### Runtime defects (continuing the numbering)
+
+| # | Where | Symptom | Cause | Fix |
+|---|---|---|---|---|
+| D6 | kanidmd unit | `Configuration Parse Failure: Permission denied` | the upstream unit uses `DynamicUser`; `server.toml` was root-only | `server.toml` 0644 (it holds no secrets) |
+| D7 | kanidmd unit | `Unable to read metadata for TLS chain … /run/credentials/kanidmd.service/… Permission denied` | `LoadCredential=` was unreachable inside **this** unit on systemd 252 (`/run/credentials` mode 000). It works for kanidm-unixd and in minimal tests, including one with kanidmd's capability and directory options. Root cause not isolated | a root pre-start step (`ExecStartPre=+install -o kanidmd -m 0400 …`) copies the chain and key into the unit's own `RuntimeDirectory` |
+| D8 | srv1 | Kanidm CLI: `Failed to parse config … Permission denied` | root-written files came out 0600 under the CUI profile (the CLI config; the CA anchor copied with `cp` kept step's 0600) | explicit `install -m 0644` / `chmod 0644` for non-secret config and public certificates |
+| D9 | client2 NSS | Kanidm users log in without their Kanidm groups (`id` shows only the primary group), so group-based login rules and sudo break | the CUI authselect profile pins **`initgroups: files`** | put `kanidm` first on `initgroups` too (tested patcher) |
+| D10 | SSH CA | `Certificate invalid: name is not a listed principal` | unixd names users by SPN (`user@idm.kanidm.lab.test`), and sshd matches principals against that | sign certificates for both forms (`sign-user-cert.sh`). Alternative for dc2: unixd `uid_attr_map = "name"` for short names |
+| — | client2 SELinux | **360 AVC denials** (`lab/selinux/client2-avc-enrol.txt`): 254 `sock_file write` on `var_run_t` (`sshd_t`, `chkpwd_t`, `systemd_logind_t`, `auditd_t`) and 106 `connectto` (`init_t` → `unconfined_service_t`), all on `/run/kanidm-unixd/sock` | Kanidm ships no SELinux policy (upstream says so); the socket is generic `var_run_t` and unixd runs unconfined | **ISSO option A:** the lab-only module `lab/selinux/kanidm_lab.te` gives the socket directory its own type, usable only by `nsswitch_domain`: **narrow**. The `connectto` rule is **broad**: every `nsswitch_domain` may connect to *any* `unconfined_service_t` stream socket whose file it can reach; SELinux can't tie `connectto` to one socket while unixd is unconfined. A proper fix confines unixd in its own domain; that's out of lab scope and belongs in the ISSO's dc2 decision. 0 AVCs afterwards. Upstream's alternative (`semanage permissive -a unconfined_service_t`) was not used |
+
+**Client configuration choices:**
+- a copy of the **CUI `hardening` authselect profile**, not stock `sssd`, so `with-faillock` and `without-nullok` are kept and verified by the script;
+- `pam_kanidm` directly before `pam_unix` in auth, account and session;
+- NSS order `kanidm files systemd` (upstream: Kanidm first, systemd last);
+- the unixd service-account token passed via the upstream-documented `LoadCredential` (works for unixd).
+
+An operator error of mine, caught and fixed within minutes: the first client run selected the new profile **without** its features, briefly re-allowing `nullok`. The script now refuses to continue if any feature is lost.
+
+**Minor:** unixd warns at every start, "DB folder /var/cache/kanidm-unixd has 'everyone' permission bits in the mode". The upstream unit's `UMask=0027` doesn't cover the `CacheDirectory` it creates. Worth a `CacheDirectoryMode=0750` drop-in on dc2.
+
+**Virtual TPM + LUKS/clevis:** see `lab/tpm-luks-experiment.md` (unattended unlock works; PCR-mismatch refusal proven; lab PCRs are all-zero under SeaBIOS).
+
+### ADR spike defects, status after Plan 3
+
+| Spike defect | Status |
+|---|---|
+| #1 build profile | avoided (Plan 2) |
+| #2 `StateDirectory` | avoided (upstream units) |
+| #3 nsswitch ordering | **confirmed as a real risk and more than ordering:** upstream order used for passwd/group, *and* the CUI profile's `initgroups: files` must also change (D9) |
+| #4 separate POSIX password | **confirmed:** Linux login accepts only the POSIX ("unix") password; the Kanidm primary password is refused |
+| #5 | candidates from this run: D7 (credentials in the kanidmd unit) and D10 (SPN principal names) |
+
+### SELinux (for the ISSO, spec §9 question 2)
+
+The **server-side** daemons (kanidmd, step-ca) run as `unconfined_service_t`, so SELinux does not confine them. There are 0 AVCs because they are *unconfined*, not because a policy allows them. The **client-side** denials are real and block logins until a policy is loaded (see the table).

@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew the Kanidm TLS certificate (step-ca) and restart kanidmd on change
+[Service]
+Type=oneshot
+Environment=STEPPATH=/root/.step
+ExecStart=/usr/bin/step-cli ca renew --force --expires-in 8h --exec "systemctl try-restart kanidmd" /etc/pki/kanidm/chain.pem /etc/pki/kanidm/key.pem

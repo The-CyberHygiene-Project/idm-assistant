@@ -6,3 +6,9 @@ probe/results/raw/
 *.iso
 .venv/
 .pytest_cache/
+
+# Lab secrets live in ~/idm-lab-secrets, never here.
+idm-lab-secrets/
+*.secret.json
+*.token
+*.key

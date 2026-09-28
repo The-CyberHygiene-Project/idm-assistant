@@ -1,0 +1,26 @@
+# kanidm_lab: LAB-ONLY SELinux module for kanidm-unixd on Rocky 9 (ISSO-approved option A, 2026-09-27).
+# Evidence: lab/selinux/client2-avc-enrol.txt. Every denied domain (sshd_t, init_t, chkpwd_t, systemd_logind_t,
+# auditd_t) is in the nsswitch_domain attribute: they were resolving users through libnss_kanidm, which talks to
+# /run/kanidm-unixd/sock. Instead of allowing writes to all of var_run_t, the socket directory gets its own type,
+# and only name-service clients may use it. CAVEAT: the connectto rule is broader - nsswitch_domain may connect to
+# ANY unconfined_service_t stream socket it can reach (SELinux can't scope connectto to one socket while unixd is
+# unconfined). A proper fix confines unixd in its own domain (out of lab scope; ISSO decision for dc2).
+# Remove with: semodule -r kanidm_lab; semanage fcontext -d '/var/run/kanidm-unixd(/.*)?'; restorecon -R /run/kanidm-unixd
+module kanidm_lab 1.0;
+
+require {
+    type unconfined_service_t;
+    attribute nsswitch_domain;
+    attribute file_type;
+    attribute non_security_file_type;
+    class dir { getattr search open read };
+    class sock_file { getattr write };
+    class unix_stream_socket connectto;
+}
+
+type kanidm_unixd_var_run_t;
+typeattribute kanidm_unixd_var_run_t file_type, non_security_file_type;
+
+allow nsswitch_domain kanidm_unixd_var_run_t:dir { getattr search open read };
+allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };
+allow nsswitch_domain unconfined_service_t:unix_stream_socket connectto;

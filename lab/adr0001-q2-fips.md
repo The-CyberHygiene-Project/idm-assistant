@@ -1,6 +1,6 @@
 # ADR 0001 Q2: Is Kanidm's cryptography FIPS-validated?
 
-**Status:** complete for Plan 2 (2026-09-27): static inventory, build-time linked crates and FIPS-variant experiment. Runtime behaviour on a FIPS host: Plan 3.
+**Status:** static inventory, build-time linked crates and the FIPS-variant experiment (Plan 2); runtime observations on FIPS hosts (Plan 3), all 2026-09-27.
 
 ## Finding (static)
 
@@ -88,3 +88,49 @@ The non-FIPS `aws-lc-sys 0.44.0` is still compiled and linked. `reqwest` → `hy
 3. Whether rustls' `ServerConfig::fips()` reports true at runtime. That is a Plan 3 check.
 
 **Implication for 3.13.11:** the variant routes **TLS** through the AWS-LC FIPS module's code with a one-line change, but Kanidm's own application cryptography, **including password hashing**, stays outside it. The honest SSP position today is: "TLS: AWS-LC FIPS 4.2.0 module built from source; CMVP certificate, Security Policy build conformance and approved-mode operation **unverified** (checks 1-3 above; Plan 3). Application crypto: not FIPS-validated → risk acceptance / POA&M", unless upstream Kanidm changes.
+
+## Runtime on FIPS hosts (Plan 3, 2026-09-27)
+
+All observations are from srv1 and client2: `fips=1`, crypto-policy `FIPS`, SELinux enforcing, CUI profile. The deployed Kanidm is the **baseline** (non-FIPS-variant) build.
+
+### No service failed to start
+
+Kanidm, step-ca, BIND and OpenSSH all started and worked with FIPS on (individual algorithms were refused where noted below, e.g. ed25519 keys). That's expected for Kanidm and step-ca, **because neither uses the OS FIPS module**: the host's FIPS mode doesn't constrain them.
+
+### TLS actually negotiated (client: client2's OpenSSL in FIPS mode)
+
+| Server | TLS 1.3 | TLS 1.2 | Key exchange | Signature |
+|---|---|---|---|---|
+| Kanidm (rustls + non-FIPS AWS-LC) | TLS_AES_256_GCM_SHA384 | ECDHE-ECDSA-AES256-GCM-SHA384 | ECDH P-256 | ECDSA P-384 / SHA-384 |
+| step-ca (Go 1.26.1, `GODEBUG=fips140=on`) | TLS_AES_128_GCM_SHA256 | — | ECDH P-256 | ECDSA P-256 / SHA-256 |
+
+A FIPS-mode client gets **approved algorithms** from both servers. Whether Kanidm would negotiate a *non-approved* group (e.g. X25519) with a non-FIPS client was **not determined**: the Mac's OpenSSL was blocked by the host firewall and the other tools couldn't force the group. So "approved-mode operation" remains unverified for non-FIPS clients.
+
+### Go (step-ca, step-cli)
+
+- **Upstream Go ignores the host's FIPS mode.** On this `fips=1` host, `step-cli` computed MD5 by default.
+- With `GODEBUG=fips140=only`, Go refused it: `use of MD5 is not allowed in FIPS 140-only mode`. The switch works for step-cli.
+- **step-ca cannot run under `fips140=only`:** it panics at start, `crypto/md5: use of MD5 is not allowed in FIPS 140-only mode`. So step-ca 0.30.2 uses a non-approved algorithm internally.
+- Ed25519 is allowed under `fips140=only`; FIPS 186-5 approves EdDSA.
+- The lab runs step-ca with `GODEBUG=fips140=on`; the running process's environment was checked. `on` enables Go's FIPS 140-3 mode but does **not** refuse non-approved algorithms, and the TLS table above can't tell FIPS mode from the default. So FIPS operation is **configured, not verified at runtime**.
+- This binary was not built with `GOFIPS140=v1.0.0`, so FIPS mode runs Go's in-tree crypto, **not the frozen module submitted to CMVP**. Its CMVP status is unverified here.
+- `step ca init` has no key-type option. The CA's root and intermediate are ECDSA **P-256** (approved); leaf certificates can be P-384.
+
+### Kanidm credentials
+
+- **TOTP is HMAC-SHA256** (`algorithm=SHA256`, 6 digits, 30 s). The algorithm is approved, but it's computed in RustCrypto, outside any validated module.
+- **Kanidm refuses a password-only primary credential:** "Multi-factor authentication required - add TOTP or replace your password with more secure method." That's evidence for 3.5.3 on the Kanidm (web/CLI) side.
+- **Linux login is single-factor by design.** SSH and `su` through `pam_kanidm` ask only for the **POSIX password**; no TOTP. In the 1.11.2 source, no identity provider ever emits the PAM MFA request (`AuthRequest::MFACode`); only the shared interface defines it. Separately, the CUI sshd sets `KbdInteractiveAuthentication no`. **For 3.5.3 (MFA for network/privileged access) this is a gap to address** in the dc2 design, e.g. SSH certificates plus a second factor, or a POA&M.
+- Password hashing (Argon2) worked, as it's user-space code and outside any FIPS module (unchanged from the static finding).
+
+### OpenSSH and BIND on the FIPS host
+
+- `ssh-keygen -t ed25519` is **refused**: "ED25519 keys are not allowed in FIPS mode". The SSH user CA and user keys are ECDSA P-384.
+- `named` 9.16 started with no FIPS messages (DNSSEC validation off in the lab).
+
+### Honest SSP position after Plan 3 (supersedes nothing above; adds runtime facts)
+
+- **TLS:** negotiates approved suites with FIPS clients. It is implemented outside a validated module in the baseline build (non-FIPS AWS-LC); the variant build routes it through AWS-LC FIPS 4.2.0 (validation unverified).
+- **step-ca:** Go FIPS 140-3 mode *configured* (`fips140=on`). It cannot run in strict `only` mode (uses MD5), and it's not built against the frozen CMVP module. Treat it as not FIPS-validated.
+- **Application crypto** (TOTP HMAC-SHA256, Argon2, token signing): not in a validated module.
+- **Linux login MFA:** not provided by Kanidm 1.11.2's PAM path.

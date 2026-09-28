@@ -1,0 +1,72 @@
+#!/usr/bin/expect -f
+# enrol-user.exp  (on srv1). stdin: line 1 = reset token, 2 = password, 3 = unix (POSIX) password, 4 = mode
+# (totp | password-only). Walks Kanidm 1.11.2's credential REPL (prompts captured 2026-09-27) and commits.
+# Prints only "TOTP_SECRET=<base32>" (mode totp) on stdout; the caller stores it in ~/idm-lab-secrets.
+# Known exposure: `kanidm … use-reset-token` accepts the token only as an argument, so it is visible in ps on srv1
+# for the seconds the REPL runs (the token is single-use and expires in 1 h). Everything else comes via stdin.
+# NOTE: every expect block is multi-line on purpose - a one-line `expect { ... }` is read as ONE literal pattern.
+set timeout 30
+log_user 0
+gets stdin tok; gets stdin pw; gets stdin upw; gets stdin mode
+proc fail {m} { puts stderr "enrol failed: $m"; exit 1 }
+proc prompt {} {
+  expect {
+    -re {# : $} {}
+    timeout { fail "no REPL prompt" }
+    eof { fail "REPL exited" }
+  }
+}
+proc newpass {p} {
+  expect {
+    -re {New [^\n]*: $} { send -- "$p\r" }
+    timeout { fail "no New password prompt" }
+  }
+  expect {
+    -re {Confirm [^\n]*: $} { send -- "$p\r" }
+    timeout { fail "no Confirm prompt" }
+  }
+  # The result line is styled (terminal codes), so don't match it; wait for the next REPL prompt instead.
+  expect {
+    -re {(?i)(error|invalid|weak|too short|rejected)[^\n]*} { fail $expect_out(0,string) }
+    -re {# : $} {}
+    timeout { fail "no REPL prompt after password" }
+  }
+}
+spawn kanidm person credential use-reset-token $tok
+prompt
+send -- "password\r"
+newpass $pw
+if {$mode eq "totp"} {
+  send -- "totp\r"
+  expect {
+    -re {TOTP Label: $} { send -- "authenticator\r" }
+    timeout { fail "no TOTP label prompt" }
+  }
+  expect {
+    -re {Secret:[^A-Z2-7\n]*([A-Z2-7]{16,})} { set sec $expect_out(1,string) }
+    timeout { fail "no TOTP secret shown" }
+  }
+  expect {
+    -re {TOTP: $} {}
+    timeout { fail "no TOTP code prompt" }
+  }
+  set code [exec python3 /tmp/srv1/totp.py - sha256 << $sec]
+  send -- "$code\r"
+  expect {
+    -re {(?i)(error|incorrect|invalid|fail)[^\n]*} { fail $expect_out(0,string) }
+    -re {# : $} {}
+    timeout { fail "no TOTP result" }
+  }
+  puts "TOTP_SECRET=$sec"
+}
+send -- "unix-password\r"
+newpass $upw
+send -- "commit\r"
+expect {
+  -re {(?i)\[y/n\]|\(y/n\)|y/N} { send -- "y\r"; exp_continue }
+  -re {(?i)(NOT been saved|error|fail)[^\n]*} { fail $expect_out(0,string) }
+  -re {(?i)success[^\n]*} {}
+  eof {}
+  timeout { fail "no commit result" }
+}
+exit 0
