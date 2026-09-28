@@ -74,11 +74,27 @@ Recovery needed exact clock arithmetic (`TOTP_OFFSET`) and, in the end, a replay
 
 ## 4. MFA at login: Google Authenticator + Kanidm POSIX password
 
-_Task 7._
+Details: `lab/chp-logs/login-matrix.md`.
+
+- **Yes, two factors at Linux login, but only through the kit's Google Authenticator.** A Kanidm user with a GA token logs in over SSH with *Verification code* (GA, SHA-1 TOTP, host-local) plus *Password* (the Kanidm POSIX password). `sudo` asks for both too. This closes the Plan 3 gap (pam_kanidm alone is single-factor) on hosts built with the kit. **3.5.3 candidate.**
+- **But the second factor is per host and outside Kanidm.** Each user needs a GA token file on *every* host. Without it, the user is **locked out** (no `nullok`, by kit design). Kanidm's own TOTP (enrolled centrally, HMAC-SHA256) is not used at Linux login at all. Tokens are not revocable centrally, and there's no enrolment flow for directory users. The lab used `lab/client/ga-enrol-kanidm.sh` as root.
+- **Patcher bug found and fixed:** in the stock sssd profile, `auth [default=1 …] pam_localuser.so` skips the next line for non-local users, so a `pam_kanidm` line inserted directly before `pam_unix` is **never reached by any Kanidm user**. The patcher now places `pam_kanidm` where no numeric jump can skip it (property test over all four fixtures).
+- **Kit finding K9:** the kit's `authselect select sssd with-faillock with-pwhistory with-mkhomedir` omits `without-nullok`, so `pam_unix nullok` (empty passwords) is active in `system-auth`/`password-auth`. GA in front of sshd/login/sudo masks it on those paths, but not on other services that include the stacks.
 
 ## 5. SELinux labels on Kanidm homes and `~/.google_authenticator`
 
-_Task 7._
+- **The dc1 lockout mechanism, reproduced end to end.** pam_google_authenticator rewrites the token file on every use (replay/rate state). The new file's label depends on **who** rewrote it:
+  - under sshd, with the lab module, it gets `auth_home_t` (correct);
+  - under `sudo`, which runs in the user's unconfined context, it gets `user_home_t`.
+
+  The next **SSH** login is then denied: `avc: denied { unlink } comm="sshd-session" name=".google_authenticator" … tcontext=user_home_t`. **`restorecon` of the token restores login** (the dc1 repair).
+- Without the lab module, the very first SSH GA login is already denied (`create` of the temp file, §1 K7).
+- **Kanidm homes:**
+  - the real home directories are **UUID-named** (`/home/4ba78837-…`);
+  - `/home/<name>@idm.kanidm.lab.test` is the SPN alias, labelled `home_root_t`; `restorecon -n` would relabel it `user_home_dir_t`;
+  - token files created by the enrolment (user context) start as `user_home_t`, not `auth_home_t`.
+- **Proposed robust fix (kit):** keep tokens **outside home folders**, e.g. `secret=/var/lib/google-authenticator/${USER}` in a directory labelled `auth_home_t`. New files inherit the directory's type whoever writes them, so the label can't flip between sshd and sudo.
+- There were no other AVCs in the SSH/sudo tests once the Kanidm (`kanidm_lab`) and GA (`chp_ga_lab`) lab modules were loaded.
 
 ## 6. Proposed kit changes (text only; the kit is not modified)
 

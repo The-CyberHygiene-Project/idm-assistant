@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+# console-login.exp VM USER  (on aero, as root): log in on the VM's serial console and run `id`; prints each prompt.
+# stdin: line 1 = password, line 2 = TOTP code (computed on the Mac just before). Answers are never printed.
+set timeout 30
+set vm [lindex $argv 0]; set user [lindex $argv 1]
+gets stdin pw; gets stdin code
+log_user 0
+spawn virsh console --force $vm
+# The serial link needs a moment after attaching (seen after snapshot reverts): pause, then wake getty twice.
+after 1500; send -- "\r"; after 1500; send -- "\r"
+expect {
+  -re {login: $} { send -- "$user\r"; exp_continue }
+  -re {(?i)(verification code[^\r\n]*): ?$} { puts "PROMPT: $expect_out(1,string)"; send -- "$code\r"; exp_continue }
+  -re {(?i)(password[^\r\n]*): ?$} { puts "PROMPT: $expect_out(1,string)"; send -- "$pw\r"; exp_continue }
+  -re {(?i)login incorrect} { puts "RESULT: DENIED (Login incorrect)" }
+  -re {[$#] ?$} { send -- "id -un; exit\r"; expect -re {\r\n([a-z0-9@._-]+)\r\n}; puts "RESULT: logged in as $expect_out(1,string)" }
+  timeout { puts "RESULT: timeout" }
+}
+send -- "\035"
