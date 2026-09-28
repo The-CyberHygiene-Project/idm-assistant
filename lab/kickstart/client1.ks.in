@@ -1,0 +1,89 @@
+# client1: CHP-kit host (disposable). Creates ONLY the CHP kit's preconditions (PARTITIONS_3.md): UEFI, FIPS, Server
+# with GUI, 512 GB layout, LUKS2 over LVM with swap inside. The kit applies the CUI baseline itself (no oscap addon).
+# Root LUKS is bound to the vTPM (clevis, PCR 7) so the lab VM boots unattended. Derived from base.ks.in.
+# Differences from dc2 are listed in lab/vm-deviations.md.
+text
+cdrom
+poweroff
+lang en_US.UTF-8
+keyboard --vckeymap=us --xlayouts='us'
+timezone America/Denver --utc
+network --bootproto=static --device=link --ip=@IP@ --netmask=255.255.255.0 --nameserver=192.168.100.10 --nodefroute --noipv6 --activate --hostname=@HOST@.kanidm.lab.test
+firewall --enabled --service=ssh
+selinux --enforcing
+rootpw --lock
+user --name=itadmin --groups=wheel
+sshkey --username=itadmin "@SSH_PUBKEY@"
+bootloader --append="fips=1"
+zerombr
+ignoredisk --only-use=vda
+clearpart --all --initlabel --drives=vda
+part /boot/efi --fstype=efi --size=1024
+part /boot --fstype=ext4 --size=2048
+part pv.01 --size=1 --grow --encrypted --luks-version=luks2 --passphrase=@LUKSPASS@
+volgroup rl_@HOST@ pv.01
+logvol swap           --vgname=rl_@HOST@ --name=swap          --size=16384
+logvol /home          --vgname=rl_@HOST@ --name=home          --fstype=xfs --size=40960
+logvol /tmp           --vgname=rl_@HOST@ --name=tmp           --fstype=xfs --size=16384
+logvol /var           --vgname=rl_@HOST@ --name=var           --fstype=xfs --size=61440
+logvol /var/tmp       --vgname=rl_@HOST@ --name=var_tmp       --fstype=xfs --size=10240
+logvol /var/log       --vgname=rl_@HOST@ --name=var_log       --fstype=xfs --size=20480
+logvol /var/log/audit --vgname=rl_@HOST@ --name=var_log_audit --fstype=xfs --size=20480
+logvol /              --vgname=rl_@HOST@ --name=root          --fstype=xfs --size=10240 --grow
+
+%addon com_redhat_kdump --disable
+%end
+
+
+%packages
+@^graphical-server-environment
+audit
+chrony
+crypto-policies
+firewalld
+fapolicyd
+openscap-scanner
+scap-security-guide
+openssh-server
+sudo
+tar
+rsync
+clevis
+clevis-luks
+clevis-dracut
+clevis-systemd
+tpm2-tools
+mokutil
+%end
+
+%post --log=/root/ks-post.log
+set -x
+printf 'itadmin ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/90-itadmin-lab
+chmod 0440 /etc/sudoers.d/90-itadmin-lab
+# Lab time source is aero.
+sed -i -E 's/^(pool|server) .*/server 192.168.100.1 iburst/' /etc/chrony.conf
+# Packages after install come from aero over the bridge (DVD + lab-local); vendor online repos are disabled.
+cat > /etc/yum.repos.d/lab.repo <<'R'
+[lab-baseos]
+name=Rocky 9.8 BaseOS (DVD via aero)
+baseurl=http://192.168.100.1:8080/dvd/BaseOS
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+[lab-appstream]
+name=Rocky 9.8 AppStream (DVD via aero)
+baseurl=http://192.168.100.1:8080/dvd/AppStream
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+[lab-local]
+name=Lab-built RPMs (unsigned; sha256 in BUILD-RECORD.md)
+baseurl=http://192.168.100.1:8080/rpms
+gpgcheck=0
+R
+dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
+# Bind the root LUKS volume to the vTPM (PCR 7 = Secure Boot state) so the lab VM boots unattended; passphrase stays as fallback.
+DEV=$(blkid -t TYPE=crypto_LUKS -o device | head -1)
+printf '%s' '@LUKSPASS@' > /root/.lp && chmod 600 /root/.lp
+clevis luks bind -y -k /root/.lp -d "$DEV" tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}'
+shred -u /root/.lp
+dracut -f --regenerate-all
+%end

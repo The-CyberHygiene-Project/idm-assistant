@@ -13,4 +13,21 @@ done
 t "srv1 IP .10 + bind" "grep -q 'ip=192.168.100.10 ' $TMPD/test-srv1.ks && grep -qx bind $TMPD/test-srv1.ks"
 t "client2 IP .13 + resolver srv1" "grep -q 'ip=192.168.100.13 ' $TMPD/test-client2.ks && grep -q 'nameserver=192.168.100.10' $TMPD/test-client2.ks"
 t "unknown host is rejected" "! OUT=$TMPD/x.ks bash '$here/render.sh' nosuch 2>/dev/null"
+C1="$TMPD/test-client1.ks"
+SSH_PUBKEY="ecdsa-sha2-nistp384 AAAA test" LUKSPASS="test-only-passphrase-not-real" OUT="$C1" bash "$here/render.sh" client1 >/dev/null
+t "client1 renders" "[[ -s $C1 ]]"
+t "client1 has no unreplaced placeholders" "! grep -q '@[A-Z_]*@' $C1"
+t "client1 validates (RHEL9)" "uvx --from pykickstart ksvalidator -v RHEL9 $C1 >/dev/null"
+t "client1 FIPS" "grep -q 'fips=1' $C1"
+t "client1 has NO oscap addon (the kit applies the baseline)" "! grep -q com_redhat_oscap $C1"
+t "client1 is Server with GUI" "grep -qx '@^graphical-server-environment' $C1"
+for m in /boot/efi /boot / /home /tmp /var /var/tmp /var/log /var/log/audit; do
+  t "client1 has mount $m" "grep -qE '^(part|logvol) +$m +' $C1"
+done
+t "client1 PV is LUKS2-encrypted" "grep -qE '^part pv\.01 .*--encrypted .*--luks-version=luks2' $C1"
+t "client1 swap is a logical volume (inside LUKS)" "grep -qE '^logvol swap ' $C1 && ! grep -qE '^part swap' $C1"
+t "client1 IP .12" "grep -q 'ip=192.168.100.12 ' $C1"
+t "client1 binds root LUKS to the TPM (clevis tpm2, PCR 7)" "grep -q 'clevis luks bind' $C1 && grep -q '\"pcr_ids\":\"7\"' $C1"
+t "client1 passphrase never written in plaintext to the installed system" "grep -q 'shred -u /root/.lp' $C1"
+rm -f "$C1"
 exit $fails
