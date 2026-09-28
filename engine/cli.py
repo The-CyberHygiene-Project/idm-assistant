@@ -1,5 +1,6 @@
 """python -m engine collect HOST [--user U] | findings HOST [--user U] | scenario ID [--runs N]"""
 import argparse
+import getpass
 import importlib
 import json
 import os
@@ -19,12 +20,18 @@ DIAG = {"srv1": "srv1-diag", "client2": "client2-diag"}
 
 def approver():
     if os.environ.get("IDM_TEST_APPROVE") == "1":              # regression runner only; recorded in the case
-        return lambda prompt: print(f"[TEST-MODE APPROVAL] {prompt}") or True
+        def test_approve(prompt):
+            print(f"[TEST-MODE APPROVAL] {prompt}")
+            return True
+        test_approve.who, test_approve.test_mode = "regression-runner (IDM_TEST_APPROVE=1)", True
+        return test_approve
+
     def ask(prompt):
         try:
             return input(f"{prompt}: ").strip().lower() == "yes"
         except EOFError:                                         # no answer is not approval
             return False
+    ask.who, ask.test_mode = getpass.getuser(), False
     return ask
 
 

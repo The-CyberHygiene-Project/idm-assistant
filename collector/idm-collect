@@ -6,7 +6,11 @@
 # curl as a header FILE (never on the command line), so no CLI token cache is written anywhere.
 set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
-REDACT="${IDM_REDACT:-/usr/local/sbin/idm-collect.redact.sed}"
+# >>> redact-path
+# As root (the sudo rule) the installed rules are used whatever the environment says: GNU sed -f accepts `w`/`e`.
+if [ "$(id -u)" -eq 0 ]; then REDACT=/usr/local/sbin/idm-collect.redact.sed
+else REDACT="${IDM_REDACT:-/usr/local/sbin/idm-collect.redact.sed}"; fi
+# <<< redact-path
 TOKEN_FILE=/etc/idm-collect/kanidm.token
 KANIDM_URL=https://idm.kanidm.lab.test
 user=""

@@ -25,17 +25,16 @@ def _k(*args):
 
 
 def inject(log):
-    subprocess.run(["rsync", "-a", f"{ROOT}/lab/srv1/", "srv1:/tmp/srv1/"], check=True, capture_output=True,
-                   stdin=subprocess.DEVNULL)
+    remote.push("srv1", f"{ROOT}/lab/srv1/", "idm-lab/srv1/")
     admin_login(_R)
     if f"name: {USER}" in _k("person", "get", USER).stdout:
-        remote.run("srv1", ["expect", "/tmp/srv1/kanidm-delete.exp", "person", USER])
+        remote.run("srv1", ["expect", "idm-lab/srv1/kanidm-delete.exp", "person", USER])
     _k("person", "create", USER, "Lab User 8")
     _k("group", "add-members", "lab_users", USER)
     _k("person", "posix", "set", USER)
     tok = re.search(r"use-reset-token ([a-z0-9-]+)", _k("person", "credential", "create-reset-token", USER).stdout).group(1)
     pw = labsecrets.new_password()
-    out = remote.run("srv1", ["expect", "/tmp/srv1/enrol-user.exp"], stdin=f"{tok}\n{pw}\nunused\ntotp-no-posix\n").stdout
+    out = remote.run("srv1", ["expect", "idm-lab/srv1/enrol-user.exp"], stdin=f"{tok}\n{pw}\nunused\ntotp-no-posix\n").stdout
     sec = re.search(r"TOTP_SECRET=([A-Z2-7]+)", out).group(1)
     labsecrets.write_json(f"{USER}.json", {"password": pw, "posix_password": None, "totp_secret": sec,
                                            "totp_algorithm": "sha256"})

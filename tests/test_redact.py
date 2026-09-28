@@ -12,6 +12,13 @@ SECRETS = [  # every secret shape the lab can produce (all fake)
     "Authorization: Bearer abcdef0123456789abcdef",
     "TOTP_SECRET=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
     'new_password: "xjgG4abcdEFGH12345"',
+    "authorization: bearer abcdef0123456789abcdef",
+    "Bearer abcdef0123456789abcdefXYZ",
+    "IDM_ADMIN_PASSWORD=Zx9fakeFAKE123",
+    "PASSWORD=Zx9fakeFAKE124",
+    "password: Zx9fakeFAKE125",
+    "secret=gezdgnbvgy3tqojqgezdgnbvgy3tqojq",
+    "use-reset-token Pkc2r-5s5We-23ghh-hfg78",
 ]
 KEYBLOCK = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAABG5vbmUAAAAEbm9uZQ\n-----END OPENSSH PRIVATE KEY-----"
 BENIGN = ["kanidmd.service active", "-----BEGIN CERTIFICATE-----", "notAfter=Sep 29 15:07:43 2026 GMT",
@@ -39,3 +46,9 @@ def test_benign_lines_survive():
     out = redact("\n".join(BENIGN) + "\n")
     for b in BENIGN:
         assert b in out
+
+
+def test_otpauth_secret_value_itself_is_gone():
+    out = redact("otpauth://totp/x?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA256\n"
+                 "Secret: GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\n")
+    assert "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" not in out

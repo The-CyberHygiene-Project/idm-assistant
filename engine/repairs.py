@@ -1,10 +1,24 @@
 """Allow-listed repairs: precheck -> approval -> backup -> apply -> verify (fresh report) -> undo if still faulty.
 Nothing is applied without approval. A repair only runs on a host of its declared role."""
+import re as _re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 
 from engine.findings import evaluate
+
+ROOT = Path(__file__).resolve().parents[1]
+STAGE = "idm-lab/srv1"                      # relative to the admin user's home on srv1, mode 0700
+
+
+def valid_user(name):
+    return bool(_re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name or ""))
+
+
+def stage(ctx):
+    ctx.remote.push(ctx.host, f"{ROOT}/lab/srv1/", f"{STAGE}/")
 
 
 @dataclass
@@ -71,7 +85,10 @@ def run_repair(repair_id, ctx, approve, registry):
     prompt = f"Repair {repair_id} on {ctx.host}: {r.describe(ctx)}. Type yes to approve"
     with case.step(f"{repair_id}:approval"):
         ok = bool(approve(prompt))
-    case.write(f"approval-{repair_id}.json", {"repair": repair_id, "host": ctx.host, "prompt": prompt, "approved": ok})
+    case.write(f"approval-{repair_id}.json", {
+        "repair": repair_id, "host": ctx.host, "prompt": prompt, "approved": ok,
+        "by": getattr(approve, "who", "unknown"), "test_mode": bool(getattr(approve, "test_mode", False)),
+        "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
     if not ok:
         case.log("REFUSED: not approved"); case.write("status.txt", "REFUSED\n")
         return "REFUSED"
@@ -200,14 +217,12 @@ REGISTRY = {r.id: r for r in (KanidmCertRenew(), AcmeTimerRestore())}
 
 
 # --- guided: credential reset token (the tool never sets a password) ------------------------------------------------
-import re as _re
-
 from engine import labsecrets
 
 
 def admin_login(ctx):
     pw = labsecrets.read_json("idm_admin.json")["password"]
-    ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
+    ctx.remote.run(ctx.host, ["expect", f"{STAGE}/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
 
 
 class KanidmCredResetToken(Repair):
@@ -224,13 +239,17 @@ class KanidmCredResetToken(Repair):
                 "with it. No password is set by this tool")
 
     def precheck(self, ctx):
-        from engine.findings import evaluate
+        if not valid_user(ctx.params.get("user")):
+            return f"refusing: {ctx.params.get('user')!r} is not a valid user name"
         if "POSIX_PW_MISSING" not in {f.id for f in evaluate(ctx.collect())}:
             return f"{ctx.params['user']} does not lack a POSIX password; nothing to repair"
         return None
 
     def apply(self, ctx):
         u = ctx.params["user"]
+        if not valid_user(u):
+            raise ValueError("invalid user name")
+        stage(ctx)
         admin_login(ctx)
         out = ctx.remote.run(ctx.host, ["kanidm", "person", "credential", "create-reset-token", u, "--ttl", "3600",
                                       "-D", "idm_admin"]).stdout
@@ -249,7 +268,7 @@ class KanidmCredResetToken(Repair):
         # LAB STAND-IN for the user: complete the reset with a new POSIX password (stored for the user in the lab).
         tok = labsecrets.path(f"{u}.reset-token").read_text().strip()
         upw = labsecrets.new_password()
-        ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/enrol-user.exp"],
+        ctx.remote.run(ctx.host, ["expect", f"{STAGE}/enrol-user.exp"],
                        stdin=f"{tok}\nunused\n{upw}\nposix-only\n")
         d = labsecrets.read_json(f"{u}.json"); d["posix_password"] = upw
         labsecrets.write_json(f"{u}.json", d)

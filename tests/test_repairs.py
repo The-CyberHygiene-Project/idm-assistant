@@ -166,6 +166,7 @@ def test_reset_token_repair_sends_every_command_to_the_case_host(tmp_path, monke
     hosts = []
     fake = SimpleNamespace(run=lambda h, argv, stdin=None, **k: hosts.append(h) or SimpleNamespace(
         stdout="kanidm person credential use-reset-token abcde-fghij-klmno-pqrst"))
+    fake.push = lambda h, src, dest: hosts.append(h)
     monkeypatch.setattr(labsecrets, "read_json", lambda n: {"password": "x", "posix_password": None})
     monkeypatch.setattr(labsecrets, "write", lambda n, t: tmp_path / n)
     c = Ctx(host="srv9", role="server", case=Case(tmp_path, "h", "s"), collect=lambda: HEALTHY, remote=fake,
@@ -182,3 +183,23 @@ def test_end_of_input_at_the_approval_prompt_counts_as_no(monkeypatch):
     monkeypatch.delenv("IDM_TEST_APPROVE", raising=False)
     monkeypatch.setattr("builtins.input", eof)
     assert cli.approver()("Repair x on srv1") is False
+
+
+@pytest.mark.parametrize("bad", ["../x", "-D", "Lab08", "", "a b", "x" * 40])
+def test_reset_token_repair_refuses_bad_user_names_before_anything_runs(tmp_path, bad):
+    from engine import repairs
+    touched = []
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "u", "s"), collect=lambda: touched.append(1) or HEALTHY,
+            params={"user": bad})
+    assert "user name" in repairs.KanidmCredResetToken().precheck(c) and touched == []
+
+
+def test_approval_record_says_who_when_and_whether_test_mode(tmp_path):
+    r = FakeRepair(); c = ctx(tmp_path, [HEALTHY])
+
+    def approve(p):
+        return True
+    approve.who, approve.test_mode = "operator-x", False
+    run_repair(r.id, c, approve, registry={r.id: r})
+    a = json.loads((c.case.dir / "approval-fake-timer.json").read_text())
+    assert a["by"] == "operator-x" and a["test_mode"] is False and a["at"].endswith("Z")
