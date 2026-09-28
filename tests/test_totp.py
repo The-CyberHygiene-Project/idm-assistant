@@ -12,3 +12,10 @@ def test_rfc6238_sha1_vectors():
 
 def test_default_is_six_digits_and_accepts_lowercase_unpadded_secret():
     assert totp(SECRET.lower().rstrip("="), t=59) == "287082"
+
+
+def test_rfc6238_sha256_vectors():
+    seed = base64.b32encode(b"12345678901234567890123456789012").decode()
+    for t, want in [(59, "46119246"), (1111111109, "68084774"), (1111111111, "67062674"),
+                    (1234567890, "91819424"), (2000000000, "90698825")]:
+        assert totp(seed, t=t, digits=8, algorithm="sha256") == want

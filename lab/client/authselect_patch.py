@@ -1,8 +1,9 @@
 """Add Kanidm to a copy of the CUI 'hardening' authselect profile, keeping every existing line.
 
 PAM: pam_kanidm goes immediately before the first pam_unix line of each auth/account/session block, so the
-CUI modules that come first (pam_faillock preauth, pam_access) still run. nsswitch: 'kanidm' first for passwd
-and group (upstream: kanidm serves a cached view of files and must come first; systemd stays last).
+CUI modules that come first (pam_faillock preauth, pam_access) still run. nsswitch: 'kanidm' first for passwd,
+group and initgroups (upstream: kanidm serves a cached view of files and must come first; systemd stays last).
+The CUI profile pins 'initgroups: files'; without kanidm there, a user's Kanidm groups are missing at login (D9).
 Usage: python3 authselect_patch.py /etc/authselect/custom/kanidm
 """
 import sys
@@ -32,7 +33,7 @@ def patch_nsswitch(text):
     out = []
     for line in text.splitlines():
         db, sep, rest = line.partition(":")
-        if sep and db.strip() in ("passwd", "group") and not line.lstrip().startswith("#"):
+        if sep and db.strip() in ("passwd", "group", "initgroups") and not line.lstrip().startswith("#"):
             mods = rest.split()
             if not mods or mods[0] != "kanidm":
                 pad = rest[: len(rest) - len(rest.lstrip())]

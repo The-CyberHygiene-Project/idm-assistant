@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+# su-login.exp USER (on client2 as itadmin). stdin: line 1 = POSIX password, line 2 = TOTP secret (may be empty).
+# Runs `su -c id USER` (PAM system-auth, which allows several prompts) and prints every prompt (never answers).
+set timeout 20
+gets stdin pw; gets stdin sec
+log_user 0
+spawn su -c id [lindex $argv 0]
+set n 0
+expect {
+  -re {(?i)([^\r\n]*(password|passcode)[^\r\n]*: ?)$} { puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "$pw\r"; incr n; if {$n < 4} { exp_continue } }
+  -re {(?i)([^\r\n]*(totp|code|token|otp)[^\r\n]*: ?)$} {
+    puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "[exec python3 /tmp/client/totp.py $sec sha256]\r"; incr n; if {$n < 4} { exp_continue } }
+  -re {uid=[^\r\n]+} { puts "RESULT: $expect_out(0,string)"; exp_continue }
+  -re {(?i)(authentication failure|incorrect|denied)[^\r\n]*} { puts "RESULT: DENIED ($expect_out(0,string))"; exp_continue }
+  eof {}
+  timeout { puts "RESULT: TIMEOUT" }
+}

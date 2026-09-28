@@ -38,6 +38,7 @@ def test_nsswitch_puts_kanidm_first_for_passwd_and_group_only():
     get = {l.split(":")[0]: l for l in out.splitlines() if ":" in l and not l.startswith("#")}
     assert get["passwd"].split()[1] == "kanidm"
     assert get["group"].split()[1] == "kanidm"
+    assert get["initgroups"].split()[1] == "kanidm"   # D9: CUI profile pins initgroups to files -> no Kanidm groups at login
     assert "kanidm" not in get["shadow"]
     assert get["passwd"].rstrip().endswith("{exclude if \"with-custom-passwd\"}")   # template markers kept
     assert patch_nsswitch(out) == out

@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+# ssh-login.exp USER [WHICH]  (runs on the Mac). Logs in to client2 over SSH with keyboard-interactive/password and
+# runs `id`. Reads ~/idm-lab-secrets/USER.json itself. WHICH = posix (default) | primary | wrong  selects the
+# password sent. Every prompt shown is printed as "PROMPT: <text>" (never the answers); TOTP prompts get a live code.
+set timeout 20
+set user [lindex $argv 0]
+set which [expr {[llength $argv] > 1 ? [lindex $argv 1] : "posix"}]
+set f [open "$env(HOME)/idm-lab-secrets/$user.json"]; set js [read $f]; close $f
+proc jget {js k} { if {[regexp "\"$k\": *\"(\[^\"\]*)\"" $js -> v]} { return $v }; return "" }
+set pw [jget $js posix_password]
+if {$which eq "primary"} { set pw [jget $js password] }
+if {$which eq "wrong"} { set pw "definitely-not-the-password-123" }
+set sec [jget $js totp_secret]
+log_user 0
+spawn ssh -o PubkeyAuthentication=no -o PreferredAuthentications=keyboard-interactive,password \
+  -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 $user@192.168.100.13 id
+set n 0
+expect {
+  -re {(?i)([^\r\n]*(password|passcode)[^\r\n]*: ?)$} {
+    puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "$pw\r"; incr n; if {$n < 4} { exp_continue } }
+  -re {(?i)([^\r\n]*(totp|code|token|otp)[^\r\n]*: ?)$} {
+    puts "PROMPT: [string trim $expect_out(1,string)]"
+    set code [exec python3 [file dirname [info script]]/../tools/totp.py $sec sha256]; send -- "$code\r"; incr n; if {$n < 4} { exp_continue } }
+  -re {uid=[^\r\n]+} { puts "RESULT: $expect_out(0,string)"; exp_continue }
+  -re {(?i)(permission denied|authentication failed|access denied)[^\r\n]*} { puts "RESULT: DENIED ($expect_out(0,string))"; exp_continue }
+  eof {}
+  timeout { puts "RESULT: TIMEOUT" }
+}
