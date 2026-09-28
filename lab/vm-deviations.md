@@ -18,6 +18,7 @@
 | srv1 | `expect` installed (DVD) | scripted Kanidm CLI logins; not a compiler |
 | srv1, client2 | snapshots `os-ready`, `golden`; `lab/reset.sh` reverts to golden **and restarts chronyd** (a reverted VM's clock is rewound; chrony flags the jump "too variable") | repeatable scenarios |
 | client1 | UEFI (OVMF secboot, MS keys enrolled, q35/SMM) + swtpm; 512 GB **thin** disk (`--check disk_size=off`); CHP-kit preconditions only (no CUI at install: the kit applies it); root LUKS2 bound to vTPM PCR 7 on first real boot | CHP kit test (spec §4.5); unattended lab reboots |
+| client1 | `itadmin ALL=(ALL) NOPASSWD: ALL` (kickstart `%post`, as on the other VMs) | lab automation. **It bypasses the CHP kit's sudo MFA; the kit's IDA-03 does not detect it (K10)** |
 | client1 | pty serial console with file log (all new VMs via `vm-lib.sh`) | answer LUKS prompts via `virsh console` |
 | aero | `expect` installed (DVD) | `luks-console-unlock.exp` |
 | all | `sysctl_user_max_user_namespaces` left as dc2 tailoring has it (unselected) | mirror dc2 |

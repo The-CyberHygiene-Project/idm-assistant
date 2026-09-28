@@ -6,17 +6,20 @@ set vm [lindex $argv 0]
 gets stdin pass
 log_user 0
 spawn virsh console --force $vm
-# The prompt may already have been printed before we attached, so don't send an empty line (that would be a wrong
-# attempt): wait briefly for a fresh prompt, otherwise answer the one that is already waiting.
-set timeout 10
-expect {
-  -re {Please enter passphrase[^\r\n]*} { puts "fresh prompt seen" }
-  timeout { puts "no fresh prompt; answering the pending one" }
+# Only answer a prompt that is really pending: the console log (pty log.file) must END with "Please enter passphrase".
+# Never send blind - after a TPM unlock the passphrase would be typed at `login:` and echoed into the log.
+set logf "/var/log/libvirt/qemu/$vm-install.log"
+set tailtxt [exec tail -c 400 $logf]
+regsub -all {\x1b\[[0-9;?]*[a-zA-Z]} $tailtxt {} tailtxt
+set lines [lsearch -all -inline -not -regexp [split [string map {"\r" "\n"} $tailtxt] "\n"] {^\s*$}]
+if {![regexp {Please enter passphrase} [lindex $lines end]]} {
+  puts stderr "no pending passphrase prompt (last console line: [lindex $lines end]); refusing to send"
+  send -- "\035"; exit 1
 }
-send -- "$pass\r"; puts "passphrase sent"
+send -- "$pass\r"; puts "passphrase sent (pending prompt confirmed)"
 set timeout 180
 expect {
-  -re {(?i)(login:|Reached target|Started)} { puts "boot continued" }
+  -re {(?i)(login:|Reached target|Started)} { puts "boot continued after a typed passphrase" }
   -re {(?i)(no key available|wrong|invalid)[^\r\n]*} { puts stderr "unlock refused: $expect_out(0,string)"; exit 1 }
   timeout { puts stderr "no progress after passphrase"; exit 1 }
 }

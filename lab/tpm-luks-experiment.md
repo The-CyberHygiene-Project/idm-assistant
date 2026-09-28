@@ -63,7 +63,7 @@ client1 is a UEFI VM (OVMF `OVMF_CODE.secboot.fd`, Microsoft keys enrolled, q35/
 
 | Firmware state | Secure Boot | PCR 7 (sha256) | Root unlock |
 |---|---|---|---|
-| Microsoft keys enrolled | enabled | `0x4B041925…5D310CCE` | **automatic** (clevis, 2 cold boots; journal: "Forward Password Requests to Clevis") |
+| Microsoft keys enrolled | enabled | `0x4B041925…5D310CCE` | **automatic**: after `virsh destroy` + `start`, sshd was reachable within ~20 s with nobody at the console, twice |
 | Blank variable store (`OVMF_VARS.fd`) | disabled, "Setup Mode" | `0xB926225A…ABECDDF1` | **refused by the TPM**; passphrase typed via serial console |
 | Enrolled store restored | enabled | `0x4B041925…5D310CCE` (identical) | **automatic** again |
 
@@ -73,5 +73,7 @@ client1 is a UEFI VM (OVMF `OVMF_CODE.secboot.fd`, Microsoft keys enrolled, q35/
 - The console still *shows* "Please enter passphrase" while clevis answers it from the TPM. A human sees a prompt that needs no answer.
 - `clevis luks bind -k -` reads the passphrase from stdin; a preceding command in the same remote shell can swallow it.
 - Lab VMs now use a pty serial console that also logs to file (`vm-lib.sh`), so a LUKS prompt can be answered via `virsh console` (`lab/host/luks-console-unlock.exp`, passphrase over stdin).
+
+**Passphrase at rest (review finding, fixed):** Anaconda keeps a verbatim `/root/original-ks.cfg`. With `part … --passphrase=`, it held the **plaintext LUKS passphrase** on the volume it protects (and in any backup of `/root`). It was found and shredded on client1 on 2026-09-28, and older snapshots were deleted. `bind-root-tpm.sh` now shreds it after binding. **For dc2:** never leave the install passphrase on the installed system; check `/root/*ks*`.
 
 **For dc2:** TPM2 + clevis + Secure Boot (PCR 7) gives an unattended reboot of an encrypted **root** volume. A Secure Boot change (firmware update, key change, SB disabled) makes the TPM refuse by design, and the escrowed passphrase is then needed. Plan firmware updates accordingly (re-bind afterwards).

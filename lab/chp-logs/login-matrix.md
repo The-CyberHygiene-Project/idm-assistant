@@ -8,6 +8,6 @@ PAM on client1: the kit's `pam_google_authenticator` (no `nullok`) is line 1 of 
 | lab02 (Kanidm, **no GA token**) | SSH | Verification code, Password | **DENIED** | GA without `nullok` refuses users with no token file: Kanidm users are locked out until enrolled on **each host** |
 | lab03 (Kanidm + GA) | SSH | Verification code, Password (Kanidm POSIX password) | **OK** (after patcher fix) | **two factors at login**; first attempt DENIED because `pam_localuser [default=1]` skipped `pam_kanidm` (patcher bug, fixed and tested) |
 | lab01 (Kanidm + GA, lab_admins) | SSH → `sudo id` | sudo: Verification code, `[sudo] password` | **root** | sudo requires both factors |
-| lab01 | SSH **after** the sudo above | Verification code, Password, Password | **DENIED** | sudo (user context) rewrote `~/.google_authenticator` as `user_home_t`; sshd then denied `unlink` → **the dc1 lockout mechanism** |
-| lab01 | SSH after `restorecon` of the token | Verification code, Password | **OK** | the dc1 repair |
+| lab01 | SSH **after** the sudo above | Verification code, Password, Password | **DENIED** | sudo (user context) rewrote `~/.google_authenticator` as `user_home_t`; sshd then denied `unlink`: a label-flip lockout **related to** dc1 (dc1 itself was the `create` denial, K7) |
+| lab01 | SSH after `restorecon` of the token | Verification code, Password | **OK** | `restorecon` repairs this label flip |
 | lab03 | serial console (`login`) | "Password:" shown first | not completed | automation did not complete; `pam.d/login` has GA first (config level). Listed as a manual follow-up with gdm |
