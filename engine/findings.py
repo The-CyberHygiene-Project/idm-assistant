@@ -19,8 +19,8 @@ def _t(s):
 
 
 def _skewed(r):
-    off = (r.get("time") or {}).get("offset_s")
-    return off is not None and abs(off) > SKEW_S
+    t = r.get("time") or {}
+    return any(v is not None and abs(v) > SKEW_S for v in (t.get("offset_s"), t.get("source_offset_s")))
 
 
 def _clock_unknown(r):
@@ -38,7 +38,9 @@ def time_unverified(r):
 
 def time_skew(r):
     if _skewed(r):
-        return Finding("TOTP_TIME_SKEW", "time", (f"offset {r['time']['offset_s']} s vs {r['time'].get('source')}",
+        t = r["time"]
+        return Finding("TOTP_TIME_SKEW", "time", (f"offset {t.get('offset_s')} s, last source sample "
+                                                   f"{t.get('source_offset_s')} s vs {t.get('source')}",
                                                    f"threshold {SKEW_S} s"))
 
 
@@ -49,6 +51,18 @@ def tls_expired(r):
     if k.get("verify") == "expired" or ("not_after" in k and _t(k["not_after"]) <= _t(r["collected_at"])):
         return Finding("TLS_CERT_EXPIRED(kanidm)", "tls", (f"notAfter {k.get('not_after')}",
                                                            f"collected {r['collected_at']}", f"verify {k.get('verify')}"))
+
+
+def tls_untrusted(r):
+    k = (r.get("tls") or {}).get("kanidm")
+    if k and k.get("verify") == "untrusted" and not _skewed(r) and not _clock_unknown(r):
+        return Finding("TLS_CERT_UNTRUSTED(kanidm)", "tls", ("verify: chain does not reach a root this host trusts",))
+
+
+def kanidm_unreachable(r):
+    if (r.get("tls") or {}).get("kanidm") is None and any(
+            e.startswith("tls: could not fetch") for e in r.get("errors") or []):
+        return Finding("KANIDM_UNREACHABLE", "network", ("TLS handshake with idm.kanidm.lab.test failed from this host",))
 
 
 def renewal_stopped(r):
@@ -75,6 +89,31 @@ def ca_root_missing(r):
         return Finding("CLIENT_MISSING_CA_ROOT", "trust", ("lab step-ca root not in the system trust store",))
 
 
+def nss_order_wrong(r):
+    nss = r.get("nss")
+    if r.get("role") != "client" or not nss:
+        return None
+    bad = [f"{m}: {nss.get(m)!r}" for m in ("passwd", "group", "initgroups")
+           if (nss.get(m) or "").split()[:1] != ["kanidm"]]
+    if bad:
+        ok = (r.get("authselect") or {}).get("valid")
+        return Finding("NSS_ORDER_WRONG", "nss", tuple(bad) + (
+            f"authselect check: {'valid' if ok else 'MODIFIED outside authselect'}",))
+
+
+def cache_stale(server, client):
+    """Cross-host: groups the client still grants from cache that the server no longer lists (revocation lag).
+    Only Kanidm groups (name@realm) count; the user's private group (the user's own SPN) is skipped."""
+    su, cu = server.get("kanidm_user") or {}, client.get("user_nss") or {}
+    if not (su.get("exists") and cu.get("found") and "memberof" in su):
+        return None
+    have = set(su["memberof"])
+    extra = sorted(g for g in cu.get("groups", []) if "@" in g and g.split("@")[0] != su["name"] and g not in have)
+    if extra:
+        return Finding("UNIXD_CACHE_STALE", "unixd", (f"{cu['name']} on {client.get('host')} still has {extra}",
+                                                      "the server no longer lists them (change not yet visible)"))
+
+
 def services_down(r):
     out = []
     for unit, st in sorted((r.get("services") or {}).items()):
@@ -83,10 +122,13 @@ def services_down(r):
     return out
 
 
-RULES = (time_unverified, time_skew, tls_expired, renewal_stopped, unixd_offline, posix_pw_missing, ca_root_missing)
+RULES = (time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
+         posix_pw_missing, ca_root_missing, nss_order_wrong)
 
 
 def evaluate(report, peer=None):
     found = [f for rule in RULES if (f := rule(report))]
     found += services_down(report)
+    if peer and report.get("role") == "client" and peer.get("role") == "server":
+        found += [f for f in (cache_stale(peer, report),) if f]
     return sorted(found, key=lambda f: f.id)

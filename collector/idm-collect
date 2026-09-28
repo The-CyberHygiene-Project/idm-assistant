@@ -39,6 +39,14 @@ if t=$(chronyc -n tracking 2>/dev/null); then
   off=$(printf '%s\n' "$t" | awk -F': *' '/^System time/ {split($2,a," "); v=a[1]; if ($2 ~ /slow/) v=-v; print v}')
   printf '%s\n' "$t" | grep -q '^Leap status *: Normal' && synced=true
 else err "time: chronyc tracking failed"; fi
+# >>> source-offset
+# Last measurement of the first source, e.g. "^* 192.168.100.1 10 6 377 12 -52us[  -58us] +/- 242us" -> -0.000058
+# (chrony pads inside the brackets; units ns/us/ms/s).
+# chrony shows the jump here ~2 min before tracking does (measured), so skew is visible at once.
+soff=$(chronyc -n sources 2>/dev/null | awk '/^\^/ { if (match($0, /\[[^]]*\]/)) { v = substr($0, RSTART + 1, RLENGTH - 2); gsub(/[[:space:]]/, "", v);
+  u = v; gsub(/[-+0-9.]/, "", u); n = v; gsub(/[a-z]/, "", n);
+  m = (u == "ns") ? 1e-9 : (u == "us") ? 1e-6 : (u == "ms") ? 1e-3 : 1; printf "%.6f\n", n * m; exit } }')
+# <<< source-offset
 
 # --- services -----------------------------------------------------------------------------------------------------
 if [ "$role" = server ]; then units="kanidmd step-ca named cert-renew-kanidm.timer"
@@ -59,6 +67,26 @@ if out=$(timeout 10 openssl s_client -connect idm.kanidm.lab.test:443 -servernam
   case "$code" in 0) v=ok ;; 10) v=expired ;; *) v=untrusted ;; esac
   tls="{\"kanidm\":{\"not_before\":$(json_str "$nb"),\"not_after\":$(json_str "$na"),\"verify\":$(json_str "$v")}}"
 else err "tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"; fi
+
+# --- user lookup (clients, --user) --------------------------------------------------------------------------------
+# Before the unixd section on purpose: `kanidm-unix status` is only fresh after a lookup needed the server (measured).
+un=null
+if [ -n "$user" ] && [ "$role" = client ]; then
+  if p=$(timeout 15 getent passwd "$user" 2>/dev/null); then
+    gl=""; for g in $(id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
+    un="{\"name\":$(json_str "$user"),\"found\":true,\"gecos\":$(json_str "$(printf '%s' "$p" | cut -d: -f5)"),\"groups\":[${gl%,}]}"
+  else un="{\"name\":$(json_str "$user"),\"found\":false}"; fi
+fi
+
+# --- NSS order + authselect (clients) -----------------------------------------------------------------------------
+nss=null; asel=null
+if [ "$role" = client ]; then
+  n=""; for m in passwd group initgroups; do
+    v=$(sed -n "s/^$m:[[:space:]]*//p" /etc/nsswitch.conf | head -1); n="$n$(json_str "$m"):$(json_str "$v"),"; done
+  nss="{${n%,}}"
+  av=false; authselect check >/dev/null 2>&1 && av=true
+  asel="{\"profile\":$(json_str "$(authselect current 2>/dev/null | sed -n 's/^Profile ID: //p')"),\"valid\":$(json_bool $av)}"
+fi
 
 # --- unixd (clients) ----------------------------------------------------------------------------------------------
 ux=absent
@@ -81,7 +109,9 @@ if [ -n "$user" ] && [ "$role" = server ]; then
         posix=false; printf '%s' "$j" | grep -q '"posixaccount"' && posix=true
         upw=false; has unix_password && upw=true
         pc=false; has primary_credential && pc=true
-        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc)}"
+        mo=$(printf '%s' "$j" | sed -n 's/.*"memberof":\[\([^]]*\)\].*/\1/p')
+        case "$mo" in *[!a-z0-9_@.,\"-]*) mo=""; err "kanidm_user: unexpected characters in memberof" ;; esac
+        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc),\"memberof\":[$mo]}"
       fi
     else err "kanidm_user: REST query failed: $(head -c 200 "$W/curl.err")"; fi
   else err "kanidm_user: no read-only token at $TOKEN_FILE"; fi
@@ -101,7 +131,9 @@ errs=""
 while IFS= read -r l; do errs="$errs$(json_str "$l"),"; done < "$ERRS"
 printf '{"schema":"idm-report/1","host":%s,"role":%s,"collected_at":%s,"user":%s,' \
   "$(json_str "$host")" "$(json_str "$role")" "$(json_str "$now")" "$( [ -n "$user" ] && json_str "$user" || printf null)"
-printf '"time":{"offset_s":%s,"synced":%s,"source":%s},' "$(json_num "$off")" "$(json_bool $synced)" "$(json_str "$src")"
+printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s},' "$(json_num "$off")" \
+  "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")"
+printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
 printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s},"errors":[%s]}\n' \
   "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "${errs%,}"

@@ -1,0 +1,26 @@
+== client2: state diff lines: 6
+253a254
+> run-user-993.mount                                                                                             loaded    active   mounted   /run/user/993
+256c257
+< session-150.scope                                                                                              loaded    active   running   Session 150 of User itadmin
+---
+> session-153.scope                                                                                              loaded    active   running   Session 153 of User itadmin
+373a375,376
+> user@993.service                                                                                               loaded    active   running   User Manager for UID 993
+> user-993.slice                                                                                                 loaded    active   active    User Slice of UID 993
+374a378
+> user-runtime-dir@993.service                                                                                   loaded    active   exited    User Runtime Directory /run/user/993
+files newer than marker (excluding /proc,/sys,/run,journal,audit,lastlog, unixd cache):
+leftover temp dirs: 0
+
+Explanation (2026-09-28, client2, collector with --user lab01, i.e. including the new user lookup, NSS/authselect and
+chrony-sources sections):
+  FILES: no change (sha256 of /etc/kanidm/*, /etc/nsswitch.conf, /etc/authselect/*, /etc/pam.d/*, /etc/pki/kanidm/*,
+         the CA anchors, /etc/idm-collect/* identical).
+  UNITS: only systemd's per-login units for the diag account (uid 993: user@993.service, user-993.slice,
+         user-runtime-dir@993.service, run-user-993.mount) and the admin's own SSH session id (session-NNN.scope,
+         itadmin, from running this proof). They come from logging in, not from idm-collect.
+  No files newer than the marker under /etc /var/lib /root /home /usr/local; no leftover /tmp/idm-collect.* dirs.
+  Not examined, by design: the unixd cache (/var/lib/kanidm-unixd, /var/cache/kanidm-unixd). A user lookup refreshes
+  that cache exactly as a login would; it is a cache, not configuration.
+Verdict: the collector itself is read-only.
