@@ -1,0 +1,37 @@
+{
+ "schema": "idm-report/1",
+ "host": "srv1",
+ "role": "server",
+ "collected_at": "2026-09-28T20:22:01Z",
+ "user": null,
+ "time": {
+  "offset_s": 1.3899e-05,
+  "synced": true,
+  "source": "192.168.100.1"
+ },
+ "services": {
+  "kanidmd": "active",
+  "step-ca": "active",
+  "named": "active",
+  "cert-renew-kanidm.timer": "inactive"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-09-28T20:15:54Z",
+   "not_after": "2026-09-28T20:21:54Z",
+   "verify": "expired"
+  }
+ },
+ "unixd": {
+  "status": "absent"
+ },
+ "kanidm_user": null,
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 0
+ },
+ "errors": []
+}

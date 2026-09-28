@@ -1,0 +1,6 @@
+{
+ "repair": "acme-timer-restore",
+ "host": "srv1",
+ "prompt": "Repair acme-timer-restore on srv1: re-enable and start cert-renew-kanidm.timer (checks the Kanidm certificate every 15 minutes). Type yes to approve",
+ "approved": true
+}
