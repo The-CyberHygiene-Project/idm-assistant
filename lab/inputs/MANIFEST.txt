@@ -4,3 +4,4 @@ step-ca-0.30.2-1.x86_64.rpm|0.30.2|17272124|58fc771efc6c0c2e9ffc48f031a2ff41c1f2
 step-cli-0.31.0-1.x86_64.rpm|0.31.0|15396425|71a7f17d99e0e10209458553aab5561d51040b88c929691136dacb8ec2f849c6|https://github.com/smallstep/cli/releases/download/v0.31.0|sha256 vs release checksums.txt
 kanidm-1.11.2.tar.gz|1.11.2|8957231|a8ed31203e5f8c036b9cb261c85ddac19291bc6ca16981495495cd9621c56529|github kanidm/kanidm tag v1.11.2|sha256 == pinned KANIDM_SHA (tag archive is unsigned)
 kanidm-1.11.2-vendor.tar.gz|1.11.2|135948564|579b442a783cb09b73f648fff3afd4e8858794b4cff46d1d187603a17bb6757a|cargo vendor --locked|crate hashes enforced by Cargo.lock at build time
+kanidm-1.11.2-fips-vendor.tar.gz|1.11.2|141494642|ae5bf81a424358f99c634354bdef3d4af20763ef18ea577d424124a7d3d39e59|cargo vendor --locked after lab/kanidm/fips-variant.patch (rustls 'fips')|crate hashes enforced by Cargo.lock at build time
