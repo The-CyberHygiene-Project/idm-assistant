@@ -7,5 +7,6 @@ ssh aero 'mkdir -p /tmp/lab-host'
 scp -q "$here"/*.sh aero:/tmp/lab-host/
 sed "s|@SSH_PUBKEY@|$(cat ~/.ssh/aero_ecdsa.pub)|" "$here/../kickstart/build1.ks.in" > /tmp/build1.ks
 scp -q /tmp/build1.ks aero:/tmp/lab-host/build1.ks
+for n in srv1 client2; do OUT=/tmp/$n.ks bash "$here/../kickstart/render.sh" $n >/dev/null; scp -q /tmp/$n.ks aero:/tmp/lab-host/$n.ks; done
 # shellcheck disable=SC2029  # step/args are meant to expand on the Mac
 ssh aero "sudo bash /tmp/lab-host/${step}.sh $*"
