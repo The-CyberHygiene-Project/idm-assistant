@@ -1,0 +1,9 @@
+$TTL 300
+@       IN SOA  srv1.kanidm.lab.test. hostmaster.kanidm.lab.test. ( 2026092801 3600 600 86400 300 )
+        IN NS   srv1.kanidm.lab.test.
+srv1    IN A    192.168.100.10
+idm     IN A    192.168.100.10
+ca      IN A    192.168.100.10
+client1 IN A    192.168.100.12
+client2 IN A    192.168.100.13
+aero    IN A    192.168.100.1
