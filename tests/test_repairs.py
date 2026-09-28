@@ -53,7 +53,7 @@ def test_without_approval_nothing_is_applied(tmp_path):
     r = FakeRepair(); c = ctx(tmp_path, [])
     assert run_repair(r.id, c, approve=lambda p: False, registry={r.id: r}) == "REFUSED"
     assert "apply" not in r.calls and "backup" not in r.calls
-    assert json.loads((c.case.dir / "approval.json").read_text())["approved"] is False
+    assert json.loads((c.case.dir / "approval-fake-timer.json").read_text())["approved"] is False
 
 
 def test_fault_still_present_after_apply_is_undone(tmp_path):
@@ -65,10 +65,20 @@ def test_fault_still_present_after_apply_is_undone(tmp_path):
 def test_success_records_the_whole_case(tmp_path):
     r = FakeRepair(); c = ctx(tmp_path, [HEALTHY])
     assert run_repair(r.id, c, lambda p: "enable the renewal timer on srv1" in p, registry={r.id: r}) == "OK"
-    for f in ("symptom.txt", "approval.json", "repair.log", "report-after.json", "timings.json", "status.txt"):
+    for f in ("symptom.txt", "approval-fake-timer.json", "repair.log", "report-after-fake-timer.json", "timings.json", "status.txt"):
         assert (c.case.dir / f).exists(), f
     t = json.loads((c.case.dir / "timings.json").read_text())
-    assert {"precheck", "approval", "backup", "apply", "verify"} <= set(t)
+    assert {f"fake-timer:{s}" for s in ("precheck", "approval", "backup", "apply", "verify")} <= set(t)
+
+
+def test_two_repairs_in_one_case_keep_separate_timings(tmp_path):
+    a, b = FakeRepair(), FakeRepair(); b.id = "fake-other"
+    c = ctx(tmp_path, [HEALTHY, HEALTHY])
+    for r in (a, b):
+        run_repair(r.id, c, lambda p: True, registry={a.id: a, b.id: b})
+    t = json.loads((c.case.dir / "timings.json").read_text())
+    assert "fake-timer:apply" in t and "fake-other:apply" in t
+    assert (c.case.dir / "approval-fake-timer.json").exists() and (c.case.dir / "approval-fake-other.json").exists()
 
 
 def test_failing_precheck_stops_before_approval(tmp_path):
@@ -78,3 +88,25 @@ def test_failing_precheck_stops_before_approval(tmp_path):
     r = P(); asked = []
     assert run_repair(r.id, ctx(tmp_path, []), lambda p: asked.append(p) or True, registry={r.id: r}) == "PRECHECK-FAILED"
     assert asked == [] and "apply" not in r.calls
+
+
+def test_guided_repair_waits_for_the_user_between_apply_and_verify(tmp_path):
+    order = []
+
+    class Guided(FakeRepair):
+        id = "guided"
+        verify_absent = {"ACME_RENEWAL_STOPPED"}
+
+        def apply(self, ctx):
+            order.append("apply")
+
+        def wait_for_user(self, ctx):
+            order.append("user-completes")
+
+    def collect():
+        order.append("verify-collect"); return HEALTHY
+
+    r = Guided()
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "g", "s"), collect=collect)
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "OK"
+    assert order == ["apply", "user-completes", "verify-collect"]
