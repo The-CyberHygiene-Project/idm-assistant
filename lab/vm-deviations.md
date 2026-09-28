@@ -9,5 +9,5 @@
 | build1 | chrony → 192.168.100.1 (aero) | lab time source |
 | build1 | minimal environment + compilers (dc2 is graphical-server) | build host only; never runs identity services |
 | build1 | 12 vCPU / 16 GB during Plan 2 (spec: 6 / 8) | only VM on aero; shortens the compile. **Reverted** 2026-09-27: back to 6 vCPU / 8 GB (snapshot `built`) |
-| build1 | **fapolicyd `permissive = 1`** during Plan 2 builds (ISSO-approved 2026-09-27); still logs every would-be denial | CUI fapolicyd blocks the non-RPM Rust toolchain and every build-script binary cargo creates. **Reverted** 2026-09-27 (`permissive = 0`, restart **and reboot**: executables allowed while permissive kept running after the restart until the reboot) |
+| build1 | **fapolicyd `permissive = 1`** during Plan 2 builds (ISSO-approved 2026-09-27); still logs every would-be denial | CUI fapolicyd blocks the non-RPM Rust toolchain and every build-script binary cargo creates. **Reverted** 2026-09-27 (`permissive = 0`, restart **and reboot**: executables allowed while permissive kept running after the restart until the reboot). Re-applied once more (ISSO-approved) for the post-review RPM rebuild, then restored to enforcing and rebooted |
 | all | `sysctl_user_max_user_namespaces` left as dc2 tailoring has it (unselected) | mirror dc2 |

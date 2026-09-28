@@ -19,15 +19,16 @@ Summary: Kanidm identity server (kanidmd)
 The Kanidm server daemon and its web UI assets.
 
 %package clients
-Summary: Kanidm command-line and SSH tools
+Summary: Kanidm command-line tools
 %description clients
-kanidm CLI and SSH authorized-keys helpers.
+The kanidm CLI and kanidm_ssh_authorizedkeys_direct (asks the server directly).
 
 %package unixd
 Summary: Kanidm UNIX integration (PAM/NSS, unixd)
 Requires: %{name}-clients = %{version}-%{release}
 %description unixd
 The kanidm_unixd resolver daemon and its tasks helper, the kanidm-unix tool,
+kanidm_ssh_authorizedkeys (asks unixd, so it works offline from the cache),
 the PAM module pam_kanidm.so and the NSS module libnss_kanidm.so.2.
 
 %prep
@@ -70,6 +71,9 @@ install -Dm0644 examples/kanidm      %{buildroot}%{_datadir}/kanidm/examples/con
 
 %files server
 %{_sbindir}/kanidmd
+%dir %{_datadir}/kanidm
+%dir %{_datadir}/kanidm/ui
+%dir %{_datadir}/kanidm/examples
 %{_datadir}/kanidm/ui/hpkg
 %{_datadir}/kanidm/examples/server.toml
 %{_unitdir}/kanidmd.service
@@ -77,12 +81,18 @@ install -Dm0644 examples/kanidm      %{buildroot}%{_datadir}/kanidm/examples/con
 
 %files clients
 %{_bindir}/kanidm
-%{_sbindir}/kanidm_ssh_authorizedkeys
 %{_sbindir}/kanidm_ssh_authorizedkeys_direct
+%dir %{_sysconfdir}/kanidm
+%dir %{_datadir}/kanidm
+%dir %{_datadir}/kanidm/examples
 %{_datadir}/kanidm/examples/config
 
 %files unixd
 %{_sbindir}/kanidm_unixd
+%{_sbindir}/kanidm_ssh_authorizedkeys
+%dir %{_sysconfdir}/kanidm
+%dir %{_datadir}/kanidm
+%dir %{_datadir}/kanidm/examples
 %{_sbindir}/kanidm_unixd_tasks
 %{_sbindir}/kanidm-unix
 %{_libdir}/security/pam_kanidm.so
