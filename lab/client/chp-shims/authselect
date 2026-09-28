@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# LAB SHIM (not part of the CHP kit). The kit calls `authselect feature enable X` (authselect >= 1.5 syntax); Rocky 9
+# ships authselect 1.2.6, whose syntax is `authselect enable-feature X`, so the kit aborts (Plan 4 finding K1).
+# Translate only that form; pass everything else through unchanged. Every translation is logged to syslog.
+if [[ ${1:-} == feature && ${2:-} == enable ]]; then
+  logger -t chp-lab-shim "authselect feature enable ${*:3} -> enable-feature ${*:3}"
+  exec /usr/bin/authselect enable-feature "${@:3}"
+fi
+exec /usr/bin/authselect "$@"

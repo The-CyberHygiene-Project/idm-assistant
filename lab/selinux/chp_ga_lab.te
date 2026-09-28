@@ -1,0 +1,21 @@
+# chp_ga_lab: LAB-ONLY SELinux module (ISSO-approved 2026-09-28) for pam_google_authenticator under sshd.
+# Evidence (client1, CHP kit hardened): pam_google_authenticator saves its state (replay/rate-limit, -d -r) by
+# creating ".google_authenticator~XXXXXX" in the home directory and renaming it over ~/.google_authenticator.
+# Denied: { create } comm="sshd-session" name=".google_authenticator~…" scontext=sshd_t tcontext=user_home_dir_t file.
+# The random suffix defeats name-based labelling, so the temp file would get user_home_dir_t. This module makes FILES
+# that sshd_t creates directly in a home directory get auth_home_t (the token's type) and lets sshd_t create, write,
+# rename and unlink only auth_home_t files there. It is the dc1 MFA-lockout pattern (gdm/xdm_t there, sshd_t here).
+# Remove with: semodule -r chp_ga_lab
+module chp_ga_lab 1.0;
+
+require {
+    type sshd_t;
+    type user_home_dir_t;
+    type auth_home_t;
+    class dir { search write add_name remove_name };
+    class file { create open read write getattr setattr rename unlink };
+}
+
+type_transition sshd_t user_home_dir_t:file auth_home_t;
+allow sshd_t user_home_dir_t:dir { search write add_name remove_name };
+allow sshd_t auth_home_t:file { create open read write getattr setattr rename unlink };

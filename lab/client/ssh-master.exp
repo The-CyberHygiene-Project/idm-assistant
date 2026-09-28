@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+# ssh-master.exp HOST SECRETS  (runs on the Mac): open a persistent SSH master connection (ControlPath
+# ~/.ssh/cm-HOST) to a PAM-only host (password + Google Authenticator code), so later `ssh HOST …` commands reuse it
+# without re-authenticating. SECRETS = JSON {posix_password, totp_secret, totp_algorithm}. Answers are never printed.
+set timeout 30
+set host [lindex $argv 0]; set sfile [lindex $argv 1]
+set f [open $sfile]; set js [read $f]; close $f
+proc jget {js k} { if {[regexp "\"$k\": *\"(\[^\"\]*)\"" $js -> v]} { return $v }; return "" }
+set pw [jget $js posix_password]; set sec [jget $js totp_secret]; set alg [jget $js totp_algorithm]
+if {$alg eq ""} { set alg sha1 }
+log_user 0
+spawn ssh -M -S $env(HOME)/.ssh/cm-$host -o ControlPersist=8h -o PubkeyAuthentication=no \
+  -o PreferredAuthentications=keyboard-interactive,password -fN $host
+expect {
+  -re {(?i)password[^\r\n]*: ?$} { send -- "$pw\r"; exp_continue }
+  -re {(?i)(verification code|code)[^\r\n]*: ?$} {
+    send -- "[exec python3 [file dirname [info script]]/../tools/totp.py - $alg << $sec]\r"; exp_continue }
+  -re {(?i)permission denied[^\r\n]*} { puts stderr "master: $expect_out(0,string)"; exit 1 }
+  eof {}
+  timeout { puts stderr "master: timeout"; exit 1 }
+}
+catch wait r
+if {[lindex $r 3] != 0} { puts stderr "master: ssh exited [lindex $r 3]"; exit 1 }
+puts "master connection to $host open (~/.ssh/cm-$host)"

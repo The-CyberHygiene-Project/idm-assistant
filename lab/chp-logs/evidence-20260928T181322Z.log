@@ -1,0 +1,92 @@
+LAB SHIMS ACTIVE: authselect firewall-cmd 
+2026-09-28T18:13:22Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=evidence run=20260928T181322Z spec=v0.1
+
+EVIDENCE — conformance claim
+-------------------------------------------------------------------------------
+
+VERIFY — CHP-SPEC v0.1 conformance suite
+-------------------------------------------------------------------------------
+
+4.1 Boundary
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-BND-01     Undeclared hosts observed: 192.168.100.1 192.168.100.10 192.168.100.2 
+  [ MET     ] CHP-BND-02     Topology documented as 'flat'; 1 global IPv4 address(es) on 1 interface(s) up. Consistent.
+
+4.2 Cryptography
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-CRY-01     fips_enabled=1, policy=FIPS, non-FIPS cipher: NEGOTIATED-OR-INCONCLUSIVE, FIPS cipher: accepted.
+  [ NOT MET ] CHP-CRY-02     All devices encrypted, but the off-host mount test is absent. Encryption is confirmed; unreadability elsewhere is not.
+  [ MET     ] CHP-CRY-03     One exclusion recorded: model-assisted administration stack excluded under CHP-CRY-01 and CHP-NET-03, with reasons.
+
+4.3 Identity and authentication
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-IDA-01     Undocumented interactive accounts: itadmin
+  [ MET     ] CHP-IDA-02     directory=sssd(inactive
+inactive, client), dns=inactive
+inactive
+external, kerberos=configured, CA=external. No all-in-one identity product installed.
+  [ NOT MET ] CHP-IDA-03     sshd single-factor attempt was not clearly refused; 
+  [ NOT MET ] CHP-IDA-04     non-compliant: rejected; compliant: REJECTED; reuse: not-run.
+  [ NOT MET ] CHP-IDA-05     recovery path has NEVER been exercised; 
+
+4.4 Perimeter and network
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-NET-01     Unexpected reachable ports: [631 ]; non-enumerated probe: refused.
+  [ NOT MET ] CHP-NET-02     No alert reached the log platform within the interval.
+  [ MET     ] CHP-NET-03     Connection blocked. Permit list: /etc/chp-spec/egress-permit.conf (0
+0 entries). No inference service is installed, so §4.9 creates no egress requirement.
+
+4.5 Logging, monitoring and control health
+-------------------------------------------------------------------------------
+  [ MET     ] CHP-LOG-01     Observed 13MB/day x 90d = 1170MB required; rotation capacity 1280MB (64MB x 20); 20226MB free. Retention is achievable.
+  [ NOT MET ] CHP-LOG-02     rsyslog=NO-ALERT chronyd=NO-ALERT firewalld=NO-ALERT healthy-when-running=no
+  [ NOT MET ] CHP-LOG-03     empty detected=no; stale detected=no.
+
+4.6 Endpoint and host hardening
+-------------------------------------------------------------------------------
+  [ MET     ] CHP-END-01     new_failures=0 resolved=0 pass=42 fail=61. Baseline: /var/lib/chp-spec/published-baseline.json; fresh scan: /var/lib/chp-spec/series/oscap-20260928T172645Z.summary.json.
+  [ NOT MET ] CHP-END-02     1 retained result(s); insufficient-history. A single passing scan is a historical fact, not a current state.
+  [ NOT MET ] CHP-END-03     untrusted binary: EXECUTED; trusted binary: allowed; fapolicyd permissive=1 (1 means it logs but does not deny); usbguard target=block. Execution is not restricted by policy until fapolicyd is enforcing.
+
+4.7 Evidence and assessment
+-------------------------------------------------------------------------------
+  [ MET     ] CHP-EVD-01     4 evidence file(s); retrieved: {"falsifying_result": "Any service in the boundary negotiating a non-validated cipher.", "host": "client1.kanidm.lab.test", "requirement": "...; chp-evidence.timer next run Tue 2026-09-29 00:04:27 MDT.
+  [ MET     ] CHP-EVD-02     0/63 records missing a required field.
+  [ MET     ] CHP-EVD-03     0 of 32 requirements re-verified later than 90d ago
+  [ MET     ] CHP-EVD-04     All in-service documented components respond. Marked planned (excluded from the trace and from conformance): [none]. Assisted administration is documented as NOT IMPLEMENTED on this host, matching the running system: no inference service installed, enabled or scheduled.
+
+4.8 Backup and recovery
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-BAK-01     No restoration has ever been recorded. 0 backup artifact(s) exist and the job reports success — which is precisely what this requirement declines to accept.
+  [ NOT MET ] CHP-BAK-02     Result: not-configured — CHP_OFFLINE_TARGET is unset, so no offline copy is declared.
+
+4.9 Assisted administration (conditional)
+-------------------------------------------------------------------------------
+  [ N/A     ] CHP-AIA-01     No assisted administration in service. The inference peer is declared planned and is not reachable. §4.9 is conditional and does not yet apply.
+  [ N/A     ] CHP-AIA-02     No assisted administration in service. The inference peer is declared planned and is not reachable. §4.9 is conditional and does not yet apply.
+  [ N/A     ] CHP-AIA-04     No assisted administration in service. The inference peer is declared planned and is not reachable. §4.9 is conditional and does not yet apply.
+  [ N/A     ] CHP-AIA-03     No hardware has been committed to an assisted-administration role, so nothing is yet due a test. Acceptance ledger holds no entries. This requirement becomes live the moment the peer is committed, and the ledger must be written BEFORE that commitment, not after.
+  [ MET     ] CHP-AIA-05     Assisted administration is documented as not implemented on this host and the inference peer is documented as planned — a contingency that does not meet the bar, not an operational capability. The running system agrees: no inference component installed, enabled, scheduled or reachable.
+
+4.10 Change and currency
+-------------------------------------------------------------------------------
+  [ MET     ] CHP-CHG-01     All records stamped spec_version=0.1; harness version 1.0.0.
+  [ MET     ] CHP-CHG-02     Gap analysis present at /var/lib/chp-spec/standards-gap.md, last updated 2026-09-28.
+-------------------------------------------------------------------------------
+  MET 13    NOT MET 15    N/A 4
+  evidence: /var/lib/chp-spec/evidence/20260928T181322Z.jsonl
+-------------------------------------------------------------------------------
+2026-09-28T18:14:02Z [OK   ] conformance claim: /var/lib/chp-spec/conformance-claim-20260928T181322Z.md
+
+# Conformance claim — CHP-SPEC v0.1
+
+**System owner:** CyberHygiene Project Lab  
+**Organization (trading name):** CyberHygiene Lab  
+**System name:** Kanidm Lab client1  
+**Domain:** kanidm.lab.test  
+**Host:** client1.kanidm.lab.test  
+**Assessed:** 2026-09-28 18:14 UTC  
+**Specification version assessed against:** 0.1 (CHP-CHG-01)
+
+**Result: PARTIAL CONFORMANCE — 13 met, 15 not met, 4 not applicable, of 32 scored.**
+

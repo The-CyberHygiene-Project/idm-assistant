@@ -12,10 +12,42 @@
 | preflight | `WARN not an HP chassis — the firmware checks below may not apply` | lab VM | lab artefact, correctly a warning |
 | preflight | OK: Rocky 9, UEFI, Secure Boot enabled, TPM 2.0 present, FIPS (policy FIPS), `/boot/efi`, every data-bearing device under LUKS, SCAP datastream found → **PREFLIGHT PASSED** | kickstart built the kit's preconditions | **kit correct** |
 | plan | 37-line change plan (boundary, crypto, identity: sssd + PAM MFA on sshd/login/sudo, break-glass `chpbreak`, perimeter default-deny + egress deny, logging, OpenSCAP baseline, fapolicyd + usbguard, evidence, backup; AIA not implemented), config backup path and a `rollback` command | — | **kit correct**; clear and reviewable |
+| harden (crypto) | writes `/etc/ssh/sshd_config.d/50-chp-spec.conf`: `PasswordAuthentication no`, `KbdInteractiveAuthentication yes`, `AuthenticationMethods keyboard-interactive:pam`, then **reloads sshd**, before the identity step installs/enrols Google Authenticator | kit ordering | **K0 (lockout):** SSH public keys stop being accepted at all. An admin with only a key (the normal build-time path) is locked out the moment sshd reloads. When harden then aborted (K1), nobody could log in: root locked, and the admin had no password and no token. Recovery: snapshot revert. **Fix:** enrol admins (password + GA) *before* the sshd step, or order the identity step first and refuse to reload sshd until at least one admin is enrolled |
+| harden (identity) | `authselect feature enable with-pwhistory` → prints authselect usage; `aborted at line 274` | **K1:** authselect ≥1.5 syntax; Rocky 9.8 ships authselect 1.2.6 (`authselect enable-feature …`). Also redundant: the `select … with-pwhistory` just before already enables it | **kit bug.** Lab shim `lab/client/chp-shims/authselect` (logged). Fix: `enable-feature` or delete the line |
+| harden (perimeter) | `firewall-cmd --permanent --set-log-denied=all` → "Can't use stand-alone options with other options"; `aborted at line 1096` | **K2:** `--set-log-denied` is stand-alone (always permanent) | **kit bug.** Lab shim `chp-shims/firewall-cmd` (logged). Fix: drop `--permanent` |
+| harden (logging) | `mv: cannot move … to '/etc/systemd/journald.conf.d/50-chp-spec.conf': No such file or directory`; `aborted at line 309` | **K3:** `write_file()` never creates the parent directory; `journald.conf.d` doesn't exist on a fresh Rocky 9.8 | **kit bug.** Lab prep `lab/client/chp-prep-dirs.sh`. Fix: `install -d` the parent in `write_file` |
+| harden (identity) | "Enrol every interactive account NOW … `su - <user> -c 'google-authenticator -t -d -f -r 3 -R 30 -W'`" | `google-authenticator` asks "Enter code from app (-1 to skip)" and fails without a terminal | doc/automation nit: pass `-1` on stdin or document `--no-confirm`-style use; also run it **before** the sshd step (K0) |
+| first GA login (sshd) | correct code + password **refused**; AVC `denied { create } comm="sshd-session" name=".google_authenticator~XXXXXX" scontext=sshd_t tcontext=user_home_dir_t` | pam_google_authenticator saves replay/rate-limit state (`-d -r`) by creating a temp file in `$HOME` and renaming it; the random suffix defeats name-based labelling; `sshd_t` may not create `user_home_dir_t` files | **K7: the dc1 MFA-lockout pattern** (gdm/`xdm_t` there, `sshd_t` here), reproduced naturally on a kit-hardened host. The kit gives no SELinux handling. Lab: ISSO-approved narrow module `lab/selinux/chp_ga_lab.te` (temp file gets `auth_home_t`; sshd may create/rename only those). Then code + password login works, 0 AVCs |
+| verify | `aborted at line 1982` after CRY-01 | **K5:** `last_offhost="$(grep -v '^#' "$ledger" | grep -v '^$' | tail -1)"` without `|| true` (the other three ledger reads have it); harden creates the ledger as a comments-only stub, so under `set -e` + `pipefail` verify always dies here | **kit bug.** Lab workaround `lab/client/chp-verify.sh` moves the stub aside for the run (nothing fabricated) |
+| verify | CHP-CRY-01 and CHP-IDA-03 always **NOT MET** ("non-FIPS cipher: NEGOTIATED-OR-INCONCLUSIVE"; "single-factor sshd attempt was not clearly refused"), although sshd *does* refuse ("Unable to negotiate … no matching cipher found"; "Permission denied") | **K4:** `if timeout 10 ssh … 2>&1 | grep -qi …` under `pipefail`: ssh's own exit (255) becomes the pipeline status even when grep matched | **kit bug:** both negative tests can never pass. Fix: capture the output, then grep it |
+| verify | `aborted at line 2214 (exit 1)` in the credential-policy test | **K6:** the ERR trap (`trap 'on_err $LINENO' ERR`) fires even inside the `set +e` block where the kit *deliberately* expects `pwtest.py` to fail (the weak password being rejected) | **kit bug:** verify can never complete on a host whose password policy works. Fix: `trap - ERR` around the block |
+
+**Proposed fixes K1–K6** are one patch, `lab/client/chp-proposed-fixes.patch` (8 hunks). It was applied only to an **evaluation copy** built on the Mac (`CHP_PATCHED=1`, logs prefixed `patched-`); the kit on the Desktop is checksum-guarded and unchanged.
 
 ## 2. Verify results (before Kanidm)
 
-_Task 5._
+Two runs, same host state (after harden, `itadmin` and `chpbreak` enrolled, GA module loaded):
+- **Unmodified kit** (`verify-20260928T181042Z.log`): BND-01 NOT MET, BND-02 MET, **CRY-01 NOT MET (K4)**, CRY-02 NOT MET, CRY-03 MET, IDA-01 NOT MET, IDA-02 MET, **IDA-03 NOT MET (K4)**, then **aborts (K6)**. Nothing after IDA-03 is evaluated.
+- **Evaluation copy with the proposed fixes** (`patched-verify-20260928T181201Z.log`): the whole suite runs, and **CRY-01 and IDA-03 become MET** (the K4 fixes). A trailing `aborted at line 2668` appears after the full result list and was not investigated.
+
+| Control | Patched-copy result | Reading |
+|---|---|---|
+| BND-01 | NOT MET: undeclared hosts .1/.10/.2 | correct: the lab boundary file is a stub (operator task) |
+| CRY-01 | **MET** | K4 fixed; host FIPS correct |
+| CRY-02 | NOT MET: off-host mount test absent | correct: a physical test the operator must record |
+| IDA-01 | NOT MET: undocumented account `itadmin` | correct: lab admin not in the kit's account register |
+| IDA-02 | MET: directory=sssd (inactive) | the kit accepts an *inactive* sssd as the directory. Doubtful; see §3 |
+| IDA-03 | **MET**: all four paths require GA, no nullok, single-factor refused | K4 fixed |
+| IDA-04 | NOT MET: "compliant: REJECTED" | the kit's own compliant test password (`Tr0ub4dor&3-Xylo-Quilt`) is rejected via its `passwd` harness although `pwscore` gives it 98. Cause not isolated (candidate **K8**) |
+| IDA-05 | NOT MET: recovery path never exercised | correct (operator task) |
+| NET-01 | NOT MET: unexpected reachable port 631 | correct: CUPS from the Server-with-GUI install; the kit reports it but doesn't remove it |
+| NET-02, LOG-02, LOG-03 | NOT MET: no alert reached the log platform / NO-ALERT | alert path not wired (no log platform in the lab) |
+| NET-03, LOG-01, END-01, EVD-01..04, AIA-05, CHG-01 | MET | — |
+| END-02 | NOT MET: one retained scan | correct (history builds over time) |
+| END-03 | NOT MET: fapolicyd permissive (untrusted binary executed) | correct: the kit deliberately starts permissive for a week |
+| BAK-01/02 | NOT MET: no restoration recorded; offline target unset | correct (operator tasks; `CHP_OFFLINE_TARGET=none`) |
+| CHG-02 | NOT MET: stub created | correct (operator task) |
+| AIA-01..04 | N/A | peer planned |
 
 ## 3. Kit vs Kanidm (ADR 0001) collisions
 

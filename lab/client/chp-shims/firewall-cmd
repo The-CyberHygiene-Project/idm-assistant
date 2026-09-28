@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# LAB SHIM (not part of the CHP kit). The kit runs `firewall-cmd --permanent --set-log-denied=all`; --set-log-denied
+# is a stand-alone option (always permanent) and firewalld refuses the combination, so the kit aborts (finding K2).
+# Drop --permanent only when --set-log-denied is present; pass everything else through unchanged. Logged to syslog.
+args=("$@")
+if printf '%s\n' "${args[@]}" | grep -q '^--set-log-denied'; then
+  out=(); for a in "${args[@]}"; do [[ $a == --permanent ]] || out+=("$a"); done
+  logger -t chp-lab-shim "firewall-cmd ${args[*]} -> ${out[*]}"
+  exec /usr/bin/firewall-cmd "${out[@]}"
+fi
+exec /usr/bin/firewall-cmd "$@"

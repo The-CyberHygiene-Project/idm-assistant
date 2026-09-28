@@ -1,0 +1,20 @@
+LAB SHIMS ACTIVE: authselect firewall-cmd 
+2026-09-28T18:09:28Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=verify run=20260928T180928Z spec=v0.1
+
+VERIFY — CHP-SPEC v0.1 conformance suite
+-------------------------------------------------------------------------------
+
+4.1 Boundary
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-BND-01     Undeclared hosts observed: 192.168.100.1 192.168.100.10 192.168.100.2 
+  [ MET     ] CHP-BND-02     Topology documented as 'flat'; 1 global IPv4 address(es) on 1 interface(s) up. Consistent.
+
+4.2 Cryptography
+-------------------------------------------------------------------------------
+  [ NOT MET ] CHP-CRY-01     fips_enabled=1, policy=FIPS, non-FIPS cipher: NEGOTIATED-OR-INCONCLUSIVE, FIPS cipher: accepted.
+2026-09-28T18:09:28Z [ERROR] aborted at line 1982 (exit 1). Config backups: /var/lib/chp-spec/config-backups/20260928T180928Z.manifest
+2026-09-28T18:09:28Z [ERROR] Nothing after this point was applied. Re-run after correcting the fault;
+2026-09-28T18:09:28Z [ERROR] this script is idempotent and safe to re-run.
+2026-09-28T18:09:28Z [ERROR] aborted at line 1982 (exit 1). Config backups: /var/lib/chp-spec/config-backups/20260928T180928Z.manifest
+2026-09-28T18:09:28Z [ERROR] Nothing after this point was applied. Re-run after correcting the fault;
+2026-09-28T18:09:28Z [ERROR] this script is idempotent and safe to re-run.

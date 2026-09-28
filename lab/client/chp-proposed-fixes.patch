@@ -1,0 +1,94 @@
+--- a/chp-build.sh	2026-09-28 12:11:45
++++ b/chp-build.sh	2026-09-28 12:11:45
+@@ -292,6 +292,7 @@
+ # write_file <path> <mode> <owner:group>  — content on stdin, atomic, idempotent
+ write_file() {
+     local path="$1" mode="${2:-0640}" owner="${3:-root:root}" tmp
++    [[ -d "$(dirname "$path")" ]] || install -d -m 0755 "$(dirname "$path")"
+     tmp="$(mktemp "${path}.chp.XXXXXX" 2>/dev/null || mktemp)"
+     cat > "$tmp"
+     if [[ -e "$path" ]] && cmp -s "$tmp" "$path"; then
+@@ -965,7 +966,7 @@
+         run "selecting authselect profile with faillock, pwhistory and mkhomedir" \
+             authselect select sssd with-faillock with-pwhistory with-mkhomedir --force
+         run "setting password history depth" \
+-            authselect feature enable with-pwhistory
++            authselect enable-feature with-pwhistory
+         # pwhistory depth lives in the pam config authselect generates
+         if [[ -f /etc/authselect/user-nsswitch.conf || -d /etc/authselect ]]; then
+             sed -i -E "s/(pam_pwhistory\.so.*remember=)[0-9]+/\1${CHP_PW_HISTORY}/" \
+@@ -1093,7 +1094,7 @@
+             warn "passing CHP-AIA-03 acceptance test is recorded."
+         fi
+         firewall-cmd --permanent --zone=drop --add-icmp-block=echo-request
+-        firewall-cmd --permanent --set-log-denied=all
++        firewall-cmd --set-log-denied=all
+         firewall-cmd --reload
+         ok "perimeter: default deny; permitted = ${CHP_PERMITTED_SERVICES[*]} ${CHP_PERMITTED_PORTS[*]:-}"
+     fi
+@@ -1936,18 +1937,19 @@
+     # good news cannot distinguish a working control from a broken one.
+     local neg_result="not-run" pos_result="not-run"
+     if command -v ssh >/dev/null 2>&1; then
+-        if timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
++        local probe
++        probe="$(timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                  -o Ciphers=chacha20-poly1305@openssh.com \
+-                 -o ConnectTimeout=5 nonexistent@127.0.0.1 true 2>&1 \
+-           | grep -qi 'no matching cipher\|Unable to negotiate'; then
++                 -o ConnectTimeout=5 nonexistent@127.0.0.1 true 2>&1 || true)"
++        if grep -qi 'no matching cipher\|Unable to negotiate' <<<"$probe"; then
+             neg_result="refused"
+         else
+             neg_result="NEGOTIATED-OR-INCONCLUSIVE"
+         fi
+-        if timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
++        probe="$(timeout 10 ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                  -o Ciphers=aes256-gcm@openssh.com \
+-                 -o ConnectTimeout=5 nonexistent@127.0.0.1 true 2>&1 \
+-           | grep -qi 'no matching cipher'; then
++                 -o ConnectTimeout=5 nonexistent@127.0.0.1 true 2>&1 || true)"
++        if grep -qi 'no matching cipher' <<<"$probe"; then
+             pos_result="refused-unexpectedly"
+         else
+             pos_result="accepted"
+@@ -1979,7 +1981,7 @@
+ 
+     local ledger="${VAR_DIR}/cry02-offhost-test.ledger" last_offhost="" offhost_age=99999
+     if [[ -f "$ledger" ]]; then
+-        last_offhost="$(grep -v '^#' "$ledger" | grep -v '^$' | tail -1)"
++        last_offhost="$(grep -v '^#' "$ledger" | grep -v '^$' | tail -1 || true)"
+         if [[ -n "$last_offhost" ]]; then
+             local d0; d0="$(cut -d'|' -f1 <<<"$last_offhost")"
+             offhost_age=$(( ( $(date +%s) - $(date -d "$d0" +%s 2>/dev/null || echo 0) ) / 86400 ))
+@@ -2076,10 +2078,11 @@
+     done
+     # The live negative test: password auth must be refused outright by sshd.
+     local ssh_pw_refused="no"
+-    if timeout 10 ssh -o BatchMode=no -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
++    local sfprobe
++    sfprobe="$(timeout 10 ssh -o BatchMode=no -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+             -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+-            -o NumberOfPasswordPrompts=0 root@127.0.0.1 true 2>&1 \
+-       | grep -qi 'Permission denied\|no supported authentication'; then
++            -o NumberOfPasswordPrompts=0 root@127.0.0.1 true 2>&1 || true)"
++    if grep -qi 'Permission denied\|no supported authentication' <<<"$sfprobe"; then
+         ssh_pw_refused="yes"
+     fi
+ 
+@@ -2211,6 +2214,7 @@
+ PYEOF
+ 
+     set +e
++    trap - ERR   # expected non-zero exits below; the ERR trap fires even under set +e
+     python3 "${LIB_DIR}/pwtest.py" "$canary" "$reuse" "$weak" >/dev/null 2>&1
+     case $? in 1) rej_weak="rejected";; 0) rej_weak="ACCEPTED";; *) rej_weak="inconclusive";; esac
+ 
+@@ -2221,6 +2225,7 @@
+         python3 "${LIB_DIR}/pwtest.py" "$canary" "$strong1" "$reuse" >/dev/null 2>&1
+         case $? in 1) rej_reuse="rejected";; 0) rej_reuse="ACCEPTED";; *) rej_reuse="inconclusive";; esac
+     fi
++    trap 'on_err $LINENO' ERR
+     set -e
+ 
+     userdel -r "$canary" >/dev/null 2>&1 || true
