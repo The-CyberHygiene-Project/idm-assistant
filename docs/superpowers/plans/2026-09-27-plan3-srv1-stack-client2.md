@@ -32,7 +32,9 @@ Plan 2 proved Kanidm can be **built and packaged**. It did not prove it **runs**
 - the diagnostic collector and repairs (Plan 5);
 - WebAuthn/passkey logins (see Decisions).
 
-## Decisions for you (ISSO), recommended defaults
+## Decisions (ISSO, approved 2026-09-27)
+
+All five were approved as recommended. On the passkey: the ISSO has USB security keys, but enrolment is deferred as not needed at this stage.
 
 1. **SELinux (spec §9.2). Recommended: a small lab-only policy module built from the exact denials observed.**
    - We record the denials first.
