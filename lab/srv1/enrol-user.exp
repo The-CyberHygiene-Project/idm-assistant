@@ -2,6 +2,8 @@
 # enrol-user.exp  (on srv1). stdin: line 1 = reset token, 2 = password, 3 = unix (POSIX) password, 4 = mode
 # (totp | password-only). Walks Kanidm 1.11.2's credential REPL (prompts captured 2026-09-27) and commits.
 # Prints only "TOTP_SECRET=<base32>" (mode totp) on stdout; the caller stores it in ~/idm-lab-secrets.
+# Known exposure: `kanidm … use-reset-token` accepts the token only as an argument, so it is visible in ps on srv1
+# for the seconds the REPL runs (the token is single-use and expires in 1 h). Everything else comes via stdin.
 # NOTE: every expect block is multi-line on purpose - a one-line `expect { ... }` is read as ONE literal pattern.
 set timeout 30
 log_user 0
@@ -48,7 +50,7 @@ if {$mode eq "totp"} {
     -re {TOTP: $} {}
     timeout { fail "no TOTP code prompt" }
   }
-  set code [exec python3 /tmp/srv1/totp.py $sec sha256]
+  set code [exec python3 /tmp/srv1/totp.py - sha256 << $sec]
   send -- "$code\r"
   expect {
     -re {(?i)(error|incorrect|invalid|fail)[^\n]*} { fail $expect_out(0,string) }

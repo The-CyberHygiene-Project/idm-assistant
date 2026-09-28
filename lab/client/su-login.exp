@@ -9,7 +9,7 @@ set n 0
 expect {
   -re {(?i)([^\r\n]*(password|passcode)[^\r\n]*: ?)$} { puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "$pw\r"; incr n; if {$n < 4} { exp_continue } }
   -re {(?i)([^\r\n]*(totp|code|token|otp)[^\r\n]*: ?)$} {
-    puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "[exec python3 /tmp/client/totp.py $sec sha256]\r"; incr n; if {$n < 4} { exp_continue } }
+    puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "[exec python3 /tmp/client/totp.py - sha256 << $sec]\r"; incr n; if {$n < 4} { exp_continue } }
   -re {uid=[^\r\n]+} { puts "RESULT: $expect_out(0,string)"; exp_continue }
   -re {(?i)(authentication failure|incorrect|denied)[^\r\n]*} { puts "RESULT: DENIED ($expect_out(0,string))"; exp_continue }
   eof {}

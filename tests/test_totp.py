@@ -19,3 +19,11 @@ def test_rfc6238_sha256_vectors():
     for t, want in [(59, "46119246"), (1111111109, "68084774"), (1111111111, "67062674"),
                     (1234567890, "91819424"), (2000000000, "90698825")]:
         assert totp(seed, t=t, digits=8, algorithm="sha256") == want
+
+
+def test_cli_reads_the_secret_from_stdin_so_it_never_appears_in_process_args():
+    import subprocess, sys
+    from pathlib import Path
+    cli = Path(__file__).resolve().parents[1] / "lab" / "tools" / "totp.py"
+    r = subprocess.run([sys.executable, str(cli), "-", "sha256"], input=SECRET + "\n", capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip() == totp(SECRET, algorithm="sha256")

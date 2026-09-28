@@ -18,4 +18,6 @@ def totp(secret_b32, t=None, digits=6, step=30, algorithm="sha1"):
 
 
 if __name__ == "__main__":
-    print(totp(sys.argv[1], algorithm=sys.argv[2] if len(sys.argv) > 2 else "sha1"))
+    # "-" = read the secret from stdin, so it never shows in `ps` / /proc/*/cmdline.
+    sec = sys.stdin.readline().strip() if sys.argv[1] == "-" else sys.argv[1]
+    print(totp(sec, algorithm=sys.argv[2] if len(sys.argv) > 2 else "sha1"))

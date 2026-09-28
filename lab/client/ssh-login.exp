@@ -20,7 +20,7 @@ expect {
     puts "PROMPT: [string trim $expect_out(1,string)]"; send -- "$pw\r"; incr n; if {$n < 4} { exp_continue } }
   -re {(?i)([^\r\n]*(totp|code|token|otp)[^\r\n]*: ?)$} {
     puts "PROMPT: [string trim $expect_out(1,string)]"
-    set code [exec python3 [file dirname [info script]]/../tools/totp.py $sec sha256]; send -- "$code\r"; incr n; if {$n < 4} { exp_continue } }
+    set code [exec python3 [file dirname [info script]]/../tools/totp.py - sha256 << $sec]; send -- "$code\r"; incr n; if {$n < 4} { exp_continue } }
   -re {uid=[^\r\n]+} { puts "RESULT: $expect_out(0,string)"; exp_continue }
   -re {(?i)(permission denied|authentication failed|access denied)[^\r\n]*} { puts "RESULT: DENIED ($expect_out(0,string))"; exp_continue }
   eof {}
