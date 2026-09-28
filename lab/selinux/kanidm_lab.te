@@ -2,7 +2,9 @@
 # Evidence: lab/selinux/client2-avc-enrol.txt. Every denied domain (sshd_t, init_t, chkpwd_t, systemd_logind_t,
 # auditd_t) is in the nsswitch_domain attribute: they were resolving users through libnss_kanidm, which talks to
 # /run/kanidm-unixd/sock. Instead of allowing writes to all of var_run_t, the socket directory gets its own type,
-# and only name-service clients may use it and connect to the (unconfined) unixd daemon.
+# and only name-service clients may use it. CAVEAT: the connectto rule is broader - nsswitch_domain may connect to
+# ANY unconfined_service_t stream socket it can reach (SELinux can't scope connectto to one socket while unixd is
+# unconfined). A proper fix confines unixd in its own domain (out of lab scope; ISSO decision for dc2).
 # Remove with: semodule -r kanidm_lab; semanage fcontext -d '/var/run/kanidm-unixd(/.*)?'; restorecon -R /run/kanidm-unixd
 module kanidm_lab 1.0;
 

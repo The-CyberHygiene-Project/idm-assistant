@@ -5,7 +5,9 @@ After=network-online.target
 User=step
 Group=step
 Environment=STEPPATH=/etc/step-ca
-# Upstream Go ignores the host FIPS mode; enable Go's FIPS 140-3 module explicitly (Plan 3 evidence: fips140=only refuses MD5).
+# Upstream Go ignores the host FIPS mode, so Go's FIPS 140-3 mode is switched on explicitly. fips140=only (refuse
+# non-approved algorithms) is NOT usable: step-ca 0.30.2 panics at start, "crypto/md5: use of MD5 is not allowed in
+# FIPS 140-only mode" (Plan 3 final review, 2026-09-28).
 Environment=GODEBUG=fips140=on
 ExecStart=/usr/bin/step-ca /etc/step-ca/config/ca.json --password-file /etc/step-ca/password
 Restart=on-failure

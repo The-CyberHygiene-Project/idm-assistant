@@ -15,7 +15,8 @@ if [[ ! -f $STEPPATH/config/ca.json ]]; then
 fi
 install -m 0644 /tmp/srv1/units/step-ca.service /etc/systemd/system/step-ca.service
 systemctl daemon-reload
-systemctl enable --now step-ca
+systemctl enable step-ca
+systemctl restart step-ca   # restart, not enable --now: a changed unit (e.g. GODEBUG) must take effect
 firewall-cmd -q --permanent --add-port=9000/tcp
 firewall-cmd -q --reload
 install -m 0644 $STEPPATH/certs/root_ca.crt /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt
