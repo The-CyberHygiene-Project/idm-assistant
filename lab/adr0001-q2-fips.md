@@ -1,10 +1,10 @@
 # ADR 0001 Q2: Is Kanidm's cryptography FIPS-validated?
 
-**Status:** static half done 2026-09-27 (Plan 2, Task 4). Build-time confirmation and FIPS-variant experiment: see the sections below as they're completed. Runtime behaviour on a FIPS host: Plan 3.
+**Status:** complete for Plan 2 (2026-09-27): static inventory, build-time linked crates and FIPS-variant experiment. Runtime behaviour on a FIPS host: Plan 3.
 
 ## Finding (static)
 
-Kanidm 1.11.2 links **no OpenSSL**. TLS and primitives use **rustls + aws-lc-rs (non-FIPS AWS-LC build)**, plus `ring`; password hashing uses RustCrypto `argon2`. None of Kanidm's cryptography passes through Rocky's FIPS-validated OpenSSL provider, **regardless of the host's FIPS mode**.
+Kanidm 1.11.2 links **no OpenSSL**. TLS and primitives use **rustls + aws-lc-rs (non-FIPS AWS-LC build)**, plus `ring` (listed in the lock but **not linked**, see below); password hashing uses RustCrypto `argon2`. None of Kanidm's cryptography passes through Rocky's FIPS-validated OpenSSL provider, **regardless of the host's FIPS mode**.
 
 Consequences for the System Security Plan (NIST SP 800-171 **3.13.11**, FIPS-validated cryptography protecting CUI):
 - Setting `fips=1` on the host does **not** make Kanidm's TLS, token signing or credential hashing FIPS-validated.
@@ -70,7 +70,7 @@ Measured on build1 (Rocky 9.8, FIPS mode, 2026-09-27) with `cargo tree -e normal
 
 **What is inside the binary:** `strings kanidmd` shows **`AWS-LC FIPS 4.2.0`**.
 
-`aws-lc-rs 1.18.0` selects its backend at compile time (`src/lib.rs`: `#[cfg(feature = "fips")] extern crate aws_lc_fips_sys as aws_lc;`). With the feature on, **every aws-lc-rs operation (so all of rustls' TLS) goes to the FIPS module.**
+`aws-lc-rs 1.18.0` selects its backend at compile time (`src/lib.rs`: `#[cfg(feature = "fips")] extern crate aws_lc_fips_sys as aws_lc;`). With the feature on, **every aws-lc-rs operation (so all of rustls' TLS) is routed to the AWS-LC FIPS module's code.** That says where the code runs, not that it runs in a validated, approved mode (see the checks below).
 
 The non-FIPS `aws-lc-sys 0.44.0` is still compiled and linked. `reqwest` → `hyper-rustls` requests aws-lc-rs' default features, but nothing calls it any more. Removing it would need feature changes in those crates. It is dead code, and an assessor may still ask about it.
 
@@ -80,11 +80,11 @@ The non-FIPS `aws-lc-sys 0.44.0` is still compiled and linked. `reqwest` → `hy
 |---|---|---|
 | Password hashing | RustCrypto `argon2` | **Argon2 is not a FIPS-approved algorithm** at all; the FIPS-approved alternative is PBKDF2 |
 | Hashes, HMAC, HKDF, PBKDF2, AES-GCM, ECDSA P-256/384, RSA used directly by Kanidm (tokens, WebAuthn/COSE, key objects) | RustCrypto crates | Not a CMVP-validated module |
-| TLS (server and outbound HTTPS) | rustls → AWS-LC FIPS 4.2.0 | **Inside** the module |
+| TLS (server and outbound HTTPS) | rustls → AWS-LC FIPS 4.2.0 | Runs in the module's code; **approved-mode operation unverified** (e.g. X25519 or ChaCha20-Poly1305 can run in the module but are not FIPS-approved for this use) |
 
 **Before claiming validation**, the ISSO must check the following (not verifiable offline here):
 1. That "AWS-LC FIPS 4.2.0" appears on the **NIST CMVP** validated or in-process list, and under what certificate.
 2. That building it from source with `aws-lc-fips-sys` follows that certificate's **Security Policy** (build procedure, compiler, operating environment).
 3. Whether rustls' `ServerConfig::fips()` reports true at runtime. That is a Plan 3 check.
 
-**Implication for 3.13.11:** the variant moves **TLS** into a FIPS module with a one-line change, but Kanidm's own application cryptography, **including password hashing**, stays outside it. The honest SSP position is "TLS: FIPS module (variant build); application crypto: not FIPS-validated → risk acceptance / POA&M", unless upstream Kanidm changes.
+**Implication for 3.13.11:** the variant routes **TLS** through the AWS-LC FIPS module's code with a one-line change, but Kanidm's own application cryptography, **including password hashing**, stays outside it. The honest SSP position today is: "TLS: AWS-LC FIPS 4.2.0 module built from source; CMVP certificate, Security Policy build conformance and approved-mode operation **unverified** (checks 1-3 above; Plan 3). Application crypto: not FIPS-validated → risk acceptance / POA&M", unless upstream Kanidm changes.
