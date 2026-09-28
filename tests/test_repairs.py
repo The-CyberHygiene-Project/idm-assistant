@@ -247,3 +247,26 @@ def test_nsswitch_restore_needs_positive_evidence():
             "authselect": {"profile": "custom/kanidm", "valid": True}}
     assert repairs.NsswitchRestore().verify_present(good) is None
     assert repairs.NsswitchRestore().verify_present(dict(good, authselect={"profile": "custom/kanidm", "valid": False}))
+
+
+def test_unixd_refresh_refuses_while_kanidm_is_unreachable(tmp_path):
+    from engine import repairs
+    down = dict(HEALTHY, role="client", host="client2", tls={},
+                errors=["tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"])
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: down)
+    assert "unreachable" in repairs.UnixdRefresh().precheck(c)
+
+
+def test_unixd_refresh_invalidates_then_refetches_the_user(tmp_path):
+    from engine import repairs
+    fr = FakeRemote({})
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: HEALTHY, remote=fr,
+            params={"user": "lab03"})
+    repairs.UnixdRefresh().apply(c)
+    cmds = " ; ".join(x[1] for x in fr.calls)
+    assert "kanidm-unix cache-invalidate" in cmds and "id -Gn lab03" in cmds
+
+
+def test_unixd_refresh_verifies_against_the_server(tmp_path):
+    from engine import repairs
+    assert repairs.UnixdRefresh.verify_absent >= {"UNIXD_CACHE_STALE", "UNIXD_OFFLINE"}

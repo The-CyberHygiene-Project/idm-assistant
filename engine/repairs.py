@@ -321,3 +321,32 @@ class NsswitchRestore(Repair):
 
 
 REGISTRY[NsswitchRestore.id] = NsswitchRestore()
+
+
+class UnixdRefresh(Repair):
+    id = "unixd-refresh"
+    host_role = "client"
+    verify_absent = {"UNIXD_CACHE_STALE", "UNIXD_OFFLINE"}
+
+    def describe(self, ctx):
+        return ("invalidate the kanidm-unixd cache (content kept, marked stale) and re-fetch the user, so server-side "
+                "changes are visible now instead of at cache expiry")
+
+    def precheck(self, ctx):
+        if ctx.params.get("user") and not valid_user(ctx.params["user"]):
+            return f"refusing: {ctx.params['user']!r} is not a valid user name"
+        if "KANIDM_UNREACHABLE" in {f.id for f in evaluate(ctx.collect())}:
+            return "Kanidm is unreachable from this host: refreshing the cache cannot help; fix the network first"
+        return None
+
+    def apply(self, ctx):
+        _sh(ctx, "kanidm-unix cache-invalidate")
+        if ctx.params.get("user"):
+            _sh(ctx, f"id -Gn {ctx.params['user']} >/dev/null")      # user name validated in precheck
+
+    def verify_present(self, report):
+        u = report.get("user_nss")
+        return None if u is None or u.get("found") else f"user lookup failed after refresh: {u}"
+
+
+REGISTRY[UnixdRefresh.id] = UnixdRefresh()
