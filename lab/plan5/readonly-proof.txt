@@ -1,0 +1,15 @@
+== srv1: state diff lines: 4
+files newer than marker (excluding /proc,/sys,/run,journal,audit,lastlog):
+leftover temp dirs: 0
+== client2: state diff lines: 4
+files newer than marker (excluding /proc,/sys,/run,journal,audit,lastlog):
+leftover temp dirs: 0
+
+Explanation of the 4 "state diff lines" (checked 2026-09-28 on srv1 with a single run):
+  FILES: no change (sha256 of /etc/kanidm/*, /etc/nsswitch.conf, /etc/pam.d/*, /etc/pki/kanidm/* identical).
+  UNITS: only the SSH login session of the diag account: session-NNN.scope (new session id), user@993.service,
+         user-993.slice, user-runtime-dir@993.service, run-user-993.mount (systemd's per-login units for uid 993 = diag).
+  These come from logging in over SSH, not from idm-collect; systemd removes them after the session ends.
+  No files newer than the marker under /etc /var/lib /root /home /usr/local (excluding chrony/timers/rsyslog/fapolicyd
+  state and /var/log); no leftover /tmp/idm-collect.* directories.
+Verdict: the collector itself is read-only.
