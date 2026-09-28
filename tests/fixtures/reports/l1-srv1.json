@@ -1,0 +1,43 @@
+{
+ "schema": "idm-report/1",
+ "host": "srv1",
+ "role": "server",
+ "collected_at": "2026-09-28T20:00:00Z",
+ "user": "lab08",
+ "time": {
+  "offset_s": 0.001,
+  "synced": true,
+  "source": "192.168.100.1"
+ },
+ "services": {
+  "kanidmd": "active",
+  "step-ca": "active",
+  "cert-renew-kanidm.timer": "active",
+  "named": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-09-28T15:00:00Z",
+   "not_after": "2026-09-29T15:00:00Z",
+   "verify": "ok"
+  }
+ },
+ "unixd": {
+  "status": "absent"
+ },
+ "kanidm_user": {
+  "name": "lab08",
+  "exists": true,
+  "posix": true,
+  "unix_password": false,
+  "primary_credential": true
+ },
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 0
+ },
+ "errors": []
+}
