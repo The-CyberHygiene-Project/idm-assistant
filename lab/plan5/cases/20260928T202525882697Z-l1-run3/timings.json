@@ -1,0 +1,12 @@
+{
+ "reset": 32.854,
+ "inject": 4.691,
+ "collect": 0.989,
+ "kanidm-cred-reset-token:precheck": 0.698,
+ "kanidm-cred-reset-token:approval": 0.0,
+ "kanidm-cred-reset-token:backup": 0.0,
+ "kanidm-cred-reset-token:apply": 0.635,
+ "kanidm-cred-reset-token:user": 0.354,
+ "kanidm-cred-reset-token:verify": 0.755,
+ "final-check": 0.742
+}

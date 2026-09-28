@@ -28,3 +28,4 @@ What the dc2 installer (custom Rocky ISO + signed RPM repo + kickstart) should s
 | 22 | Collector | the `diag` account with a **single-command** sudo rule; a key for the collector host | Plan 5 Task 3; ISSO question 3 (dc2) | D |
 | 23 | Collector | a Kanidm service account `idm-collect` in `idm_service_desk` + `idm_unix_admins` with a **read-only** API token (write proven refused) | Plan 5 Task 4 | R |
 | 24 | Monitoring | alert on `cert-renew-kanidm.timer` not active and on the served Kanidm certificate's remaining lifetime | Plan 5 C1 | R |
+| 25 | Onboarding | make **setting the POSIX (unix) password part of user onboarding**: a user with only a primary Kanidm credential is refused SSH by PAM on every client, and the collector's `POSIX_PW_MISSING` finding is the check | Plan 5 L1 (3/3: refused with the primary password before, posix login OK after) | R |

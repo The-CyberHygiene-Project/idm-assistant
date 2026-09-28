@@ -38,13 +38,19 @@ def inject(log):
     labsecrets.write_json(f"{USER}.json", {"password": pw, "posix_password": None, "totp_secret": sec,
                                            "totp_algorithm": "sha256"})
     log(f"injected: {USER} with primary password + TOTP and no POSIX password")
-    if final_probe(log, expect_ok=False):
-        raise RuntimeError(f"{USER} could log in before the repair; injection did not take")
+    # Before the repair the user only has a primary (Kanidm) password: try THAT one, so the refusal comes from PAM
+    # (an empty password would be refused by sshd itself before PAM runs, proving nothing).
+    if probe("primary", log) != "DENIED":
+        raise RuntimeError(f"{USER} was not refused by PAM before the repair; injection did not take")
 
 
-def final_probe(log, expect_ok=True):
-    r = subprocess.run(["/usr/bin/expect", str(ROOT / "lab/client/ssh-login.exp"), USER, "posix", "192.168.100.13"],
+def probe(which, log):
+    r = subprocess.run(["/usr/bin/expect", str(ROOT / "lab/client/ssh-login.exp"), USER, which, "192.168.100.13"],
                        capture_output=True, text=True)
-    ok = "RESULT: uid=" in r.stdout
-    log(f"login probe {USER}@client2: {'OK' if ok else 'DENIED'} (expected {'OK' if expect_ok else 'DENIED'})")
-    return ok
+    res = "OK" if "RESULT: uid=" in r.stdout else "DENIED" if "RESULT: DENIED" in r.stdout else "ERROR"
+    log(f"login probe {USER}@client2 with its {which} password: {res}")
+    return res
+
+
+def final_probe(log):
+    return probe("posix", log) == "OK"
