@@ -17,6 +17,8 @@ def offenders():
     for p in SCRIPTS:
         for n, line in enumerate(p.read_text().splitlines(), 1):
             code = line.split(" #")[0]
+            code = re.sub(r"'[^']*'", "''", code)   # && inside single quotes (awk programs, trap strings) is not a statement here
+            code = re.sub(r"\b(if|elif|while|until)\b.*?;\s*(then|do)\b", " ", code)   # && inside a condition is fine
             if "&&" not in code or code.lstrip().startswith("#") or "||" in code:
                 continue
             if re.match(r"^\s*(if|elif|while|until|for)\b", code) or QUERY.match(code) or "grep -q" in code.split("&&")[0]:

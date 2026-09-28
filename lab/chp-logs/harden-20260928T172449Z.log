@@ -1,0 +1,135 @@
+LAB SHIMS ACTIVE: authselect 
+2026-09-28T17:24:47Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=harden run=20260928T172447Z spec=v0.1
+
+PREFLIGHT — install media assumptions
+-------------------------------------------------------------------------------
+2026-09-28T17:24:47Z [OK   ] Rocky Linux 9 confirmed
+2026-09-28T17:24:47Z [INFO ] hardware: Red Hat KVM
+2026-09-28T17:24:47Z [WARN ] not an HP chassis — the firmware checks below may not apply
+2026-09-28T17:24:47Z [OK   ] booted in UEFI mode
+2026-09-28T17:24:47Z [OK   ] Secure Boot enabled
+2026-09-28T17:24:47Z [OK   ] TPM 2.0 present (2)
+2026-09-28T17:24:48Z [OK   ] FIPS mode enabled (crypto policy: FIPS)
+
+PREFLIGHT — partition layout
+-------------------------------------------------------------------------------
+  [ ok   ] /                  /dev/mapper/rl_client1-root xfs 326.8G
+  [ ok   ] /home              /dev/mapper/rl_client1-home xfs 39.9G
+  [ ok   ] /tmp               /dev/mapper/rl_client1-tmp xfs 15.9G
+  [ ok   ] /var               /dev/mapper/rl_client1-var xfs 59.9G
+  [ ok   ] /var/tmp           /dev/mapper/rl_client1-var_tmp xfs 9.9G
+  [ ok   ] /var/log           /dev/mapper/rl_client1-var_log xfs 19.9G
+  [ ok   ] /var/log/audit     /dev/mapper/rl_client1-var_log_audit xfs 19.9G
+  [ ok   ] /boot              /dev/vda2 ext4 1.9G
+2026-09-28T17:24:48Z [OK   ] /boot/efi present
+
+PREFLIGHT — encryption at rest (CHP-CRY-02)
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [OK   ] every data-bearing block device is under LUKS
+  /dev/vda3        LUKS	2  cipher=aes-xts-plain64  hash=sha256
+
+PREFLIGHT — tooling
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [OK   ] SCAP datastream: /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [OK   ] PREFLIGHT PASSED
+2026-09-28T17:24:48Z [INFO ] config present: /etc/chp-spec/chp.conf (not overwritten)
+
+CHANGE PLAN — CyberHygiene Lab — spec v0.1
+-------------------------------------------------------------------------------
+  Boundary                CHP-BND-01/02  write enumerated component list, record
+                                         single-segment finding if flat
+  Cryptography            CHP-CRY-01/02  verify OS FIPS policy inheritance; pin
+                                         sshd to FIPS-permitted algorithms only
+  Identity                CHP-IDA-01     sssd, deny undocumented local accounts
+                          CHP-IDA-03     pam MFA on sshd, login (console) and sudo
+                          CHP-IDA-04     pwquality + pwhistory + faillock
+                          CHP-IDA-05     break-glass account chpbreak,
+                                         bounded lockout (900s)
+  Perimeter               CHP-NET-01     firewalld default-deny, enumerated: ssh
+                          CHP-NET-02     auditd + AIDE + rsyslog alert path
+                          CHP-NET-03     egress deny to non-permitted destinations
+  Logging                 CHP-LOG-01     journald+rsyslog sized for 90d retention
+                          CHP-LOG-02     chp-health timer every 15m
+                          CHP-LOG-03     freshness+content checks on every periodic output
+  Hardening               CHP-END-01/02  OpenSCAP baseline, Sun 02:30, retained series
+                          CHP-END-03     fapolicyd execution control, usbguard media control
+  Evidence                CHP-EVD-01..04 evidence timer (daily),
+                                         re-verification cycle 90d
+  Backup                  CHP-BAK-01/02  backup job + restoration-proof ledger,
+                                         offline copy reachability test
+  Assisted administration CHP-AIA-*      NOT IMPLEMENTED on this host.
+                                         Inference peer (not yet declared)
+                                         recorded as planned — marked planned
+                                         per CHP-EVD-04, excluded from conformance,
+                                         gated on a CHP-AIA-03 acceptance test.
+
+  Not performed by this script: OS install, partitioning, FIPS enablement,
+  LUKS creation, reboots.
+
+  Config backups for this run: /var/lib/chp-spec/config-backups/20260928T172447Z/
+  Rollback:                    chp-build.kanidm-lab-client1.sh rollback 20260928T172447Z
+-------------------------------------------------------------------------------
+
+HARDEN — packages
+-------------------------------------------------------------------------------
+
+HARDEN — boundary declaration (CHP-BND-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [INFO ] boundary declaration already present: /etc/chp-spec/boundary.conf
+
+HARDEN — cryptography (CHP-CRY-01)
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [INFO ] reloading sshd
+
+HARDEN — identity and authentication (CHP-IDA-*)
+-------------------------------------------------------------------------------
+2026-09-28T17:24:48Z [INFO ] selecting authselect profile with faillock, pwhistory and mkhomedir
+Backup stored at /var/lib/authselect/backups/2026-09-28-17-24-48.h6QZtw
+Profile "sssd" was selected.
+The following nsswitch maps are overwritten by the profile:
+- passwd
+- group
+- netgroup
+- automount
+- services
+
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+ 
+- with-mkhomedir is selected, make sure pam_oddjob_mkhomedir module
+  is present and oddjobd service is enabled and active
+  - systemctl enable --now oddjobd.service
+
+2026-09-28T17:24:48Z [INFO ] setting password history depth
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+
+2026-09-28T17:24:48Z [INFO ] wrote /etc/security/pwhistory.conf
+2026-09-28T17:24:48Z [INFO ] inserted MFA requirement into pam.d/sshd
+2026-09-28T17:24:48Z [INFO ] inserted MFA requirement into pam.d/login
+2026-09-28T17:24:48Z [INFO ] inserted MFA requirement into pam.d/gdm-password
+2026-09-28T17:24:48Z [INFO ] inserted MFA requirement into pam.d/sudo
+2026-09-28T17:24:48Z [WARN ] Enrol every interactive account NOW, before logging out:
+2026-09-28T17:24:48Z [WARN ]     su - <user> -c 'google-authenticator -t -d -f -r 3 -R 30 -W'
+2026-09-28T17:24:48Z [WARN ] Accounts without a token file cannot authenticate (nullok is not set, by design).
+2026-09-28T17:24:48Z [INFO ] creating break-glass account chpbreak
+2026-09-28T17:24:48Z [INFO ] adding chpbreak to wheel
+2026-09-28T17:24:48Z [WARN ] Set a passphrase for chpbreak, seal it, store it offline:
+2026-09-28T17:24:48Z [WARN ]     passwd chpbreak
+2026-09-28T17:24:48Z [INFO ] wrote /etc/ssh/sshd_config.d/60-chp-breakglass.conf
+2026-09-28T17:24:48Z [INFO ] wrote /var/lib/chp-spec/ida05-breakglass.ledger
+2026-09-28T17:24:49Z [INFO ] wrote /etc/chp-spec/local-accounts.allow
+2026-09-28T17:24:49Z [INFO ] Documented local accounts: /etc/chp-spec/local-accounts.allow
+2026-09-28T17:24:49Z [INFO ] Join the directory with: realm join --client-software=sssd kanidm.lab.test
+
+HARDEN — perimeter (CHP-NET-01/02/03)
+-------------------------------------------------------------------------------
+2026-09-28T17:24:49Z [INFO ] enabling firewalld
+2026-09-28T17:24:49Z [INFO ] setting default zone to drop (default deny)
+success
+success
+success
+usage: 'firewall-cmd --help' for usage information or see firewall-cmd(1) man page
+Can't use stand-alone options with other options.
+2026-09-28T17:24:50Z [ERROR] aborted at line 1096 (exit 2). Config backups: /var/lib/chp-spec/config-backups/20260928T172447Z.manifest
+2026-09-28T17:24:50Z [ERROR] Nothing after this point was applied. Re-run after correcting the fault;
+2026-09-28T17:24:50Z [ERROR] this script is idempotent and safe to re-run.

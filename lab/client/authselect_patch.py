@@ -6,6 +6,7 @@ group and initgroups (upstream: kanidm serves a cached view of files and must co
 The CUI profile pins 'initgroups: files'; without kanidm there, a user's Kanidm groups are missing at login (D9).
 Usage: python3 authselect_patch.py /etc/authselect/custom/kanidm
 """
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,29 @@ PAM_LINES = {
 }
 
 
+def _jumps(line):
+    """Numeric PAM jumps in a control bracket, e.g. [default=1 success=ok] -> [1]."""
+    m = re.search(r"\[([^\]]*)\]", line)
+    return [int(v) for _, _, v in (p.partition("=") for p in m.group(1).split()) if v.isdigit()] if m else []
+
+
+def _safe_insert_at(out, kind):
+    """Index (in `out`) just before the upcoming pam_unix line, moved up until no earlier line of the same type can
+    jump over it. PAM counts jumps in lines of the same type. E.g. stock sssd's
+    `auth [default=1 …] pam_localuser.so` skips the next auth line for NON-local users: pam_kanidm must not be there.
+    Likewise CUI's `session [success=1 …] pam_succeed_if.so service in crond` must keep skipping pam_unix."""
+    pos = [i for i, l in enumerate(out) if l.split(None, 1)[0:1] == [kind]]   # same-type lines so far
+    k = len(pos)                                                              # insertion = before stack line k
+    moved = True
+    while moved:
+        moved = False
+        for j in range(k):
+            if any(j < k <= j + n for n in _jumps(out[pos[j]])):
+                k, moved = j, True
+                break
+    return pos[k] if k < len(pos) else len(out)
+
+
 def patch_pam(text):
     if "pam_kanidm" in text:
         return text
@@ -23,12 +47,7 @@ def patch_pam(text):
     for line in text.splitlines():
         kind = line.split(None, 1)[0] if line.strip() else ""
         if kind in PAM_LINES and kind not in done and "pam_unix.so" in line:
-            at = len(out)
-            # Keep jump rules pointing at pam_unix: e.g. CUI's "session [success=1 default=ignore]
-            # pam_succeed_if.so service in crond" must still skip pam_unix, so go in before such a rule.
-            while at > 0 and out[at - 1].split(None, 1)[0:1] == [kind] and "[success=" in out[at - 1]:
-                at -= 1
-            out.insert(at, PAM_LINES[kind])
+            out.insert(_safe_insert_at(out, kind), PAM_LINES[kind])
             done.add(kind)
         out.append(line)
     return "\n".join(out) + ("\n" if text.endswith("\n") else "")

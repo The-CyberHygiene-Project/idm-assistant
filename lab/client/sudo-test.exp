@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+# sudo-test.exp USER HOST SECRETS  (on the Mac): log in (code + password), then run `sudo -k; sudo id -un` and print
+# every prompt sudo shows ("SUDO-PROMPT: …") and the result. Answers come from SECRETS and are never printed.
+set timeout 25
+set user [lindex $argv 0]; set host [lindex $argv 1]; set sfile [lindex $argv 2]
+set f [open $sfile]; set js [read $f]; close $f
+proc jget {js k} { if {[regexp "\"$k\": *\"(\[^\"\]*)\"" $js -> v]} { return $v }; return "" }
+set pw [jget $js posix_password]; set sec [jget $js totp_secret]; set alg [jget $js totp_algorithm]
+if {$alg eq ""} { set alg sha1 }
+set tp [file dirname [info script]]/../tools/totp.py
+log_user 0
+spawn ssh -tt -o ControlPath=none -o PubkeyAuthentication=no -o PreferredAuthentications=keyboard-interactive $user@$host
+expect {
+  -re {(?i)([^\r\n]*(verification|code)[^\r\n]*: ?)$} { send -- "[exec python3 $tp - $alg << $sec]\r"; exp_continue }
+  -re {(?i)([^\r\n]*password[^\r\n]*: ?)$} { send -- "$pw\r"; exp_continue }
+  -re {[$#] ?$} {}
+  timeout { puts "RESULT: login timeout"; exit 1 }
+}
+# GA refuses a code reused within its window (-d): wait for the next 30 s step before sudo asks for one.
+after 31000
+send -- "sudo -k; sudo id -un; echo SUDO-RC=\$?\r"
+expect {
+  -re {(?i)(\[sudo\][^\r\n]*|verification code[^\r\n]*): ?$} {
+    set p $expect_out(1,string); puts "SUDO-PROMPT: [string trim $p]"
+    if {[string match -nocase "*verification*" $p]} { send -- "[exec python3 $tp - $alg << $sec]\r" } else { send -- "$pw\r" }
+    exp_continue }
+  -re {(?i)password[^\r\n]*: ?$} { puts "SUDO-PROMPT: $expect_out(0,string)"; send -- "$pw\r"; exp_continue }
+  -re {SUDO-RC=(\d+)} { puts "RESULT: sudo rc=$expect_out(1,string)" }
+  -re {\r\nroot\r\n} { puts "RESULT: became root"; exp_continue }
+  timeout { puts "RESULT: sudo timeout" }
+}
+send -- "exit\r"

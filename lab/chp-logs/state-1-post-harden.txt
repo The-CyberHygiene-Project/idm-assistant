@@ -1,0 +1,161 @@
+== authselect
+sssd with-faillock with-pwhistory with-mkhomedir
+== pam.d/system-auth 8732839ee038
+auth required pam_env.so
+auth required pam_faildelay.so delay=2000000
+auth required pam_faillock.so preauth silent
+auth [default=1 ignore=ignore success=ok] pam_usertype.so isregular
+auth [default=1 ignore=ignore success=ok] pam_localuser.so
+auth sufficient pam_unix.so nullok
+auth [default=1 ignore=ignore success=ok] pam_usertype.so isregular
+auth sufficient pam_sss.so forward_pass
+auth required pam_faillock.so authfail
+auth required pam_deny.so
+account required pam_faillock.so
+account required pam_unix.so
+account sufficient pam_localuser.so
+account sufficient pam_usertype.so issystem
+account [default=bad success=ok user_unknown=ignore] pam_sss.so
+account required pam_permit.so
+password requisite pam_pwquality.so local_users_only
+password [default=1 ignore=ignore success=ok] pam_localuser.so
+password requisite pam_pwhistory.so use_authtok
+password sufficient pam_unix.so sha512 shadow nullok use_authtok
+password [success=1 default=ignore] pam_localuser.so
+password sufficient pam_sss.so use_authtok
+password required pam_deny.so
+session optional pam_keyinit.so revoke
+session required pam_limits.so
+-session optional pam_systemd.so
+session optional pam_oddjob_mkhomedir.so
+session [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_uid
+session required pam_unix.so
+session optional pam_sss.so
+== pam.d/password-auth 8732839ee038
+auth required pam_env.so
+auth required pam_faildelay.so delay=2000000
+auth required pam_faillock.so preauth silent
+auth [default=1 ignore=ignore success=ok] pam_usertype.so isregular
+auth [default=1 ignore=ignore success=ok] pam_localuser.so
+auth sufficient pam_unix.so nullok
+auth [default=1 ignore=ignore success=ok] pam_usertype.so isregular
+auth sufficient pam_sss.so forward_pass
+auth required pam_faillock.so authfail
+auth required pam_deny.so
+account required pam_faillock.so
+account required pam_unix.so
+account sufficient pam_localuser.so
+account sufficient pam_usertype.so issystem
+account [default=bad success=ok user_unknown=ignore] pam_sss.so
+account required pam_permit.so
+password requisite pam_pwquality.so local_users_only
+password [default=1 ignore=ignore success=ok] pam_localuser.so
+password requisite pam_pwhistory.so use_authtok
+password sufficient pam_unix.so sha512 shadow nullok use_authtok
+password [success=1 default=ignore] pam_localuser.so
+password sufficient pam_sss.so use_authtok
+password required pam_deny.so
+session optional pam_keyinit.so revoke
+session required pam_limits.so
+-session optional pam_systemd.so
+session optional pam_oddjob_mkhomedir.so
+session [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_uid
+session required pam_unix.so
+session optional pam_sss.so
+== pam.d/sshd 32d835bdc750
+auth required pam_google_authenticator.so no_increment_hotp
+auth substack password-auth
+auth include postlogin
+account required pam_sepermit.so
+account required pam_nologin.so
+account include password-auth
+password include password-auth
+session required pam_selinux.so close
+session required pam_loginuid.so
+session required pam_selinux.so open env_params
+session required pam_namespace.so
+session optional pam_keyinit.so force revoke
+session optional pam_motd.so
+session include password-auth
+session include postlogin
+== pam.d/login b695807a9229
+auth required pam_google_authenticator.so no_increment_hotp
+auth substack system-auth
+auth include postlogin
+account required pam_nologin.so
+account include system-auth
+password include system-auth
+session required pam_selinux.so close
+session required pam_loginuid.so
+session required pam_selinux.so open
+session required pam_namespace.so
+session optional pam_keyinit.so force revoke
+session include system-auth
+session include postlogin
+-session optional pam_ck_connector.so
+== pam.d/gdm-password 036999f19f59
+auth required pam_google_authenticator.so no_increment_hotp
+auth [success=done ignore=ignore default=bad] pam_selinux_permit.so
+auth substack password-auth
+auth optional pam_gnome_keyring.so
+auth include postlogin
+account required pam_nologin.so
+account include password-auth
+password substack password-auth
+-password optional pam_gnome_keyring.so use_authtok
+session required pam_selinux.so close
+session required pam_loginuid.so
+session optional pam_console.so
+session required pam_selinux.so open
+session optional pam_keyinit.so force revoke
+session required pam_namespace.so
+session include password-auth
+session optional pam_gnome_keyring.so auto_start
+session include postlogin
+== pam.d/sudo 05777f33d81e
+auth required pam_google_authenticator.so no_increment_hotp
+auth include system-auth
+account include system-auth
+password include system-auth
+session include system-auth
+== pam.d/su 6b08d1c3f556
+auth		required	pam_env.so
+auth		sufficient	pam_rootok.so
+auth		substack	system-auth
+auth		include		postlogin
+account		sufficient	pam_succeed_if.so uid = 0 use_uid quiet
+account		include		system-auth
+password	include		system-auth
+session		include		system-auth
+session		include		postlogin
+session		optional	pam_xauth.so
+== nsswitch
+passwd:     files sss systemd
+group:      files [SUCCESS=merge] sss [SUCCESS=merge] systemd
+shadow:     files
+== sshd -T
+usepam yes
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication yes
+ciphers aes256-gcm@openssh.com,aes256-ctr,aes128-gcm@openssh.com,aes128-ctr
+macs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512
+trustedusercakeys none
+authorizedkeyscommand none
+kexalgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+denyusers chpbreak
+authenticationmethods keyboard-interactive:pam
+== sssd
+inactive
+ls: cannot access '/etc/sssd/sssd.conf': No such file or directory
+== kanidm
+inactive
+ls: cannot access '/etc/kanidm': No such file or directory 
+== fapolicyd/usbguard/firewalld
+fapolicyd active
+usbguard active
+firewalld active
+== local accounts (uid>=1000)
+itadmin chpbreak 
+== AVC since boot: 0

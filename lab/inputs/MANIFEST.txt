@@ -5,3 +5,5 @@ step-cli-0.31.0-1.x86_64.rpm|0.31.0|15396425|71a7f17d99e0e10209458553aab5561d510
 kanidm-1.11.2.tar.gz|1.11.2|8957231|a8ed31203e5f8c036b9cb261c85ddac19291bc6ca16981495495cd9621c56529|github kanidm/kanidm tag v1.11.2|sha256 == pinned KANIDM_SHA (tag archive is unsigned)
 kanidm-1.11.2-vendor.tar.gz|1.11.2|135948564|579b442a783cb09b73f648fff3afd4e8858794b4cff46d1d187603a17bb6757a|cargo vendor --locked|crate hashes enforced by Cargo.lock at build time
 kanidm-1.11.2-fips-vendor.tar.gz|1.11.2|141494642|ae5bf81a424358f99c634354bdef3d4af20763ef18ea577d424124a7d3d39e59|cargo vendor --locked after lab/kanidm/fips-variant.patch (rustls 'fips')|crate hashes enforced by Cargo.lock at build time
+RPM-GPG-KEY-EPEL-9|epel9|1656|fcf0eab4f05a1c0de6363ac4b707600a27a9d774e9b491059e59e6921b255a84|dl.fedoraproject.org/pub/epel|fingerprint FF8AD1344597106ECE813B918A3872BF3228467C (fetch-epel.sh)
+google-authenticator-1.09-5.el9.x86_64.rpm|1.09-5.el9|56176|0afb54b80b21911bbb645e0a9df49d0544bc7702070c37dc5e6d6ecac3190f14|EPEL 9 Everything x86_64|rpm -K OK with pinned EPEL 9 key (verify-epel.sh on build1)

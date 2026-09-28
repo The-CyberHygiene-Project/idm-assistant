@@ -99,6 +99,13 @@ The end-to-end chain works:
 
 An operator error of mine, caught and fixed within minutes: the first client run selected the new profile **without** its features, briefly re-allowing `nullok`. The script now refuses to continue if any feature is lost.
 
+**On a CHP-kit host (Plan 4, client1):** the same RPMs and enrolment work. Three more client-side facts:
+- (1) In the **stock `sssd` authselect profile**, `pam_localuser [default=1]` skips the next line for non-local users. A `pam_kanidm` placed directly before `pam_unix` is never reached by Kanidm users. The enrolment patcher now places it where no jump can skip it (tested).
+- (2) `pam_kanidm` also authenticates **local** accounts, through unixd's system provider (`/etc/shadow`).
+- (3) Kanidm homes are **UUID-named** directories with an SPN-named alias (`home_root_t`; `restorecon` would relabel it `user_home_dir_t`).
+
+Details: `lab/chp-findings.md`.
+
 **Minor:** unixd warns at every start, "DB folder /var/cache/kanidm-unixd has 'everyone' permission bits in the mode". The upstream unit's `UMask=0027` doesn't cover the `CacheDirectory` it creates. Worth a `CacheDirectoryMode=0750` drop-in on dc2.
 
 **Virtual TPM + LUKS/clevis:** see `lab/tpm-luks-experiment.md` (unattended unlock works; PCR-mismatch refusal proven; lab PCRs are all-zero under SeaBIOS).
