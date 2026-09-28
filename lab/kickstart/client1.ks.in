@@ -1,6 +1,6 @@
 # client1: CHP-kit host (disposable). Creates ONLY the CHP kit's preconditions (PARTITIONS_3.md): UEFI, FIPS, Server
 # with GUI, 512 GB layout, LUKS2 over LVM with swap inside. The kit applies the CUI baseline itself (no oscap addon).
-# Root LUKS is bound to the vTPM (clevis, PCR 7) so the lab VM boots unattended. Derived from base.ks.in.
+# Root LUKS is bound to the vTPM (clevis, PCR 7) after first boot, so the lab VM boots unattended. From base.ks.in.
 # Differences from dc2 are listed in lab/vm-deviations.md.
 text
 cdrom
@@ -80,10 +80,7 @@ baseurl=http://192.168.100.1:8080/rpms
 gpgcheck=0
 R
 dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
-# Bind the root LUKS volume to the vTPM (PCR 7 = Secure Boot state) so the lab VM boots unattended; passphrase stays as fallback.
-DEV=$(blkid -t TYPE=crypto_LUKS -o device | head -1)
-printf '%s' '@LUKSPASS@' > /root/.lp && chmod 600 /root/.lp
-clevis luks bind -y -k /root/.lp -d "$DEV" tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}'
-shred -u /root/.lp
-dracut -f --regenerate-all
+# NOTE: the root LUKS volume is bound to the TPM on the FIRST REAL BOOT (lab/client/bind-root-tpm.sh), not here.
+# virt-install --location boots the installer by direct kernel boot, bypassing shim/GRUB, so PCR 7 during install
+# differs from PCR 7 on a real Secure Boot and a binding made here never unlocks (Plan 4, 2026-09-28).
 %end

@@ -27,7 +27,7 @@ done
 t "client1 PV is LUKS2-encrypted" "grep -qE '^part pv\.01 .*--encrypted .*--luks-version=luks2' $C1"
 t "client1 swap is a logical volume (inside LUKS)" "grep -qE '^logvol swap ' $C1 && ! grep -qE '^part swap' $C1"
 t "client1 IP .12" "grep -q 'ip=192.168.100.12 ' $C1"
-t "client1 binds root LUKS to the TPM (clevis tpm2, PCR 7)" "grep -q 'clevis luks bind' $C1 && grep -q '\"pcr_ids\":\"7\"' $C1"
-t "client1 passphrase never written in plaintext to the installed system" "grep -q 'shred -u /root/.lp' $C1"
+t "client1 does NOT bind in %post (installer PCR 7 differs; bind on first real boot)" "! grep -q 'clevis luks bind' $C1"
+t "client1 installs clevis-dracut for boot-time TPM unlock" "grep -qx clevis-dracut $C1"
 rm -f "$C1"
 exit $fails

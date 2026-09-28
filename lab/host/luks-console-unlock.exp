@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+# luks-console-unlock.exp VM  (on aero, as root): answer a LUKS passphrase prompt on the VM's serial console.
+# The passphrase is read from stdin (never argv). Used when TPM unlock does not happen (e.g. PCR mismatch).
+set timeout 120
+set vm [lindex $argv 0]
+gets stdin pass
+log_user 0
+spawn virsh console --force $vm
+# The prompt may already have been printed before we attached, so don't send an empty line (that would be a wrong
+# attempt): wait briefly for a fresh prompt, otherwise answer the one that is already waiting.
+set timeout 10
+expect {
+  -re {Please enter passphrase[^\r\n]*} { puts "fresh prompt seen" }
+  timeout { puts "no fresh prompt; answering the pending one" }
+}
+send -- "$pass\r"; puts "passphrase sent"
+set timeout 180
+expect {
+  -re {(?i)(login:|Reached target|Started)} { puts "boot continued" }
+  -re {(?i)(no key available|wrong|invalid)[^\r\n]*} { puts stderr "unlock refused: $expect_out(0,string)"; exit 1 }
+  timeout { puts stderr "no progress after passphrase"; exit 1 }
+}
+send -- "\035"
+exit 0

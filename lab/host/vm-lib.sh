@@ -18,7 +18,7 @@ create_vm() {
       --location "$iso" --network bridge=br-lab \
       --initrd-inject "$ks" \
       --extra-args "inst.ks=file:/$(basename "$ks") fips=1 console=ttyS0,115200 inst.text" \
-      --graphics none --serial file,path="$logf" \
+      --graphics none --serial pty,log.file="$logf" \
       --noautoconsole --noreboot --wait 90 "$@" \
     || log "virt-install exited non-zero (time limit or installer error); checking the VM"
   state=$(virsh domstate "$name" 2>/dev/null || echo missing)
