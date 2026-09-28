@@ -9,6 +9,8 @@ size() { stat -c %s "$1" 2>/dev/null || stat -f %z "$1"; }
 bad=0
 EXPECTED=(Rocky-9.8-x86_64-dvd.iso rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz step-ca-0.30.2-1.x86_64.rpm
           step-cli-0.31.0-1.x86_64.rpm kanidm-1.11.2.tar.gz kanidm-1.11.2-vendor.tar.gz)
+# A machine that receives only some inputs (e.g. build1) names that subset here.
+[[ -n ${EXPECTED_OVERRIDE:-} ]] && read -r -a EXPECTED <<<"$EXPECTED_OVERRIDE"
 for n in "${EXPECTED[@]}"; do
   grep -q "^$n|" "$MAN" || { echo "NOTLISTED $n (manifest incomplete)"; bad=1; }
 done

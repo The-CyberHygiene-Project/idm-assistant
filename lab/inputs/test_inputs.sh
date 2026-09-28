@@ -20,6 +20,12 @@ t "a valid signature from a DIFFERENT pinned fingerprint is rejected" \
 grep -v '^kanidm-1.11.2-vendor' "$here/MANIFEST.txt" > "$tmp/short-manifest"
 t "verify.sh fails when an expected input is missing from the manifest" \
   "! IDM_MANIFEST='$tmp/short-manifest' '$here/verify.sh' >/dev/null"
+grep -E '^(rust-1\.96|kanidm-1\.11\.2)' "$here/MANIFEST.txt" > "$tmp/subset-manifest"
+SUBSET="rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz kanidm-1.11.2.tar.gz kanidm-1.11.2-vendor.tar.gz"
+t "verify.sh passes a subset manifest when EXPECTED_OVERRIDE names that subset" \
+  "IDM_MANIFEST='$tmp/subset-manifest' EXPECTED_OVERRIDE='$SUBSET' '$here/verify.sh' >/dev/null"
+t "verify.sh rejects the same subset manifest without the override" \
+  "! IDM_MANIFEST='$tmp/subset-manifest' '$here/verify.sh' >/dev/null"
 t "verify.sh passes on the full manifest" "'$here/verify.sh' >/dev/null"
 rm -rf "$tmp"
 exit $fails
