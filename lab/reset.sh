@@ -10,3 +10,9 @@ for v in "${vms[@]}"; do
   # use aero. Restarting chronyd clears that; the CUI config's `makestep 1.0 3` then steps on the first updates.
   ssh -n "$v" 'sudo systemctl restart chronyd; chronyc waitsync 30 0.5 >/dev/null 2>&1; echo "$(hostname -s): clock synced, now $(date -u +%T)"'
 done
+# The restored Kanidm certificate is as old as the snapshot and may be expired (renewal refuses expired certs):
+# issue a fresh one, then prove what is SERVED is fresh.
+if [[ " ${vms[*]} " == *" srv1 "* ]]; then
+  "$here/srv1/run.sh" 21-kanidm-cert srv1 --reissue >/dev/null
+  "$here/srv1/check-served-cert.sh"
+fi
