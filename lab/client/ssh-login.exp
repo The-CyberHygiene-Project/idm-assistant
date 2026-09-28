@@ -6,6 +6,7 @@
 set timeout 20
 set user [lindex $argv 0]
 set which [expr {[llength $argv] > 1 ? [lindex $argv 1] : "posix"}]
+set cmd [expr {[info exists env(LOGIN_CMD)] ? $env(LOGIN_CMD) : "id"}]
 set host [expr {[llength $argv] > 2 ? [lindex $argv 2] : "192.168.100.13"}]
 set sfile [expr {[llength $argv] > 3 ? [lindex $argv 3] : "$env(HOME)/idm-lab-secrets/$user.json"}]
 set f [open $sfile]; set js [read $f]; close $f
@@ -17,7 +18,7 @@ set sec [jget $js totp_secret]
 set alg [jget $js totp_algorithm]; if {$alg eq ""} { set alg sha1 }
 log_user 0
 spawn ssh -o PubkeyAuthentication=no -o PreferredAuthentications=keyboard-interactive,password \
-  -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 $user@$host id
+  -o StrictHostKeyChecking=accept-new -o NumberOfPasswordPrompts=1 $user@$host $cmd
 set n 0
 expect {
   -re {(?i)([^\r\n]*(password|passcode)[^\r\n]*: ?)$} {
@@ -26,6 +27,7 @@ expect {
     puts "PROMPT: [string trim $expect_out(1,string)]"
     set code [exec python3 [file dirname [info script]]/../tools/totp.py - $alg << $sec]; send -- "$code\r"; incr n; if {$n < 4} { exp_continue } }
   -re {uid=[^\r\n]+} { puts "RESULT: $expect_out(0,string)"; exp_continue }
+  -re {OUT: ([^\r\n]*)} { puts "OUT: $expect_out(1,string)"; exp_continue }
   -re {(?i)(permission denied|authentication failed|access denied)[^\r\n]*} { puts "RESULT: DENIED ($expect_out(0,string))"; exp_continue }
   eof {}
   timeout { puts "RESULT: TIMEOUT" }

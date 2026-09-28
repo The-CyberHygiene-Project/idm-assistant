@@ -98,8 +98,32 @@ Details: `lab/chp-logs/login-matrix.md`.
 
 ## 6. Proposed kit changes (text only; the kit is not modified)
 
-_Task 8._
+**Bugs.** Patch in `lab/client/chp-proposed-fixes.patch` for K1–K6, proven on an evaluation copy:
+- **K1** `authselect feature enable` → `authselect enable-feature` (or delete the redundant line).
+- **K2** `firewall-cmd --set-log-denied=all` without `--permanent`.
+- **K3** `write_file()` creates the parent directory.
+- **K4** capture probe output before `grep` (CRY-01 and IDA-03 negative tests).
+- **K5** `|| true` on the off-host ledger read.
+- **K6** `trap - ERR` around the deliberate-failure block in the credential-policy test.
+- **K8 (candidate)** IDA-04: the kit's own compliant test password is rejected by its `passwd` harness (pwscore 98). Investigate the harness.
+- **K9** add `without-nullok` to the `authselect select` line.
+
+**Design.**
+1. **Ordering (K0):** enrol at least one admin (password + GA) **before** switching sshd to `AuthenticationMethods keyboard-interactive:pam`, and refuse to reload sshd otherwise. A failed harden must never leave a host with no working login.
+2. **Identity mode:** add `CHP_IDENTITY=sssd|kanidm`. In `kanidm` mode, harden must **preserve** a non-`sssd` authselect profile (or build its features on top of it) instead of re-selecting `sssd`. Today a re-run silently turns Kanidm off (§3). verify IDA-02 should recognise unixd/Kanidm as the directory, and not accept an *inactive* sssd as one.
+3. **SSH keys/certificates:** the dc2 design uses an SSH CA; the kit forbids public-key auth entirely. Consider `AuthenticationMethods publickey,keyboard-interactive:pam` (key **and** GA) so certificates can count as one factor.
+4. **Google Authenticator + SELinux (K7, dc1 pattern):** keep token files outside home directories (`secret=/var/lib/google-authenticator/${USER}`, directory labelled `auth_home_t`), so the label can't flip between sshd (`sshd_t`) and sudo/user contexts. Or ship a policy module. Also document restoring a GA host from backup: resync time first, and the rate-limit timestamps and faillock will otherwise block the first logins.
+5. **Directory users and GA:** with no `nullok`, every directory user needs a token file on *every* host before first login. The kit needs an enrolment flow for directory users, or should use the directory's own MFA where it exists.
+6. **Remove, not just report, services from the GUI install** (CUPS port 631), or document it as operator action.
 
 ## 7. Open questions for the ISSO (spec §9 question 5)
 
-_Task 8._
+1. **Which second factor at Linux login for dc2?** The options:
+   - (a) the kit's host-local Google Authenticator + Kanidm POSIX password (works, per-host tokens, not centrally revocable);
+   - (b) SSH certificate + GA (needs the kit's sshd policy changed);
+   - (c) wait for Kanidm-native MFA in PAM (not available in 1.11.2);
+   - (d) accept single factor at Linux login with compensating controls (POA&M).
+2. Should the kit gain a **Kanidm identity mode** (design 2 above), or should dc2 hosts not use the kit's identity step at all?
+3. Where do **GA token files** live on dc2, and who enrols them for directory users (design 4 and 5)?
+4. Is **SELinux confinement** for GA (module vs token location) and for Kanidm (from Plan 3) one decision or two?
+5. Should the kit's upstream (The CyberHygiene Project) receive K0–K9 as issues? The kit is public; these findings are, too.
