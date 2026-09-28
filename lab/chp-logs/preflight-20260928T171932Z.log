@@ -1,0 +1,34 @@
+2026-09-28T17:19:34Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=preflight run=20260928T171934Z spec=v0.1
+
+PREFLIGHT — install media assumptions
+-------------------------------------------------------------------------------
+2026-09-28T17:19:34Z [OK   ] Rocky Linux 9 confirmed
+2026-09-28T17:19:34Z [INFO ] hardware: Red Hat KVM
+2026-09-28T17:19:34Z [WARN ] not an HP chassis — the firmware checks below may not apply
+2026-09-28T17:19:34Z [OK   ] booted in UEFI mode
+2026-09-28T17:19:34Z [OK   ] Secure Boot enabled
+2026-09-28T17:19:34Z [OK   ] TPM 2.0 present (2)
+2026-09-28T17:19:35Z [OK   ] FIPS mode enabled (crypto policy: FIPS)
+
+PREFLIGHT — partition layout
+-------------------------------------------------------------------------------
+  [ ok   ] /                  /dev/mapper/rl_client1-root xfs 326.8G
+  [ ok   ] /home              /dev/mapper/rl_client1-home xfs 39.9G
+  [ ok   ] /tmp               /dev/mapper/rl_client1-tmp xfs 15.9G
+  [ ok   ] /var               /dev/mapper/rl_client1-var xfs 59.9G
+  [ ok   ] /var/tmp           /dev/mapper/rl_client1-var_tmp xfs 9.9G
+  [ ok   ] /var/log           /dev/mapper/rl_client1-var_log xfs 19.9G
+  [ ok   ] /var/log/audit     /dev/mapper/rl_client1-var_log_audit xfs 19.9G
+  [ ok   ] /boot              /dev/vda2 ext4 1.9G
+2026-09-28T17:19:35Z [OK   ] /boot/efi present
+
+PREFLIGHT — encryption at rest (CHP-CRY-02)
+-------------------------------------------------------------------------------
+2026-09-28T17:19:35Z [OK   ] every data-bearing block device is under LUKS
+  /dev/vda3        LUKS	2  cipher=aes-xts-plain64  hash=sha256
+
+PREFLIGHT — tooling
+-------------------------------------------------------------------------------
+2026-09-28T17:19:35Z [OK   ] SCAP datastream: /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+-------------------------------------------------------------------------------
+2026-09-28T17:19:35Z [OK   ] PREFLIGHT PASSED

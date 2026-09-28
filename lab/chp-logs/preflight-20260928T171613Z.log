@@ -1,0 +1,14 @@
+2026-09-28T17:16:14Z [ERROR] This script has not been customized. 6 placeholder(s) remain:
+2026-09-28T17:16:14Z [ERROR]     CHP_SYSTEM_OWNER
+2026-09-28T17:16:14Z [ERROR]     CHP_ORG_NAME
+2026-09-28T17:16:14Z [ERROR]     CHP_SYSTEM_NAME
+2026-09-28T17:16:14Z [ERROR]     CHP_DOMAIN
+2026-09-28T17:16:14Z [ERROR]     CHP_WAN_ADDR
+2026-09-28T17:16:14Z [ERROR]     CHP_OFFLINE_TARGET
+2026-09-28T17:16:14Z [ERROR] 
+2026-09-28T17:16:14Z [ERROR] Fill in PLACEHOLDERS.md and run:
+2026-09-28T17:16:14Z [ERROR]     ./chp-apply-placeholders.sh PLACEHOLDERS.md chp-build.sh
+2026-09-28T17:16:14Z [ERROR] 
+2026-09-28T17:16:14Z [ERROR] Or edit the marked block at the top of this file by hand. Use the literal
+2026-09-28T17:16:14Z [ERROR] word 'none' for any value that does not apply to your build.
+2026-09-28T17:16:14Z [ERROR] refusing to run with unreplaced placeholders

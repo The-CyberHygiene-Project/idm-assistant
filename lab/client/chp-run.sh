@@ -13,10 +13,21 @@ rsync -a --exclude '.DS_Store' --exclude '2026-09-27_aero-Lab-and-Local-AI-Testi
 scp -q "$here/chp-placeholders.lab.md" "$host:/tmp/chp-kit/PLACEHOLDERS.md"
 # shellcheck disable=SC2029  # cmd/args/log expand on the Mac by design
 rc=0
-ssh -n "$host" "sudo rm -rf /root/chp-run.new && sudo cp -a /tmp/chp-kit /root/chp-run.new && sudo mkdir -p /root/chp-run/logs \
-  && sudo cp -a /root/chp-run/logs /root/chp-run.new/ && sudo rm -rf /root/chp-run && sudo mv /root/chp-run.new /root/chp-run \
-  && cd /root/chp-run && sudo ./chp-apply-placeholders.sh PLACEHOLDERS.md chp-build.sh >/dev/null \
-  && sudo bash -c './chp-build.sh $cmd $* 2>&1 | tee $log; exit \${PIPESTATUS[0]}'" || rc=$?   # keep going: log + rc matter
+# One root script over stdin (a `cd` in a plain ssh command runs as the login user and can't enter /root).
+# shellcheck disable=SC2087  # cmd/args/log expand on the Mac by design
+ssh "$host" "sudo bash -s" <<REMOTE || rc=$?
+set -e
+rm -rf /root/chp-run.new; cp -a /tmp/chp-kit /root/chp-run.new
+mkdir -p /root/chp-run/logs; cp -a /root/chp-run/logs /root/chp-run.new/
+rm -rf /root/chp-run; mv /root/chp-run.new /root/chp-run; cd /root/chp-run
+./chp-apply-placeholders.sh PLACEHOLDERS.md chp-build.sh >/dev/null
+# The kit's placeholder tool leaves chp-build.sh untouched and writes chp-build.<system-name>.sh; run that.
+gen=\$(ls chp-build.*.sh | grep -vx chp-build.sh | head -1)
+[[ -n \$gen ]] || { echo "chp-apply-placeholders.sh produced no customised script"; exit 1; }
+set +e
+./\$gen $cmd $* 2>&1 | tee $log
+exit \${PIPESTATUS[0]}
+REMOTE
 mkdir -p "$here/../chp-logs"; dest="$here/../chp-logs/$cmd-$ts.log"
 # shellcheck disable=SC2029
 ssh -n "$host" "sudo cat $log" > "$dest.tmp"
