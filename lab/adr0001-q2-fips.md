@@ -50,7 +50,16 @@ OpenSSL present: NO · AWS-LC FIPS module present: NO
 
 ## Build-time confirmation (what is actually linked)
 
-_Filled in by Plan 2 Task 5 (`cargo tree` on build1 for the exact targets and features built)._
+Measured on build1 (Rocky 9.8, FIPS mode, 2026-09-27) with `cargo tree -e normal` over exactly what we build and ship (`daemon`, `kanidm_tools`, `pam_kanidm`, `nss_kanidm`, `kanidm_unix_int --features unix,selinux`); 489 crates in total. The crypto crates **actually linked**:
+
+| Family | Linked crates |
+|---|---|
+| AWS-LC (**non-FIPS** build) | `aws-lc-rs 1.18.0`, `aws-lc-sys 0.44.0`, via `rustls 0.23.43` |
+| RustCrypto (not CMVP-validated) | `aes-gcm 0.10.3`, `argon2 0.5.3`, `blake2 0.10.6`, `ecdsa 0.16.9`, `hkdf 0.12.4`, `hmac 0.12.1` + `0.13.0-rc.5`, `md-5 0.10.6`, `p256 0.13.2`, `p384 0.13.1`, `pbkdf2 0.12.2` + `0.13.0-rc.9`, `rsa 0.9.10`, `sha1 0.10.7`, `sha2 0.10.9` + `0.11.0-rc.5` |
+| OpenSSL | **none**. `openssl-probe` is linked, but it only locates the system CA-certificate files; it performs no cryptography |
+| Not linked, although listed in `Cargo.lock` | `ring`, `tss-esapi` (TPM), `aes`, `cbc`, `ctr`, `p521` |
+
+**Conclusion (build-time):** the static finding holds for the binaries we ship. TLS runs on a non-FIPS AWS-LC; hashing, signatures, HMAC, key derivation and password hashing run on RustCrypto. Nothing uses the host's FIPS-validated OpenSSL.
 
 ## FIPS-variant experiment (rustls → AWS-LC FIPS module)
 
