@@ -1,0 +1,406 @@
+LAB SHIMS ACTIVE: authselect firewall-cmd 
+2026-09-28T18:36:41Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=harden run=20260928T183641Z spec=v0.1
+
+PREFLIGHT — install media assumptions
+-------------------------------------------------------------------------------
+2026-09-28T18:36:41Z [OK   ] Rocky Linux 9 confirmed
+2026-09-28T18:36:41Z [INFO ] hardware: Red Hat KVM
+2026-09-28T18:36:41Z [WARN ] not an HP chassis — the firmware checks below may not apply
+2026-09-28T18:36:41Z [OK   ] booted in UEFI mode
+2026-09-28T18:36:41Z [OK   ] Secure Boot enabled
+2026-09-28T18:36:41Z [OK   ] TPM 2.0 present (2)
+2026-09-28T18:36:42Z [OK   ] FIPS mode enabled (crypto policy: FIPS)
+
+PREFLIGHT — partition layout
+-------------------------------------------------------------------------------
+  [ ok   ] /                  /dev/mapper/rl_client1-root xfs 326.8G
+  [ ok   ] /home              /dev/mapper/rl_client1-home xfs 39.9G
+  [ ok   ] /tmp               /dev/mapper/rl_client1-tmp xfs 15.9G
+  [ ok   ] /var               /dev/mapper/rl_client1-var xfs 59.9G
+  [ ok   ] /var/tmp           /dev/mapper/rl_client1-var_tmp xfs 9.9G
+  [ ok   ] /var/log           /dev/mapper/rl_client1-var_log xfs 19.9G
+  [ ok   ] /var/log/audit     /dev/mapper/rl_client1-var_log_audit xfs 19.9G
+  [ ok   ] /boot              /dev/vda2 ext4 1.9G
+2026-09-28T18:36:42Z [OK   ] /boot/efi present
+
+PREFLIGHT — encryption at rest (CHP-CRY-02)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:42Z [OK   ] every data-bearing block device is under LUKS
+  /dev/vda3        LUKS	2  cipher=aes-xts-plain64  hash=sha256
+
+PREFLIGHT — tooling
+-------------------------------------------------------------------------------
+2026-09-28T18:36:42Z [OK   ] SCAP datastream: /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+-------------------------------------------------------------------------------
+2026-09-28T18:36:42Z [OK   ] PREFLIGHT PASSED
+2026-09-28T18:36:42Z [INFO ] wrote /etc/chp-spec/chp.conf
+2026-09-28T18:36:42Z [WARN ] Config template written to /etc/chp-spec/chp.conf. Review every value before 'harden'.
+
+CHANGE PLAN — CyberHygiene Lab — spec v0.1
+-------------------------------------------------------------------------------
+  Boundary                CHP-BND-01/02  write enumerated component list, record
+                                         single-segment finding if flat
+  Cryptography            CHP-CRY-01/02  verify OS FIPS policy inheritance; pin
+                                         sshd to FIPS-permitted algorithms only
+  Identity                CHP-IDA-01     sssd, deny undocumented local accounts
+                          CHP-IDA-03     pam MFA on sshd, login (console) and sudo
+                          CHP-IDA-04     pwquality + pwhistory + faillock
+                          CHP-IDA-05     break-glass account chpbreak,
+                                         bounded lockout (900s)
+  Perimeter               CHP-NET-01     firewalld default-deny, enumerated: ssh
+                          CHP-NET-02     auditd + AIDE + rsyslog alert path
+                          CHP-NET-03     egress deny to non-permitted destinations
+  Logging                 CHP-LOG-01     journald+rsyslog sized for 90d retention
+                          CHP-LOG-02     chp-health timer every 15m
+                          CHP-LOG-03     freshness+content checks on every periodic output
+  Hardening               CHP-END-01/02  OpenSCAP baseline, Sun 02:30, retained series
+                          CHP-END-03     fapolicyd execution control, usbguard media control
+  Evidence                CHP-EVD-01..04 evidence timer (daily),
+                                         re-verification cycle 90d
+  Backup                  CHP-BAK-01/02  backup job + restoration-proof ledger,
+                                         offline copy reachability test
+  Assisted administration CHP-AIA-*      NOT IMPLEMENTED on this host.
+                                         Inference peer (not yet declared)
+                                         recorded as planned — marked planned
+                                         per CHP-EVD-04, excluded from conformance,
+                                         gated on a CHP-AIA-03 acceptance test.
+
+  Not performed by this script: OS install, partitioning, FIPS enablement,
+  LUKS creation, reboots.
+
+  Config backups for this run: /var/lib/chp-spec/config-backups/20260928T183641Z/
+  Rollback:                    chp-build.kanidm-lab-client1.sh rollback 20260928T183641Z
+-------------------------------------------------------------------------------
+
+HARDEN — packages
+-------------------------------------------------------------------------------
+2026-09-28T18:36:43Z [INFO ] installing: aide sssd-tools oddjob-mkhomedir pam_ssh_agent_auth usbguard
+Last metadata expiration check: 1:14:05 ago on Mon 28 Sep 2026 11:22:38 AM MDT.
+Dependencies resolved.
+================================================================================
+ Package             Arch    Version                       Repository      Size
+================================================================================
+Installing:
+ aide                x86_64  0.19.2-5.el9                  lab-appstream  156 k
+ oddjob-mkhomedir    x86_64  0.34.7-7.el9                  lab-appstream   26 k
+ pam_ssh_agent_auth  x86_64  0.10.4-7.7.el9_8.rocky.0.1    lab-appstream  104 k
+ sssd-tools          x86_64  2.9.8-4.el9_8                 lab-baseos     161 k
+ usbguard            x86_64  1.1.4-2.el9                   lab-appstream  467 k
+Installing dependencies:
+ libqb               x86_64  2.0.8-1.el9                   lab-appstream   91 k
+ oddjob              x86_64  0.34.7-7.el9                  lab-appstream   63 k
+ protobuf            x86_64  3.14.0-17.el9_7               lab-appstream  1.0 M
+ python3-sss         x86_64  2.9.8-4.el9_8                 lab-baseos      28 k
+ python3-sssdconfig  noarch  2.9.8-4.el9_8                 lab-baseos      58 k
+ sssd-dbus           x86_64  2.9.8-4.el9_8                 lab-baseos     132 k
+Installing weak dependencies:
+ usbguard-selinux    noarch  1.1.4-2.el9                   lab-appstream   22 k
+
+Transaction Summary
+================================================================================
+Install  12 Packages
+
+Total download size: 2.3 M
+Installed size: 6.8 M
+Downloading Packages:
+(1/12): python3-sss-2.9.8-4.el9_8.x86_64.rpm    2.0 MB/s |  28 kB     00:00    
+(2/12): python3-sssdconfig-2.9.8-4.el9_8.noarch 3.1 MB/s |  58 kB     00:00    
+(3/12): sssd-dbus-2.9.8-4.el9_8.x86_64.rpm      5.7 MB/s | 132 kB     00:00    
+(4/12): sssd-tools-2.9.8-4.el9_8.x86_64.rpm      12 MB/s | 161 kB     00:00    
+(5/12): aide-0.19.2-5.el9.x86_64.rpm             12 MB/s | 156 kB     00:00    
+(6/12): libqb-2.0.8-1.el9.x86_64.rpm            6.2 MB/s |  91 kB     00:00    
+(7/12): oddjob-0.34.7-7.el9.x86_64.rpm          4.4 MB/s |  63 kB     00:00    
+(8/12): oddjob-mkhomedir-0.34.7-7.el9.x86_64.rp 2.2 MB/s |  26 kB     00:00    
+(9/12): pam_ssh_agent_auth-0.10.4-7.7.el9_8.roc 9.5 MB/s | 104 kB     00:00    
+(10/12): usbguard-selinux-1.1.4-2.el9.noarch.rp 4.7 MB/s |  22 kB     00:00    
+(11/12): usbguard-1.1.4-2.el9.x86_64.rpm         27 MB/s | 467 kB     00:00    
+(12/12): protobuf-3.14.0-17.el9_7.x86_64.rpm     39 MB/s | 1.0 MB     00:00    
+--------------------------------------------------------------------------------
+Total                                            32 MB/s | 2.3 MB     00:00     
+Rocky 9.8 BaseOS (DVD via aero)                 1.7 MB/s | 1.7 kB     00:00    
+Importing GPG key 0x350D275D:
+ Userid     : "Rocky Enterprise Software Foundation - Release key 2022 <releng@rockylinux.org>"
+ Fingerprint: 21CB 256A E16F C54C 6E65 2949 702D 426D 350D 275D
+ From       : /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
+Key imported successfully
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Running scriptlet: usbguard-selinux-1.1.4-2.el9.noarch                   1/12 
+  Installing       : usbguard-selinux-1.1.4-2.el9.noarch                   1/12 
+  Running scriptlet: usbguard-selinux-1.1.4-2.el9.noarch                   1/12 
+  Installing       : protobuf-3.14.0-17.el9_7.x86_64                       2/12 
+  Installing       : oddjob-0.34.7-7.el9.x86_64                            3/12 
+  Running scriptlet: oddjob-0.34.7-7.el9.x86_64                            3/12 
+  Installing       : libqb-2.0.8-1.el9.x86_64                              4/12 
+  Installing       : sssd-dbus-2.9.8-4.el9_8.x86_64                        5/12 
+  Running scriptlet: sssd-dbus-2.9.8-4.el9_8.x86_64                        5/12 
+  Installing       : python3-sssdconfig-2.9.8-4.el9_8.noarch               6/12 
+  Installing       : python3-sss-2.9.8-4.el9_8.x86_64                      7/12 
+  Installing       : sssd-tools-2.9.8-4.el9_8.x86_64                       8/12 
+  Installing       : usbguard-1.1.4-2.el9.x86_64                           9/12 
+  Running scriptlet: usbguard-1.1.4-2.el9.x86_64                           9/12 
+  Installing       : oddjob-mkhomedir-0.34.7-7.el9.x86_64                 10/12 
+  Running scriptlet: oddjob-mkhomedir-0.34.7-7.el9.x86_64                 10/12 
+  Installing       : pam_ssh_agent_auth-0.10.4-7.7.el9_8.rocky.0.1.x86_   11/12 
+  Installing       : aide-0.19.2-5.el9.x86_64                             12/12 
+  Running scriptlet: usbguard-selinux-1.1.4-2.el9.noarch                  12/12 
+  Running scriptlet: aide-0.19.2-5.el9.x86_64                             12/12 
+  Verifying        : python3-sss-2.9.8-4.el9_8.x86_64                      1/12 
+  Verifying        : python3-sssdconfig-2.9.8-4.el9_8.noarch               2/12 
+  Verifying        : sssd-dbus-2.9.8-4.el9_8.x86_64                        3/12 
+  Verifying        : sssd-tools-2.9.8-4.el9_8.x86_64                       4/12 
+  Verifying        : aide-0.19.2-5.el9.x86_64                              5/12 
+  Verifying        : libqb-2.0.8-1.el9.x86_64                              6/12 
+  Verifying        : oddjob-0.34.7-7.el9.x86_64                            7/12 
+  Verifying        : oddjob-mkhomedir-0.34.7-7.el9.x86_64                  8/12 
+  Verifying        : pam_ssh_agent_auth-0.10.4-7.7.el9_8.rocky.0.1.x86_    9/12 
+  Verifying        : protobuf-3.14.0-17.el9_7.x86_64                      10/12 
+  Verifying        : usbguard-1.1.4-2.el9.x86_64                          11/12 
+  Verifying        : usbguard-selinux-1.1.4-2.el9.noarch                  12/12 
+
+Installed:
+  aide-0.19.2-5.el9.x86_64                                                      
+  libqb-2.0.8-1.el9.x86_64                                                      
+  oddjob-0.34.7-7.el9.x86_64                                                    
+  oddjob-mkhomedir-0.34.7-7.el9.x86_64                                          
+  pam_ssh_agent_auth-0.10.4-7.7.el9_8.rocky.0.1.x86_64                          
+  protobuf-3.14.0-17.el9_7.x86_64                                               
+  python3-sss-2.9.8-4.el9_8.x86_64                                              
+  python3-sssdconfig-2.9.8-4.el9_8.noarch                                       
+  sssd-dbus-2.9.8-4.el9_8.x86_64                                                
+  sssd-tools-2.9.8-4.el9_8.x86_64                                               
+  usbguard-1.1.4-2.el9.x86_64                                                   
+  usbguard-selinux-1.1.4-2.el9.noarch                                           
+
+Complete!
+
+HARDEN — boundary declaration (CHP-BND-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:51Z [INFO ] wrote /etc/chp-spec/boundary.conf
+2026-09-28T18:36:51Z [WARN ] EDIT /etc/chp-spec/boundary.conf before claiming conformance — it is a stub.
+
+HARDEN — cryptography (CHP-CRY-01)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:51Z [INFO ] wrote /etc/ssh/sshd_config.d/50-chp-spec.conf
+2026-09-28T18:36:51Z [INFO ] wrote /etc/issue.net
+2026-09-28T18:36:51Z [INFO ] reloading sshd
+2026-09-28T18:36:51Z [INFO ] wrote /var/lib/chp-spec/cry02-offhost-test.ledger
+2026-09-28T18:36:51Z [WARN ] CHP-CRY-02 off-host test has never been performed. Perform it and record it in /var/lib/chp-spec/cry02-offhost-test.ledger.
+
+HARDEN — identity and authentication (CHP-IDA-*)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:51Z [INFO ] wrote /etc/security/pwquality.conf.d/50-chp-spec.conf
+2026-09-28T18:36:51Z [INFO ] wrote /etc/security/faillock.conf
+2026-09-28T18:36:51Z [INFO ] selecting authselect profile with faillock, pwhistory and mkhomedir
+Backup stored at /var/lib/authselect/backups/2026-09-28-18-36-51.r2htq2
+Profile "sssd" was selected.
+The following nsswitch maps are overwritten by the profile:
+- passwd
+- group
+- netgroup
+- automount
+- services
+
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+ 
+- with-mkhomedir is selected, make sure pam_oddjob_mkhomedir module
+  is present and oddjobd service is enabled and active
+  - systemctl enable --now oddjobd.service
+
+2026-09-28T18:36:52Z [INFO ] setting password history depth
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+
+2026-09-28T18:36:52Z [INFO ] wrote /etc/security/pwhistory.conf
+2026-09-28T18:36:52Z [INFO ] inserted MFA requirement into pam.d/sshd
+2026-09-28T18:36:52Z [INFO ] inserted MFA requirement into pam.d/login
+2026-09-28T18:36:52Z [INFO ] inserted MFA requirement into pam.d/gdm-password
+2026-09-28T18:36:52Z [INFO ] inserted MFA requirement into pam.d/sudo
+2026-09-28T18:36:52Z [WARN ] Enrol every interactive account NOW, before logging out:
+2026-09-28T18:36:52Z [WARN ]     su - <user> -c 'google-authenticator -t -d -f -r 3 -R 30 -W'
+2026-09-28T18:36:52Z [WARN ] Accounts without a token file cannot authenticate (nullok is not set, by design).
+2026-09-28T18:36:52Z [INFO ] creating break-glass account chpbreak
+2026-09-28T18:36:52Z [INFO ] adding chpbreak to wheel
+2026-09-28T18:36:52Z [WARN ] Set a passphrase for chpbreak, seal it, store it offline:
+2026-09-28T18:36:52Z [WARN ]     passwd chpbreak
+2026-09-28T18:36:52Z [INFO ] wrote /etc/ssh/sshd_config.d/60-chp-breakglass.conf
+2026-09-28T18:36:52Z [INFO ] wrote /var/lib/chp-spec/ida05-breakglass.ledger
+2026-09-28T18:36:52Z [INFO ] wrote /etc/chp-spec/local-accounts.allow
+2026-09-28T18:36:52Z [INFO ] Documented local accounts: /etc/chp-spec/local-accounts.allow
+2026-09-28T18:36:52Z [INFO ] Join the directory with: realm join --client-software=sssd kanidm.lab.test
+
+HARDEN — perimeter (CHP-NET-01/02/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:52Z [INFO ] enabling firewalld
+2026-09-28T18:36:52Z [INFO ] setting default zone to drop (default deny)
+success
+success
+success
+success
+success
+2026-09-28T18:36:54Z [OK   ] perimeter: default deny; permitted = ssh 
+success
+success
+2026-09-28T18:36:54Z [INFO ] wrote /etc/chp-spec/egress-permit.conf
+
+HARDEN — logging and control health (CHP-LOG-01/02/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:36:54Z [INFO ] wrote /etc/audit/auditd.conf
+2026-09-28T18:36:54Z [INFO ] wrote /etc/audit/rules.d/50-chp-spec.rules
+2026-09-28T18:36:54Z [INFO ] loading audit rules
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+Old style watch rules are slower
+No rules
+enabled 1
+failure 1
+pid 1419
+rate_limit 0
+backlog_limit 8192
+lost 0
+backlog 0
+backlog_wait_time 60000
+backlog_wait_time_actual 0
+enabled 1
+failure 1
+pid 1419
+rate_limit 0
+backlog_limit 8192
+lost 0
+backlog 0
+backlog_wait_time 60000
+backlog_wait_time_actual 0
+enabled 1
+failure 1
+pid 1419
+rate_limit 0
+backlog_limit 8192
+lost 0
+backlog 0
+backlog_wait_time 60000
+backlog_wait_time_actual 0
+enabled 1
+failure 1
+pid 1419
+rate_limit 0
+backlog_limit 8192
+lost 0
+backlog 12
+backlog_wait_time 60000
+backlog_wait_time_actual 0
+enabled 2
+failure 1
+pid 1419
+rate_limit 0
+backlog_limit 8192
+lost 0
+backlog 5
+backlog_wait_time 60000
+backlog_wait_time_actual 0
+Stopping logging: 
+Redirecting start to /bin/systemctl start auditd.service
+2026-09-28T18:36:56Z [INFO ] wrote /etc/systemd/journald.conf.d/50-chp-spec.conf
+2026-09-28T18:36:56Z [INFO ] wrote /etc/rsyslog.d/50-chp-spec.conf
+2026-09-28T18:36:56Z [INFO ] wrote /etc/logrotate.d/chp-spec
+2026-09-28T18:36:56Z [INFO ] enabling rsyslog
+2026-09-28T18:36:56Z [INFO ] enabling chronyd
+2026-09-28T18:36:57Z [INFO ] initializing AIDE database (this takes several minutes)
+2026-09-28T18:37:51Z [INFO ] wrote /usr/local/libexec/chp/chp-health
+2026-09-28T18:37:51Z [INFO ] wrote /usr/local/libexec/chp/chp-health-deadman
+
+HARDEN — schedules (systemd timers, not cron)
+-------------------------------------------------------------------------------
+2026-09-28T18:37:51Z [INFO ] wrote /etc/systemd/system/chp-health.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-health.timer
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-deadman.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-deadman.timer
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-scan.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-scan.timer
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-aide.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-aide.timer
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-evidence.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-evidence.timer
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-backup.service
+2026-09-28T18:37:52Z [INFO ] wrote /etc/systemd/system/chp-backup.timer
+2026-09-28T18:37:52Z [INFO ] enabling chp-health.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-health.timer → /etc/systemd/system/chp-health.timer.
+2026-09-28T18:37:52Z [INFO ] enabling chp-deadman.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-deadman.timer → /etc/systemd/system/chp-deadman.timer.
+2026-09-28T18:37:53Z [INFO ] enabling chp-scan.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-scan.timer → /etc/systemd/system/chp-scan.timer.
+2026-09-28T18:37:53Z [INFO ] enabling chp-aide.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-aide.timer → /etc/systemd/system/chp-aide.timer.
+2026-09-28T18:37:54Z [INFO ] enabling chp-evidence.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-evidence.timer → /etc/systemd/system/chp-evidence.timer.
+2026-09-28T18:37:54Z [INFO ] enabling chp-backup.timer
+Created symlink /etc/systemd/system/timers.target.wants/chp-backup.timer → /etc/systemd/system/chp-backup.timer.
+
+HARDEN — published baseline (CHP-END-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:37:55Z [OK   ] datastream /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+2026-09-28T18:37:55Z [OK   ] profile    xccdf_org.ssgproject.content_profile_cui
+2026-09-28T18:37:55Z [INFO ] wrote /usr/local/libexec/chp/chp-scan
+2026-09-28T18:37:55Z [INFO ] wrote /usr/local/libexec/chp/chp-aide
+2026-09-28T18:37:55Z [INFO ] running the first baseline scan (several minutes)
+
+HARDEN — application and media control (CHP-END-03)
+-------------------------------------------------------------------------------
+2026-09-28T18:38:07Z [INFO ] wrote /etc/fapolicyd/fapolicyd.conf
+2026-09-28T18:38:07Z [INFO ] wrote /etc/fapolicyd/rules.d/90-chp-deny-untrusted.rules
+2026-09-28T18:38:07Z [INFO ] usbguard policy generated from currently attached devices
+2026-09-28T18:38:07Z [WARN ] Attach nothing you do not want permanently allowed before this step.
+2026-09-28T18:38:07Z [INFO ] wrote /etc/usbguard/usbguard-daemon.conf
+2026-09-28T18:38:07Z [INFO ] enabling fapolicyd
+Created symlink /etc/systemd/system/multi-user.target.wants/fapolicyd.service → /usr/lib/systemd/system/fapolicyd.service.
+2026-09-28T18:38:08Z [INFO ] enabling usbguard
+Created symlink /etc/systemd/system/basic.target.wants/usbguard.service → /usr/lib/systemd/system/usbguard.service.
+2026-09-28T18:38:08Z [WARN ] fapolicyd is PERMISSIVE. Review denials for a week:
+2026-09-28T18:38:08Z [WARN ]     journalctl -t fapolicyd | grep dec=deny
+2026-09-28T18:38:08Z [WARN ] Then set 'permissive = 0' in /etc/fapolicyd/fapolicyd.conf and restart.
+2026-09-28T18:38:08Z [WARN ] CHP-END-03 is reported NOT MET until fapolicyd is enforcing.
+
+HARDEN — backup and recovery (CHP-BAK-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:38:08Z [WARN ] Backup key created at /etc/chp-spec/backup.key.
+2026-09-28T18:38:08Z [WARN ] Copy it to sealed offline storage NOW. Without it no backup can be restored,
+2026-09-28T18:38:08Z [WARN ] and CHP-BAK-01 cannot be satisfied by any means.
+2026-09-28T18:38:08Z [INFO ] wrote /usr/local/libexec/chp/chp-backup
+2026-09-28T18:38:08Z [INFO ] wrote /var/lib/chp-spec/bak01-restoration.ledger
+2026-09-28T18:38:08Z [WARN ] CHP-BAK-01 requires a completed restoration to alternate hardware.
+2026-09-28T18:38:08Z [WARN ] Until one is recorded in /var/lib/chp-spec/bak01-restoration.ledger, CHP-BAK-01 is reported NOT MET.
+2026-09-28T18:38:08Z [WARN ] CHP_OFFLINE_TARGET is unset — CHP-BAK-02 (offline copy) cannot be satisfied.
+
+HARDEN — evidence generation (CHP-EVD-01/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:38:08Z [INFO ] wrote /var/lib/chp-spec/reverification.conf
+2026-09-28T18:38:08Z [OK   ] evidence is generated on a schedule by chp-evidence.timer and stored in /var/lib/chp-spec/evidence
+
+HARDEN — assisted administration statement (CHP-AIA-05)
+-------------------------------------------------------------------------------
+2026-09-28T18:38:08Z [INFO ] wrote /etc/chp-spec/aia-statement.txt
+2026-09-28T18:38:08Z [INFO ] wrote /var/lib/chp-spec/aia03-acceptance.ledger
+2026-09-28T18:38:08Z [OK   ] recorded: §4.9 not implemented here; inference peer marked PLANNED (CHP-AIA-05, CHP-EVD-04)
+2026-09-28T18:38:08Z [WARN ] Phase 2 gate: record a CHP-AIA-03 acceptance test in /var/lib/chp-spec/aia03-acceptance.ledger
+2026-09-28T18:38:08Z [WARN ] BEFORE committing the inference peer to any administrative role.
+-------------------------------------------------------------------------------
+2026-09-28T18:38:08Z [OK   ] HARDEN complete. Config backups: /var/lib/chp-spec/config-backups/20260928T183641Z/
+2026-09-28T18:38:08Z [INFO ] Next: chp-build.kanidm-lab-client1.sh verify

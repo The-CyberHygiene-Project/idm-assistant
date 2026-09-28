@@ -20,4 +20,6 @@ def totp(secret_b32, t=None, digits=6, step=30, algorithm="sha1"):
 if __name__ == "__main__":
     # "-" = read the secret from stdin, so it never shows in `ps` / /proc/*/cmdline.
     sec = sys.stdin.readline().strip() if sys.argv[1] == "-" else sys.argv[1]
-    print(totp(sec, algorithm=sys.argv[2] if len(sys.argv) > 2 else "sha1"))
+    # TOTP_OFFSET (seconds) = the target host's clock minus ours, e.g. a VM reverted to a snapshot.
+    now = time.time() + int(__import__("os").environ.get("TOTP_OFFSET", "0"))
+    print(totp(sec, t=now, algorithm=sys.argv[2] if len(sys.argv) > 2 else "sha1"))

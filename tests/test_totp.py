@@ -27,3 +27,12 @@ def test_cli_reads_the_secret_from_stdin_so_it_never_appears_in_process_args():
     cli = Path(__file__).resolve().parents[1] / "lab" / "tools" / "totp.py"
     r = subprocess.run([sys.executable, str(cli), "-", "sha256"], input=SECRET + "\n", capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.strip() == totp(SECRET, algorithm="sha256")
+
+
+def test_cli_honours_TOTP_OFFSET_seconds_for_a_host_whose_clock_is_skewed():
+    import subprocess, sys, time
+    from pathlib import Path
+    cli = Path(__file__).resolve().parents[1] / "lab" / "tools" / "totp.py"
+    r = subprocess.run([sys.executable, str(cli), "-", "sha1"], input=SECRET + "\n", capture_output=True, text=True,
+                       env={"TOTP_OFFSET": "-600"})
+    assert r.stdout.strip() == totp(SECRET, t=time.time() - 600)

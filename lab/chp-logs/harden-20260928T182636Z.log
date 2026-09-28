@@ -1,0 +1,184 @@
+LAB SHIMS ACTIVE: authselect firewall-cmd 
+2026-09-28T18:26:19Z [INFO ] chp-build.kanidm-lab-client1.sh 1.0.0 — command=harden run=20260928T182619Z spec=v0.1
+
+PREFLIGHT — install media assumptions
+-------------------------------------------------------------------------------
+2026-09-28T18:26:19Z [OK   ] Rocky Linux 9 confirmed
+2026-09-28T18:26:19Z [INFO ] hardware: Red Hat KVM
+2026-09-28T18:26:19Z [WARN ] not an HP chassis — the firmware checks below may not apply
+2026-09-28T18:26:19Z [OK   ] booted in UEFI mode
+2026-09-28T18:26:19Z [OK   ] Secure Boot enabled
+2026-09-28T18:26:19Z [OK   ] TPM 2.0 present (2)
+2026-09-28T18:26:20Z [OK   ] FIPS mode enabled (crypto policy: FIPS)
+
+PREFLIGHT — partition layout
+-------------------------------------------------------------------------------
+  [ ok   ] /                  /dev/mapper/rl_client1-root xfs 326.8G
+  [ ok   ] /home              /dev/mapper/rl_client1-home xfs 39.9G
+  [ ok   ] /tmp               /dev/mapper/rl_client1-tmp xfs 15.9G
+  [ ok   ] /var               /dev/mapper/rl_client1-var xfs 59.9G
+  [ ok   ] /var/tmp           /dev/mapper/rl_client1-var_tmp xfs 9.9G
+  [ ok   ] /var/log           /dev/mapper/rl_client1-var_log xfs 19.9G
+  [ ok   ] /var/log/audit     /dev/mapper/rl_client1-var_log_audit xfs 19.9G
+  [ ok   ] /boot              /dev/vda2 ext4 1.9G
+2026-09-28T18:26:20Z [OK   ] /boot/efi present
+
+PREFLIGHT — encryption at rest (CHP-CRY-02)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:20Z [OK   ] every data-bearing block device is under LUKS
+  /dev/vda3        LUKS	2  cipher=aes-xts-plain64  hash=sha256
+
+PREFLIGHT — tooling
+-------------------------------------------------------------------------------
+2026-09-28T18:26:20Z [OK   ] SCAP datastream: /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+-------------------------------------------------------------------------------
+2026-09-28T18:26:20Z [OK   ] PREFLIGHT PASSED
+2026-09-28T18:26:20Z [INFO ] config present: /etc/chp-spec/chp.conf (not overwritten)
+
+CHANGE PLAN — CyberHygiene Lab — spec v0.1
+-------------------------------------------------------------------------------
+  Boundary                CHP-BND-01/02  write enumerated component list, record
+                                         single-segment finding if flat
+  Cryptography            CHP-CRY-01/02  verify OS FIPS policy inheritance; pin
+                                         sshd to FIPS-permitted algorithms only
+  Identity                CHP-IDA-01     sssd, deny undocumented local accounts
+                          CHP-IDA-03     pam MFA on sshd, login (console) and sudo
+                          CHP-IDA-04     pwquality + pwhistory + faillock
+                          CHP-IDA-05     break-glass account chpbreak,
+                                         bounded lockout (900s)
+  Perimeter               CHP-NET-01     firewalld default-deny, enumerated: ssh
+                          CHP-NET-02     auditd + AIDE + rsyslog alert path
+                          CHP-NET-03     egress deny to non-permitted destinations
+  Logging                 CHP-LOG-01     journald+rsyslog sized for 90d retention
+                          CHP-LOG-02     chp-health timer every 15m
+                          CHP-LOG-03     freshness+content checks on every periodic output
+  Hardening               CHP-END-01/02  OpenSCAP baseline, Sun 02:30, retained series
+                          CHP-END-03     fapolicyd execution control, usbguard media control
+  Evidence                CHP-EVD-01..04 evidence timer (daily),
+                                         re-verification cycle 90d
+  Backup                  CHP-BAK-01/02  backup job + restoration-proof ledger,
+                                         offline copy reachability test
+  Assisted administration CHP-AIA-*      NOT IMPLEMENTED on this host.
+                                         Inference peer (not yet declared)
+                                         recorded as planned — marked planned
+                                         per CHP-EVD-04, excluded from conformance,
+                                         gated on a CHP-AIA-03 acceptance test.
+
+  Not performed by this script: OS install, partitioning, FIPS enablement,
+  LUKS creation, reboots.
+
+  Config backups for this run: /var/lib/chp-spec/config-backups/20260928T182619Z/
+  Rollback:                    chp-build.kanidm-lab-client1.sh rollback 20260928T182619Z
+-------------------------------------------------------------------------------
+
+HARDEN — packages
+-------------------------------------------------------------------------------
+
+HARDEN — boundary declaration (CHP-BND-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:21Z [INFO ] boundary declaration already present: /etc/chp-spec/boundary.conf
+
+HARDEN — cryptography (CHP-CRY-01)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:21Z [INFO ] reloading sshd
+
+HARDEN — identity and authentication (CHP-IDA-*)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:21Z [INFO ] selecting authselect profile with faillock, pwhistory and mkhomedir
+Backup stored at /var/lib/authselect/backups/2026-09-28-18-26-21.PnRXJN
+Profile "sssd" was selected.
+The following nsswitch maps are overwritten by the profile:
+- passwd
+- group
+- netgroup
+- automount
+- services
+
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+ 
+- with-mkhomedir is selected, make sure pam_oddjob_mkhomedir module
+  is present and oddjobd service is enabled and active
+  - systemctl enable --now oddjobd.service
+
+2026-09-28T18:26:21Z [INFO ] setting password history depth
+Make sure that SSSD service is configured and enabled. See SSSD documentation for more information.
+
+2026-09-28T18:26:21Z [INFO ] MFA already present in pam.d/sshd
+2026-09-28T18:26:21Z [INFO ] MFA already present in pam.d/login
+2026-09-28T18:26:21Z [INFO ] MFA already present in pam.d/gdm-password
+2026-09-28T18:26:21Z [INFO ] MFA already present in pam.d/sudo
+2026-09-28T18:26:21Z [WARN ] Enrol every interactive account NOW, before logging out:
+2026-09-28T18:26:21Z [WARN ]     su - <user> -c 'google-authenticator -t -d -f -r 3 -R 30 -W'
+2026-09-28T18:26:21Z [WARN ] Accounts without a token file cannot authenticate (nullok is not set, by design).
+2026-09-28T18:26:21Z [INFO ] Documented local accounts: /etc/chp-spec/local-accounts.allow
+2026-09-28T18:26:21Z [INFO ] Join the directory with: realm join --client-software=sssd kanidm.lab.test
+
+HARDEN — perimeter (CHP-NET-01/02/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:21Z [INFO ] enabling firewalld
+2026-09-28T18:26:21Z [INFO ] setting default zone to drop (default deny)
+Warning: ZONE_ALREADY_SET: drop
+success
+Warning: ALREADY_ENABLED: ssh
+success
+Warning: ALREADY_ENABLED: echo-request
+success
+Warning: ALREADY_SET: all
+success
+success
+2026-09-28T18:26:23Z [OK   ] perimeter: default deny; permitted = ssh 
+success
+
+HARDEN — logging and control health (CHP-LOG-01/02/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:23Z [INFO ] loading audit rules
+/sbin/augenrules: No change
+/sbin/augenrules: Audit system is in immutable mode - exiting with no changes
+Stopping logging: 
+Redirecting start to /bin/systemctl start auditd.service
+2026-09-28T18:26:26Z [INFO ] enabling rsyslog
+2026-09-28T18:26:26Z [INFO ] enabling chronyd
+
+HARDEN — schedules (systemd timers, not cron)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:27Z [INFO ] enabling chp-health.timer
+2026-09-28T18:26:28Z [INFO ] enabling chp-deadman.timer
+2026-09-28T18:26:28Z [INFO ] enabling chp-scan.timer
+2026-09-28T18:26:29Z [INFO ] enabling chp-aide.timer
+2026-09-28T18:26:29Z [INFO ] enabling chp-evidence.timer
+2026-09-28T18:26:30Z [INFO ] enabling chp-backup.timer
+
+HARDEN — published baseline (CHP-END-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:31Z [OK   ] datastream /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+2026-09-28T18:26:31Z [OK   ] profile    xccdf_org.ssgproject.content_profile_cui
+2026-09-28T18:26:31Z [INFO ] running the first baseline scan (several minutes)
+RESOLVED (update the published baseline): xccdf_org.ssgproject.content_rule_configure_usbguard_auditbackend, xccdf_org.ssgproject.content_rule_service_fapolicyd_enabled, xccdf_org.ssgproject.content_rule_service_usbguard_enabled, xccdf_org.ssgproject.content_rule_usbguard_allow_hid_and_hub
+
+HARDEN — application and media control (CHP-END-03)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:43Z [INFO ] enabling fapolicyd
+2026-09-28T18:26:44Z [INFO ] enabling usbguard
+2026-09-28T18:26:44Z [WARN ] fapolicyd is PERMISSIVE. Review denials for a week:
+2026-09-28T18:26:44Z [WARN ]     journalctl -t fapolicyd | grep dec=deny
+2026-09-28T18:26:44Z [WARN ] Then set 'permissive = 0' in /etc/fapolicyd/fapolicyd.conf and restart.
+2026-09-28T18:26:44Z [WARN ] CHP-END-03 is reported NOT MET until fapolicyd is enforcing.
+
+HARDEN — backup and recovery (CHP-BAK-01/02)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:44Z [WARN ] CHP-BAK-01 requires a completed restoration to alternate hardware.
+2026-09-28T18:26:44Z [WARN ] Until one is recorded in /var/lib/chp-spec/bak01-restoration.ledger, CHP-BAK-01 is reported NOT MET.
+2026-09-28T18:26:44Z [WARN ] CHP_OFFLINE_TARGET is unset — CHP-BAK-02 (offline copy) cannot be satisfied.
+
+HARDEN — evidence generation (CHP-EVD-01/03)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:44Z [OK   ] evidence is generated on a schedule by chp-evidence.timer and stored in /var/lib/chp-spec/evidence
+
+HARDEN — assisted administration statement (CHP-AIA-05)
+-------------------------------------------------------------------------------
+2026-09-28T18:26:44Z [OK   ] recorded: §4.9 not implemented here; inference peer marked PLANNED (CHP-AIA-05, CHP-EVD-04)
+2026-09-28T18:26:44Z [WARN ] Phase 2 gate: record a CHP-AIA-03 acceptance test in /var/lib/chp-spec/aia03-acceptance.ledger
+2026-09-28T18:26:44Z [WARN ] BEFORE committing the inference peer to any administrative role.
+-------------------------------------------------------------------------------
+2026-09-28T18:26:44Z [OK   ] HARDEN complete. Config backups: /var/lib/chp-spec/config-backups/20260928T182619Z/
+2026-09-28T18:26:44Z [INFO ] Next: chp-build.kanidm-lab-client1.sh verify

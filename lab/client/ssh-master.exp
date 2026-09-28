@@ -9,16 +9,19 @@ proc jget {js k} { if {[regexp "\"$k\": *\"(\[^\"\]*)\"" $js -> v]} { return $v 
 set pw [jget $js posix_password]; set sec [jget $js totp_secret]; set alg [jget $js totp_algorithm]
 if {$alg eq ""} { set alg sha1 }
 log_user 0
-spawn ssh -M -S $env(HOME)/.ssh/cm-$host -o ControlPersist=8h -o PubkeyAuthentication=no \
-  -o PreferredAuthentications=keyboard-interactive,password -fN $host
+# ControlPersist pattern: authenticate once, run `true`; the master then stays in the background by itself.
+spawn ssh -o ControlMaster=yes -S $env(HOME)/.ssh/cm-$host -o ControlPersist=8h -o PubkeyAuthentication=no \
+  -o PreferredAuthentications=keyboard-interactive,password $host true
 expect {
   -re {(?i)password[^\r\n]*: ?$} { send -- "$pw\r"; exp_continue }
   -re {(?i)(verification code|code)[^\r\n]*: ?$} {
     send -- "[exec python3 [file dirname [info script]]/../tools/totp.py - $alg << $sec]\r"; exp_continue }
   -re {(?i)permission denied[^\r\n]*} { puts stderr "master: $expect_out(0,string)"; exit 1 }
   eof {}
-  timeout { puts stderr "master: timeout"; exit 1 }
+  timeout {}
 }
-catch wait r
-if {[lindex $r 3] != 0} { puts stderr "master: ssh exited [lindex $r 3]"; exit 1 }
+# The proof is the control socket, not ssh's exit.
+if {[catch {exec ssh -S $env(HOME)/.ssh/cm-$host -O check $host} msg]} {
+  if {![string match "*Master running*" $msg]} { puts stderr "master: not established ($msg)"; exit 1 }
+}
 puts "master connection to $host open (~/.ssh/cm-$host)"

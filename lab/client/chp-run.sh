@@ -18,7 +18,7 @@ if [[ ${CHP_PATCHED:-0} == 1 ]]; then
   tag="patched-"
 fi
 ts=$(date -u +%Y%m%dT%H%M%SZ); log=/root/chp-run/logs/$tag$cmd-$ts.log
-ssh -n "$host" 'rm -rf /tmp/chp-kit && mkdir -p /tmp/chp-kit'
+ssh -n "$host" 'set -e; rm -rf /tmp/chp-kit; mkdir -p /tmp/chp-kit'
 rsync -a --exclude '.DS_Store' --exclude '2026-09-27_aero-Lab-and-Local-AI-Testing-Record.md' "$src/" "$host:/tmp/chp-kit/"
 scp -q "$here/chp-placeholders.lab.md" "$host:/tmp/chp-kit/PLACEHOLDERS.md"
 shim=""; if [[ ${CHP_SHIMS:-0} == 1 ]]; then rsync -a "$here/chp-shims/" "$host:/tmp/chp-shims/"; shim="PATH=/root/chp-shims:\$PATH"; fi

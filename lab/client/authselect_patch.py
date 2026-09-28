@@ -6,6 +6,7 @@ group and initgroups (upstream: kanidm serves a cached view of files and must co
 The CUI profile pins 'initgroups: files'; without kanidm there, a user's Kanidm groups are missing at login (D9).
 Usage: python3 authselect_patch.py /etc/authselect/custom/kanidm
 """
+import re
 import sys
 from pathlib import Path
 
@@ -24,9 +25,10 @@ def patch_pam(text):
         kind = line.split(None, 1)[0] if line.strip() else ""
         if kind in PAM_LINES and kind not in done and "pam_unix.so" in line:
             at = len(out)
-            # Keep jump rules pointing at pam_unix: e.g. CUI's "session [success=1 default=ignore]
+            # Keep numeric jump rules pointing at pam_unix: e.g. CUI's "session [success=1 default=ignore]
             # pam_succeed_if.so service in crond" must still skip pam_unix, so go in before such a rule.
-            while at > 0 and out[at - 1].split(None, 1)[0:1] == [kind] and "[success=" in out[at - 1]:
+            # ([success=done …] rules, e.g. sssd's smartcard line, are not skip counts and are left alone.)
+            while at > 0 and out[at - 1].split(None, 1)[0:1] == [kind] and re.search(r"\[success=\d", out[at - 1]):
                 at -= 1
             out.insert(at, PAM_LINES[kind])
             done.add(kind)

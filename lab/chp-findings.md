@@ -51,7 +51,26 @@ Two runs, same host state (after harden, `itadmin` and `chpbreak` enrolled, GA m
 
 ## 3. Kit vs Kanidm (ADR 0001) collisions
 
-_Task 6._
+Kanidm was added to the CHP-hardened client1 with the Plan 3 enrolment (`lab/client/10-enrol.sh client1 sssd`), based on the profile the kit selected. Evidence: `lab/chp-logs/state-1b-…`, `state-2-post-kanidm.txt`, `state-3-post-reharden.txt`.
+
+| Area | Kit (after harden) | After Kanidm enrolment | Collision / finding |
+|---|---|---|---|
+| authselect | `sssd with-faillock with-pwhistory with-mkhomedir` | `custom/kanidm` (a copy of **stock sssd**) with the **same features**; `pam_kanidm` before `pam_unix` in auth/account/session | no conflict at enrolment; the enrolment carries the kit's features over and verifies them |
+| `pam.d/sshd`, `login`, `sudo`, `gdm-password` | `pam_google_authenticator` (no `nullok`) inserted at line 1 | unchanged (authselect doesn't manage these files) | GA stays in front of Kanidm: **the two factors are GA code + password** (see §4) |
+| nsswitch | `files sss systemd` | `kanidm files sss systemd` (group likewise; stock sssd has no `initgroups` line, so glibc falls back to `group`) | none |
+| **re-running the kit's harden** | — | **silently reverts Kanidm**: authselect back to `sssd`, every `pam_kanidm` line gone, `kanidm` removed from nsswitch; unixd keeps running, unused; sshd's Kanidm lines stay | **major:** a routine kit re-run (it says it is "idempotent and safe to re-run") turns every Kanidm user off with no warning. The kit needs an identity mode (`CHP_IDENTITY=kanidm`) or must preserve a non-`sssd` profile |
+| sshd | `AuthenticationMethods keyboard-interactive:pam`, `PasswordAuthentication no` | `AuthorizedKeysCommand kanidm_ssh_authorizedkeys`, `TrustedUserCAKeys` added | **SSH keys and SSH certificates are never accepted** on a kit host: the dc2 design's separate SSH CA (and Kanidm-published keys) can't be used alongside the kit's sshd policy |
+| local accounts | `pam_unix` | `pam_kanidm` answers **first for local users too**: unixd's system provider checks `/etc/shadow` ("Authentication Success, account_id: itadmin" in the unixd log) | behaviour change to note: local-account password checks now go through unixd |
+| SELinux | GA module (§1 K7) | the same unixd socket AVCs as client2 (`sshd_t`, `auditd_t`, `init_t`, plus **`setroubleshootd_t`**) until `kanidm_lab` is loaded; **0 AVCs** afterwards | the Plan 3 module covers the CHP host unchanged |
+| egress deny (CHP-NET-03) | default-deny egress, test target 8.8.8.8 | dnf from the lab repo, Kanidm (443) and step-ca were all reachable | the kit's egress policy did not block the lab subnet; not a collision here, but dc2 must permit its Kanidm/CA endpoints explicitly if the policy tightens |
+| kit `verify` with Kanidm (evaluation copy, `patched-verify-20260928T184035Z.log`) | IDA-02 MET "directory=sssd (inactive)" | **still** IDA-02 MET "directory=sssd (inactive)" | **the kit's verify is blind to Kanidm**: it accepts an inactive SSSD as the directory and never sees unixd |
+
+**Operational lesson (lab, but relevant to dc2 backups/restores):** reverting a PAM-only + GA host to a snapshot made fresh logins fail repeatedly. The causes:
+- the guest clock is rewound (the TOTP code no longer matches);
+- the rate-limit timestamps inside `~/.google_authenticator` are "just now" (GA fails without prompting);
+- faillock counts every failed try.
+
+Recovery needed exact clock arithmetic (`TOTP_OFFSET`) and, in the end, a replay from a key-login snapshot. dc2 restores (image or VM) should expect the same: resync time first, and allow for GA's rate-limit state.
 
 ## 4. MFA at login: Google Authenticator + Kanidm POSIX password
 
