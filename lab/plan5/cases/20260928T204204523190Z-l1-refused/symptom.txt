@@ -1,0 +1,1 @@
+lab08 can log in to the Kanidm web UI but not to client2 over SSH.

@@ -35,8 +35,14 @@ class FakeRepair(Repair):
 
 
 def ctx(tmp_path, reports, role="server"):
-    seq = iter(reports)
-    return Ctx(host="srv1", role=role, case=Case(tmp_path, "t", "symptom text"), collect=lambda: next(seq))
+    seq = list(reports)
+    collected = []
+
+    def collect():                                  # repeats the last report once the sequence runs out
+        collected.append(1); return seq[min(len(collected), len(seq)) - 1]
+    c = Ctx(host="srv1", role=role, case=Case(tmp_path, "t", "symptom text"), collect=collect, sleep=lambda s: None)
+    c.collected = collected
+    return c
 
 
 def test_unknown_repair_is_refused(tmp_path):
@@ -110,3 +116,69 @@ def test_guided_repair_waits_for_the_user_between_apply_and_verify(tmp_path):
     c = Ctx(host="srv1", role="server", case=Case(tmp_path, "g", "s"), collect=collect)
     assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "OK"
     assert order == ["apply", "user-completes", "verify-collect"]
+
+
+class TimerRepair(FakeRepair):
+    def verify_present(self, report):
+        st = (report.get("services") or {}).get("cert-renew-kanidm.timer")
+        return None if st == "active" else f"timer is {st}"
+
+
+def test_verify_fails_when_the_repaired_evidence_is_missing(tmp_path):
+    r = TimerRepair(); c = ctx(tmp_path, [dict(HEALTHY, services={})])   # no finding, but no evidence either
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "FAILED-UNDONE"
+    assert ("undo", "inactive") in r.calls
+
+
+def test_verify_fails_when_the_fresh_report_has_collection_errors(tmp_path):
+    r = FakeRepair(); c = ctx(tmp_path, [dict(HEALTHY, errors=["tls: could not fetch the Kanidm certificate"])])
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "FAILED-UNDONE"
+
+
+def test_verify_retries_while_the_service_comes_back(tmp_path):
+    r = TimerRepair(); c = ctx(tmp_path, [dict(HEALTHY, errors=["tls: handshake failed"]), HEALTHY])
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "OK"
+    assert len(c.collected) == 2 and not any(isinstance(x, tuple) for x in r.calls)
+
+
+def test_exception_during_apply_is_undone_and_recorded(tmp_path):
+    class Boom(FakeRepair):
+        def apply(self, ctx):
+            self.calls.append("apply"); raise RuntimeError("step-cli exited 1")
+    r = Boom(); c = ctx(tmp_path, [HEALTHY])
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "ERROR-UNDONE"
+    assert ("undo", "inactive") in r.calls
+    assert (c.case.dir / "status.txt").read_text() == "ERROR-UNDONE\n"
+    assert "RuntimeError" in (c.case.dir / "repair.log").read_text()
+
+
+def test_role_is_taken_from_the_report_and_the_host_must_match():
+    from engine.repairs import target_role
+    assert target_role(dict(HEALTHY, role="client", host="client2"), "client2") == "client"
+    with pytest.raises(ValueError):
+        target_role(HEALTHY, "client2")                     # a report from srv1 cannot authorise work on client2
+
+
+def test_reset_token_repair_sends_every_command_to_the_case_host(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from engine import labsecrets, repairs
+    hosts = []
+    fake = SimpleNamespace(run=lambda h, argv, stdin=None, **k: hosts.append(h) or SimpleNamespace(
+        stdout="kanidm person credential use-reset-token abcde-fghij-klmno-pqrst"))
+    monkeypatch.setattr(labsecrets, "read_json", lambda n: {"password": "x", "posix_password": None})
+    monkeypatch.setattr(labsecrets, "write", lambda n, t: tmp_path / n)
+    c = Ctx(host="srv9", role="server", case=Case(tmp_path, "h", "s"), collect=lambda: HEALTHY, remote=fake,
+            params={"user": "lab08"})
+    repairs.KanidmCredResetToken().apply(c)
+    assert hosts and set(hosts) == {"srv9"}
+
+
+def test_end_of_input_at_the_approval_prompt_counts_as_no(monkeypatch):
+    from engine import cli
+
+    def eof(prompt):
+        raise EOFError
+    monkeypatch.delenv("IDM_TEST_APPROVE", raising=False)
+    monkeypatch.setattr("builtins.input", eof)
+    assert cli.approver()("Repair x on srv1") is False

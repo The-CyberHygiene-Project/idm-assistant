@@ -23,6 +23,19 @@ def _skewed(r):
     return off is not None and abs(off) > SKEW_S
 
 
+def _clock_unknown(r):
+    t = r.get("time") or {}
+    return t.get("offset_s") is None or t.get("synced") is False
+
+
+def time_unverified(r):
+    if _clock_unknown(r):
+        t = r.get("time") or {}
+        return Finding("TIME_UNVERIFIED", "time", (f"offset {t.get('offset_s')} s, synced {t.get('synced')}",
+                                                    "clock not confirmed by NTP; certificate-expiry verdicts suppressed"),
+                       "warning")
+
+
 def time_skew(r):
     if _skewed(r):
         return Finding("TOTP_TIME_SKEW", "time", (f"offset {r['time']['offset_s']} s vs {r['time'].get('source')}",
@@ -31,7 +44,7 @@ def time_skew(r):
 
 def tls_expired(r):
     k = (r.get("tls") or {}).get("kanidm")
-    if not k or _skewed(r):          # a wrong clock makes any expiry verdict on this host unreliable
+    if not k or _skewed(r) or _clock_unknown(r):   # a wrong or unknown clock makes any expiry verdict unreliable
         return None
     if k.get("verify") == "expired" or ("not_after" in k and _t(k["not_after"]) <= _t(r["collected_at"])):
         return Finding("TLS_CERT_EXPIRED(kanidm)", "tls", (f"notAfter {k.get('not_after')}",
@@ -70,7 +83,7 @@ def services_down(r):
     return out
 
 
-RULES = (time_skew, tls_expired, renewal_stopped, unixd_offline, posix_pw_missing, ca_root_missing)
+RULES = (time_unverified, time_skew, tls_expired, renewal_stopped, unixd_offline, posix_pw_missing, ca_root_missing)
 
 
 def evaluate(report):

@@ -1,0 +1,3 @@
+2026-09-28T20:42:40.199966+00:00 injected: lab08 with primary password + TOTP and no POSIX password
+2026-09-28T20:42:42.600438+00:00 login probe lab08@client2 with its primary password: DENIED
+2026-09-28T20:42:44.348166+00:00 REFUSED: not approved

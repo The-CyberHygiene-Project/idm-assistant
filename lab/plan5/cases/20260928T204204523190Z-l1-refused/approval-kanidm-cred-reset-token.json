@@ -1,0 +1,6 @@
+{
+ "repair": "kanidm-cred-reset-token",
+ "host": "srv1",
+ "prompt": "Repair kanidm-cred-reset-token on srv1: issue a credential-reset token (1 h) for lab08; the USER sets their own POSIX password with it. No password is set by this tool. Type yes to approve",
+ "approved": false
+}

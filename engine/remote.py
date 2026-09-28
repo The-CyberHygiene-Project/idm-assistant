@@ -6,7 +6,8 @@ import subprocess
 
 def run(host, argv, stdin=None, timeout=600, check=True):
     cmd = ["ssh", "-o", "BatchMode=yes", host, shlex.join(argv)]
-    return subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout, check=check)
+    io = {"input": stdin} if stdin is not None else {"stdin": subprocess.DEVNULL}   # never let ssh eat our stdin
+    return subprocess.run(cmd, **io, capture_output=True, text=True, timeout=timeout, check=check)
 
 
 def collect(diag_host, user=None):

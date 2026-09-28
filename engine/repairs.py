@@ -1,5 +1,6 @@
 """Allow-listed repairs: precheck -> approval -> backup -> apply -> verify (fresh report) -> undo if still faulty.
 Nothing is applied without approval. A repair only runs on a host of its declared role."""
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -14,12 +15,24 @@ class Ctx:
     collect: Callable[[], dict]      # fresh read-only report of the target host
     params: dict = field(default_factory=dict)
     remote: Optional[object] = None  # engine.remote (injected; fakes in tests)
+    sleep: Callable[[float], None] = time.sleep
+    verify_tries: int = 6            # a restarted service may need a few seconds before a fresh report shows it
+
+
+def target_role(report, host):
+    """The role a repair may assume on HOST, taken from HOST's own report. A report from another host is refused."""
+    if report.get("host") != host:
+        raise ValueError(f"report is from {report.get('host')!r}, not {host!r}")
+    return report["role"]
 
 
 class Repair:
     id = ""
     host_role = ""
     verify_absent: set = set()       # findings that must be ABSENT in a fresh report after apply
+
+    def verify_present(self, report):  # -> None if the fresh report POSITIVELY shows the fix, else a reason
+        return None
 
     def describe(self, ctx):
         return self.id
@@ -65,22 +78,52 @@ def run_repair(repair_id, ctx, approve, registry):
     with case.step(f"{repair_id}:backup"):
         saved = r.backup(ctx)
     case.log(f"backup: {sorted(saved)}")
-    with case.step(f"{repair_id}:apply"):
-        r.apply(ctx)
-    case.log("applied")
-    with case.step(f"{repair_id}:user"):
-        r.wait_for_user(ctx)
-    with case.step(f"{repair_id}:verify"):
-        after = ctx.collect()
-        still = sorted({f.id for f in evaluate(after)} & set(r.verify_absent))
-    case.write(f"report-after-{repair_id}.json", after)
-    if still:
-        with case.step(f"{repair_id}:undo"):
-            r.undo(ctx, saved)
-        case.log(f"VERIFY FAILED ({still}); undone"); case.write("status.txt", "FAILED-UNDONE\n")
-        return "FAILED-UNDONE"
+    try:
+        with case.step(f"{repair_id}:apply"):
+            r.apply(ctx)
+        case.log("applied")
+        with case.step(f"{repair_id}:user"):
+            r.wait_for_user(ctx)
+        with case.step(f"{repair_id}:verify"):
+            why, after = _verify(r, ctx)
+        case.write(f"report-after-{repair_id}.json", after)
+    except Exception as e:          # the exception text may carry command output, so only its class is recorded
+        case.log(f"ERROR during {repair_id}: {type(e).__name__}")
+        return _undo(r, ctx, saved, repair_id, "ERROR-UNDONE")
+    if why:
+        case.log(f"VERIFY FAILED ({why})")
+        return _undo(r, ctx, saved, repair_id, "FAILED-UNDONE")
     case.log("verified"); case.write("status.txt", "OK\n")
     return "OK"
+
+
+def _verify(r, ctx):
+    """Fresh reports only: the fault's findings must be gone, the fix must be positively visible, and the collector
+    must have reported no errors (a missing section is not evidence of health). Retries while services restart."""
+    why, after = None, {}
+    for n in range(ctx.verify_tries):
+        if n:
+            ctx.sleep(5)
+        after = ctx.collect()
+        still = sorted({f.id for f in evaluate(after)} & set(r.verify_absent))
+        why = (f"still present: {still}" if still else r.verify_present(after)
+               or (f"collector errors: {after['errors']}" if after.get("errors") else None))
+        if not why:
+            break
+    return why, after
+
+
+def _undo(r, ctx, saved, repair_id, status):
+    case = ctx.case
+    try:
+        with case.step(f"{repair_id}:undo"):
+            r.undo(ctx, saved)
+        case.log("undone")
+    except Exception as e:
+        case.log(f"UNDO FAILED: {type(e).__name__}; restore by hand from the backup {sorted(saved)}")
+        status = status.replace("UNDONE", "UNDO-FAILED")
+    case.write("status.txt", status + "\n")
+    return status
 
 
 # --- allow-listed repairs -----------------------------------------------------------------------------------------
@@ -97,6 +140,10 @@ class KanidmCertRenew(Repair):
     id = "kanidm-cert-renew"
     host_role = "server"
     verify_absent = {"TLS_CERT_EXPIRED(kanidm)"}
+
+    def verify_present(self, report):
+        v = ((report.get("tls") or {}).get("kanidm") or {}).get("verify")
+        return None if v == "ok" else f"Kanidm certificate verify is {v!r}, not 'ok'"
 
     def describe(self, ctx):
         return ("back up the Kanidm TLS chain/key, issue a fresh certificate over ACME (step-ca refuses to renew an "
@@ -127,6 +174,10 @@ class AcmeTimerRestore(Repair):
     host_role = "server"
     verify_absent = {"ACME_RENEWAL_STOPPED"}
 
+    def verify_present(self, report):
+        st = (report.get("services") or {}).get(TIMER)
+        return None if st == "active" else f"{TIMER} is {st!r}"
+
     def describe(self, ctx):
         return f"re-enable and start {TIMER} (checks the Kanidm certificate every 15 minutes)"
 
@@ -156,13 +207,17 @@ from engine import labsecrets
 
 def admin_login(ctx):
     pw = labsecrets.read_json("idm_admin.json")["password"]
-    ctx.remote.run("srv1", ["expect", "/tmp/srv1/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
+    ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
 
 
 class KanidmCredResetToken(Repair):
     id = "kanidm-cred-reset-token"
     host_role = "server"
     verify_absent = {"POSIX_PW_MISSING"}
+
+    def verify_present(self, report):
+        u = report.get("kanidm_user") or {}
+        return None if u.get("exists") and u.get("unix_password") is True else "no unix (POSIX) password in the report"
 
     def describe(self, ctx):
         return (f"issue a credential-reset token (1 h) for {ctx.params['user']}; the USER sets their own POSIX password "
@@ -177,7 +232,7 @@ class KanidmCredResetToken(Repair):
     def apply(self, ctx):
         u = ctx.params["user"]
         admin_login(ctx)
-        out = ctx.remote.run("srv1", ["kanidm", "person", "credential", "create-reset-token", u, "--ttl", "3600",
+        out = ctx.remote.run(ctx.host, ["kanidm", "person", "credential", "create-reset-token", u, "--ttl", "3600",
                                       "-D", "idm_admin"]).stdout
         m = _re.search(r"use-reset-token ([a-z0-9-]+)", out)
         if not m:
@@ -194,7 +249,7 @@ class KanidmCredResetToken(Repair):
         # LAB STAND-IN for the user: complete the reset with a new POSIX password (stored for the user in the lab).
         tok = labsecrets.path(f"{u}.reset-token").read_text().strip()
         upw = labsecrets.new_password()
-        ctx.remote.run("srv1", ["expect", "/tmp/srv1/enrol-user.exp"],
+        ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/enrol-user.exp"],
                        stdin=f"{tok}\nunused\n{upw}\nposix-only\n")
         d = labsecrets.read_json(f"{u}.json"); d["posix_password"] = upw
         labsecrets.write_json(f"{u}.json", d)

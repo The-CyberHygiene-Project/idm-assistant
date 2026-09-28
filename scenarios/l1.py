@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class _R:
+    host = "srv1"                                 # admin_login targets ctx.host
     remote = remote
 
 
@@ -24,7 +25,8 @@ def _k(*args):
 
 
 def inject(log):
-    subprocess.run(["rsync", "-a", f"{ROOT}/lab/srv1/", "srv1:/tmp/srv1/"], check=True, capture_output=True)
+    subprocess.run(["rsync", "-a", f"{ROOT}/lab/srv1/", "srv1:/tmp/srv1/"], check=True, capture_output=True,
+                   stdin=subprocess.DEVNULL)
     admin_login(_R)
     if f"name: {USER}" in _k("person", "get", USER).stdout:
         remote.run("srv1", ["expect", "/tmp/srv1/kanidm-delete.exp", "person", USER])
@@ -46,7 +48,7 @@ def inject(log):
 
 def probe(which, log):
     r = subprocess.run(["/usr/bin/expect", str(ROOT / "lab/client/ssh-login.exp"), USER, which, "192.168.100.13"],
-                       capture_output=True, text=True)
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True)
     res = "OK" if "RESULT: uid=" in r.stdout else "DENIED" if "RESULT: DENIED" in r.stdout else "ERROR"
     log(f"login probe {USER}@client2 with its {which} password: {res}")
     return res

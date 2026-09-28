@@ -49,3 +49,11 @@ def test_load_report_rejects_wrong_schema(tmp_path):
     p = tmp_path / "x.json"; p.write_text(json.dumps({"schema": "other/9"}))
     with pytest.raises(ValueError):
         load_report(p)
+
+
+@pytest.mark.parametrize("time", [{"offset_s": None, "synced": False, "source": ""},
+                                  {"offset_s": 0.4, "synced": False, "source": "192.168.100.1"}])
+def test_unverified_clock_blocks_the_expiry_verdict(time):
+    r = dict(load_report(FIX / "c1-srv1.json"), time=time)
+    got = [f.id for f in evaluate(r)]
+    assert "TIME_UNVERIFIED" in got and "TLS_CERT_EXPIRED(kanidm)" not in got
