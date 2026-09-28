@@ -203,3 +203,12 @@ def test_approval_record_says_who_when_and_whether_test_mode(tmp_path):
     run_repair(r.id, c, approve, registry={r.id: r})
     a = json.loads((c.case.dir / "approval-fake-timer.json").read_text())
     assert a["by"] == "operator-x" and a["test_mode"] is False and a["at"].endswith("Z")
+
+
+def test_verify_passes_the_peer_report_to_the_rules(tmp_path, monkeypatch):
+    from engine import repairs
+    seen = []
+    monkeypatch.setattr(repairs, "evaluate", lambda rep, peer=None: seen.append(peer) or [])
+    r = FakeRepair(); c = ctx(tmp_path, [HEALTHY]); c.peer = lambda: {"host": "srv1", "role": "server"}
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "OK"
+    assert seen == [{"host": "srv1", "role": "server"}]

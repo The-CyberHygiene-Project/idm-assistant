@@ -86,7 +86,7 @@ def services_down(r):
 RULES = (time_unverified, time_skew, tls_expired, renewal_stopped, unixd_offline, posix_pw_missing, ca_root_missing)
 
 
-def evaluate(report):
+def evaluate(report, peer=None):
     found = [f for rule in RULES if (f := rule(report))]
     found += services_down(report)
     return sorted(found, key=lambda f: f.id)

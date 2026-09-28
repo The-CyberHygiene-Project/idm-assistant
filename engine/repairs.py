@@ -30,6 +30,7 @@ class Ctx:
     params: dict = field(default_factory=dict)
     remote: Optional[object] = None  # engine.remote (injected; fakes in tests)
     sleep: Callable[[float], None] = time.sleep
+    peer: Optional[Callable[[], dict]] = None   # the server's fresh report, for cross-host rules during verify
     verify_tries: int = 6            # a restarted service may need a few seconds before a fresh report shows it
 
 
@@ -122,7 +123,7 @@ def _verify(r, ctx):
         if n:
             ctx.sleep(5)
         after = ctx.collect()
-        still = sorted({f.id for f in evaluate(after)} & set(r.verify_absent))
+        still = sorted({f.id for f in evaluate(after, ctx.peer() if ctx.peer else None)} & set(r.verify_absent))
         why = (f"still present: {still}" if still else r.verify_present(after)
                or (f"collector errors: {after['errors']}" if after.get("errors") else None))
         if not why:
