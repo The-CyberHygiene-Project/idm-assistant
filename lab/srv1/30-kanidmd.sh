@@ -10,6 +10,8 @@ chmod 0644 /etc/kanidm/config
 systemctl daemon-reload
 kanidmd configtest -c /etc/kanidm/server.toml || true   # informative; the unit is the real test
 systemctl enable --now kanidmd
-firewall-cmd -q --permanent --add-service=https && firewall-cmd -q --reload
+firewall-cmd -q --permanent --add-service=https
+firewall-cmd -q --reload
 for _ in $(seq 30); do curl -fsS https://idm.kanidm.lab.test/status >/dev/null 2>&1 && break; sleep 2; done
-curl -fsS https://idm.kanidm.lab.test/status; echo
+curl -fsS https://idm.kanidm.lab.test/status   # hard failure if still down
+echo

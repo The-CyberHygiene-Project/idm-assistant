@@ -16,7 +16,9 @@ logging { channel default_debug { file "data/named.run"; severity dynamic; }; };
 zone "kanidm.lab.test" IN { type primary; file "kanidm.lab.test.zone"; allow-update { none; }; };
 N
 restorecon -R /var/named /etc/named.conf
-named-checkconf && named-checkzone kanidm.lab.test /var/named/kanidm.lab.test.zone
+named-checkconf
+named-checkzone kanidm.lab.test /var/named/kanidm.lab.test.zone
 systemctl enable --now named
-firewall-cmd -q --permanent --add-service=dns && firewall-cmd -q --reload
+firewall-cmd -q --permanent --add-service=dns
+firewall-cmd -q --reload
 dig +short @192.168.100.10 idm.kanidm.lab.test
