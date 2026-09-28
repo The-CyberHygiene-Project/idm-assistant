@@ -35,6 +35,8 @@ The loop is inject → collect (read-only) → findings (deterministic) → repa
 - scenarios L2–L6 and C2–C4 (Plan 6);
 - the ISO build itself (its own project).
 
+**Approval:** ISSO read and approved the plan as written, 2026-09-28. Native execution.
+
 ## Global Constraints
 
 - **Read-only collector:** no writes outside its own `mktemp` directory (removed on exit). Proven by before/after hashes of `/etc`, `/var/lib/kanidm-unixd`, `/etc/pki/kanidm` and `systemctl list-units --state=active` (spec §8 non-negotiable).
