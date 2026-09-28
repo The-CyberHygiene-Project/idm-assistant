@@ -23,7 +23,12 @@ def patch_pam(text):
     for line in text.splitlines():
         kind = line.split(None, 1)[0] if line.strip() else ""
         if kind in PAM_LINES and kind not in done and "pam_unix.so" in line:
-            out.append(PAM_LINES[kind])
+            at = len(out)
+            # Keep jump rules pointing at pam_unix: e.g. CUI's "session [success=1 default=ignore]
+            # pam_succeed_if.so service in crond" must still skip pam_unix, so go in before such a rule.
+            while at > 0 and out[at - 1].split(None, 1)[0:1] == [kind] and "[success=" in out[at - 1]:
+                at -= 1
+            out.insert(at, PAM_LINES[kind])
             done.add(kind)
         out.append(line)
     return "\n".join(out) + ("\n" if text.endswith("\n") else "")

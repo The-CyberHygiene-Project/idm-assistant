@@ -23,6 +23,8 @@ sleep 3
 kanidm-unix status || true
 # authselect: copy of the CUI 'hardening' profile + Kanidm (keeps faillock/pam_access/mkhomedir and the features)
 [[ -d /etc/authselect/custom/kanidm ]] || authselect create-profile kanidm -b custom/hardening
+# Rebuild from the CUI profile every run (the patcher is idempotent per file, so a stale patch would otherwise stay).
+for f in system-auth password-auth nsswitch.conf; do cp /etc/authselect/custom/hardening/$f /etc/authselect/custom/kanidm/$f; done
 python3 $C/authselect_patch.py /etc/authselect/custom/kanidm
 # Carry every authselect feature of the CUI profile (e.g. with-faillock, without-nullok) over to custom/kanidm, and
 # refuse to continue if any is lost. `authselect current -r` output is split on spaces AND newlines to be safe.
