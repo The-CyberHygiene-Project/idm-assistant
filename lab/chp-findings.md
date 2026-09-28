@@ -140,3 +140,31 @@ Details: `lab/chp-logs/login-matrix.md`.
 4. Is **SELinux confinement** for GA (module vs token location) and for Kanidm (from Plan 3) one decision or two?
 5. Should the kit's upstream (The CyberHygiene Project) receive K0–K10 as issues? The kit is public; these findings are, too.
 6. **Plan 5 impact:** the spec's collector (§5.1) assumes SSH public-key access. That's impossible on kit hosts (`AuthenticationMethods keyboard-interactive:pam`). The collector needs a different access path there, or the kit's sshd change in §6 design 3.
+
+## 8. ISSO decisions (2026-09-28)
+
+| # | Question | Decision | Notes |
+|---|---|---|---|
+| 1 | Second factor at Linux login | **(a) host-local Google Authenticator + Kanidm POSIX password**, one TOTP secret per user per host | ISSO: "not unreasonable for the small-scale network we are planning", but tedious at scale. Revisit (b) or Kanidm-native MFA if the host count grows |
+| 2 | Kit identity mode | **Delegated to the implementer; decision below (D-2)** | |
+| 3 | Where GA tokens live | **On each workstation/VM (host-local)**, so login still works when the directory server is down | Compatible with §6 design 4: still host-local, but stored in `/var/lib/google-authenticator/` (labelled `auth_home_t`) rather than in home folders, which removes the label flip (§5). Location detail to confirm when the kit changes |
+| 3′ | sshd policy (§6 design 3) | **Approved: `AuthenticationMethods publickey,keyboard-interactive:pam`**, key (or SSH certificate) **and** GA | Makes the dc2 SSH CA usable on kit hosts; also gives Plan 5's collector a key-based path with a second factor |
+| 4 | SELinux: one decision or two | **Open** | Recommendation stands: two decisions. The GA fix is a token location (no policy); Kanidm needs a confinement policy or an accepted risk (Plan 3) |
+| 5 | Publish K0–K10 | **Yes, public** | The kit is not yet in a public repository; the destination is to be chosen (issues need a tracker) |
+
+### D-2: identity mode for the CHP kit (implementer's decision, documented)
+
+**Decision:** the kit should gain an explicit identity mode, `CHP_IDENTITY=sssd|kanidm` (default `sssd`, so existing behaviour is unchanged). dc2-style hosts use `kanidm`.
+
+In `kanidm` mode, harden:
+1. does **not** run `authselect select sssd …`. It applies its features (`with-faillock with-pwhistory with-mkhomedir without-nullok`) to the **current** profile, or builds a `custom/kanidm` profile from the base the way the lab enrolment does. It refuses if applying them would remove `pam_kanidm`.
+2. keeps `pam_google_authenticator` in front of sshd, login, sudo and GDM (decision 1), with tokens host-local under `/var/lib/google-authenticator/` (decision 3).
+3. writes `AuthenticationMethods publickey,keyboard-interactive:pam` (decision 3′).
+4. verify IDA-02 recognises Kanidm (unixd active, `Kanidm: online`, `pam_kanidm` present and unskippable) as the directory, and never accepts an *inactive* SSSD.
+
+**Why:**
+- Today a routine re-run of the kit (it is documented as idempotent and safe to re-run) **silently turns every Kanidm user off** (§3). That is a latent outage on every dc2 host, discovered only when someone can't log in.
+- Skipping the kit's identity step instead would lose its password quality, lockout, history, break-glass and GA controls, which dc2 needs.
+- A mode flag is the smallest change that makes the kit truthful for both directory types.
+
+**Cost if wrong:** one more setting to maintain in the kit. If Kanidm is abandoned, `sssd` remains the default and nothing changes.
