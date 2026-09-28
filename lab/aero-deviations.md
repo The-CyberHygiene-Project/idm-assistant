@@ -17,6 +17,7 @@ aero is a disposable, offline lab asset (no CUI, lab cable only). Fidelity setti
 | 2026-09-27 | b4 | enp49s0 enslaved to bridge br-lab (192.168.100.1/24); "Profile 1" autoconnect off | lab VMs share the cable subnet | `nmcli con delete br-lab-port br-lab; nmcli con mod "Profile 1" connection.autoconnect yes; nmcli con up "Profile 1"` |
 | 2026-09-27 | b5 | chrony: CUI `port 0` commented out; `allow 192.168.100.0/24` + `local stratum 10` added; ntp opened in firewalld (zone public) | aero is the lab's only time source | restore `port 0`, remove the two added lines, `firewall-cmd --permanent --zone=public --remove-service=ntp` |
 | 2026-09-27 | manual | clock set once from the Mac (`date -s`), was 13.4 s slow; RTC left in local-time mode as found | TOTP/TLS tests compare against the Mac | none needed |
+| 2026-09-27 | b8 | `lab-repo.service`: python3 http.server (DynamicUser) bound to 192.168.100.1:8080 serving /data/lab-inputs read-only; 8080/tcp opened in firewalld zone public | VMs install from the DVD + lab-local repo over the bridge | `systemctl disable --now lab-repo; rm /etc/systemd/system/lab-repo.service; firewall-cmd --permanent --zone=public --remove-port=8080/tcp; firewall-cmd --reload` |
 
 ## Observed on the standard build (not changed)
 - A `cuda-rhel10-x86_64` repo was enabled. This was the user's own experiment to enable GPU AI on aero
