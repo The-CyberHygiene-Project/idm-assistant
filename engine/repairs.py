@@ -278,3 +278,46 @@ class KanidmCredResetToken(Repair):
 
 
 REGISTRY[KanidmCredResetToken.id] = KanidmCredResetToken()
+
+
+# --- client repairs ---------------------------------------------------------------------------------------------------
+AUTHSELECT_PROFILE = "custom/kanidm"
+AUTHSELECT_FEATURES = ("with-faillock", "without-nullok")     # the golden client's feature set (CUI profile)
+
+
+class NsswitchRestore(Repair):
+    id = "nsswitch-restore"
+    host_role = "client"
+    verify_absent = {"NSS_ORDER_WRONG"}
+
+    def describe(self, ctx):
+        return (f"re-select authselect profile {AUTHSELECT_PROFILE} with {', '.join(AUTHSELECT_FEATURES)} (--force); "
+                "the current files are saved first and restored if verification fails")
+
+    def precheck(self, ctx):
+        feats = _sh(ctx, f"authselect list-features {AUTHSELECT_PROFILE} 2>/dev/null || true").split()
+        missing = [f for f in AUTHSELECT_FEATURES if f not in feats]
+        return f"profile {AUTHSELECT_PROFILE} lacks {missing}" if missing else None
+
+    def backup(self, ctx):
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        _sh(ctx, f"install -d -m 0700 {d} && tar -C /etc -cpf {d}/authselect.tar authselect nsswitch.conf pam.d")
+        return {"dir": d}
+
+    def apply(self, ctx):
+        name = "idm-" + _re.sub(r"[^A-Za-z0-9-]", "-", ctx.case.dir.name)[-40:]
+        _sh(ctx, f"authselect select {AUTHSELECT_PROFILE} {' '.join(AUTHSELECT_FEATURES)} --force --backup={name}")
+
+    def undo(self, ctx, backup):
+        _sh(ctx, f"tar -C /etc -xpf {backup['dir']}/authselect.tar")
+
+    def verify_present(self, report):
+        nss, a = report.get("nss") or {}, report.get("authselect") or {}
+        if any((nss.get(m) or "").split()[:1] != ["kanidm"] for m in ("passwd", "group", "initgroups")):
+            return f"nss still wrong: {nss}"
+        if not a.get("valid") or a.get("profile") != AUTHSELECT_PROFILE:
+            return f"authselect not clean: {a}"
+        return None
+
+
+REGISTRY[NsswitchRestore.id] = NsswitchRestore()

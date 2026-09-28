@@ -212,3 +212,38 @@ def test_verify_passes_the_peer_report_to_the_rules(tmp_path, monkeypatch):
     r = FakeRepair(); c = ctx(tmp_path, [HEALTHY]); c.peer = lambda: {"host": "srv1", "role": "server"}
     assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "OK"
     assert seen == [{"host": "srv1", "role": "server"}]
+
+
+class FakeRemote:
+    def __init__(self, outputs):
+        self.outputs, self.calls = outputs, []
+
+    def run(self, host, argv, stdin=None, **kw):
+        from types import SimpleNamespace
+        self.calls.append((host, argv[-1]))
+        out = next((v for k, v in self.outputs.items() if k in argv[-1]), "")
+        return SimpleNamespace(stdout=out)
+
+
+def test_nsswitch_restore_refuses_when_the_pinned_profile_or_features_are_missing(tmp_path):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "n", "s"), collect=lambda: HEALTHY,
+            remote=FakeRemote({"authselect list-features": "with-faillock\n"}))        # without-nullok missing
+    assert "without-nullok" in repairs.NsswitchRestore().precheck(c)
+
+
+def test_nsswitch_restore_selects_exactly_the_pinned_profile(tmp_path):
+    from engine import repairs
+    fr = FakeRemote({})
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "n", "s"), collect=lambda: HEALTHY, remote=fr)
+    repairs.NsswitchRestore().apply(c)
+    cmd = fr.calls[-1][1]
+    assert "authselect select custom/kanidm with-faillock without-nullok --force --backup=" in cmd
+
+
+def test_nsswitch_restore_needs_positive_evidence():
+    from engine import repairs
+    good = {"nss": {"passwd": "kanidm files", "group": "kanidm files", "initgroups": "kanidm files"},
+            "authselect": {"profile": "custom/kanidm", "valid": True}}
+    assert repairs.NsswitchRestore().verify_present(good) is None
+    assert repairs.NsswitchRestore().verify_present(dict(good, authselect={"profile": "custom/kanidm", "valid": False}))
