@@ -15,5 +15,5 @@ fi
 install -m 0644 /tmp/srv1/units/step-ca.service /etc/systemd/system/step-ca.service
 systemctl daemon-reload && systemctl enable --now step-ca
 firewall-cmd -q --permanent --add-port=9000/tcp && firewall-cmd -q --reload
-cp $STEPPATH/certs/root_ca.crt /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt && update-ca-trust
+install -m 0644 $STEPPATH/certs/root_ca.crt /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt && update-ca-trust   # public cert: 0644 (cp kept step's 0600)
 for _ in $(seq 20); do step-cli ca health --ca-url https://ca.kanidm.lab.test:9000 --root $STEPPATH/certs/root_ca.crt 2>/dev/null && break; sleep 1; done

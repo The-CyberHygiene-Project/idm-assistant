@@ -2,9 +2,11 @@
 # srv1: install kanidm-server + kanidm-clients from lab-local (fapolicyd ENFORCING), configure, start.
 set -Eeuo pipefail
 dnf -y -q install kanidm-server kanidm-clients
-install -m 0640 /tmp/srv1/server.toml /etc/kanidm/server.toml
+install -m 0644 /tmp/srv1/server.toml /etc/kanidm/server.toml   # DynamicUser must read it; it holds no secrets (TLS key comes via LoadCredential)
 install -D -m 0644 /tmp/srv1/kanidmd-credentials.conf /etc/systemd/system/kanidmd.service.d/credentials.conf
-printf 'uri = "https://idm.kanidm.lab.test"\nca_path = "/etc/step-ca/certs/root_ca.crt"\n' > /etc/kanidm/config
+# ca_path: the trust-store copy (world-readable), not /etc/step-ca (root only). 0644: the CUI umask would make it 0600.
+printf 'uri = "https://idm.kanidm.lab.test"\nca_path = "/etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt"\n' > /etc/kanidm/config
+chmod 0644 /etc/kanidm/config
 systemctl daemon-reload
 kanidmd configtest -c /etc/kanidm/server.toml || true   # informative; the unit is the real test
 systemctl enable --now kanidmd
