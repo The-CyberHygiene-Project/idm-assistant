@@ -32,7 +32,7 @@ The same machine also answers the question left open by Plan 3's TPM experiment:
 - the collector and repairs (Plan 5);
 - the dc2 installer ISO (a separate project after Plan 4, per the ISSO, 2026-09-28).
 
-## Decisions for you (ISSO), recommended defaults
+## Decisions (ISSO, approved 2026-09-28: "Yes this looks good")
 
 1. **client1's kickstart creates only the kit's preconditions**: FIPS, Server with GUI, PARTITIONS_3 layout, and LUKS2 over LVM with swap inside. It does **not** apply the CUI profile at install (unlike srv1/client2), because the kit's own `harden` applies the baseline. Applying both would hide which one did what.
 2. **The root LUKS volume is unlocked by the virtual TPM (clevis, PCR 7)**, so the lab VM reboots unattended. The passphrase slot stays as the fallback. The passphrase is generated on the Mac into `~/idm-lab-secrets/client1-luks.pass`, put into the rendered kickstart, and the rendered kickstart is shredded after install.
