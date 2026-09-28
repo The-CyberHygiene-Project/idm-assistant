@@ -1,0 +1,10 @@
+--- Cargo.toml.orig	2026-09-27 18:20:58
++++ Cargo.toml	2026-09-27 18:20:58
+@@ -268,6 +268,7 @@
+ rustls = { version = "0.23.37", default-features = false, features = [
+     "std",
+     "aws_lc_rs",
++    "fips",
+ ] }
+ sd-notify = "^0.5.0"
+ selinux = "^0.6.1"

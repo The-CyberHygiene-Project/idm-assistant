@@ -1,0 +1,16 @@
+# Paths that must be packaged (release_linux profile + PAM/NSS/systemd conventions on Rocky 9 x86_64).
+/usr/sbin/kanidmd
+/usr/bin/kanidm
+/usr/sbin/kanidm_unixd
+/usr/sbin/kanidm_unixd_tasks
+/usr/sbin/kanidm-unix
+/usr/sbin/kanidm_ssh_authorizedkeys
+/usr/sbin/kanidm_ssh_authorizedkeys_direct
+/usr/lib64/security/pam_kanidm.so
+/usr/lib64/libnss_kanidm.so.2
+/usr/share/kanidm/ui/hpkg/style.css
+/usr/share/kanidm/ui/hpkg/pkhtml.js
+/usr/lib/systemd/system/kanidmd.service
+/usr/lib/systemd/system/kanidm-unixd.service
+/usr/lib/systemd/system/kanidm-unixd-tasks.service
+/etc/kanidm
