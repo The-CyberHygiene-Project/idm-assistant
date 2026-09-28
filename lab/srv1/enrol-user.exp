@@ -1,6 +1,8 @@
 #!/usr/bin/expect -f
 # enrol-user.exp  (on srv1). stdin: line 1 = reset token, 2 = password, 3 = unix (POSIX) password, 4 = mode
-# (totp | password-only). Walks Kanidm 1.11.2's credential REPL (prompts captured 2026-09-27) and commits.
+# (totp | totp-no-posix | posix-only). totp-no-posix = primary password + TOTP, NO unix password (scenario L1);
+# posix-only = only the unix (POSIX) password, e.g. a user completing a reset token (repair kanidm-cred-reset-token).
+# Walks Kanidm 1.11.2's credential REPL (prompts captured 2026-09-27) and commits.
 # Prints only "TOTP_SECRET=<base32>" (mode totp) on stdout; the caller stores it in ~/idm-lab-secrets.
 # Known exposure: `kanidm … use-reset-token` accepts the token only as an argument, so it is visible in ps on srv1
 # for the seconds the REPL runs (the token is single-use and expires in 1 h). Everything else comes via stdin.
@@ -34,9 +36,11 @@ proc newpass {p} {
 }
 spawn kanidm person credential use-reset-token $tok
 prompt
-send -- "password\r"
-newpass $pw
-if {$mode eq "totp"} {
+if {$mode ne "posix-only"} {
+  send -- "password\r"
+  newpass $pw
+}
+if {$mode eq "totp" || $mode eq "totp-no-posix"} {
   send -- "totp\r"
   expect {
     -re {TOTP Label: $} { send -- "authenticator\r" }
@@ -59,8 +63,10 @@ if {$mode eq "totp"} {
   }
   puts "TOTP_SECRET=$sec"
 }
-send -- "unix-password\r"
-newpass $upw
+if {$mode ne "totp-no-posix"} {
+  send -- "unix-password\r"
+  newpass $upw
+}
 send -- "commit\r"
 expect {
   -re {(?i)\[y/n\]|\(y/n\)|y/N} { send -- "y\r"; exp_continue }

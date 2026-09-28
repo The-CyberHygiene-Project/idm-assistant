@@ -1,0 +1,16 @@
+{
+ "reset": 32.939,
+ "inject": 307.6,
+ "collect": 1.48,
+ "kanidm-cert-renew:precheck": 0.48,
+ "kanidm-cert-renew:approval": 0.0,
+ "kanidm-cert-renew:backup": 0.256,
+ "kanidm-cert-renew:apply": 4.047,
+ "kanidm-cert-renew:verify": 0.71,
+ "acme-timer-restore:precheck": 0.0,
+ "acme-timer-restore:approval": 0.0,
+ "acme-timer-restore:backup": 0.549,
+ "acme-timer-restore:apply": 0.556,
+ "acme-timer-restore:verify": 0.609,
+ "final-check": 1.259
+}

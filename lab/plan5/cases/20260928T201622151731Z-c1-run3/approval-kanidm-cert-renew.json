@@ -1,0 +1,6 @@
+{
+ "repair": "kanidm-cert-renew",
+ "host": "srv1",
+ "prompt": "Repair kanidm-cert-renew on srv1: back up the Kanidm TLS chain/key, issue a fresh certificate over ACME (step-ca refuses to renew an expired one), restart kanidmd. Type yes to approve",
+ "approved": true
+}

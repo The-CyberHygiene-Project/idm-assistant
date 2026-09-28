@@ -1,0 +1,8 @@
+2026-09-28T20:16:59.438372+00:00 injected: renewal timer disabled; short certificate notAfter=Sep 28 20:21:54 2026 GMT
+2026-09-28T20:22:02.685853+00:00 served certificate is now expired
+2026-09-28T20:22:04.906607+00:00 backup: ['dir']
+2026-09-28T20:22:08.955337+00:00 applied
+2026-09-28T20:22:09.667770+00:00 verified
+2026-09-28T20:22:10.218529+00:00 backup: ['active', 'enabled']
+2026-09-28T20:22:10.776026+00:00 applied
+2026-09-28T20:22:11.386553+00:00 verified

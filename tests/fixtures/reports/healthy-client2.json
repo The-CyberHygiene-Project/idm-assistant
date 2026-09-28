@@ -1,0 +1,36 @@
+{
+ "schema": "idm-report/1",
+ "host": "client2",
+ "role": "client",
+ "collected_at": "2026-09-28T20:00:00Z",
+ "user": null,
+ "time": {
+  "offset_s": 0.001,
+  "synced": true,
+  "source": "192.168.100.1"
+ },
+ "services": {
+  "kanidm-unixd": "active",
+  "kanidm-unixd-tasks": "active",
+  "sshd": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-09-28T15:00:00Z",
+   "not_after": "2026-09-29T15:00:00Z",
+   "verify": "ok"
+  }
+ },
+ "unixd": {
+  "status": "online"
+ },
+ "kanidm_user": null,
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 0
+ },
+ "errors": []
+}

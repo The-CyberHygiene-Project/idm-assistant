@@ -1,0 +1,9 @@
+{
+ "srv1": [
+  "ACME_RENEWAL_STOPPED",
+  "TLS_CERT_EXPIRED(kanidm)"
+ ],
+ "client2": [
+  "TLS_CERT_EXPIRED(kanidm)"
+ ]
+}

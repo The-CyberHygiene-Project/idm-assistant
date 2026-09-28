@@ -1,0 +1,103 @@
+#!/bin/sh
+# idm-collect [--user NAME]: READ-ONLY identity diagnostics for the dc2-style stack. Prints one idm-report/1 JSON
+# document on stdout. Writes nothing outside a private temp dir (removed on exit). Secrets are redacted with
+# redact.sed (installed next to this script as /usr/local/sbin/idm-collect.redact.sed).
+# Kanidm queries use the REST API with a READ-ONLY service-account token (/etc/idm-collect/kanidm.token), passed to
+# curl as a header FILE (never on the command line), so no CLI token cache is written anywhere.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+REDACT="${IDM_REDACT:-/usr/local/sbin/idm-collect.redact.sed}"
+TOKEN_FILE=/etc/idm-collect/kanidm.token
+KANIDM_URL=https://idm.kanidm.lab.test
+user=""
+[ "${1:-}" = "--user" ] && user="${2:-}"
+case "$user" in ''|[a-z0-9_]*) : ;; *) echo '{"schema":"idm-report/1","errors":["bad --user"]}'; exit 0 ;; esac
+case "$user" in *[!a-z0-9_]*) echo '{"schema":"idm-report/1","errors":["bad --user"]}'; exit 0 ;; esac
+W=$(mktemp -d /tmp/idm-collect.XXXXXX); chmod 700 "$W"; trap 'rm -rf "$W"' EXIT
+ERRS="$W/errors"; : > "$ERRS"
+err() { printf '%s\n' "$1" | sed -E -f "$REDACT" >> "$ERRS"; }
+
+# JSON string escaping (POSIX): backslash, quote, control characters -> spaces; redaction first.
+json_str() { printf '%s' "$1" | sed -E -f "$REDACT" | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037' | sed 's/^/"/; s/$/"/'; }
+json_bool() { if [ "$1" = true ]; then printf true; else printf false; fi; }
+json_num() { case "$1" in ''|*[!0-9.eE+-]*) printf null ;; *) printf '%s' "$1" ;; esac; }
+iso() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
+
+host=$(hostname -s)
+if systemctl cat kanidmd.service >/dev/null 2>&1; then role=server; else role=client; fi
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# --- time ---------------------------------------------------------------------------------------------------------
+off=""; synced=false; src=""
+if t=$(chronyc -n tracking 2>/dev/null); then
+  src=$(printf '%s\n' "$t" | awk -F': *' '/^Reference ID/ {split($2,a," "); print a[2]}' | tr -d '()')
+  # "System time : 0.000012 seconds fast of NTP time" -> signed offset (local minus NTP)
+  off=$(printf '%s\n' "$t" | awk -F': *' '/^System time/ {split($2,a," "); v=a[1]; if ($2 ~ /slow/) v=-v; print v}')
+  printf '%s\n' "$t" | grep -q '^Leap status *: Normal' && synced=true
+else err "time: chronyc tracking failed"; fi
+
+# --- services -----------------------------------------------------------------------------------------------------
+if [ "$role" = server ]; then units="kanidmd step-ca named cert-renew-kanidm.timer"
+else units="kanidm-unixd kanidm-unixd-tasks sshd"; fi
+svc=""
+for u in $units; do st=$(systemctl is-active "$u" 2>/dev/null || true); svc="$svc$(json_str "$u"):$(json_str "${st:-unknown}"),"; done
+svc="{${svc%,}}"
+
+# --- TLS (Kanidm) ------------------------------------------------------------------------------------------------
+tls="{}"
+if out=$(timeout 10 openssl s_client -connect idm.kanidm.lab.test:443 -servername idm.kanidm.lab.test </dev/null 2>&1) \
+   && printf '%s\n' "$out" | grep -q -- '-----BEGIN CERTIFICATE-----'; then
+  printf '%s\n' "$out" | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' > "$W/kanidm.pem"
+  nb=$(iso "$(openssl x509 -in "$W/kanidm.pem" -noout -startdate | cut -d= -f2)")
+  na=$(iso "$(openssl x509 -in "$W/kanidm.pem" -noout -enddate | cut -d= -f2)")
+  # s_client verifies the chain against the system trust store: 0 ok, 10 expired, anything else untrusted.
+  code=$(printf '%s\n' "$out" | sed -n 's/.*Verify return code: \([0-9]*\).*/\1/p' | tail -1)
+  case "$code" in 0) v=ok ;; 10) v=expired ;; *) v=untrusted ;; esac
+  tls="{\"kanidm\":{\"not_before\":$(json_str "$nb"),\"not_after\":$(json_str "$na"),\"verify\":$(json_str "$v")}}"
+else err "tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"; fi
+
+# --- unixd (clients) ----------------------------------------------------------------------------------------------
+ux=absent
+if [ "$role" = client ]; then
+  if s=$(kanidm-unix status 2>/dev/null); then
+    if printf '%s\n' "$s" | grep -qi '^Kanidm: *online'; then ux=online; else ux=offline; fi
+  else err "unixd: kanidm-unix status failed"; ux=offline; fi
+fi
+
+# --- Kanidm user (server role, --user) ----------------------------------------------------------------------------
+ku=null
+if [ -n "$user" ] && [ "$role" = server ]; then
+  if [ -r "$TOKEN_FILE" ]; then
+    printf 'Authorization: Bearer %s\n' "$(cat "$TOKEN_FILE")" > "$W/auth.hdr"; chmod 600 "$W/auth.hdr"
+    if j=$(curl -fsS --max-time 10 -H @"$W/auth.hdr" "$KANIDM_URL/v1/person/$user" 2>"$W/curl.err"); then
+      if [ "$j" = null ] || [ -z "$j" ]; then
+        ku="{\"name\":$(json_str "$user"),\"exists\":false}"
+      else
+        has() { printf '%s' "$j" | grep -q "\"$1\""; }
+        posix=false; printf '%s' "$j" | grep -q '"posixaccount"' && posix=true
+        upw=false; has unix_password && upw=true
+        pc=false; has primary_credential && pc=true
+        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc)}"
+      fi
+    else err "kanidm_user: REST query failed: $(head -c 200 "$W/curl.err")"; fi
+  else err "kanidm_user: no read-only token at $TOKEN_FILE"; fi
+fi
+
+# --- trust --------------------------------------------------------------------------------------------------------
+tr_ok=false
+if [ -f /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt ] && \
+   trust list --filter=ca-anchors 2>/dev/null | grep -qi 'kanidm.lab.test Lab CA'; then tr_ok=true; fi
+
+# --- SELinux ------------------------------------------------------------------------------------------------------
+se=$(getenforce 2>/dev/null || echo unknown)
+avc=$(ausearch --input-logs -m AVC -ts recent 2>/dev/null </dev/null | grep -c 'type=AVC' || true)
+
+# --- emit ---------------------------------------------------------------------------------------------------------
+errs=""
+while IFS= read -r l; do errs="$errs$(json_str "$l"),"; done < "$ERRS"
+printf '{"schema":"idm-report/1","host":%s,"role":%s,"collected_at":%s,"user":%s,' \
+  "$(json_str "$host")" "$(json_str "$role")" "$(json_str "$now")" "$( [ -n "$user" ] && json_str "$user" || printf null)"
+printf '"time":{"offset_s":%s,"synced":%s,"source":%s},' "$(json_num "$off")" "$(json_bool $synced)" "$(json_str "$src")"
+printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
+printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s},"errors":[%s]}\n' \
+  "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "${errs%,}"
