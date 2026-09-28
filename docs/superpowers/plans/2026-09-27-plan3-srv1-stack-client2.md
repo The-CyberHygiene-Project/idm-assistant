@@ -336,8 +336,8 @@ Run it on aero: RED, because `vm-lib.sh` doesn't exist. Then move b7's body into
 # create_vm NAME VCPUS MEM_MB DISK_GB KS [extra virt-install args...]  (source lib.sh first)
 create_vm() {
   local name=$1 vcpus=$2 mem=$3 disk=$4 ks=$5; shift 5
-  local iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso img=/data/libvirt/images/$1.qcow2
-  local logf=/var/log/libvirt/qemu/$1-install.log state
+  local iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso img=/data/libvirt/images/$name.qcow2
+  local logf=/var/log/libvirt/qemu/$name-install.log state
   [[ -f $ks ]] || die "missing $ks (run via push.sh)"
   if virsh dominfo "$name" >/dev/null 2>&1; then
     virsh snapshot-info "$name" golden >/dev/null 2>&1 \
