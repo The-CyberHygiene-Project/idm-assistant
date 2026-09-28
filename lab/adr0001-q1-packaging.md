@@ -99,6 +99,10 @@ The end-to-end chain works:
 
 An operator error of mine, caught and fixed within minutes: the first client run selected the new profile **without** its features, briefly re-allowing `nullok`. The script now refuses to continue if any feature is lost.
 
+**Minor:** unixd warns at every start, "DB folder /var/cache/kanidm-unixd has 'everyone' permission bits in the mode". The upstream unit's `UMask=0027` doesn't cover the `CacheDirectory` it creates. Worth a `CacheDirectoryMode=0750` drop-in on dc2.
+
+**Virtual TPM + LUKS/clevis:** see `lab/tpm-luks-experiment.md` (unattended unlock works; PCR-mismatch refusal proven; lab PCRs are all-zero under SeaBIOS).
+
 ### ADR spike defects, status after Plan 3
 
 | Spike defect | Status |
