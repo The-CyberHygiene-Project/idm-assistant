@@ -6,7 +6,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; D="${1:-$HOME/rpmbuild/RPMS/x86_64}"
 GOV=$(cat "$HOME/step-build/go-version.txt")
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-ca=$(ls "$D"/step-ca-0.30.2-2.chp*.rpm); cli=$(ls "$D"/step-cli-0.31.0-2.chp*.rpm)
+ca=$(ls "$D"/step-ca-0.30.2-3.chp*.rpm); cli=$(ls "$D"/step-cli-0.31.0-2.chp*.rpm)
 for r in "$ca" "$cli"; do ( cd "$tmp" && rpm2cpio "$r" | cpio -idm --quiet ); done
 bad=0; t() { if eval "$2"; then echo "OK    $1"; else echo "FAIL  $1"; bad=1; fi; }
 t "step-ca built with $GOV"            "'$HOME/step-build/go/bin/go' version -m '$tmp/usr/bin/step-ca' | grep >/dev/null \"$GOV\""
@@ -17,6 +17,7 @@ t "step-cli reports 0.31.0"            "'$tmp/usr/bin/step-cli' version 2>&1 | g
 t "step -> step-cli"                   "[[ \$(readlink '$tmp/usr/bin/step') == step-cli ]]"
 t "unit sets GODEBUG=fips140=on"       "grep -qx 'Environment=GODEBUG=fips140=on' '$tmp/usr/lib/systemd/system/step-ca.service'"
 t "unit never sets fips140=only"       "! grep -qE '^Environment=.*fips140=only' '$tmp/usr/lib/systemd/system/step-ca.service'"
+t "%pre creates user step (the sysusers FILE trigger does not run in Anaconda)" "rpm -qp --scripts '$ca' 2>/dev/null | grep -E 'useradd.*step|getent passwd step|systemd-sysusers' >/dev/null"
 t "sysusers creates step"              "grep -qE '^u step ' '$tmp/usr/lib/sysusers.d/step-ca.conf'"
 t "licence files shipped"              "ls '$tmp'/usr/share/licenses/step-ca/LICENSE '$tmp'/usr/share/licenses/step-cli/LICENSE >/dev/null"
 t "nothing lab-specific inside"        "! grep -rqs 'kanidm.lab.test\\|192.168.100' '$tmp/usr/lib' '$tmp/usr/share'"
