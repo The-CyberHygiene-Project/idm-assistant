@@ -469,3 +469,47 @@ class ClientCaTrust(Repair):
 
 
 REGISTRY[ClientCaTrust.id] = ClientCaTrust()
+
+
+class AccountUnexpire(Repair):
+    """Re-enable an EXPIRED Kanidm account. Expiry is usually deliberate: the runbook default is 'none', and the
+    approval text says so. Only the named, validated user is touched; undo puts the old expiry back."""
+    id = "account-unexpire"
+    host_role = "server"
+    verify_absent = {"ACCOUNT_EXPIRED"}
+
+    def describe(self, ctx):
+        return (f"clear the account expiry of {ctx.params.get('user')} so they can log in again. WARNING: expiry may "
+                "be intentional (off-boarding, contract end); approve only if you know it was a mistake")
+
+    def precheck(self, ctx):
+        if not valid_user(ctx.params.get("user")):
+            return f"refusing: {ctx.params.get('user')!r} is not a valid user name"
+        if "ACCOUNT_EXPIRED" not in {f.id for f in evaluate(ctx.collect())}:
+            return f"{ctx.params['user']} is not expired; nothing to repair"
+        return None
+
+    def backup(self, ctx):
+        return {"account_expire": (ctx.collect().get("kanidm_user") or {}).get("account_expire")}
+
+    def _expire_at(self, ctx, value):
+        ctx.remote.run(ctx.host, ["kanidm", "person", "validity", "expire-at", ctx.params["user"], value,
+                                  "-D", "idm_admin"])
+
+    def apply(self, ctx):
+        if not valid_user(ctx.params.get("user")):
+            raise ValueError("invalid user name")
+        stage(ctx)
+        admin_login(ctx)
+        self._expire_at(ctx, "clear")
+
+    def undo(self, ctx, backup):
+        if backup.get("account_expire"):
+            self._expire_at(ctx, backup["account_expire"])
+
+    def verify_present(self, report):
+        u = report.get("kanidm_user") or {}
+        return None if u.get("exists") and u.get("account_expire") is None else f"account still has expiry: {u}"
+
+
+REGISTRY[AccountUnexpire.id] = AccountUnexpire()
