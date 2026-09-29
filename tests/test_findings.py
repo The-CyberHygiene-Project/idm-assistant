@@ -142,3 +142,57 @@ def test_reports_about_different_users_are_not_compared():
     s, c = pair()
     s["kanidm_user"]["memberof"] = []; s["kanidm_user"]["name"] = "lab02"
     assert "UNIXD_CACHE_STALE" not in cids(c, s)
+
+
+def test_expired_account_is_found_and_suppressed_on_a_bad_clock():
+    s = pair()[0]; s["kanidm_user"]["account_expire"] = "2026-09-01T00:00:00Z"
+    assert "ACCOUNT_EXPIRED" in cids(s)
+    s["time"].update(synced=False, offset_s=None)
+    assert "ACCOUNT_EXPIRED" not in cids(s)
+
+
+def test_not_yet_valid_account_is_found():
+    s = pair()[0]; s["kanidm_user"]["valid_from"] = "2099-01-01T00:00:00Z"
+    assert "ACCOUNT_NOT_YET_VALID" in cids(s)
+
+
+def test_expired_issued_ssh_cert_is_found():
+    s = pair()[0]
+    s["ssh_ca"] = {"fingerprint": "SHA256:x", "issued": {"user": "lab01", "valid_from": "2026-09-01T00:00:00Z",
+                                                          "valid_to": "2026-09-01T01:00:00Z", "principals": ["lab01"]}}
+    assert "SSH_USER_CERT_EXPIRED" in cids(s)
+    s["ssh_ca"]["issued"]["valid_to"] = "forever"
+    assert "SSH_USER_CERT_EXPIRED" not in cids(s)
+
+
+def test_expired_ssh_cert_is_suppressed_on_a_bad_clock():
+    s = pair()[0]; s["time"]["offset_s"] = 600.0
+    s["ssh_ca"] = {"fingerprint": "SHA256:x", "issued": {"user": "lab01", "valid_from": "2026-09-01T00:00:00Z",
+                                                          "valid_to": "2026-09-01T01:00:00Z", "principals": ["lab01"]}}
+    assert "SSH_USER_CERT_EXPIRED" not in cids(s)
+
+
+def test_client_without_trusted_ca_is_found_and_so_is_a_foreign_ca():
+    s, c = pair()
+    s["ssh_ca"] = {"fingerprint": "SHA256:good", "issued": None}
+    c["sshd"] = {"trusted_ca_path": "none", "trusted_ca_fingerprints": []}
+    assert "SSH_CA_NOT_TRUSTED" in cids(c, s)
+    assert "SSH_CA_NOT_TRUSTED" in cids(c)                  # single-host: nothing trusted at all
+    c["sshd"] = {"trusted_ca_path": "/etc/ssh/trusted_user_ca_keys", "trusted_ca_fingerprints": ["SHA256:other"]}
+    assert "SSH_CA_NOT_TRUSTED" in cids(c, s)
+    c["sshd"]["trusted_ca_fingerprints"] = ["SHA256:good"]
+    assert "SSH_CA_NOT_TRUSTED" not in cids(c, s)
+
+
+def test_each_wrong_label_is_its_own_finding():
+    c = pair()[1]
+    c["selinux"]["relabel"] = [{"path": "/run/kanidm-unixd", "have": "var_run_t", "want": "kanidm_unixd_var_run_t"},
+                               {"path": "/run/kanidm-unixd/sock", "have": "var_run_t", "want": "kanidm_unixd_var_run_t"}]
+    got = cids(c)
+    assert "SELINUX_LABEL_WRONG(/run/kanidm-unixd)" in got and "SELINUX_LABEL_WRONG(/run/kanidm-unixd/sock)" in got
+
+
+def test_live_healthy_lab02_pair_with_plan7_sections_has_no_findings():
+    s = load_report(FIX / "healthy-srv1-lab02.json"); c = load_report(FIX / "healthy-client2-lab02.json")
+    assert s["ssh_ca"]["issued"] and c["sshd"]["trusted_ca_fingerprints"] and "relabel" in c["selinux"]
+    assert cids(s) == [] and cids(c, s) == []

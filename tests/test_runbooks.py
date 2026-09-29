@@ -5,8 +5,9 @@ from engine.findings import Finding
 
 BASES = ["POSIX_PW_MISSING", "TLS_CERT_EXPIRED", "ACME_RENEWAL_STOPPED", "TLS_CERT_UNTRUSTED", "CLIENT_MISSING_CA_ROOT",
          "NSS_ORDER_WRONG", "UNIXD_CACHE_STALE", "UNIXD_OFFLINE", "KANIDM_UNREACHABLE", "TOTP_TIME_SKEW",
-         "TIME_UNVERIFIED", "SERVICE_DOWN"]
-FUTURE_REPAIRS = {"nsswitch-restore", "unixd-refresh", "time-resync", "client-ca-trust"}   # added in Tasks 5-8
+         "TIME_UNVERIFIED", "SERVICE_DOWN", "ACCOUNT_EXPIRED", "ACCOUNT_NOT_YET_VALID", "SSH_USER_CERT_EXPIRED",
+         "SSH_CA_NOT_TRUSTED", "SELINUX_LABEL_WRONG"]
+FUTURE_REPAIRS = {"ssh-user-cert-reissue", "ssh-ca-trust-restore", "selinux-restorecon"}   # Plan 7 Tasks 4-6
 
 
 @pytest.mark.parametrize("base", BASES)
