@@ -5,6 +5,7 @@
 # Kanidm queries use the REST API with a READ-ONLY service-account token (/etc/idm-collect/kanidm.token), passed to
 # curl as a header FILE (never on the command line), so no CLI token cache is written anywhere.
 set -eu
+set -f   # no pathname expansion anywhere: group names and paths are data, never patterns
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 # >>> redact-path
 # As root (the sudo rule) the installed rules are used whatever the environment says: GNU sed -f accepts `w`/`e`.
@@ -83,7 +84,7 @@ else err "tls: could not fetch the Kanidm certificate (unreachable or handshake 
 un=null
 if [ -n "$user" ] && [ "$role" = client ]; then
   if p=$(timeout 15 getent passwd "$user" 2>/dev/null); then
-    gl=""; for g in $(id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
+    gl=""; for g in $(timeout 15 id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
     un="{\"name\":$(json_str "$user"),\"found\":true,\"gecos\":$(json_str "$(printf '%s' "$p" | cut -d: -f5)"),\"groups\":[${gl%,}]}"
   else un="{\"name\":$(json_str "$user"),\"found\":false}"; fi
 fi

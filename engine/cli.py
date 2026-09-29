@@ -49,6 +49,11 @@ def final_status(final, probe_ok, interp, no_model, elapsed_s, clear_before_s):
     return "GREEN"
 
 
+def allowed_for_findings(fl, reps):
+    """Repairs for the roles of the hosts that actually have findings (not every host collected)."""
+    return interpret.allowed_for({reps[h]["role"] for h, fs in fl.items() if fs})
+
+
 def _evaluate_all(reps):
     """Client reports are also judged against the server's view (cross-host rules)."""
     srv = reps.get("srv1")
@@ -85,7 +90,7 @@ def run_scenario(sc, run_no):
         return case, "DIAGNOSIS-FAILED"
     no_model = os.environ.get("IDM_NO_MODEL") == "1"
     with case.step("interpret"):
-        allowed = interpret.allowed_for({r["role"] for r in reps.values()})
+        allowed = allowed_for_findings(fl, reps)
         it = None if no_model else interpret.interpret(sc.SYMPTOM, [f for h in fl for f in fl[h]], allowed)
     expected = [rid for _, rid in sc.REPAIRS]
     if it is not None:

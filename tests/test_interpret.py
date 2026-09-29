@@ -95,3 +95,9 @@ def test_malformed_field_types_are_rejected_not_raised(field, value):
 def test_a_json_array_reply_is_invalid_not_a_crash():
     r = interpret.interpret("x", F, ALLOWED, transport=reply("[1, 2]"))
     assert not r["valid"] and r["errors"]
+
+
+def test_prompt_keeps_errors_before_warnings_when_capped():
+    many = [Finding(f"A_WARN_{i:02d}", "x", ("w",), "warning") for i in range(15)] + [Finding("Z_ERR", "x", ("e",))]
+    msgs = interpret.build_messages("s", many, [], ALLOWED)
+    assert '"Z_ERR"' in msgs[-1]["content"]

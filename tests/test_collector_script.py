@@ -82,3 +82,8 @@ def _memberof(j):
 def test_memberof_is_a_list_or_unknown(j, want):
     import json
     assert json.loads(_memberof(j)) == want
+
+
+def test_group_names_are_not_globbed():
+    text = SCRIPT.read_text()
+    assert "set -f" in text and "timeout 15 id -Gn" in text

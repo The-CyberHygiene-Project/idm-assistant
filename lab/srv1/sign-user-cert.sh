@@ -8,4 +8,4 @@ u="${1:?usage: sign-user-cert.sh USER PUBKEY_FILE [VALIDITY]}"; pub="${2:?pubkey
 [[ $v =~ ^[-+0-9a-zA-Z:]+$ ]] || { echo "bad validity: $v" >&2; exit 1; }
 scp -q "$pub" srv1:/tmp/"$u"-sign.pub
 # shellcheck disable=SC2029  # values expand on the Mac by design (validated above)
-ssh -n srv1 "set -e; trap 'rm -f /tmp/$u-sign*' EXIT; sudo ssh-keygen -q -s /etc/ssh-ca/user_ca -I $u-cert -n $u,$u@idm.kanidm.lab.test -V $v /tmp/$u-sign.pub; cat /tmp/$u-sign-cert.pub"
+ssh -n srv1 "set -e; trap 'sudo rm -f /tmp/$u-sign*' EXIT; sudo ssh-keygen -q -s /etc/ssh-ca/user_ca -I $u-cert -n $u,$u@idm.kanidm.lab.test -V $v /tmp/$u-sign.pub; cat /tmp/$u-sign-cert.pub"

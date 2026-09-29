@@ -32,10 +32,15 @@ def allowed_for(roles):
     return {rid for rid, r in REGISTRY.items() if r.host_role in roles}
 
 
+def order(findings):
+    """Errors before warnings, then by id: what survives the 12-finding cap is what matters most."""
+    return sorted(findings, key=lambda f: (f.severity != "error", f.id))
+
+
 def _data(symptom, findings, rbs, allowed, cap):
     d = {"symptom": symptom[:cap],
          "findings": [{"id": f.id, "component": f.component, "evidence": [e[:cap] for e in f.evidence][:4]}
-                      for f in findings][:12],
+                      for f in order(findings)][:12],
          "runbooks": [{"finding": r.finding, "default_repair": r.default_repair, "excerpt": r.excerpt[:cap * 2]}
                       for r in rbs],
          "allowed_repairs": sorted(allowed)}
