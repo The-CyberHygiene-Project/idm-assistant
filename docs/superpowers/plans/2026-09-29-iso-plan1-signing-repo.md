@@ -101,6 +101,8 @@ Plan 2/3 tested; the product packaging now evolves separately.
   `cyberhygiene` and the file `RPM-GPG-KEY-cyberhygiene`. Every later task reads the fingerprint from that file:
   `CHP_FPR=$(awk '$2=="cyberhygiene"{print $1}' appliance/release/trusted-keys.txt)`.
 
+- [ ] **Step 0: The right token.** Only the **dedicated signing YubiKey** may be connected (the user's choice, 2026-09-29: a token used for nothing else). `ykman list` must show exactly one YubiKey; ask the user to confirm it is the signing token. Never write its serial into the repo.
+
 - [ ] **Step 1: pinentry-mac and a shared card reader.** The Mac has no GUI pinentry, and the forwarded agent (Task 2)
   has no terminal, so PINs must come from a dialog.
   ```bash
@@ -189,7 +191,7 @@ Plan 2/3 tested; the product packaging now evolves separately.
 
 - [ ] **Step 8: Write `appliance/release/SIGNING-KEY.md`.** Its contents, filled in from Steps 4–7:
   - fingerprint (`$FPR`), algorithm RSA 3072, created date, expiry (2 years from creation)
-  - custody: "generated on-card on the System Owner's YubiKey 5 NFC; not exportable; no backup copy exists". Do **not** record the serial.
+  - custody: "generated on-card on a DEDICATED YubiKey 5 NFC (used for nothing but release signing; held by the System Owner); not exportable; no backup copy exists". Do **not** record the serial.
   - touch policy On. Expect **two touches per RPM** (rpm 4.16 adds a header and a header+payload signature) and one for `repomd.xml`.
   - **Expiry:** before the expiry date, extend it on-card with `gpg --quick-set-expire $FPR 2y`, re-export, re-commit.
   - **Loss or compromise:** generate a new key (Tasks 1.3–1.7), replace the `cyberhygiene` line in `trusted-keys.txt`,

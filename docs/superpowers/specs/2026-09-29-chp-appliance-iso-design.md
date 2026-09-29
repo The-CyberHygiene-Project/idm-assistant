@@ -37,7 +37,7 @@ Not gates for this project (recorded so that nobody assumes otherwise): a real-h
 | Desktop | **Server with GUI on both roles** (`graphical-server`, graphical target) |
 | Approach | **Config RPMs + thin kickstart + first-boot one-shot units** (not a fat `%post`, not Ansible) |
 | Distribution | Prebuilt, signed ISO on the Synology share **For Jeff** during development |
-| Signing key | Dedicated project GPG key **on a YubiKey the owner holds** (non-exportable) |
+| Signing key | Dedicated project GPG key **on a dedicated YubiKey (release signing only) the owner holds** (non-exportable) |
 | ISSO #12 SELinux | Ship the proven policy as two modules, **`chp_kanidm`** (unixd socket contexts, `nsswitch_domain` only) and **`chp_ga`** (token paths); unixd stays unconfined → **POA&M**; full confinement is a follow-on project |
 | ISSO #14 FIPS | Kanidm server **and** unixd built with the **AWS-LC FIPS TLS variant**; Argon2 / TOTP app crypto documented as a **POA&M item (3.13.11)**; CMVP status of every module verified, not assumed (§9) |
 | ISSO #20 CHP kit | **Not a dependency.** Hardening = kickstart OpenSCAP CUI profile + tailoring + role RPMs. The kit (with `CHP_IDENTITY=kanidm` and the K1–K6 fixes) remains a separate, optional tool |
