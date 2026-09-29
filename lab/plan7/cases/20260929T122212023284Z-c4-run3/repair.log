@@ -1,0 +1,9 @@
+2026-09-29T12:22:45.986952+00:00 certificate login probe lab02@client2: RESULT: OK lab02@idm.kanidm.lab.test
+2026-09-29T12:22:46.295454+00:00 injected: TrustedUserCAKeys removed from sshd's drop-in; sshd reloaded
+2026-09-29T12:22:46.465478+00:00 certificate login probe lab02@client2: RESULT: DENIED
+2026-09-29T12:22:56.231769+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=ssh-ca-trust-restore shown=ssh-ca-trust-restore agrees=True errors=[]
+2026-09-29T12:22:57.177688+00:00 backup: ['dir']
+2026-09-29T12:22:57.749609+00:00 applied
+2026-09-29T12:22:59.712049+00:00 verified
+2026-09-29T12:23:01.848144+00:00 certificate login probe lab02@client2: RESULT: OK lab02@idm.kanidm.lab.test
+2026-09-29T12:23:01.848913+00:00 inject->repairs done: 13.2 s; status GREEN

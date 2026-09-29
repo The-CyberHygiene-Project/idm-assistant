@@ -1,0 +1,1 @@
+After last night's patching nobody can log in to client2 with their Kanidm account; local admins can.

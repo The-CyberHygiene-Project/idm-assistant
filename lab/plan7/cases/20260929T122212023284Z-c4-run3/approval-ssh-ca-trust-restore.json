@@ -1,0 +1,9 @@
+{
+ "repair": "ssh-ca-trust-restore",
+ "host": "client2",
+ "prompt": "Repair ssh-ca-trust-restore on client2: trust the lab SSH user CA again (SHA256:fnyFGHP/iyOJ..., pinned): write /etc/ssh/trusted_user_ca_keys, restore TrustedUserCAKeys in /etc/ssh/sshd_config.d/10-kanidm.conf, check sshd -t, reload sshd. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T12:22:56Z"
+}

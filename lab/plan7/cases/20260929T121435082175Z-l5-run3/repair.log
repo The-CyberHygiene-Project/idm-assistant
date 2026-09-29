@@ -1,0 +1,8 @@
+2026-09-29T12:15:09.638824+00:00 injected: lab06's account expired now
+2026-09-29T12:15:13.903157+00:00 login probe lab06@client2 with its posix password: DENIED
+2026-09-29T12:15:24.865233+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=None shown=None agrees=True errors=[]
+2026-09-29T12:15:26.550091+00:00 backup: ['account_expire']
+2026-09-29T12:15:28.199234+00:00 applied
+2026-09-29T12:15:29.034769+00:00 verified
+2026-09-29T12:15:31.757425+00:00 login probe lab06@client2 with its posix password: OK
+2026-09-29T12:15:31.758157+00:00 inject->repairs done: 15.1 s; status GREEN

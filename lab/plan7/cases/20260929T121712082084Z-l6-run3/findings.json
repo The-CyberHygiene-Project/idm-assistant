@@ -1,0 +1,7 @@
+{
+ "client2": [
+  "SELINUX_LABEL_WRONG(/run/kanidm-unixd)",
+  "SELINUX_LABEL_WRONG(/run/kanidm-unixd/sock)",
+  "SELINUX_LABEL_WRONG(/run/kanidm-unixd/task_sock)"
+ ]
+}

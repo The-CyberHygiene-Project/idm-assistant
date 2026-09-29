@@ -1,0 +1,6 @@
+{
+ "srv1": [],
+ "client2": [
+  "SSH_CA_NOT_TRUSTED"
+ ]
+}
