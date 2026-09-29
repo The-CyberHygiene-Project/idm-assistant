@@ -466,3 +466,46 @@ def test_restorecon_verifies_no_label_differs():
     from engine import repairs
     assert repairs.SelinuxRestorecon().verify_present({"selinux": {"relabel": []}}) is None
     assert repairs.SelinuxRestorecon().verify_present(_mislabelled(["/run/kanidm-unixd"]))
+
+
+CERT_SRV = dict(HEALTHY, host="srv1", role="server", time={"offset_s": 0.0, "synced": True, "source_offset_s": 0.0},
+                collected_at="2026-09-29T12:00:00Z",
+                ssh_ca={"fingerprint": "SHA256:x", "issued": {"user": "lab02", "valid_from": "2026-09-29T10:00:00Z",
+                                                              "valid_to": "2026-09-29T11:00:00Z", "principals": []}})
+
+
+def test_reissue_signs_only_the_registered_key_with_both_principals(tmp_path):
+    from engine import repairs
+    rr = RecRemote(out="ecdsa-sha2-nistp384-cert-v01@openssh.com AAAA lab02\n")
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV, remote=rr,
+            params={"user": "lab02"})
+    repairs.SshUserCertReissue().apply(c)
+    script = rr.calls[-1][1][-1]
+    assert "/var/lib/ssh-ca/keys/lab02.pub" in script and "-n lab02,lab02@idm.kanidm.lab.test" in script
+    assert "-V +1h" in script and "/var/lib/ssh-ca/issued/lab02-cert.pub" in script
+    assert c.params["_cert"].startswith("ecdsa-sha2-nistp384-cert-v01@openssh.com")
+
+
+@pytest.mark.parametrize("user,out,why", [("-x", "yes", "user name"), ("lab02", "", "registered")])
+def test_reissue_precheck_needs_a_valid_user_and_a_registered_key(tmp_path, user, out, why):
+    from engine import repairs
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV,
+            remote=RecRemote(out=out), params={"user": user})
+    assert why in repairs.SshUserCertReissue().precheck(c)
+
+
+def test_reissue_verifies_a_cert_valid_now():
+    from engine import repairs
+    good = dict(CERT_SRV, ssh_ca={"issued": {"valid_to": "2026-09-29T13:00:00Z"}})
+    assert repairs.SshUserCertReissue().verify_present(good) is None
+    assert repairs.SshUserCertReissue().verify_present(CERT_SRV)
+
+
+def test_reissue_lab_standin_delivers_the_certificate_to_the_user(tmp_path, monkeypatch):
+    from engine import labsecrets, repairs
+    got = {}
+    monkeypatch.setattr(labsecrets, "write", lambda n, t: got.update({n: t}) or tmp_path / n)
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV,
+            params={"user": "lab02", "lab_standin": True, "_cert": "CERT\n"})
+    repairs.SshUserCertReissue().wait_for_user(c)
+    assert got == {"lab02_ecdsa-cert.pub": "CERT\n"}

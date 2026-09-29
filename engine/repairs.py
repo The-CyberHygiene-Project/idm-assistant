@@ -564,3 +564,70 @@ class SelinuxRestorecon(Repair):
 
 
 REGISTRY[SelinuxRestorecon.id] = SelinuxRestorecon()
+
+
+SSH_REALM = "idm.kanidm.lab.test"
+
+
+def sign_user_cert(remote, host, user, validity):
+    """Sign the user's REGISTERED public key (/var/lib/ssh-ca/keys/<user>.pub) on the CA host, record the certificate
+    (public) as the newest issued one, and return it. No key material is sent from here."""
+    if not valid_user(user) or not _re.fullmatch(r"[-+0-9a-zA-Z:]+", validity):
+        raise ValueError("invalid user name or validity")
+    script = (f"set -e; T=$(mktemp -d); trap 'rm -rf \"$T\"' EXIT; cp /var/lib/ssh-ca/keys/{user}.pub \"$T/k.pub\"; "
+              f"ssh-keygen -q -s /etc/ssh-ca/user_ca -I {user}-cert -n {user},{user}@{SSH_REALM} -V {validity} "
+              f"\"$T/k.pub\"; install -m 0644 \"$T/k-cert.pub\" /var/lib/ssh-ca/issued/{user}-cert.pub; "
+              f"cat \"$T/k-cert.pub\"")
+    return remote.run(host, ["sudo", "sh", "-c", script]).stdout
+
+
+class SshUserCertReissue(Repair):
+    id = "ssh-user-cert-reissue"
+    host_role = "server"
+    verify_absent = {"SSH_USER_CERT_EXPIRED"}
+    VALIDITY = "+1h"
+
+    def describe(self, ctx):
+        return (f"sign {ctx.params.get('user')}'s registered public key again (principals user and user@realm, "
+                f"valid {self.VALIDITY}) and hand the new certificate to the user; no private key moves")
+
+    def precheck(self, ctx):
+        u = ctx.params.get("user")
+        if not valid_user(u):
+            return f"refusing: {u!r} is not a valid user name"
+        if _sh(ctx, f"test -r /var/lib/ssh-ca/keys/{u}.pub && echo yes || true").strip() != "yes":
+            return f"{u} has no registered public key on the CA; register it first (never sign a key from a report)"
+        return None
+
+    def backup(self, ctx):
+        u = ctx.params["user"]
+        return {"record": _sh(ctx, f"cat /var/lib/ssh-ca/issued/{u}-cert.pub 2>/dev/null || true")}
+
+    def apply(self, ctx):
+        ctx.params["_cert"] = sign_user_cert(ctx.remote, ctx.host, ctx.params["user"], self.VALIDITY)
+
+    def wait_for_user(self, ctx):
+        u = ctx.params["user"]
+        if not ctx.params.get("lab_standin"):
+            input(f"Give {u} the new certificate (public; in the case log dir as needed), press Enter when done: ")
+            return
+        labsecrets.write(f"{u}_ecdsa-cert.pub", ctx.params["_cert"])     # LAB STAND-IN: the user's machine
+        ctx.case.log(f"lab stand-in: new certificate delivered to {u} (public)")
+
+    def undo(self, ctx, backup):
+        # The newly issued certificate is public and short-lived; undo restores the CA's record of the previous one.
+        if backup.get("record"):
+            ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                      f"cat > /var/lib/ssh-ca/issued/{ctx.params['user']}-cert.pub"],
+                           stdin=backup["record"])
+
+    def verify_present(self, report):
+        iss = (report.get("ssh_ca") or {}).get("issued") or {}
+        vt = iss.get("valid_to")
+        if vt == "forever" or (vt and datetime.fromisoformat(vt.replace("Z", "+00:00"))
+                               > datetime.fromisoformat(report["collected_at"].replace("Z", "+00:00"))):
+            return None
+        return f"no currently valid certificate recorded: {iss}"
+
+
+REGISTRY[SshUserCertReissue.id] = SshUserCertReissue()
