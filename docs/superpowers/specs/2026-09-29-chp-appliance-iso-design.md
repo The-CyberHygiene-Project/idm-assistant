@@ -57,7 +57,7 @@ Not gates for this project (recorded so that nobody assumes otherwise): a real-h
                                        mkksiso ◄── kickstarts ──────┤
                                           │                         │
                                           ▼                         │
-                              chp-appliance.iso ──► For Jeff share  │
+                              cyberhygiene-lab-installer-el9.iso ─► For Jeff  │
                                                                     │
   OEMDRV USB: site.conf + hosts table ──► boot "Install identity server"
                                             │  %pre: chp-site validate (before disks)
@@ -216,13 +216,21 @@ local break-glass account remains.
 4. **Assemble:** `createrepo_c`, then `mkksiso` adds the repo, both kickstarts and the two boot
    entries (*Install identity server*, *Install client*). Rocky's signed shim, grub and kernel are
    **not modified**, so Secure Boot keeps working (row 17).
-5. **Release** to `/Volumes/For Jeff/chp-appliance/<version>/`: the ISO, `SHA256SUMS`,
+5. **Release** to `/Volumes/For Jeff/cyberhygiene-lab-installer/<version>/`: the ISO, `SHA256SUMS`,
    `SHA256SUMS.asc`, the public key, and `VERIFY.md`. Also a signed repo tarball, so RPM fixes
    can be taken without reinstalling.
 6. **Cadence:** rebuild for each Rocky 9 point release and for fixes to our RPMs.
 
+**Naming and trademark (user research, 2026-09-29; `appliance/branding/`):** the product is the
+**CyberHygiene Project Lab Installer (EL9 / Rocky Linux 9 compatible)**, file
+`cyberhygiene-lab-installer-el9.iso`. It is never presented as Rocky Linux or a Rocky edition.
+`NOTICE.txt` (non-endorsement, trademarks, BSD-3 and per-package licences, internal-only status)
+sits at the ISO root and in the release folder; the boot menu and installer show
+`boot-banner.txt`; every shipped script and kickstart starts with `file-header.txt`. Rocky's
+packages ship unmodified.
+
 **Deferred to any future public release** (open release items, not work in this project):
-the Rocky Linux trademark and rebranding requirements for a remastered ISO; public hosting
+public hosting
 (the ISO is about 11 GB and GitHub Releases caps each file at 2 GiB); a license review of every
 bundled component (Kanidm MPL-2.0, step-ca Apache-2.0, the rest to be listed).
 
