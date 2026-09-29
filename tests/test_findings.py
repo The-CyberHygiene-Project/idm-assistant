@@ -111,7 +111,7 @@ def test_unreachable_kanidm_is_its_own_finding():
 def test_untrusted_chain_is_reported_unless_the_clock_is_suspect():
     c = pair()[1]; c["tls"]["kanidm"]["verify"] = "untrusted"
     assert "TLS_CERT_UNTRUSTED(kanidm)" in cids(c)
-    c["time"]["source_offset_s"] = 600.0
+    c["time"].update(synced=False, source_offset_s=600.0)        # the unsynchronised window after a jump
     assert "TLS_CERT_UNTRUSTED(kanidm)" not in cids(c)
 
 
@@ -119,3 +119,14 @@ def test_source_offset_reveals_skew_while_chrony_is_unsynchronised():
     c = pair()[1]; c["time"].update(offset_s=0.0, synced=False, source_offset_s=600.0)
     got = cids(c)
     assert "TOTP_TIME_SKEW" in got and "TIME_UNVERIFIED" in got
+
+
+def test_stale_last_sample_after_a_step_is_not_skew_once_chrony_is_synced():
+    # live 2026-09-28: after `chronyc makestep` tracking said 0.0 s / Normal while the last sample still read +600 s
+    c = pair()[1]; c["time"].update(offset_s=0.000000001, synced=True, source_offset_s=600.0)
+    assert "TOTP_TIME_SKEW" not in cids(c)
+
+
+def test_synced_but_far_off_is_still_skew():
+    c = pair()[1]; c["time"].update(offset_s=598.96, synced=True, source_offset_s=600.0)
+    assert "TOTP_TIME_SKEW" in cids(c)

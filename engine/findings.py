@@ -19,8 +19,14 @@ def _t(s):
 
 
 def _skewed(r):
+    """chrony's tracking offset is authoritative once synchronised. The last source sample only counts while chrony
+    is NOT synchronised (right after a jump, tracking says 0.0 for ~2 min); once synced it can be a stale pre-step
+    sample for a whole poll interval (measured 2026-09-28)."""
     t = r.get("time") or {}
-    return any(v is not None and abs(v) > SKEW_S for v in (t.get("offset_s"), t.get("source_offset_s")))
+    off, src = t.get("offset_s"), t.get("source_offset_s")
+    if off is not None and abs(off) > SKEW_S:
+        return True
+    return t.get("synced") is False and src is not None and abs(src) > SKEW_S
 
 
 def _clock_unknown(r):

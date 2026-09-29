@@ -1,5 +1,8 @@
 """Allow-listed repairs: precheck -> approval -> backup -> apply -> verify (fresh report) -> undo if still faulty.
 Nothing is applied without approval. A repair only runs on a host of its declared role."""
+import base64 as _b64
+import binascii as _binascii
+import hashlib as _hashlib
 import re as _re
 import time
 from dataclasses import dataclass, field
@@ -350,3 +353,98 @@ class UnixdRefresh(Repair):
 
 
 REGISTRY[UnixdRefresh.id] = UnixdRefresh()
+
+
+class TimeResync(Repair):
+    id = "time-resync"
+    host_role = "client"
+    verify_absent = {"TOTP_TIME_SKEW", "TIME_UNVERIFIED"}
+
+    def describe(self, ctx):
+        return ("step the clock to the lab time source now (chronyc makestep). Not reversible, and not meant to be: "
+                "the old time was wrong")
+
+    def precheck(self, ctx):
+        src = _sh(ctx, "systemctl is-active chronyd >/dev/null && chronyc -n sources 2>/dev/null || true")
+        live = [ln for ln in src.splitlines() if ln.startswith("^") and len(ln.split()) > 4 and ln.split()[4] != "0"]
+        return None if live else "no reachable time source (chronyd down or reach 0): a step would use nothing"
+
+    def apply(self, ctx):
+        # burst = fresh samples at once, so the evidence is not a pre-step sample; waitsync bounded to ~60 s
+        _sh(ctx, "chronyc makestep >/dev/null && chronyc burst 4/4 >/dev/null; chronyc waitsync 6 1.0 >/dev/null 2>&1 || true")
+
+    def verify_present(self, report):
+        t = report.get("time") or {}
+        if not t.get("synced") or t.get("offset_s") is None or abs(t["offset_s"]) >= 1:
+            return f"clock not synced within 1 s: {t}"
+        return None
+
+
+REGISTRY[TimeResync.id] = TimeResync()
+
+
+PINNED_ROOT = (ROOT / "lab" / "trust" / "kanidm-lab-root.sha256").read_text().strip()
+
+
+def fingerprint(pem):
+    """Colon-separated upper-case SHA-256 of the first certificate's DER (what `openssl x509 -fingerprint` prints)."""
+    lines = pem.splitlines()
+    i = lines.index("-----BEGIN CERTIFICATE-----")
+    j = lines.index("-----END CERTIFICATE-----", i)
+    h = _hashlib.sha256(_b64.b64decode("".join(lines[i + 1:j]), validate=True)).hexdigest().upper()
+    return ":".join(h[k:k + 2] for k in range(0, len(h), 2))
+
+
+class ClientCaTrust(Repair):
+    id = "client-ca-trust"
+    host_role = "client"
+    verify_absent = {"CLIENT_MISSING_CA_ROOT", "TLS_CERT_UNTRUSTED(kanidm)"}
+    CA_HOST = "srv1"                                   # where the step-ca root lives (NOT the target host)
+    ROOT_PATH = "/root/.step/certs/root_ca.crt"
+    ANCHOR = "/etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt"
+
+    def describe(self, ctx):
+        return (f"install the step-ca root (SHA-256 {PINNED_ROOT[:23]}..., pinned) as {self.ANCHOR}, update the trust "
+                "store, restart kanidm-unixd")
+
+    def _root(self, ctx):
+        pem = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.ROOT_PATH]).stdout
+        try:
+            fp = fingerprint(pem)
+        except (ValueError, _binascii.Error):
+            return None, "the CA host returned no readable certificate"
+        return (pem, None) if fp == PINNED_ROOT else (None, f"root fingerprint {fp} does not match the pinned value")
+
+    def precheck(self, ctx):
+        return self._root(ctx)[1]
+
+    def backup(self, ctx):
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        st = _sh(ctx, f"install -d -m 0700 {d}; if [ -e {self.ANCHOR} ]; then cp -p {self.ANCHOR} {d}/; "
+                      "echo present; else echo absent; fi").strip()
+        return {"dir": d, "anchor": st}
+
+    def apply(self, ctx):
+        pem, why = self._root(ctx)
+        if why:
+            raise RuntimeError(why)
+        ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                  f"umask 022; cat > {self.ANCHOR}.new && install -m 0644 {self.ANCHOR}.new {self.ANCHOR} && "
+                                  f"rm -f {self.ANCHOR}.new && restorecon {self.ANCHOR} && update-ca-trust extract && "
+                                  "systemctl restart kanidm-unixd"], stdin=pem)
+
+    def undo(self, ctx, backup):
+        if backup.get("anchor") == "present":
+            _sh(ctx, f"cp -p {backup['dir']}/kanidm-lab-root.crt {self.ANCHOR}")
+        else:
+            _sh(ctx, f"rm -f {self.ANCHOR}")
+        _sh(ctx, "update-ca-trust extract && systemctl restart kanidm-unixd")
+
+    def verify_present(self, report):
+        if not (report.get("trust") or {}).get("kanidm_root_in_store"):
+            return "root not in the trust store"
+        v = ((report.get("tls") or {}).get("kanidm") or {}).get("verify")
+        return None if v == "ok" else f"Kanidm certificate verify is {v!r}"
+
+
+REGISTRY[ClientCaTrust.id] = ClientCaTrust()

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -270,3 +271,53 @@ def test_unixd_refresh_invalidates_then_refetches_the_user(tmp_path):
 def test_unixd_refresh_verifies_against_the_server(tmp_path):
     from engine import repairs
     assert repairs.UnixdRefresh.verify_absent >= {"UNIXD_CACHE_STALE", "UNIXD_OFFLINE"}
+
+
+def test_time_resync_refuses_without_a_reachable_source(tmp_path):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY,
+            remote=FakeRemote({"chronyc -n sources": "^? 192.168.100.1 10 6 0 - +0ns[+0ns] +/- 0ns\n"}))
+    assert "no reachable time source" in repairs.TimeResync().precheck(c)
+
+
+def test_time_resync_steps_once_and_needs_a_synced_small_offset(tmp_path):
+    from engine import repairs
+    fr = FakeRemote({})
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY, remote=fr)
+    repairs.TimeResync().apply(c)
+    assert "chronyc makestep" in fr.calls[-1][1]
+    assert "chronyc burst" in fr.calls[-1][1]                  # fresh samples, so evidence is not stale
+    bad = [{"time": {"offset_s": 598.9, "synced": True, "source_offset_s": 600.0}},
+           {"time": {"offset_s": 0.0, "synced": False, "source_offset_s": 600.0}}]
+    good = {"time": {"offset_s": 0.000000001, "synced": True, "source_offset_s": 600.0}}   # stale sample: fine
+    assert all(repairs.TimeResync().verify_present(b) for b in bad)
+    assert repairs.TimeResync().verify_present(good) is None
+
+
+FIXROOT = (Path(__file__).parent / "fixtures" / "kanidm-lab-root.crt").read_text()
+
+
+def test_fingerprint_matches_openssl():
+    from engine import repairs
+    assert repairs.fingerprint(FIXROOT) == repairs.PINNED_ROOT
+
+
+def test_client_ca_trust_refuses_a_root_with_the_wrong_fingerprint(tmp_path):
+    from engine import repairs
+    lines = FIXROOT.splitlines()
+    other = FIXROOT.replace(lines[5], lines[6])                    # a different (corrupt) body
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "c", "s"), collect=lambda: HEALTHY,
+            remote=FakeRemote({"root_ca.crt": other}))
+    assert "fingerprint" in repairs.ClientCaTrust().precheck(c)
+
+
+def test_client_ca_trust_installs_via_stdin_and_restarts_unixd(tmp_path):
+    from engine import repairs
+    fr = FakeRemote({"root_ca.crt": FIXROOT})
+    sent = []
+    orig = fr.run
+    fr.run = lambda host, argv, stdin=None, **kw: (sent.append((host, stdin)), orig(host, argv, stdin))[1]
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "c", "s"), collect=lambda: HEALTHY, remote=fr)
+    repairs.ClientCaTrust().apply(c)
+    assert ("srv1", None) in sent and ("client2", FIXROOT) in sent
+    assert "update-ca-trust extract" in fr.calls[-1][1] and "systemctl restart kanidm-unixd" in fr.calls[-1][1]

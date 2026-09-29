@@ -50,3 +50,17 @@ import pytest  # noqa: E402
 ])
 def test_source_offset_parses_chrony_units_and_padding(line, want):
     assert abs(_source_offset(line) - want) < 1e-6          # the collector prints microsecond precision
+
+
+def _json_str(value):
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
+    red = SCRIPT.parent / "redact.sed"
+    sh = f'REDACT={red}\n' + "\n".join(lines[i + 1:j]) + '\njson_str "$1"'
+    return subprocess.run(["sh", "-c", sh, "sh", value], capture_output=True, text=True, check=True).stdout
+
+
+@pytest.mark.parametrize("value", ["", "192.168.100.1", 'say "hi"\\there', "line1\nline2"])
+def test_json_str_always_emits_a_valid_json_string(value):
+    import json
+    assert isinstance(json.loads(_json_str(value)), str)

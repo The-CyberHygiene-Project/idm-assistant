@@ -21,10 +21,14 @@ W=$(mktemp -d /tmp/idm-collect.XXXXXX); chmod 700 "$W"; trap 'rm -rf "$W"' EXIT
 ERRS="$W/errors"; : > "$ERRS"
 err() { printf '%s\n' "$1" | sed -E -f "$REDACT" >> "$ERRS"; }
 
+# >>> json-helpers
 # JSON string escaping (POSIX): backslash, quote, control characters -> spaces; redaction first.
-json_str() { printf '%s' "$1" | sed -E -f "$REDACT" | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037' | sed 's/^/"/; s/$/"/'; }
+# An empty value must still print "" (sed emits nothing for empty input, which broke the report when chrony had no
+# reference: "source":,).
+json_str() { [ -n "$1" ] || { printf '""'; return; }; printf '%s' "$1" | sed -E -f "$REDACT" | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037' | sed 's/^/"/; s/$/"/'; }
 json_bool() { if [ "$1" = true ]; then printf true; else printf false; fi; }
 json_num() { case "$1" in ''|*[!0-9.eE+-]*) printf null ;; *) printf '%s' "$1" ;; esac; }
+# <<< json-helpers
 iso() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
 
 host=$(hostname -s)
