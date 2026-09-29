@@ -1,0 +1,1 @@
+lab01 can log in to client2 but sudo and group-shared folders stopped working.

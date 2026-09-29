@@ -11,7 +11,9 @@ def validate(resp, allowed_repairs):
         return ["response is not an object"]
     if not isinstance(resp.get("analysis"), str) or not resp["analysis"].strip():
         errs.append("analysis missing")
-    if resp.get("confidence_level") not in LEVELS:
+    lvl, rev, rid = resp.get("confidence_level"), resp.get("human_review"), resp.get("repair_id")
+    # type checks first: a list or dict here would make a set-membership test raise (unhashable)
+    if not isinstance(lvl, str) or lvl not in LEVELS:
         errs.append("confidence_level missing/invalid")
     s = resp.get("confidence_score")
     if not isinstance(s, int) or not 0 <= s <= 100:
@@ -21,9 +23,8 @@ def validate(resp, allowed_repairs):
     for k in LISTS:
         if not isinstance(resp.get(k), list) or not all(isinstance(x, str) for x in resp[k]):
             errs.append(f"{k} must be a list of strings")
-    if resp.get("human_review") not in REVIEW:
+    if not isinstance(rev, str) or rev not in REVIEW:
         errs.append("human_review missing/invalid")
-    rid = resp.get("repair_id")
-    if rid is not None and rid not in allowed_repairs:
+    if rid is not None and (not isinstance(rid, str) or rid not in allowed_repairs):
         errs.append(f"repair_id {rid!r} is not on the allow-list")
     return errs

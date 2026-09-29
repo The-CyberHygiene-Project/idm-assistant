@@ -1,0 +1,13 @@
+{
+ "reset": 33.168,
+ "inject": 66.172,
+ "collect": 0.655,
+ "interpret": 7.521,
+ "time-resync:precheck": 0.511,
+ "time-resync:approval": 0.0,
+ "time-resync:backup": 0.0,
+ "time-resync:apply": 10.354,
+ "time-resync:user": 0.0,
+ "time-resync:verify": 0.882,
+ "final-check": 0.68
+}

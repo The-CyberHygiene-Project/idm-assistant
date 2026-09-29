@@ -1,0 +1,13 @@
+{
+ "reset": 33.057,
+ "inject": 0.466,
+ "collect": 1.967,
+ "interpret": 8.615,
+ "nsswitch-restore:precheck": 0.431,
+ "nsswitch-restore:approval": 0.0,
+ "nsswitch-restore:backup": 0.22,
+ "nsswitch-restore:apply": 0.225,
+ "nsswitch-restore:user": 0.0,
+ "nsswitch-restore:verify": 1.732,
+ "final-check": 1.594
+}

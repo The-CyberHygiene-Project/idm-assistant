@@ -1,0 +1,9 @@
+{
+ "repair": "time-resync",
+ "host": "client2",
+ "prompt": "Repair time-resync on client2: step the clock to the lab time source now (chronyc makestep). Not reversible, and not meant to be: the old time was wrong. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T00:42:28Z"
+}

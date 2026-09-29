@@ -1,0 +1,1 @@
+Authenticator codes are rejected on client2 and some TLS connections fail.

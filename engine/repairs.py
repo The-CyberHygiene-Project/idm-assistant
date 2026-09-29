@@ -1,10 +1,27 @@
 """Allow-listed repairs: precheck -> approval -> backup -> apply -> verify (fresh report) -> undo if still faulty.
 Nothing is applied without approval. A repair only runs on a host of its declared role."""
+import base64 as _b64
+import binascii as _binascii
+import hashlib as _hashlib
+import re as _re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 
 from engine.findings import evaluate
+
+ROOT = Path(__file__).resolve().parents[1]
+STAGE = "idm-lab/srv1"                      # relative to the admin user's home on srv1, mode 0700
+
+
+def valid_user(name):
+    return bool(_re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name or ""))
+
+
+def stage(ctx):
+    ctx.remote.push(ctx.host, f"{ROOT}/lab/srv1/", f"{STAGE}/")
 
 
 @dataclass
@@ -16,6 +33,7 @@ class Ctx:
     params: dict = field(default_factory=dict)
     remote: Optional[object] = None  # engine.remote (injected; fakes in tests)
     sleep: Callable[[float], None] = time.sleep
+    peer: Optional[Callable[[], dict]] = None   # the server's fresh report, for cross-host rules during verify
     verify_tries: int = 6            # a restarted service may need a few seconds before a fresh report shows it
 
 
@@ -71,7 +89,10 @@ def run_repair(repair_id, ctx, approve, registry):
     prompt = f"Repair {repair_id} on {ctx.host}: {r.describe(ctx)}. Type yes to approve"
     with case.step(f"{repair_id}:approval"):
         ok = bool(approve(prompt))
-    case.write(f"approval-{repair_id}.json", {"repair": repair_id, "host": ctx.host, "prompt": prompt, "approved": ok})
+    case.write(f"approval-{repair_id}.json", {
+        "repair": repair_id, "host": ctx.host, "prompt": prompt, "approved": ok,
+        "by": getattr(approve, "who", "unknown"), "test_mode": bool(getattr(approve, "test_mode", False)),
+        "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
     if not ok:
         case.log("REFUSED: not approved"); case.write("status.txt", "REFUSED\n")
         return "REFUSED"
@@ -105,7 +126,7 @@ def _verify(r, ctx):
         if n:
             ctx.sleep(5)
         after = ctx.collect()
-        still = sorted({f.id for f in evaluate(after)} & set(r.verify_absent))
+        still = sorted({f.id for f in evaluate(after, ctx.peer() if ctx.peer else None)} & set(r.verify_absent))
         why = (f"still present: {still}" if still else r.verify_present(after)
                or (f"collector errors: {after['errors']}" if after.get("errors") else None))
         if not why:
@@ -200,14 +221,12 @@ REGISTRY = {r.id: r for r in (KanidmCertRenew(), AcmeTimerRestore())}
 
 
 # --- guided: credential reset token (the tool never sets a password) ------------------------------------------------
-import re as _re
-
 from engine import labsecrets
 
 
 def admin_login(ctx):
     pw = labsecrets.read_json("idm_admin.json")["password"]
-    ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
+    ctx.remote.run(ctx.host, ["expect", f"{STAGE}/kanidm-login.exp", "idm_admin"], stdin=pw + "\n")
 
 
 class KanidmCredResetToken(Repair):
@@ -224,13 +243,17 @@ class KanidmCredResetToken(Repair):
                 "with it. No password is set by this tool")
 
     def precheck(self, ctx):
-        from engine.findings import evaluate
+        if not valid_user(ctx.params.get("user")):
+            return f"refusing: {ctx.params.get('user')!r} is not a valid user name"
         if "POSIX_PW_MISSING" not in {f.id for f in evaluate(ctx.collect())}:
             return f"{ctx.params['user']} does not lack a POSIX password; nothing to repair"
         return None
 
     def apply(self, ctx):
         u = ctx.params["user"]
+        if not valid_user(u):
+            raise ValueError("invalid user name")
+        stage(ctx)
         admin_login(ctx)
         out = ctx.remote.run(ctx.host, ["kanidm", "person", "credential", "create-reset-token", u, "--ttl", "3600",
                                       "-D", "idm_admin"]).stdout
@@ -249,7 +272,7 @@ class KanidmCredResetToken(Repair):
         # LAB STAND-IN for the user: complete the reset with a new POSIX password (stored for the user in the lab).
         tok = labsecrets.path(f"{u}.reset-token").read_text().strip()
         upw = labsecrets.new_password()
-        ctx.remote.run(ctx.host, ["expect", "/tmp/srv1/enrol-user.exp"],
+        ctx.remote.run(ctx.host, ["expect", f"{STAGE}/enrol-user.exp"],
                        stdin=f"{tok}\nunused\n{upw}\nposix-only\n")
         d = labsecrets.read_json(f"{u}.json"); d["posix_password"] = upw
         labsecrets.write_json(f"{u}.json", d)
@@ -258,3 +281,191 @@ class KanidmCredResetToken(Repair):
 
 
 REGISTRY[KanidmCredResetToken.id] = KanidmCredResetToken()
+
+
+# --- client repairs ---------------------------------------------------------------------------------------------------
+AUTHSELECT_PROFILE = "custom/kanidm"
+AUTHSELECT_FEATURES = ("with-faillock", "without-nullok")     # the golden client's feature set (CUI profile)
+
+
+class NsswitchRestore(Repair):
+    id = "nsswitch-restore"
+    host_role = "client"
+    verify_absent = {"NSS_ORDER_WRONG"}
+
+    def describe(self, ctx):
+        return (f"re-select authselect profile {AUTHSELECT_PROFILE} with {', '.join(AUTHSELECT_FEATURES)} (--force); "
+                "the current files are saved first and restored if verification fails")
+
+    def precheck(self, ctx):
+        feats = _sh(ctx, f"authselect list-features {AUTHSELECT_PROFILE} 2>/dev/null || true").split()
+        missing = [f for f in AUTHSELECT_FEATURES if f not in feats]
+        if missing:
+            return f"profile {AUTHSELECT_PROFILE} lacks {missing}"
+        # Only restore the pinned state onto a host that is SUPPOSED to be in it: a host with its own profile or extra
+        # features is not a hand-edit victim, and --force would silently drop its settings.
+        cur = _sh(ctx, "authselect current 2>/dev/null || true")
+        prof = next((ln.split(":", 1)[1].strip() for ln in cur.splitlines() if ln.startswith("Profile ID:")), None)
+        have = sorted(ln[2:].strip() for ln in cur.splitlines() if ln.startswith("- "))
+        if prof != AUTHSELECT_PROFILE or have != sorted(AUTHSELECT_FEATURES):
+            return (f"current authselect state ({prof}, {have}) does not match the pinned {AUTHSELECT_PROFILE} "
+                    f"{sorted(AUTHSELECT_FEATURES)}: not restoring over a host's own configuration")
+        return None
+
+    def backup(self, ctx):
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        _sh(ctx, f"install -d -m 0700 {d} && tar -C /etc -cpf {d}/authselect.tar authselect nsswitch.conf pam.d")
+        return {"dir": d}
+
+    def apply(self, ctx):
+        name = "idm-" + _re.sub(r"[^A-Za-z0-9-]", "-", ctx.case.dir.name)[-40:]
+        _sh(ctx, f"authselect select {AUTHSELECT_PROFILE} {' '.join(AUTHSELECT_FEATURES)} --force --backup={name}")
+
+    def undo(self, ctx, backup):
+        _sh(ctx, f"tar -C /etc -xpf {backup['dir']}/authselect.tar")
+
+    def verify_present(self, report):
+        nss, a = report.get("nss") or {}, report.get("authselect") or {}
+        if any((nss.get(m) or "").split()[:1] != ["kanidm"] for m in ("passwd", "group", "initgroups")):
+            return f"nss still wrong: {nss}"
+        if not a.get("valid") or a.get("profile") != AUTHSELECT_PROFILE:
+            return f"authselect not clean: {a}"
+        return None
+
+
+REGISTRY[NsswitchRestore.id] = NsswitchRestore()
+
+
+class UnixdRefresh(Repair):
+    id = "unixd-refresh"
+    host_role = "client"
+    verify_absent = {"UNIXD_CACHE_STALE", "UNIXD_OFFLINE"}
+
+    def describe(self, ctx):
+        return ("invalidate the kanidm-unixd cache (content kept, marked stale) and re-fetch the user, so server-side "
+                "changes are visible now instead of at cache expiry")
+
+    def precheck(self, ctx):
+        if ctx.params.get("user") and not valid_user(ctx.params["user"]):
+            return f"refusing: {ctx.params['user']!r} is not a valid user name"
+        if "KANIDM_UNREACHABLE" in {f.id for f in evaluate(ctx.collect())}:
+            return "Kanidm is unreachable from this host: refreshing the cache cannot help; fix the network first"
+        return None
+
+    def apply(self, ctx):
+        _sh(ctx, "kanidm-unix cache-invalidate")
+        if ctx.params.get("user"):
+            _sh(ctx, f"id -Gn {ctx.params['user']} >/dev/null")      # user name validated in precheck
+
+    def verify_present(self, report):
+        u = report.get("user_nss")
+        if report.get("user") and not (u and u.get("found")):
+            return f"user lookup for {report['user']} failed after refresh: {u}"
+        return None
+
+
+REGISTRY[UnixdRefresh.id] = UnixdRefresh()
+
+
+class TimeResync(Repair):
+    id = "time-resync"
+    host_role = "client"
+    verify_absent = {"TOTP_TIME_SKEW", "TIME_UNVERIFIED"}
+
+    def describe(self, ctx):
+        return ("step the clock to the lab time source now (chronyc makestep). Not reversible, and not meant to be: "
+                "the old time was wrong")
+
+    def precheck(self, ctx):
+        src = _sh(ctx, "systemctl is-active chronyd >/dev/null && chronyc -n sources 2>/dev/null || true")
+        live = [ln for ln in src.splitlines() if ln.startswith("^") and len(ln.split()) > 4 and ln.split()[4] != "0"]
+        return None if live else "no reachable time source (chronyd down or reach 0): a step would use nothing"
+
+    def apply(self, ctx):
+        # burst = fresh samples at once, so the evidence is not a pre-step sample; waitsync bounded to ~60 s
+        _sh(ctx, "chronyc makestep >/dev/null && chronyc burst 4/4 >/dev/null; chronyc waitsync 6 1.0 >/dev/null 2>&1 || true")
+
+    def verify_present(self, report):
+        t = report.get("time") or {}
+        if not t.get("synced") or t.get("offset_s") is None or abs(t["offset_s"]) >= 1:
+            return f"clock not synced within 1 s: {t}"
+        return None
+
+
+REGISTRY[TimeResync.id] = TimeResync()
+
+
+PINNED_ROOT = (ROOT / "lab" / "trust" / "kanidm-lab-root.sha256").read_text().strip()
+
+
+def first_cert(pem):
+    """The first BEGIN..END CERTIFICATE block, exactly (raises ValueError if there is none)."""
+    lines = pem.splitlines()
+    i = lines.index("-----BEGIN CERTIFICATE-----")
+    j = lines.index("-----END CERTIFICATE-----", i)
+    return "\n".join(lines[i:j + 1]) + "\n"
+
+
+def fingerprint(pem):
+    """Colon-separated upper-case SHA-256 of the first certificate's DER (what `openssl x509 -fingerprint` prints)."""
+    lines = pem.splitlines()
+    i = lines.index("-----BEGIN CERTIFICATE-----")
+    j = lines.index("-----END CERTIFICATE-----", i)
+    h = _hashlib.sha256(_b64.b64decode("".join(lines[i + 1:j]), validate=True)).hexdigest().upper()
+    return ":".join(h[k:k + 2] for k in range(0, len(h), 2))
+
+
+class ClientCaTrust(Repair):
+    id = "client-ca-trust"
+    host_role = "client"
+    verify_absent = {"CLIENT_MISSING_CA_ROOT", "TLS_CERT_UNTRUSTED(kanidm)"}
+    CA_HOST = "srv1"                                   # where the step-ca root lives (NOT the target host)
+    ROOT_PATH = "/root/.step/certs/root_ca.crt"
+    ANCHOR = "/etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt"
+
+    def describe(self, ctx):
+        return (f"install the step-ca root (SHA-256 {PINNED_ROOT[:23]}..., pinned) as {self.ANCHOR}, update the trust "
+                "store, restart kanidm-unixd")
+
+    def _root(self, ctx):
+        out = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.ROOT_PATH]).stdout
+        try:
+            pem = first_cert(out)          # only the verified block is ever installed, never the rest of the file
+            fp = fingerprint(pem)
+        except (ValueError, _binascii.Error):
+            return None, "the CA host returned no readable certificate"
+        return (pem, None) if fp == PINNED_ROOT else (None, f"root fingerprint {fp} does not match the pinned value")
+
+    def precheck(self, ctx):
+        return self._root(ctx)[1]
+
+    def backup(self, ctx):
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        st = _sh(ctx, f"install -d -m 0700 {d}; if [ -e {self.ANCHOR} ]; then cp -p {self.ANCHOR} {d}/; "
+                      "echo present; else echo absent; fi").strip()
+        return {"dir": d, "anchor": st}
+
+    def apply(self, ctx):
+        pem, why = self._root(ctx)
+        if why:
+            raise RuntimeError(why)
+        ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                  f"umask 022; cat > {self.ANCHOR}.new && install -m 0644 {self.ANCHOR}.new {self.ANCHOR} && "
+                                  f"rm -f {self.ANCHOR}.new && restorecon {self.ANCHOR} && update-ca-trust extract && "
+                                  "systemctl restart kanidm-unixd"], stdin=pem)
+
+    def undo(self, ctx, backup):
+        if backup.get("anchor") == "present":
+            _sh(ctx, f"cp -p {backup['dir']}/kanidm-lab-root.crt {self.ANCHOR}")
+        else:
+            _sh(ctx, f"rm -f {self.ANCHOR}")
+        _sh(ctx, "update-ca-trust extract && systemctl restart kanidm-unixd")
+
+    def verify_present(self, report):
+        if not (report.get("trust") or {}).get("kanidm_root_in_store"):
+            return "root not in the trust store"
+        v = ((report.get("tls") or {}).get("kanidm") or {}).get("verify")
+        return None if v == "ok" else f"Kanidm certificate verify is {v!r}"
+
+
+REGISTRY[ClientCaTrust.id] = ClientCaTrust()
