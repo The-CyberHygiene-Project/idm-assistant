@@ -321,3 +321,43 @@ def test_client_ca_trust_installs_via_stdin_and_restarts_unixd(tmp_path):
     repairs.ClientCaTrust().apply(c)
     assert ("srv1", None) in sent and ("client2", FIXROOT) in sent
     assert "update-ca-trust extract" in fr.calls[-1][1] and "systemctl restart kanidm-unixd" in fr.calls[-1][1]
+
+
+def test_unixd_refresh_needs_the_user_lookup_when_a_user_was_asked_for():
+    from engine import repairs
+    assert repairs.UnixdRefresh().verify_present({"user": "lab03", "user_nss": None})
+    assert repairs.UnixdRefresh().verify_present({"user": None, "user_nss": None}) is None
+
+
+@pytest.mark.parametrize("current", [
+    "Profile ID: custom/kanidm\nEnabled features:\n- with-faillock\n- without-nullok\n- with-mkhomedir\n",
+    "Profile ID: sssd\nEnabled features:\n- with-faillock\n- without-nullok\n",
+])
+def test_nsswitch_restore_refuses_to_change_a_hosts_own_profile_or_features(tmp_path, current):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "n", "s"), collect=lambda: HEALTHY,
+            remote=FakeRemote({"authselect list-features": "with-faillock\nwithout-nullok\n",
+                               "authselect current": current}))
+    assert "does not match" in repairs.NsswitchRestore().precheck(c)
+
+
+def test_nsswitch_restore_accepts_the_pinned_profile_and_features(tmp_path):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "n", "s"), collect=lambda: HEALTHY,
+            remote=FakeRemote({"authselect list-features": "with-faillock\nwithout-nullok\n",
+                               "authselect current": "Profile ID: custom/kanidm\nEnabled features:\n"
+                                                     "- with-faillock\n- without-nullok\n"}))
+    assert repairs.NsswitchRestore().precheck(c) is None
+
+
+def test_client_ca_trust_installs_only_the_verified_certificate(tmp_path):
+    from engine import repairs
+    extra = FIXROOT + FIXROOT.replace(FIXROOT.splitlines()[5], FIXROOT.splitlines()[6])   # a second, other cert
+    fr = FakeRemote({"root_ca.crt": extra})
+    sent = []
+    orig = fr.run
+    fr.run = lambda host, argv, stdin=None, **kw: (sent.append((host, stdin)), orig(host, argv, stdin))[1]
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "c", "s"), collect=lambda: HEALTHY, remote=fr)
+    repairs.ClientCaTrust().apply(c)
+    installed = [s for h, s in sent if h == "client2"][0]
+    assert installed.count("BEGIN CERTIFICATE") == 1 and repairs.fingerprint(installed) == repairs.PINNED_ROOT

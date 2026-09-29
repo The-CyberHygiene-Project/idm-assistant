@@ -87,7 +87,10 @@ def interpret(symptom, findings, allowed, transport=None, timeout=120):
         out["errors"] = [f"reply is not JSON ({len(text)} chars)"]
         return out
     out["response"] = resp
-    errs = validate(resp, allowed)
+    try:
+        errs = validate(resp, allowed)
+    except Exception as e:                 # any unforeseen shape is an invalid reply, never a crash
+        errs = [f"invalid reply ({type(e).__name__})"]
     if errs:
         out["errors"] = errs
         return out

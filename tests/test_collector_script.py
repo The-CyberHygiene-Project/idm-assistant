@@ -64,3 +64,21 @@ def _json_str(value):
 def test_json_str_always_emits_a_valid_json_string(value):
     import json
     assert isinstance(json.loads(_json_str(value)), str)
+
+
+def _memberof(j):
+    lines = SCRIPT.read_text().splitlines()
+    i, k = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
+    sh = "\n".join(lines[i + 1:k]) + '\nmemberof_json "$1"'
+    return subprocess.run(["sh", "-c", sh, "sh", j], capture_output=True, text=True, check=True).stdout
+
+
+@pytest.mark.parametrize("j,want", [
+    ('{"attrs":{"directmemberof":["a@x"],"memberof":["a@x","b_c@x"]}}', ["a@x", "b_c@x"]),
+    ('{"attrs":{"memberof":[]}}', []),
+    ('{"attrs":{"name":["lab01"]}}', None),                          # hidden by ACP: unknown, not "no groups"
+    ('{"attrs":{"memberof":["a b@x"]}}', None),                      # unexpected characters
+])
+def test_memberof_is_a_list_or_unknown(j, want):
+    import json
+    assert json.loads(_memberof(j)) == want

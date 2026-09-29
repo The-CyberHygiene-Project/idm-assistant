@@ -28,6 +28,12 @@ err() { printf '%s\n' "$1" | sed -E -f "$REDACT" >> "$ERRS"; }
 json_str() { [ -n "$1" ] || { printf '""'; return; }; printf '%s' "$1" | sed -E -f "$REDACT" | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037' | sed 's/^/"/; s/$/"/'; }
 json_bool() { if [ "$1" = true ]; then printf true; else printf false; fi; }
 json_num() { case "$1" in ''|*[!0-9.eE+-]*) printf null ;; *) printf '%s' "$1" ;; esac; }
+# memberof from Kanidm's person JSON as a JSON array, or null when absent/unreadable (unknown is not "no groups").
+memberof_json() {
+  printf '%s' "$1" | grep -q '"memberof":\[' || { printf null; return; }
+  _mo=$(printf '%s' "$1" | sed -n 's/.*"memberof":\[\([^]]*\)\].*/\1/p')
+  case "$_mo" in *[!a-z0-9_@.,\"-]*) printf null ;; *) printf '[%s]' "$_mo" ;; esac
+}
 # <<< json-helpers
 iso() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
 
@@ -113,9 +119,9 @@ if [ -n "$user" ] && [ "$role" = server ]; then
         posix=false; printf '%s' "$j" | grep -q '"posixaccount"' && posix=true
         upw=false; has unix_password && upw=true
         pc=false; has primary_credential && pc=true
-        mo=$(printf '%s' "$j" | sed -n 's/.*"memberof":\[\([^]]*\)\].*/\1/p')
-        case "$mo" in *[!a-z0-9_@.,\"-]*) mo=""; err "kanidm_user: unexpected characters in memberof" ;; esac
-        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc),\"memberof\":[$mo]}"
+        mo=$(memberof_json "$j")
+        [ "$mo" = null ] && err "kanidm_user: memberof missing or unreadable (reported as unknown)"
+        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc),\"memberof\":$mo}"
       fi
     else err "kanidm_user: REST query failed: $(head -c 200 "$W/curl.err")"; fi
   else err "kanidm_user: no read-only token at $TOKEN_FILE"; fi

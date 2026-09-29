@@ -54,3 +54,24 @@ def test_collect_survives_nss_noise_before_the_report(monkeypatch):
     assert rep["host"] == "client2"
     assert rep["errors"] == ["e1", "collect: 1 non-report line(s) on stdout before the report (not copied)"]
     assert not any("socket" in e for e in rep["errors"])
+
+
+def _collect_with(monkeypatch, stdout):
+    class R:
+        pass
+    R.stdout = stdout
+    monkeypatch.setattr(remote.subprocess, "run", lambda cmd, **kw: R())
+    return remote.collect("client2-diag")
+
+
+def test_a_json_log_line_is_not_mistaken_for_the_report(monkeypatch):
+    import pytest
+    with pytest.raises(ValueError):                         # collector died; only a JSON-shaped log line came out
+        _collect_with(monkeypatch, '{"level":"error","msg":"nss: socket refused"}\n')
+
+
+def test_the_report_must_be_the_last_line(monkeypatch):
+    import pytest
+    rep = '{"schema":"idm-report/1","host":"client2","role":"client","collected_at":"x","errors":[]}'
+    with pytest.raises(ValueError):
+        _collect_with(monkeypatch, rep + "\ntrailing noise\n")

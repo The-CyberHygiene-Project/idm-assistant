@@ -22,3 +22,11 @@ def test_summary_reports_model_validity_and_agreement():
 
 def test_summary_ends_with_an_overall_verdict():
     assert summarize(ROWS).rstrip().endswith("**Overall: 1 of 2 scenarios green in every run.**")
+
+
+def test_regress_accepts_a_relative_output_path(tmp_path, monkeypatch):
+    from engine import cli, regress
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(regress, "run", lambda ids, runs: [dict(ROWS[0], case="c")])
+    assert cli.regress_cmd(["l2"], 1, "out/report.md") == 0
+    assert "Overall: 1 of 1" in (tmp_path / "out" / "report.md").read_text()

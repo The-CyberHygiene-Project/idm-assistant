@@ -130,3 +130,15 @@ def test_stale_last_sample_after_a_step_is_not_skew_once_chrony_is_synced():
 def test_synced_but_far_off_is_still_skew():
     c = pair()[1]; c["time"].update(offset_s=598.96, synced=True, source_offset_s=600.0)
     assert "TOTP_TIME_SKEW" in cids(c)
+
+
+def test_unknown_server_membership_is_no_evidence_of_staleness():
+    s, c = pair()
+    s["kanidm_user"]["memberof"] = None                     # collector could not read it
+    assert "UNIXD_CACHE_STALE" not in cids(c, s)
+
+
+def test_reports_about_different_users_are_not_compared():
+    s, c = pair()
+    s["kanidm_user"]["memberof"] = []; s["kanidm_user"]["name"] = "lab02"
+    assert "UNIXD_CACHE_STALE" not in cids(c, s)

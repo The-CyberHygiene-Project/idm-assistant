@@ -83,3 +83,15 @@ def test_each_call_is_a_fresh_two_message_context():
     interpret.interpret("x", F, ALLOWED, transport=cap)
     assert [m["role"] for m in seen["p"]["messages"]] == ["system", "user"]
     assert seen["p"]["model"] == interpret.MODEL and "tools" not in seen["p"]
+
+
+@pytest.mark.parametrize("field,value", [("repair_id", ["nsswitch-restore"]), ("confidence_level", ["HIGH"]),
+                                         ("human_review", {"x": 1}), ("repair_id", {"id": "x"})])
+def test_malformed_field_types_are_rejected_not_raised(field, value):
+    r = interpret.interpret("x", F, ALLOWED, transport=reply(dict(GOOD, **{field: value})))
+    assert not r["valid"] and r["errors"] and r["shown_repair"] == "nsswitch-restore"
+
+
+def test_a_json_array_reply_is_invalid_not_a_crash():
+    r = interpret.interpret("x", F, ALLOWED, transport=reply("[1, 2]"))
+    assert not r["valid"] and r["errors"]

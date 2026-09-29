@@ -300,7 +300,17 @@ class NsswitchRestore(Repair):
     def precheck(self, ctx):
         feats = _sh(ctx, f"authselect list-features {AUTHSELECT_PROFILE} 2>/dev/null || true").split()
         missing = [f for f in AUTHSELECT_FEATURES if f not in feats]
-        return f"profile {AUTHSELECT_PROFILE} lacks {missing}" if missing else None
+        if missing:
+            return f"profile {AUTHSELECT_PROFILE} lacks {missing}"
+        # Only restore the pinned state onto a host that is SUPPOSED to be in it: a host with its own profile or extra
+        # features is not a hand-edit victim, and --force would silently drop its settings.
+        cur = _sh(ctx, "authselect current 2>/dev/null || true")
+        prof = next((ln.split(":", 1)[1].strip() for ln in cur.splitlines() if ln.startswith("Profile ID:")), None)
+        have = sorted(ln[2:].strip() for ln in cur.splitlines() if ln.startswith("- "))
+        if prof != AUTHSELECT_PROFILE or have != sorted(AUTHSELECT_FEATURES):
+            return (f"current authselect state ({prof}, {have}) does not match the pinned {AUTHSELECT_PROFILE} "
+                    f"{sorted(AUTHSELECT_FEATURES)}: not restoring over a host's own configuration")
+        return None
 
     def backup(self, ctx):
         d = f"/root/idm-backup/{ctx.case.dir.name}"
@@ -349,7 +359,9 @@ class UnixdRefresh(Repair):
 
     def verify_present(self, report):
         u = report.get("user_nss")
-        return None if u is None or u.get("found") else f"user lookup failed after refresh: {u}"
+        if report.get("user") and not (u and u.get("found")):
+            return f"user lookup for {report['user']} failed after refresh: {u}"
+        return None
 
 
 REGISTRY[UnixdRefresh.id] = UnixdRefresh()
@@ -386,6 +398,14 @@ REGISTRY[TimeResync.id] = TimeResync()
 PINNED_ROOT = (ROOT / "lab" / "trust" / "kanidm-lab-root.sha256").read_text().strip()
 
 
+def first_cert(pem):
+    """The first BEGIN..END CERTIFICATE block, exactly (raises ValueError if there is none)."""
+    lines = pem.splitlines()
+    i = lines.index("-----BEGIN CERTIFICATE-----")
+    j = lines.index("-----END CERTIFICATE-----", i)
+    return "\n".join(lines[i:j + 1]) + "\n"
+
+
 def fingerprint(pem):
     """Colon-separated upper-case SHA-256 of the first certificate's DER (what `openssl x509 -fingerprint` prints)."""
     lines = pem.splitlines()
@@ -408,8 +428,9 @@ class ClientCaTrust(Repair):
                 "store, restart kanidm-unixd")
 
     def _root(self, ctx):
-        pem = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.ROOT_PATH]).stdout
+        out = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.ROOT_PATH]).stdout
         try:
+            pem = first_cert(out)          # only the verified block is ever installed, never the rest of the file
             fp = fingerprint(pem)
         except (ValueError, _binascii.Error):
             return None, "the CA host returned no readable certificate"

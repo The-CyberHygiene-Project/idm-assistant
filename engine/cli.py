@@ -127,7 +127,7 @@ def run_scenario(sc, run_no):
 def regress_cmd(ids, runs, out):
     rows = regress.run(ids, runs)
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    path = Path(out) if out else ROOT / "lab" / "plan6" / f"regression-{day}.md"
+    path = Path(out).resolve() if out else ROOT / "lab" / "plan6" / f"regression-{day}.md"
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True,
                           text=True, stdin=subprocess.DEVNULL).stdout.strip()
     model = "IDM_NO_MODEL" if os.environ.get("IDM_NO_MODEL") == "1" else interpret.MODEL
@@ -138,7 +138,7 @@ def regress_cmd(ids, runs, out):
     lines += [f"- {r['id']} run {r['run']}: {r['status']} — cases/{r['case']}" for r in rows]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n")
-    print(f"wrote {path.relative_to(ROOT)}")
+    print(f"wrote {path}")
     return 0 if all(r["status"] == "GREEN" for r in rows) else 1
 
 
