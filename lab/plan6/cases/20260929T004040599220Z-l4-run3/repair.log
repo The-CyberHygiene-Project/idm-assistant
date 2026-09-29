@@ -1,0 +1,7 @@
+2026-09-29T00:41:14.225319+00:00 injected: client2 clock +10 min
+2026-09-29T00:42:19.941546+00:00 skew visible to the collector
+2026-09-29T00:42:28.123634+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=time-resync shown=time-resync agrees=True errors=[]
+2026-09-29T00:42:28.638215+00:00 backup: []
+2026-09-29T00:42:38.994061+00:00 applied
+2026-09-29T00:42:39.879664+00:00 verified
+2026-09-29T00:42:40.562840+00:00 inject->repairs done: 19.9 s; status GREEN

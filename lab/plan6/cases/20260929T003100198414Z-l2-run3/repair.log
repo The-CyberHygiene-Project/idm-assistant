@@ -1,0 +1,7 @@
+2026-09-29T00:31:33.723916+00:00 injected: initgroups is 'files' only; lab01 lost lab_users@idm.kanidm.lab.test
+2026-09-29T00:31:44.311167+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=nsswitch-restore shown=nsswitch-restore agrees=True errors=[]
+2026-09-29T00:31:44.967726+00:00 backup: ['dir']
+2026-09-29T00:31:45.194044+00:00 applied
+2026-09-29T00:31:46.929129+00:00 verified
+2026-09-29T00:31:48.732356+00:00 probe: id -Gn lab01 on client2 includes lab_users@idm.kanidm.lab.test
+2026-09-29T00:31:48.733080+00:00 inject->repairs done: 13.2 s; status GREEN

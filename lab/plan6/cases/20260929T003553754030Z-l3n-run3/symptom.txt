@@ -1,0 +1,1 @@
+Nobody can log in to client2; existing sessions still work.

@@ -1,0 +1,9 @@
+{
+ "repair": "unixd-refresh",
+ "host": "client2",
+ "prompt": "Repair unixd-refresh on client2: invalidate the kanidm-unixd cache (content kept, marked stale) and re-fetch the user, so server-side changes are visible now instead of at cache expiry. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T00:34:19Z"
+}

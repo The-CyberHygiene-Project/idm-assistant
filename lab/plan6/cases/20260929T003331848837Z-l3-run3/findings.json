@@ -1,0 +1,6 @@
+{
+ "srv1": [],
+ "client2": [
+  "UNIXD_CACHE_STALE"
+ ]
+}

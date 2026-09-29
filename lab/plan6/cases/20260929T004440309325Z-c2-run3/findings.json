@@ -1,0 +1,9 @@
+{
+ "client2": [
+  "CLIENT_MISSING_CA_ROOT",
+  "SERVICE_DOWN(kanidm-unixd)",
+  "SERVICE_DOWN(kanidm-unixd-tasks)",
+  "TLS_CERT_UNTRUSTED(kanidm)",
+  "UNIXD_OFFLINE"
+ ]
+}

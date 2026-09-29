@@ -1,0 +1,7 @@
+2026-09-29T00:45:14.175131+00:00 injected: lab root removed from client2's trust store; unixd restarted
+2026-09-29T00:45:26.772635+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=client-ca-trust shown=client-ca-trust agrees=True errors=[]
+2026-09-29T00:45:27.716595+00:00 backup: ['anchor', 'dir']
+2026-09-29T00:45:39.229935+00:00 applied
+2026-09-29T00:45:40.188786+00:00 verified
+2026-09-29T00:45:41.144656+00:00 probe: unixd online
+2026-09-29T00:45:41.144984+00:00 inject->repairs done: 26.0 s; status GREEN

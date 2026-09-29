@@ -1,0 +1,53 @@
+{
+ "schema": "idm-report/1",
+ "host": "client2",
+ "role": "client",
+ "collected_at": "2026-09-29T00:45:13Z",
+ "user": "lab01",
+ "time": {
+  "offset_s": -3.1e-08,
+  "synced": true,
+  "source": "192.168.100.1",
+  "source_offset_s": 3.2e-05
+ },
+ "nss": {
+  "passwd": "kanidm files systemd",
+  "group": "kanidm files [SUCCESS=merge] systemd",
+  "initgroups": "kanidm files"
+ },
+ "authselect": {
+  "profile": "custom/kanidm",
+  "valid": true
+ },
+ "user_nss": {
+  "name": "lab01",
+  "found": false
+ },
+ "services": {
+  "kanidm-unixd": "activating",
+  "kanidm-unixd-tasks": "inactive",
+  "sshd": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-09-29T00:44:07Z",
+   "not_after": "2026-09-30T00:45:07Z",
+   "verify": "untrusted"
+  }
+ },
+ "unixd": {
+  "status": "offline"
+ },
+ "kanidm_user": null,
+ "trust": {
+  "kanidm_root_in_store": false
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 6
+ },
+ "errors": [
+  "unixd: kanidm-unix status failed",
+  "collect: 2 non-report line(s) on stdout before the report (not copied)"
+ ]
+}

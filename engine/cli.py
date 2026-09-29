@@ -1,5 +1,6 @@
 """python -m engine collect HOST [--user U] | findings HOST [--user U] | scenario ID [--runs N]"""
 import argparse
+from datetime import datetime, timezone
 import getpass
 import importlib
 import json
@@ -9,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from engine import interpret, remote
+from engine import interpret, regress, remote
 from engine.case import Case
 from engine.findings import evaluate
 from engine.repairs import REGISTRY, Ctx, run_repair, target_role
@@ -123,6 +124,24 @@ def run_scenario(sc, run_no):
     return case, status
 
 
+def regress_cmd(ids, runs, out):
+    rows = regress.run(ids, runs)
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    path = Path(out) if out else ROOT / "lab" / "plan6" / f"regression-{day}.md"
+    head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL).stdout.strip()
+    model = "IDM_NO_MODEL" if os.environ.get("IDM_NO_MODEL") == "1" else interpret.MODEL
+    lines = [f"# Regression report {day}", "",
+             f"- commit `{head}`; model `{model}`; hosts srv1, client2 (reset to `golden` before every run)",
+             f"- {runs} run(s) per scenario; approvals by the regression runner (`IDM_TEST_APPROVE=1`)", "",
+             regress.summarize(rows), "## Runs", ""]
+    lines += [f"- {r['id']} run {r['run']}: {r['status']} — cases/{r['case']}" for r in rows]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")
+    print(f"wrote {path.relative_to(ROOT)}")
+    return 0 if all(r["status"] == "GREEN" for r in rows) else 1
+
+
 def explain(host, user, symptom):
     """Collect, evaluate, interpret, print. Never runs a repair."""
     reps = _collect_all([host] + (["srv1"] if host != "srv1" else []), user)
@@ -144,11 +163,15 @@ def main(argv=None):
     for c in ("collect", "findings"):
         p = sub.add_parser(c); p.add_argument("host"); p.add_argument("--user")
     p = sub.add_parser("scenario"); p.add_argument("id"); p.add_argument("--runs", type=int, default=1)
+    p = sub.add_parser("regress"); p.add_argument("ids", nargs="*"); p.add_argument("--runs", type=int, default=3)
+    p.add_argument("--out")
     p = sub.add_parser("explain"); p.add_argument("host"); p.add_argument("--user")
     p.add_argument("--symptom", default="(no symptom given)")
     a = ap.parse_args(argv)
     if a.cmd == "explain":
         return explain(a.host, a.user, a.symptom)
+    if a.cmd == "regress":
+        return regress_cmd(a.ids or regress.DEFAULT, a.runs, a.out)
     if a.cmd in ("collect", "findings"):
         rep = remote.collect(DIAG[a.host], a.user)
         print(json.dumps(rep if a.cmd == "collect" else [f.__dict__ for f in evaluate(rep)], indent=1, default=list))

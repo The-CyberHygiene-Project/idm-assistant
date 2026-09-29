@@ -1,0 +1,13 @@
+{
+ "reset": 32.983,
+ "inject": 0.88,
+ "collect": 0.857,
+ "interpret": 11.735,
+ "client-ca-trust:precheck": 0.479,
+ "client-ca-trust:approval": 0.0,
+ "client-ca-trust:backup": 0.461,
+ "client-ca-trust:apply": 11.512,
+ "client-ca-trust:user": 0.0,
+ "client-ca-trust:verify": 0.956,
+ "final-check": 0.738
+}

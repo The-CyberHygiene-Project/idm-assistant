@@ -1,0 +1,7 @@
+2026-09-29T00:34:07.599727+00:00 injected: lab03 removed from lab_admins while client2 was cut off; client2 still shows it after reconnection
+2026-09-29T00:34:18.667293+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=unixd-refresh shown=unixd-refresh agrees=True errors=[]
+2026-09-29T00:34:19.363724+00:00 backup: []
+2026-09-29T00:34:20.010086+00:00 applied
+2026-09-29T00:34:21.792377+00:00 verified
+2026-09-29T00:34:23.457231+00:00 probe: client2 no longer shows lab_admins@idm.kanidm.lab.test for lab03
+2026-09-29T00:34:23.457841+00:00 inject->repairs done: 14.2 s; status GREEN

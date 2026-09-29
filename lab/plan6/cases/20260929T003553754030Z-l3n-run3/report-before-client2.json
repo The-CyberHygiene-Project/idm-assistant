@@ -1,0 +1,51 @@
+{
+ "schema": "idm-report/1",
+ "host": "client2",
+ "role": "client",
+ "collected_at": "2026-09-29T00:36:26Z",
+ "user": "lab04",
+ "time": {
+  "offset_s": -1e-09,
+  "synced": true,
+  "source": "192.168.100.1",
+  "source_offset_s": 4e-06
+ },
+ "nss": {
+  "passwd": "kanidm files systemd",
+  "group": "kanidm files [SUCCESS=merge] systemd",
+  "initgroups": "kanidm files"
+ },
+ "authselect": {
+  "profile": "custom/kanidm",
+  "valid": true
+ },
+ "user_nss": {
+  "name": "lab04",
+  "found": true,
+  "gecos": "Lab User 4",
+  "groups": [
+   "lab04@idm.kanidm.lab.test",
+   "lab_users@idm.kanidm.lab.test"
+  ]
+ },
+ "services": {
+  "kanidm-unixd": "active",
+  "kanidm-unixd-tasks": "active",
+  "sshd": "active"
+ },
+ "tls": {},
+ "unixd": {
+  "status": "offline"
+ },
+ "kanidm_user": null,
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 0
+ },
+ "errors": [
+  "tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"
+ ]
+}

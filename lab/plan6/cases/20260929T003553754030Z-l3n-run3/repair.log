@@ -1,0 +1,5 @@
+2026-09-29T00:36:26.791897+00:00 injected: blackhole route to srv1 on client2 (the collector's user lookup makes unixd notice)
+2026-09-29T00:36:35.472297+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=None shown=None agrees=True errors=[]
+2026-09-29T00:36:35.698071+00:00 operator restored the network path (outside the allow-list); no repair was run
+2026-09-29T00:36:36.602999+00:00 probe: unixd online after the network came back, with no refresh
+2026-09-29T00:36:36.603754+00:00 inject->repairs done: 8.7 s; status GREEN

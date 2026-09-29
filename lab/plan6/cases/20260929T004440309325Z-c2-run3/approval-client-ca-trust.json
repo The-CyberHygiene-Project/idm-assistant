@@ -1,0 +1,9 @@
+{
+ "repair": "client-ca-trust",
+ "host": "client2",
+ "prompt": "Repair client-ca-trust on client2: install the step-ca root (SHA-256 05:DD:29:89:C4:67:3B:2A..., pinned) as /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt, update the trust store, restart kanidm-unixd. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T00:45:27Z"
+}

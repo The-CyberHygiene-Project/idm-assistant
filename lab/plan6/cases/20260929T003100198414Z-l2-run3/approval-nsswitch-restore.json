@@ -1,0 +1,9 @@
+{
+ "repair": "nsswitch-restore",
+ "host": "client2",
+ "prompt": "Repair nsswitch-restore on client2: re-select authselect profile custom/kanidm with with-faillock, without-nullok (--force); the current files are saved first and restored if verification fails. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T00:31:44Z"
+}
