@@ -509,3 +509,42 @@ def test_reissue_lab_standin_delivers_the_certificate_to_the_user(tmp_path, monk
             params={"user": "lab02", "lab_standin": True, "_cert": "CERT\n"})
     repairs.SshUserCertReissue().wait_for_user(c)
     assert got == {"lab02_ecdsa-cert.pub": "CERT\n"}
+
+
+CA_PUB = (Path(__file__).parent / "fixtures" / "ssh-user-ca.pub").read_text()
+
+
+def test_ssh_fingerprint_matches_ssh_keygen():
+    from engine import repairs
+    assert repairs.ssh_fingerprint(CA_PUB) == repairs.PINNED_SSH_CA
+
+
+def test_ca_trust_restore_refuses_a_ca_key_with_another_fingerprint(tmp_path):
+    from engine import repairs
+    other = "ecdsa-sha2-nistp384 " + CA_PUB.split()[1][:-8] + "AAAAAAA= x\n"
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY,
+            remote=RecRemote(out=other))
+    assert "fingerprint" in repairs.SshCaTrustRestore().precheck(c)
+
+
+def test_ca_trust_restore_validates_sshd_config_before_reload(tmp_path):
+    from engine import repairs
+    sent = []
+
+    class R(RecRemote):
+        def run(self, host, argv, stdin=None, **kw):
+            sent.append((host, stdin)); return super().run(host, argv, stdin)
+    rr = R(out=CA_PUB)
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY, remote=rr)
+    repairs.SshCaTrustRestore().apply(c)
+    script = rr.calls[-1][1][-1]
+    assert ("srv1", None) in sent and ("client2", CA_PUB) in sent
+    assert script.index("sshd -t") < script.index("systemctl reload sshd")
+    assert "TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys" in script and script.startswith("set -e")
+
+
+def test_ca_trust_restore_verifies_the_pinned_ca_is_trusted():
+    from engine import repairs
+    ok = {"sshd": {"trusted_ca_path": "/etc/ssh/trusted_user_ca_keys", "trusted_ca_fingerprints": [repairs.PINNED_SSH_CA]}}
+    assert repairs.SshCaTrustRestore().verify_present(ok) is None
+    assert repairs.SshCaTrustRestore().verify_present({"sshd": {"trusted_ca_path": "none", "trusted_ca_fingerprints": []}})

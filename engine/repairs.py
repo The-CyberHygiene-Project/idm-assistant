@@ -631,3 +631,65 @@ class SshUserCertReissue(Repair):
 
 
 REGISTRY[SshUserCertReissue.id] = SshUserCertReissue()
+
+
+PINNED_SSH_CA = (ROOT / "lab" / "trust" / "ssh-user-ca.sha256").read_text().strip()
+
+
+def ssh_fingerprint(publine):
+    """OpenSSH SHA256 fingerprint of a public-key line (what `ssh-keygen -lf` prints)."""
+    blob = _b64.b64decode(publine.split()[1], validate=True)
+    return "SHA256:" + _b64.b64encode(_hashlib.sha256(blob).digest()).decode().rstrip("=")
+
+
+class SshCaTrustRestore(Repair):
+    id = "ssh-ca-trust-restore"
+    host_role = "client"
+    verify_absent = {"SSH_CA_NOT_TRUSTED"}
+    CA_HOST = "srv1"                                    # where the SSH user CA lives (NOT the target host)
+    CA_PUB = "/etc/ssh-ca/user_ca.pub"
+    DROPIN = "/etc/ssh/sshd_config.d/10-kanidm.conf"
+    KEYS = "/etc/ssh/trusted_user_ca_keys"
+
+    def describe(self, ctx):
+        return (f"trust the lab SSH user CA again ({PINNED_SSH_CA[:19]}..., pinned): write {self.KEYS}, restore "
+                f"TrustedUserCAKeys in {self.DROPIN}, check sshd -t, reload sshd")
+
+    def _ca(self, ctx):
+        line = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.CA_PUB]).stdout.strip().splitlines()
+        try:
+            fp = ssh_fingerprint(line[-1])
+        except (IndexError, ValueError, _binascii.Error):
+            return None, "the CA host returned no readable public key"
+        return (line[-1] + "\n", None) if fp == PINNED_SSH_CA else (None, f"CA fingerprint {fp} does not match the pin")
+
+    def precheck(self, ctx):
+        return self._ca(ctx)[1]
+
+    def backup(self, ctx):
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        _sh(ctx, f"install -d -m 0700 {d} && cp -p {self.DROPIN} {self.KEYS} {d}/")
+        return {"dir": d}
+
+    def apply(self, ctx):
+        key, why = self._ca(ctx)
+        if why:
+            raise RuntimeError(why)
+        ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                  f"set -e; cat > {self.KEYS}.new; install -m 0644 {self.KEYS}.new {self.KEYS}; "
+                                  f"rm -f {self.KEYS}.new; restorecon {self.KEYS}; "
+                                  f"grep -q '^TrustedUserCAKeys ' {self.DROPIN} || "
+                                  f"echo 'TrustedUserCAKeys {self.KEYS}' >> {self.DROPIN}; "
+                                  "sshd -t; systemctl reload sshd"], stdin=key)
+
+    def undo(self, ctx, backup):
+        d = backup["dir"]
+        _sh(ctx, f"cp -p {d}/10-kanidm.conf {self.DROPIN} && cp -p {d}/trusted_user_ca_keys {self.KEYS} && "
+                 "sshd -t && systemctl reload sshd")
+
+    def verify_present(self, report):
+        d = report.get("sshd") or {}
+        return None if PINNED_SSH_CA in (d.get("trusted_ca_fingerprints") or []) else f"pinned CA not trusted: {d}"
+
+
+REGISTRY[SshCaTrustRestore.id] = SshCaTrustRestore()
