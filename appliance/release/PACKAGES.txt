@@ -1,8 +1,9 @@
-# package names in the 0.1.0 repo (one per line); assemble-repo.sh takes the newest RPM of each
-kanidm-server
-kanidm-clients
-kanidm-unixd
-step-ca
-step-cli
-idm-collect
-google-authenticator
+# <name> <source>: "ours" = our own build, taken only from the built dir; anything else = third-party label,
+# taken only from the third-party dir (its vendor signature is kept). assemble-repo.sh takes the newest RPM of each.
+kanidm-server ours
+kanidm-clients ours
+kanidm-unixd ours
+step-ca ours
+step-cli ours
+idm-collect ours
+google-authenticator epel

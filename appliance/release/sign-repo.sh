@@ -30,6 +30,10 @@ for f in "$work"/*.rpm; do
   if grep -q 'Signature, key ID' <<<"$out"; then
     grep -qE 'NOKEY|NOT OK|BAD' <<<"$out" && { echo "REFUSED: $(basename "$f") is signed by an unpinned key or is damaged"; exit 1; }
   else
+    # only OUR builds get our signature: a stray lab/upstream RPM must never be blessed with the project key
+    vr=$(rpm -qp --qf '%{VENDOR}|%{RELEASE}' "$f" 2>/dev/null)
+    [[ ${vr%%|*} == "The CyberHygiene Project" && ${vr#*|} == *.chp* ]] \
+      || { echo "REFUSED: $(basename "$f") is unsigned but not ours (vendor|release: $vr); not signing it"; exit 1; }
     to_sign+=("$f")
   fi
 done

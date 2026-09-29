@@ -17,18 +17,24 @@ bad=0; say() { echo "$*"; bad=1; }
 chp=""
 while read -r fpr label file; do
   [[ -z ${fpr:-} || $fpr == \#* ]] && continue
-  got=$(gpg --batch --with-colons --import-options show-only --import "$K/$file" 2>/dev/null | awk -F: '/^fpr/{print $10; exit}')
+  show=$(gpg --batch --with-colons --import-options show-only --import "$K/$file" 2>/dev/null)
+  npub=$(grep -c '^pub' <<<"$show" || true)
+  [[ $npub == 1 ]] || { echo "KEY FILE HOLDS $npub KEYS: $file (pin exactly one primary key per file)"; exit 1; }
+  got=$(awk -F: '/^fpr/{print $10; exit}' <<<"$show")
   [[ $got == "$fpr" ]] || { echo "KEY MISMATCH: $file is ${got:-unreadable}, pinned $fpr"; exit 1; }
   gpg --batch --quiet --import "$K/$file" 2>/dev/null
   rpm --dbpath "$db" --import "$K/$file"
   [[ $label == cyberhygiene ]] && chp=$fpr
+  ids="${ids:-} $(tr 'A-F' 'a-f' <<<"${fpr: -8}")"   # rpm prints the SHORT (8-hex) key ID; only pinned keys are in this db
 done < "$K/trusted-keys.txt"
 [[ -n $chp ]] || { echo "NO cyberhygiene key pinned in $K/trusted-keys.txt"; exit 1; }
 shopt -s nullglob; n=0
 for f in "$R"/*.rpm; do
   n=$((n + 1))
   out=$(rpm --dbpath "$db" -Kv "$f" 2>&1 || true)
-  if ! grep -q 'Header V4 RSA/SHA256 Signature, key ID [0-9a-f]*: OK' <<<"$out" || grep -qE 'NOKEY|NOT OK|BAD' <<<"$out"; then
+  kid=$(sed -n 's/.*Header V4 RSA\/SHA256 Signature, key ID \([0-9a-f]*\): OK.*/\1/p' <<<"$out" | head -n 1)
+  # rpm names the (sub)key that made the signature: it must be a pinned PRIMARY key, never a subkey
+  if [[ -z $kid || " $ids " != *" $kid "* ]] || grep -qE 'NOKEY|NOT OK|BAD' <<<"$out"; then
     say "BAD SIGNATURE: $(basename "$f")"
   fi
 done

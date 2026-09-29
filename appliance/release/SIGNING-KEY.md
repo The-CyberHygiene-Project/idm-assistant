@@ -11,7 +11,7 @@ release checksums.
 | Digest used for signatures | SHA-256 |
 | Created | 2026-09-29 |
 | Expires | 2028-09-28 |
-| Public key | `RPM-GPG-KEY-cyberhygiene` (pinned in `trusted-keys.txt`) |
+| Public key | `RPM-GPG-KEY-cyberhygiene` (pinned in `trusted-keys.txt`): exported with **only the primary signing key** (`export-minimal`, non-signing subkeys dropped); `verify-repo.sh` accepts a signature only from a pinned **primary** key |
 
 ## Custody
 
