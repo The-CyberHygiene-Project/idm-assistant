@@ -1206,7 +1206,7 @@ allowing that shape, or (b) no `--user` on appliance hosts.
 
 - [ ] **Step 8: Tests, scan, commit.**
   `uv run pytest -q` (all pass); `bash lab/kickstart/test_render.sh` (unchanged, still passes); `bash lab/tools/secrets-scan.sh`
-  (only the two known fixture FAILs); `grep -rn "<yubikey-serial>" . --exclude-dir=.git` finds nothing.
+  (only the two known fixture FAILs); a grep for the YubiKey serial finds nothing.
   Commit `appliance/release/{PACKAGES.txt,assemble-repo.sh,RELEASE-RECORD-0.1.0.md,CMVP-STATUS.md}` and
   `lab/host/iso1-install-test.sh` with the message `ISO Plan 1 Task 8: signed 0.1.0 repo (7 packages) verified; dnf enforces signatures; FIPS-variant server+unixd interoperate; CMVP status recorded`.
 

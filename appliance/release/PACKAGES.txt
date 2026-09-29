@@ -1,0 +1,8 @@
+# package names in the 0.1.0 repo (one per line); assemble-repo.sh takes the newest RPM of each
+kanidm-server
+kanidm-clients
+kanidm-unixd
+step-ca
+step-cli
+idm-collect
+google-authenticator
