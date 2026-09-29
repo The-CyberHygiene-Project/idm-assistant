@@ -513,3 +513,54 @@ class AccountUnexpire(Repair):
 
 
 REGISTRY[AccountUnexpire.id] = AccountUnexpire()
+
+
+class SelinuxRestorecon(Repair):
+    """Put back policy-defined SELinux labels, only on the fixed identity paths the collector checks (never a path from
+    anywhere else). The previous labels are recorded so undo can put them back with chcon."""
+    id = "selinux-restorecon"
+    host_role = "client"
+    PATHS = ("/run/kanidm-unixd", "/var/cache/kanidm-unixd", "/var/lib/kanidm-unixd", "/etc/kanidm",
+             "/etc/ssh/trusted_user_ca_keys", "/etc/pki/ca-trust/source/anchors")
+
+    def describe(self, ctx):
+        return "restore the SELinux labels the policy defines (restorecon) on the identity paths that differ"
+
+    def _targets(self, report):
+        return [x.get("path") for x in (report.get("selinux") or {}).get("relabel") or []]
+
+    def _allowed(self, p):
+        return (isinstance(p, str) and _re.fullmatch(r"/[A-Za-z0-9_./-]+", p) and "/../" not in p + "/"
+                and any(p == a or p.startswith(a + "/") for a in self.PATHS))
+
+    def precheck(self, ctx):
+        t = self._targets(ctx.collect())
+        if not t:
+            return "no identity path has a wrong label; nothing to repair"
+        bad = [p for p in t if not self._allowed(p)]
+        return f"refusing: {bad} outside the identity path list" if bad else None
+
+    def backup(self, ctx):
+        t = [p for p in self._targets(ctx.collect()) if self._allowed(p)]
+        out = _sh(ctx, "ls -dZ -- " + " ".join(t))
+        labels = dict(reversed(ln.split(None, 1)) for ln in out.splitlines() if ln.strip())
+        return {"labels": {p: c for p, c in labels.items() if p in t}}
+
+    def apply(self, ctx):
+        t = [p for p in self._targets(ctx.collect()) if self._allowed(p)]
+        if t:
+            _sh(ctx, "restorecon -v -- " + " ".join(t))
+
+    def undo(self, ctx, backup):
+        for p, c in backup.get("labels", {}).items():
+            if self._allowed(p) and _re.fullmatch(r"[a-z_]+:[a-z_]+:[a-z0-9_]+:s0(:c[0-9.,]+)?", c):
+                _sh(ctx, f"chcon {c} -- {p}")
+
+    def verify_present(self, report):
+        t = self._targets(report)
+        return None if not t else f"labels still differ: {t}"
+
+    # verify_absent is dynamic (one finding per path); the positive check above covers every path
+
+
+REGISTRY[SelinuxRestorecon.id] = SelinuxRestorecon()

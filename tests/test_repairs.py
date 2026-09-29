@@ -423,3 +423,46 @@ def test_scenario_may_accept_a_declining_model():
     assert model_agrees({"valid": True, "repair_id": None}, ["account-unexpire"], may_decline=True)
     assert not model_agrees({"valid": True, "repair_id": None}, ["account-unexpire"], may_decline=False)
     assert model_agrees({"valid": True, "repair_id": "account-unexpire"}, ["account-unexpire"], may_decline=True)
+
+
+def _mislabelled(paths):
+    return dict(HEALTHY, host="client2", role="client",
+                selinux={"relabel": [{"path": p, "have": "var_run_t", "want": "kanidm_unixd_var_run_t"} for p in paths]})
+
+
+def test_restorecon_paths_match_the_collectors_fixed_list():
+    from engine import repairs
+    text = (Path(__file__).resolve().parents[1] / "collector" / "idm-collect").read_text()
+    for p in repairs.SelinuxRestorecon.PATHS:
+        assert p in text
+
+
+@pytest.mark.parametrize("bad", ["/etc/shadow", "/run/kanidm-unixd-evil/x", "/run/kanidm-unixd/a b", "/etc/kanidm/../shadow"])
+def test_restorecon_refuses_paths_outside_the_identity_list(tmp_path, bad):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: _mislabelled([bad]),
+            remote=RecRemote())
+    assert "outside" in repairs.SelinuxRestorecon().precheck(c)
+
+
+def test_restorecon_touches_only_the_reported_paths_and_can_undo(tmp_path):
+    from engine import repairs
+    paths = ["/run/kanidm-unixd", "/run/kanidm-unixd/sock"]
+    rr = RecRemote(out="system_u:object_r:var_run_t:s0 /run/kanidm-unixd\nsystem_u:object_r:var_run_t:s0 /run/kanidm-unixd/sock\n")
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: _mislabelled(paths), remote=rr)
+    r = repairs.SelinuxRestorecon()
+    assert r.precheck(c) is None
+    saved = r.backup(c)
+    assert saved["labels"] == {"/run/kanidm-unixd": "system_u:object_r:var_run_t:s0",
+                               "/run/kanidm-unixd/sock": "system_u:object_r:var_run_t:s0"}
+    r.apply(c)
+    script = rr.calls[-1][1][-1]
+    assert script == "restorecon -v -- /run/kanidm-unixd /run/kanidm-unixd/sock"
+    r.undo(c, saved)
+    assert "chcon system_u:object_r:var_run_t:s0 -- /run/kanidm-unixd/sock" in rr.calls[-1][1][-1]
+
+
+def test_restorecon_verifies_no_label_differs():
+    from engine import repairs
+    assert repairs.SelinuxRestorecon().verify_present({"selinux": {"relabel": []}}) is None
+    assert repairs.SelinuxRestorecon().verify_present(_mislabelled(["/run/kanidm-unixd"]))
