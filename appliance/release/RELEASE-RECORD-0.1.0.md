@@ -1,5 +1,8 @@
 # Release record: package repository 0.1.0
 
+> **Superseded by 0.1.1** (`RELEASE-RECORD-0.1.1.md`): step-ca 2.chp never created its `step` user, and the negative test
+> below could pass on a download failure. Do not use 0.1.0.
+
 **Date:** 2026-09-29 · **Location:** `aero:/data/chp-release/0.1.0/repo` (a lab copy is served at
 `http://192.168.100.1:8080/chp/0.1.0/`) · **Audience:** CyberHygiene Project development team only
 (`appliance/branding/NOTICE.txt`).
