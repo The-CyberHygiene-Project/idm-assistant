@@ -12,7 +12,17 @@ def run(host, argv, stdin=None, timeout=600, check=True):
 
 def collect(diag_host, user=None):
     argv = ["sudo", "-n", "/usr/local/sbin/idm-collect"] + (["--user", user] if user else [])
-    return json.loads(run(diag_host, argv).stdout)
+    lines = run(diag_host, argv).stdout.splitlines()
+    # The report is the last line starting with "{". Anything before it is not the collector's (e.g. the Kanidm NSS
+    # module inside sudo logging to stdout while unixd is down): counted, never copied (it is unredacted).
+    idx = max((i for i, ln in enumerate(lines) if ln.startswith("{")), default=None)
+    if idx is None:
+        raise ValueError(f"no report from {diag_host} ({len(lines)} line(s) of other output)")
+    rep = json.loads(lines[idx])
+    noise = sum(1 for ln in lines[:idx] if ln.strip())
+    if noise:
+        rep.setdefault("errors", []).append(f"collect: {noise} non-report line(s) on stdout before the report (not copied)")
+    return rep
 
 
 def push(host, src, dest):

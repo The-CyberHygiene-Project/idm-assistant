@@ -41,3 +41,16 @@ def test_push_stages_into_a_private_directory(monkeypatch):
     assert rskw["stdin"] is remote.subprocess.DEVNULL
     # macOS openrsync ignores --chmod and -a copies the source's 0755: tighten the whole tree afterwards.
     assert ch[-1] == "chmod -R go= idm-lab" and chkw["stdin"] is remote.subprocess.DEVNULL
+
+
+def test_collect_survives_nss_noise_before_the_report(monkeypatch):
+    # live 2026-09-29 (C2): with unixd down, sudo's own NSS lookup (Kanidm module) logs an ERROR line to stdout
+    # before idm-collect runs; the report must still be read, and the noise counted, not copied.
+    class R:
+        stdout = ("\x1b[2m2026-09-29T00:03:02Z\x1b[0m \x1b[31mERROR\x1b[0m Unix socket stream setup error\n"
+                  '{"schema":"idm-report/1","host":"client2","role":"client","collected_at":"x","errors":["e1"]}\n')
+    monkeypatch.setattr(remote.subprocess, "run", lambda cmd, **kw: R())
+    rep = remote.collect("client2-diag")
+    assert rep["host"] == "client2"
+    assert rep["errors"] == ["e1", "collect: 1 non-report line(s) on stdout before the report (not copied)"]
+    assert not any("socket" in e for e in rep["errors"])
