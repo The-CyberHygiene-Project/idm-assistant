@@ -65,8 +65,9 @@ a6ec8b9a183caa500438552051f00df4edba8ce51371c6f3285cc3f6ebdb317e  libnss_kanidm.
 
 - `check-rpms.sh`: `RPMS OK: all expected files packaged and owned (1.11.2-2.chp.el9)`. Each package gained
   `/usr/share/licenses/kanidm/LICENSE.md` (MPL-2.0).
-- `check-fips.sh` (on the binaries **inside the RPMs**): `FIPS OK` for `usr/sbin/kanidmd`, `usr/bin/kanidm` and
-  `usr/sbin/kanidm_unixd`, giving `FIPS VARIANT OK`.
+- `check-fips.sh` (on the binaries **inside the RPMs**): `FIPS OK` for `usr/sbin/kanidmd`, `usr/bin/kanidm`,
+  `usr/sbin/kanidm_unixd` and (added after the final review) `usr/sbin/kanidm_ssh_authorizedkeys_direct`, giving
+  `FIPS VARIANT OK`. Negative control: the same check on the lab `1.lab` RPMs reports `NOT FIPS` for all four.
 - rpmbuild strips the binaries (kanidmd 241 MB → 62 MB); the `AWS-LC FIPS 4.2.0` marker survives stripping.
 - Copied to `aero:/data/chp-release/built/`.
 
