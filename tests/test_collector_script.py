@@ -145,3 +145,8 @@ def test_certificate_times_are_read_in_utc():
     # a zone-less time as UTC, so validity came out 6 h early. ssh-keygen must print UTC.
     text = SCRIPT.read_text()
     assert 'TZ=UTC ssh-keygen -L' in text and 'cl=$(ssh-keygen -L' not in text
+
+
+def test_an_unconvertible_certificate_time_is_emitted_as_null():
+    text = SCRIPT.read_text()
+    assert 'isoj()' in text and 'json_str "$(iso "$cf")"' not in text and 'json_str "$(iso "$ct")"' not in text

@@ -96,8 +96,13 @@ def run_repair(repair_id, ctx, approve, registry):
     if not ok:
         case.log("REFUSED: not approved"); case.write("status.txt", "REFUSED\n")
         return "REFUSED"
-    with case.step(f"{repair_id}:backup"):
-        saved = r.backup(ctx)
+    try:
+        with case.step(f"{repair_id}:backup"):
+            saved = r.backup(ctx)
+    except Exception as e:          # nothing has been applied: stop, and say so (class only; text may hold output)
+        case.log(f"BACKUP FAILED for {repair_id}: {type(e).__name__}; nothing applied")
+        case.write("status.txt", "BACKUP-FAILED\n")
+        return "BACKUP-FAILED"
     case.log(f"backup: {sorted(saved)}")
     try:
         with case.step(f"{repair_id}:apply"):
@@ -667,9 +672,11 @@ class SshCaTrustRestore(Repair):
         return self._ca(ctx)[1]
 
     def backup(self, ctx):
+        # Either file may be missing (that is one way SSH_CA_NOT_TRUSTED happens): record which ones existed.
         d = f"/root/idm-backup/{ctx.case.dir.name}"
-        _sh(ctx, f"install -d -m 0700 {d} && cp -p {self.DROPIN} {self.KEYS} {d}/")
-        return {"dir": d}
+        out = _sh(ctx, f"install -d -m 0700 {d}; for f in {self.DROPIN} {self.KEYS}; do "
+                       f"[ -e \"$f\" ] && cp -p \"$f\" {d}/ && echo \"$f\"; done; true")
+        return {"dir": d, "existed": [ln.strip() for ln in out.splitlines() if ln.strip() in (self.DROPIN, self.KEYS)]}
 
     def apply(self, ctx):
         key, why = self._ca(ctx)
@@ -683,9 +690,10 @@ class SshCaTrustRestore(Repair):
                                   "sshd -t; systemctl reload sshd"], stdin=key)
 
     def undo(self, ctx, backup):
-        d = backup["dir"]
-        _sh(ctx, f"cp -p {d}/10-kanidm.conf {self.DROPIN} && cp -p {d}/trusted_user_ca_keys {self.KEYS} && "
-                 "sshd -t && systemctl reload sshd")
+        d, existed = backup["dir"], backup.get("existed", [self.DROPIN, self.KEYS])
+        steps = [f"cp -p {d}/{f.rsplit('/', 1)[1]} {f}" if f in existed else f"rm -f {f}"
+                 for f in (self.DROPIN, self.KEYS)]
+        _sh(ctx, " && ".join(steps) + " && sshd -t && systemctl reload sshd")
 
     def verify_present(self, report):
         d = report.get("sshd") or {}

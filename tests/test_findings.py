@@ -196,3 +196,11 @@ def test_live_healthy_lab02_pair_with_plan7_sections_has_no_findings():
     s = load_report(FIX / "healthy-srv1-lab02.json"); c = load_report(FIX / "healthy-client2-lab02.json")
     assert s["ssh_ca"]["issued"] and c["sshd"]["trusted_ca_fingerprints"] and "relabel" in c["selinux"]
     assert cids(s) == [] and cids(c, s) == []
+
+
+@pytest.mark.parametrize("vt", ["", None])
+def test_unparsed_certificate_time_is_no_evidence_not_a_crash(vt):
+    s = pair()[0]
+    s["ssh_ca"] = {"fingerprint": "SHA256:x", "issued": {"user": "lab01", "valid_from": None, "valid_to": vt,
+                                                          "principals": []}}
+    assert "SSH_USER_CERT_EXPIRED" not in cids(s)

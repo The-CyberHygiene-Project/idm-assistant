@@ -548,3 +548,26 @@ def test_ca_trust_restore_verifies_the_pinned_ca_is_trusted():
     ok = {"sshd": {"trusted_ca_path": "/etc/ssh/trusted_user_ca_keys", "trusted_ca_fingerprints": [repairs.PINNED_SSH_CA]}}
     assert repairs.SshCaTrustRestore().verify_present(ok) is None
     assert repairs.SshCaTrustRestore().verify_present({"sshd": {"trusted_ca_path": "none", "trusted_ca_fingerprints": []}})
+
+
+def test_a_failing_backup_is_recorded_and_nothing_is_applied(tmp_path):
+    class B(FakeRepair):
+        def backup(self, ctx):
+            raise RuntimeError("cp: cannot stat")
+    r = B(); c = ctx(tmp_path, [HEALTHY])
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "BACKUP-FAILED"
+    assert "apply" not in r.calls and (c.case.dir / "status.txt").read_text() == "BACKUP-FAILED\n"
+    assert "RuntimeError" in (c.case.dir / "repair.log").read_text()
+
+
+def test_ca_trust_backup_tolerates_a_missing_keys_file_and_undo_removes_what_was_not_there(tmp_path):
+    from engine import repairs
+    rr = RecRemote(out="/etc/ssh/sshd_config.d/10-kanidm.conf\n")          # only the drop-in existed
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY, remote=rr)
+    saved = repairs.SshCaTrustRestore().backup(c)
+    b = rr.calls[-1][1][-1]
+    assert '[ -e "$f" ] && cp -p' in b and "/etc/ssh/trusted_user_ca_keys" in b and b.rstrip().endswith("true")
+    assert saved["existed"] == ["/etc/ssh/sshd_config.d/10-kanidm.conf"]
+    repairs.SshCaTrustRestore().undo(c, saved)
+    undo = rr.calls[-1][1][-1]
+    assert "rm -f /etc/ssh/trusted_user_ca_keys" in undo and "cp -p" in undo and undo.index("sshd -t") < undo.index("reload")

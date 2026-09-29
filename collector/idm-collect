@@ -71,6 +71,7 @@ EOF
 }
 # <<< parsers
 iso() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
+isoj() { _i=$(iso "$1"); if [ -n "$_i" ]; then json_str "$_i"; else printf null; fi; }   # unconvertible -> null
 
 host=$(hostname -s)
 if systemctl cat kanidmd.service >/dev/null 2>&1; then role=server; else role=client; fi
@@ -174,8 +175,8 @@ if [ "$role" = server ] && [ -r /etc/ssh-ca/user_ca.pub ]; then
 $(cert_validity "$cl")
 EOF
     # ssh-keygen prints zone-less LOCAL time: TZ=UTC above makes it UTC, which iso() (date -u) then reads correctly
-    if [ "$cf" = - ]; then cfj=null; else cfj=$(json_str "$(iso "$cf")"); fi
-    case "$ct" in forever) ctj='"forever"' ;; -) ctj=null ;; *) ctj=$(json_str "$(iso "$ct")") ;; esac
+    if [ "$cf" = - ]; then cfj=null; else cfj=$(isoj "$cf"); fi
+    case "$ct" in forever) ctj='"forever"' ;; -) ctj=null ;; *) ctj=$(isoj "$ct") ;; esac
     iss="{\"user\":$(json_str "$user"),\"valid_from\":$cfj,\"valid_to\":$ctj,\"principals\":$(principals_json "$cl")}"
   fi
   sca="{\"fingerprint\":$(json_str "$cafp"),\"issued\":$iss}"

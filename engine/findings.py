@@ -144,7 +144,7 @@ def account_not_yet_valid(r):
 
 def ssh_cert_expired(r):
     iss = (r.get("ssh_ca") or {}).get("issued")
-    if r.get("role") == "server" and iss and iss.get("valid_to") not in (None, "forever") and not _time_suspect(r) \
+    if r.get("role") == "server" and iss and iss.get("valid_to") not in (None, "", "forever") and not _time_suspect(r) \
             and _t(iss["valid_to"]) <= _t(r["collected_at"]):
         return Finding("SSH_USER_CERT_EXPIRED", "ssh-ca", (f"newest certificate issued to {iss.get('user')} expired "
                                                            f"{iss['valid_to']}", f"principals {iss.get('principals')}"))
