@@ -1,0 +1,16 @@
+# <pkg> <path>: pkg must own path.  !<pkg> <path>: pkg must NOT contain it.
+# /etc/kanidm holds config for every role (server.toml, config, unixd): each package co-owns it.
+server /etc/kanidm
+clients /etc/kanidm
+unixd /etc/kanidm
+server /usr/share/kanidm
+server /usr/share/kanidm/ui
+server /usr/share/kanidm/examples
+clients /usr/share/kanidm
+clients /usr/share/kanidm/examples
+unixd /usr/share/kanidm
+unixd /usr/share/kanidm/examples
+# kanidm_ssh_authorizedkeys asks unixd (resolver_kanidm crate); _direct asks the server (tools/cli crate).
+unixd /usr/sbin/kanidm_ssh_authorizedkeys
+!clients /usr/sbin/kanidm_ssh_authorizedkeys
+clients /usr/sbin/kanidm_ssh_authorizedkeys_direct
