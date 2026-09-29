@@ -65,7 +65,19 @@ def tls_untrusted(r):
         return Finding("TLS_CERT_UNTRUSTED(kanidm)", "tls", ("verify: chain does not reach a root this host trusts",))
 
 
+def _conf_errors(r):
+    return [e for e in r.get("errors") or [] if e.startswith("collect.conf:")]
+
+
+def collect_conf_invalid(r):
+    errs = _conf_errors(r)
+    if errs:
+        return Finding("COLLECT_CONF_INVALID", "collector", tuple(errs))
+
+
 def kanidm_unreachable(r):
+    if _conf_errors(r):
+        return None                      # no usable URL: the config is the fault, not the network
     if (r.get("tls") or {}).get("kanidm") is None and any(
             e.startswith("tls: could not fetch") for e in r.get("errors") or []):
         return Finding("KANIDM_UNREACHABLE", "network", ("TLS handshake with idm.kanidm.lab.test failed from this host",))
@@ -91,6 +103,8 @@ def posix_pw_missing(r):
 
 
 def ca_root_missing(r):
+    if any(e.startswith("collect.conf: CA_ANCHOR") for e in _conf_errors(r)):
+        return None                      # no configured anchor: nothing was checked
     if (r.get("trust") or {}).get("kanidm_root_in_store") is False:
         return Finding("CLIENT_MISSING_CA_ROOT", "trust", ("lab step-ca root not in the system trust store",))
 
@@ -179,7 +193,7 @@ def services_down(r):
     return out
 
 
-RULES = (time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
+RULES = (collect_conf_invalid, time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
          posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
          ssh_ca_not_trusted)
 

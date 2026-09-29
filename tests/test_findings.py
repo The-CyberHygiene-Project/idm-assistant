@@ -204,3 +204,21 @@ def test_unparsed_certificate_time_is_no_evidence_not_a_crash(vt):
     s["ssh_ca"] = {"fingerprint": "SHA256:x", "issued": {"user": "lab01", "valid_from": None, "valid_to": vt,
                                                           "principals": []}}
     assert "SSH_USER_CERT_EXPIRED" not in cids(s)
+
+
+CONF_ERRS = ["collect.conf: KANIDM_URL missing or invalid (want https://host[:port])",
+             "collect.conf: CA_ANCHOR missing or invalid (want a file in /etc/pki/ca-trust/source/anchors/)"]
+
+
+def test_bad_collect_conf_is_its_own_finding_not_a_network_or_trust_fault():
+    c = pair()[1]; c["tls"] = {}; c["trust"] = {"kanidm_root_in_store": None}; c["errors"] = list(CONF_ERRS)
+    got = cids(c)
+    assert "COLLECT_CONF_INVALID" in got
+    assert "KANIDM_UNREACHABLE" not in got and "CLIENT_MISSING_CA_ROOT" not in got
+
+
+def test_unreachable_is_still_reported_when_the_config_is_fine_but_tls_fails():
+    c = pair()[1]; c["tls"] = {}
+    c["errors"] = ["tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"]
+    got = cids(c)
+    assert "KANIDM_UNREACHABLE" in got and "COLLECT_CONF_INVALID" not in got

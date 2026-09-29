@@ -45,13 +45,18 @@ case "$user" in *[!a-z0-9_]*) echo '{"schema":"idm-report/1","errors":["bad --us
 W=$(mktemp -d /tmp/idm-collect.XXXXXX); chmod 700 "$W"; trap 'rm -rf "$W"' EXIT
 ERRS="$W/errors"; : > "$ERRS"
 err() { printf '%s\n' "$1" | sed -E -f "$REDACT" >> "$ERRS"; }
+# >>> config-errors
+# A missing or garbled site value is reported as what it is, never as a network or trust fault further down.
+[ -n "$KANIDM_URL" ] || err "collect.conf: KANIDM_URL missing or invalid (want https://host[:port])"
+[ -n "$CA_ANCHOR" ] || err "collect.conf: CA_ANCHOR missing or invalid (want a file in /etc/pki/ca-trust/source/anchors/)"
+# <<< config-errors
 
 # >>> json-helpers
 # JSON string escaping (POSIX): backslash, quote, control characters -> spaces; redaction first.
 # An empty value must still print "" (sed emits nothing for empty input, which broke the report when chrony had no
 # reference: "source":,).
 json_str() { [ -n "$1" ] || { printf '""'; return; }; printf '%s' "$1" | sed -E -f "$REDACT" | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037' | sed 's/^/"/; s/$/"/'; }
-json_bool() { if [ "$1" = true ]; then printf true; else printf false; fi; }
+json_bool() { case "$1" in true) printf true ;; null) printf null ;; *) printf false ;; esac; }   # null = unknown
 json_num() { case "$1" in ''|*[!0-9.eE+-]*) printf null ;; *) printf '%s' "$1" ;; esac; }
 # memberof from Kanidm's person JSON as a JSON array, or null when absent/unreadable (unknown is not "no groups").
 memberof_json() {
@@ -126,9 +131,11 @@ for u in $units; do st=$(systemctl is-active "$u" 2>/dev/null || true); svc="$sv
 svc="{${svc%,}}"
 
 # --- TLS (Kanidm) ------------------------------------------------------------------------------------------------
+# >>> tls
 tls="{}"
-if [ -n "$KANIDM_HOSTPORT" ] \
-   && out=$(timeout 10 openssl s_client -connect "$KANIDM_HOSTPORT" -servername "${KANIDM_HOSTPORT%:*}" </dev/null 2>&1) \
+if [ -z "$KANIDM_HOSTPORT" ]; then
+  :   # no usable KANIDM_URL: reported under config-errors, and no probe is a guess at the wrong host
+elif out=$(timeout 10 openssl s_client -connect "$KANIDM_HOSTPORT" -servername "${KANIDM_HOSTPORT%:*}" </dev/null 2>&1) \
    && printf '%s\n' "$out" | grep -q -- '-----BEGIN CERTIFICATE-----'; then
   printf '%s\n' "$out" | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' > "$W/kanidm.pem"
   nb=$(iso "$(openssl x509 -in "$W/kanidm.pem" -noout -startdate | cut -d= -f2)")
@@ -138,6 +145,7 @@ if [ -n "$KANIDM_HOSTPORT" ] \
   case "$code" in 0) v=ok ;; 10) v=expired ;; *) v=untrusted ;; esac
   tls="{\"kanidm\":{\"not_before\":$(json_str "$nb"),\"not_after\":$(json_str "$na"),\"verify\":$(json_str "$v")}}"
 else err "tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"; fi
+# <<< tls
 
 # --- user lookup (clients, --user) --------------------------------------------------------------------------------
 # Before the unixd section on purpose: `kanidm-unix status` is only fresh after a lookup needed the server (measured).
@@ -171,7 +179,7 @@ fi
 ku=null
 if [ -n "$user" ] && [ "$role" = server ]; then
   if [ -z "$KANIDM_URL" ]; then
-    err "collect.conf: KANIDM_URL missing or invalid (want https://host[:port])"
+    :   # already reported under config-errors; no query without a usable URL
   elif [ -r "$TOKEN_FILE" ]; then
     printf 'Authorization: Bearer %s\n' "$(cat "$TOKEN_FILE")" > "$W/auth.hdr"; chmod 600 "$W/auth.hdr"
     if j=$(curl -fsS --max-time 10 -H @"$W/auth.hdr" "$KANIDM_URL/v1/person/$user" 2>"$W/curl.err"); then
@@ -222,12 +230,15 @@ if [ "$role" = client ]; then
 fi
 
 # --- trust --------------------------------------------------------------------------------------------------------
+# >>> trust
 tr_ok=false
+[ -n "$CA_ANCHOR" ] || tr_ok=null   # unknown, not "missing": without a configured anchor there is nothing to check
 # The anchor file is present AND the system trust store lists its CA (matched by the anchor's own subject CN).
 if [ -n "$CA_ANCHOR" ] && [ -f "$CA_ANCHOR" ]; then
   cn=$(openssl x509 -in "$CA_ANCHOR" -noout -subject -nameopt multiline 2>/dev/null | sed -n 's/^ *commonName *= *//p' | head -n 1)
   if [ -n "$cn" ] && trust list --filter=ca-anchors 2>/dev/null | grep -qiF -- "$cn"; then tr_ok=true; fi
 fi
+# <<< trust
 
 # --- SELinux ------------------------------------------------------------------------------------------------------
 se=$(getenforce 2>/dev/null || echo unknown)

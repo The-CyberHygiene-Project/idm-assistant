@@ -255,3 +255,31 @@ def test_ca_anchor_comes_from_the_config():
 ])
 def test_ca_anchor_rejects_anything_else(bad):
     assert _conf_block(bad + "\n", "$CA_ANCHOR") == ""
+
+
+def _block_run(marker, prelude, echo=""):
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index(f"# >>> {marker}"), lines.index(f"# <<< {marker}")
+    sh = 'err() { printf "ERR %s\\n" "$1"; }\n' + prelude + "\n" + "\n".join(lines[i + 1:j]) + (f'\necho "{echo}"' if echo else "")
+    return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
+
+
+def test_unusable_config_values_are_reported_as_config_errors():
+    out = _block_run("config-errors", 'KANIDM_URL=""; CA_ANCHOR=""')
+    assert "ERR collect.conf: KANIDM_URL missing or invalid" in out
+    assert "ERR collect.conf: CA_ANCHOR missing or invalid" in out
+
+
+def test_good_config_values_report_nothing():
+    out = _block_run("config-errors", 'KANIDM_URL=https://idm.example.test; CA_ANCHOR=/etc/pki/ca-trust/source/anchors/x.crt')
+    assert out == ""
+
+
+def test_no_tls_probe_and_no_unreachable_error_without_a_usable_url():
+    out = _block_run("tls", 'KANIDM_HOSTPORT=""; openssl() { echo PROBED; }; timeout() { shift; "$@"; }', "$tls")
+    assert "PROBED" not in out and "could not fetch" not in out and out.strip() == "{}"
+
+
+def test_trust_is_unknown_not_false_without_an_anchor():
+    out = _block_run("trust", 'CA_ANCHOR=""', "$tr_ok")
+    assert out.strip() == "null"
