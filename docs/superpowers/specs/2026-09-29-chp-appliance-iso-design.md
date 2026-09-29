@@ -1,6 +1,6 @@
 # CHP Identity Appliance Installer ISO
 
-**Date:** 2026-09-29 · **Status:** DRAFT: design approved in conversation 2026-09-29, awaiting the user's review of this written spec
+**Date:** 2026-09-29 · **Status:** APPROVED by the user 2026-09-29 (Rocky trademark/branding questions: user researching separately)
 **Owner:** D. Shannon (System Owner / ISSO)
 **Inputs:** `lab/iso-requirements.md` (rows 1–35 from Plans 2–7, row 36 added here);
 ADR 0001 *Replace FreeIPA with four independent identity components*; the lab spec
@@ -16,8 +16,7 @@ lab finding built in as a default rather than a runbook step.
 It is an **appliance**: nothing site-specific is baked in. RS#3 (dc2 /
 cyberappliance.tech, Jeff) is the first intended user, not the only one.
 
-**Audience during development:** the CyberHygiene Project development team only. It is not
-a public release (§8).
+**Audience during development:** the CyberHygiene Project development team only. It is not a public release (§8).
 
 ### Success criteria (acceptance gates)
 1. **Install from nothing on aero:** 1 server + 2 clients from the ISO and a site USB, with no
@@ -27,9 +26,7 @@ a public release (§8).
 3. **CUI compliance scan:** OpenSCAP CUI profile on each installed host; every failure is
    either fixed or listed in a deviation table with the ISSO decision behind it.
 
-Not gates for this project (recorded so that nobody assumes otherwise): a real-hardware install
-(physical UEFI/TPM PCRs), and a separate signature-chain test. Row 1's `gpgcheck=1` is
-still a build requirement.
+Not gates for this project (recorded so that nobody assumes otherwise): a real-hardware install (physical UEFI/TPM PCRs), and a separate signature-chain test. Row 1's `gpgcheck=1` is still a build requirement.
 
 ## 2. Decisions settled during design (2026-09-29)
 
