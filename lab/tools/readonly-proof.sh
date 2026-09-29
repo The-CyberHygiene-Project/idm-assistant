@@ -13,7 +13,7 @@ snap() {   # $1 = before|after
 ssh -n -o BatchMode=yes "$host" 'sudo touch /root/ro-marker'
 snap before
 sleep 1
-ssh -n -o BatchMode=yes "$host-diag" sudo -n /usr/local/sbin/idm-collect "$@" >/dev/null
+ssh -n -o BatchMode=yes "$host-diag" sudo -n /usr/sbin/idm-collect "$@" >/dev/null
 snap after
 ssh -n -o BatchMode=yes "$host" "sudo bash -c '
   echo \"== $host: state diff lines: \$(diff /root/ro-before /root/ro-after | grep -c \"^[<>]\")\"

@@ -1,7 +1,10 @@
 #!/bin/sh
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # idm-collect [--user NAME]: READ-ONLY identity diagnostics for the dc2-style stack. Prints one idm-report/1 JSON
 # document on stdout. Writes nothing outside a private temp dir (removed on exit). Secrets are redacted with
-# redact.sed (installed next to this script as /usr/local/sbin/idm-collect.redact.sed).
+# redact.sed (installed by the RPM as /usr/share/idm-collect/redact.sed).
 # Kanidm queries use the REST API with a READ-ONLY service-account token (/etc/idm-collect/kanidm.token), passed to
 # curl as a header FILE (never on the command line), so no CLI token cache is written anywhere.
 set -eu
@@ -9,11 +12,32 @@ set -f   # no pathname expansion anywhere: group names and paths are data, never
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 # >>> redact-path
 # As root (the sudo rule) the installed rules are used whatever the environment says: GNU sed -f accepts `w`/`e`.
-if [ "$(id -u)" -eq 0 ]; then REDACT=/usr/local/sbin/idm-collect.redact.sed
-else REDACT="${IDM_REDACT:-/usr/local/sbin/idm-collect.redact.sed}"; fi
+if [ "$(id -u)" -eq 0 ]; then REDACT=/usr/share/idm-collect/redact.sed
+else REDACT="${IDM_REDACT:-/usr/share/idm-collect/redact.sed}"; fi
 # <<< redact-path
 TOKEN_FILE=/etc/idm-collect/kanidm.token
-KANIDM_URL=https://idm.kanidm.lab.test
+# >>> kanidm-url
+# The Kanidm URL is site data (/etc/idm-collect/collect.conf, written by the client role), never baked in. Only
+# https://<lower-case host>[:port] is accepted; anything else leaves it empty and the Kanidm checks report an error.
+if [ "$(id -u)" -eq 0 ]; then CONF=/etc/idm-collect/collect.conf; else CONF="${IDM_COLLECT_CONF:-/etc/idm-collect/collect.conf}"; fi
+KANIDM_URL=$(sed -n 's/^KANIDM_URL=//p' "$CONF" 2>/dev/null | tail -n 1)
+# Character lists are spelled out: a range like a-z follows the locale's collation and can match upper case.
+lc=abcdefghijklmnopqrstuvwxyz0123456789
+case "$KANIDM_URL" in
+  https://*) _h=${KANIDM_URL#https://}
+             case "$_h" in ''|*[!$lc.:-]*|:*|*:|*:*:*) KANIDM_URL="" ;; esac ;;
+  *) KANIDM_URL="" ;;
+esac
+KANIDM_HOSTPORT=""
+if [ -n "$KANIDM_URL" ]; then
+  _h=${KANIDM_URL#https://}; case "$_h" in *:*) KANIDM_HOSTPORT=$_h ;; *) KANIDM_HOSTPORT=$_h:443 ;; esac
+fi
+# The site's CA root anchor (its file name and CA name are site data too): a plain file in the anchors directory.
+CA_ANCHOR=$(sed -n 's/^CA_ANCHOR=//p' "$CONF" 2>/dev/null | tail -n 1)
+case "${CA_ANCHOR#/etc/pki/ca-trust/source/anchors/}" in
+  "$CA_ANCHOR"|''|*[!$lc._-]*|.*) CA_ANCHOR="" ;;
+esac
+# <<< kanidm-url
 user=""
 [ "${1:-}" = "--user" ] && user="${2:-}"
 case "$user" in ''|[a-z0-9_]*) : ;; *) echo '{"schema":"idm-report/1","errors":["bad --user"]}'; exit 0 ;; esac
@@ -103,7 +127,8 @@ svc="{${svc%,}}"
 
 # --- TLS (Kanidm) ------------------------------------------------------------------------------------------------
 tls="{}"
-if out=$(timeout 10 openssl s_client -connect idm.kanidm.lab.test:443 -servername idm.kanidm.lab.test </dev/null 2>&1) \
+if [ -n "$KANIDM_HOSTPORT" ] \
+   && out=$(timeout 10 openssl s_client -connect "$KANIDM_HOSTPORT" -servername "${KANIDM_HOSTPORT%:*}" </dev/null 2>&1) \
    && printf '%s\n' "$out" | grep -q -- '-----BEGIN CERTIFICATE-----'; then
   printf '%s\n' "$out" | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' > "$W/kanidm.pem"
   nb=$(iso "$(openssl x509 -in "$W/kanidm.pem" -noout -startdate | cut -d= -f2)")
@@ -145,7 +170,9 @@ fi
 # --- Kanidm user (server role, --user) ----------------------------------------------------------------------------
 ku=null
 if [ -n "$user" ] && [ "$role" = server ]; then
-  if [ -r "$TOKEN_FILE" ]; then
+  if [ -z "$KANIDM_URL" ]; then
+    err "collect.conf: KANIDM_URL missing or invalid (want https://host[:port])"
+  elif [ -r "$TOKEN_FILE" ]; then
     printf 'Authorization: Bearer %s\n' "$(cat "$TOKEN_FILE")" > "$W/auth.hdr"; chmod 600 "$W/auth.hdr"
     if j=$(curl -fsS --max-time 10 -H @"$W/auth.hdr" "$KANIDM_URL/v1/person/$user" 2>"$W/curl.err"); then
       if [ "$j" = null ] || [ -z "$j" ]; then
@@ -196,8 +223,11 @@ fi
 
 # --- trust --------------------------------------------------------------------------------------------------------
 tr_ok=false
-if [ -f /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt ] && \
-   trust list --filter=ca-anchors 2>/dev/null | grep -qi 'kanidm.lab.test Lab CA'; then tr_ok=true; fi
+# The anchor file is present AND the system trust store lists its CA (matched by the anchor's own subject CN).
+if [ -n "$CA_ANCHOR" ] && [ -f "$CA_ANCHOR" ]; then
+  cn=$(openssl x509 -in "$CA_ANCHOR" -noout -subject -nameopt multiline 2>/dev/null | sed -n 's/^ *commonName *= *//p' | head -n 1)
+  if [ -n "$cn" ] && trust list --filter=ca-anchors 2>/dev/null | grep -qiF -- "$cn"; then tr_ok=true; fi
+fi
 
 # --- SELinux ------------------------------------------------------------------------------------------------------
 se=$(getenforce 2>/dev/null || echo unknown)

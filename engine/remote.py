@@ -11,7 +11,7 @@ def run(host, argv, stdin=None, timeout=600, check=True):
 
 
 def collect(diag_host, user=None):
-    argv = ["sudo", "-n", "/usr/local/sbin/idm-collect"] + (["--user", user] if user else [])
+    argv = ["sudo", "-n", "/usr/sbin/idm-collect"] + (["--user", user] if user else [])
     lines = [ln for ln in run(diag_host, argv).stdout.splitlines() if ln.strip()]
     # The report is the collector's LAST line and carries its schema. Lines before it are not the collector's (e.g.
     # the Kanidm NSS module inside sudo logging to stdout while unixd is down): counted, never copied (unredacted).
