@@ -5,6 +5,7 @@
 # Kanidm queries use the REST API with a READ-ONLY service-account token (/etc/idm-collect/kanidm.token), passed to
 # curl as a header FILE (never on the command line), so no CLI token cache is written anywhere.
 set -eu
+set -f   # no pathname expansion anywhere: group names and paths are data, never patterns
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 # >>> redact-path
 # As root (the sudo rule) the installed rules are used whatever the environment says: GNU sed -f accepts `w`/`e`.
@@ -35,7 +36,42 @@ memberof_json() {
   case "$_mo" in *[!a-z0-9_@.,\"-]*) printf null ;; *) printf '[%s]' "$_mo" ;; esac
 }
 # <<< json-helpers
+# >>> parsers
+# Pure text parsers (unit-tested on the Mac with real output shapes).
+validity_json() {   # $1 = Kanidm person JSON, $2 = attribute -> "YYYY-MM-DDTHH:MM:SSZ" (fraction dropped) or null
+  _v=$(printf '%s' "$1" | sed -n "s/.*\"$2\":\[\"\([^\"]*\)\".*/\1/p" | sed 's/\.[0-9]*//')
+  case "$_v" in ''|*[!0-9TZ:+-]*) printf null ;; *) printf '"%s"' "$_v" ;; esac
+}
+cert_validity() {   # ssh-keygen -L text -> "FROM TO" ("-" when absent; TO may be "forever")
+  _l=$(printf '%s\n' "$1" | sed -n 's/^[[:space:]]*Valid: //p' | head -1)
+  case "$_l" in
+    forever) echo "- forever" ;;
+    "from "*" to "*) printf '%s\n' "$_l" | awk '{print $2, $4}' ;;
+    *) echo "- -" ;;
+  esac
+}
+principals_json() {   # ssh-keygen -L text -> JSON array of principals
+  _p=""
+  for _x in $(printf '%s\n' "$1" | awk '/^[[:space:]]*Principals:/ {p = 1; next} /^[[:space:]]*[A-Z][A-Za-z ]*:/ {p = 0} p {print $1}'); do
+    _p="$_p$(json_str "$_x"),"
+  done
+  printf '[%s]' "${_p%,}"
+}
+relabel_json() {   # restorecon -n -v output -> [{"path","have","want"}] (SELinux types only)
+  _r=""
+  _t=$(printf '%s\n' "$1" | awk '$1 == "Would" && $2 == "relabel" && $4 == "from" && $6 == "to" {
+    split($5, a, ":"); split($7, b, ":"); print $3, a[3], b[3] }')
+  while read -r _p _a _b; do
+    [ -n "$_p" ] || continue
+    _r="$_r{\"path\":$(json_str "$_p"),\"have\":$(json_str "$_a"),\"want\":$(json_str "$_b")},"
+  done <<EOF
+$_t
+EOF
+  printf '[%s]' "${_r%,}"
+}
+# <<< parsers
 iso() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
+isoj() { _i=$(iso "$1"); if [ -n "$_i" ]; then json_str "$_i"; else printf null; fi; }   # unconvertible -> null
 
 host=$(hostname -s)
 if systemctl cat kanidmd.service >/dev/null 2>&1; then role=server; else role=client; fi
@@ -83,7 +119,7 @@ else err "tls: could not fetch the Kanidm certificate (unreachable or handshake 
 un=null
 if [ -n "$user" ] && [ "$role" = client ]; then
   if p=$(timeout 15 getent passwd "$user" 2>/dev/null); then
-    gl=""; for g in $(id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
+    gl=""; for g in $(timeout 15 id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
     un="{\"name\":$(json_str "$user"),\"found\":true,\"gecos\":$(json_str "$(printf '%s' "$p" | cut -d: -f5)"),\"groups\":[${gl%,}]}"
   else un="{\"name\":$(json_str "$user"),\"found\":false}"; fi
 fi
@@ -121,10 +157,41 @@ if [ -n "$user" ] && [ "$role" = server ]; then
         pc=false; has primary_credential && pc=true
         mo=$(memberof_json "$j")
         [ "$mo" = null ] && err "kanidm_user: memberof missing or unreadable (reported as unknown)"
-        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc),\"memberof\":$mo}"
+        ae=$(validity_json "$j" account_expire); vf=$(validity_json "$j" account_valid_from)
+        ku="{\"name\":$(json_str "$user"),\"exists\":true,\"posix\":$(json_bool $posix),\"unix_password\":$(json_bool $upw),\"primary_credential\":$(json_bool $pc),\"memberof\":$mo,\"account_expire\":$ae,\"valid_from\":$vf}"
       fi
     else err "kanidm_user: REST query failed: $(head -c 200 "$W/curl.err")"; fi
   else err "kanidm_user: no read-only token at $TOKEN_FILE"; fi
+fi
+
+# --- SSH CA (server): its key fingerprint and, with --user, the newest certificate it issued (public record) ------
+sca=null
+if [ "$role" = server ] && [ -r /etc/ssh-ca/user_ca.pub ]; then
+  cafp=$(ssh-keygen -lf /etc/ssh-ca/user_ca.pub 2>/dev/null | awk '{print $2}')
+  iss=null
+  if [ -n "$user" ] && [ -r "/var/lib/ssh-ca/issued/$user-cert.pub" ]; then
+    cl=$(TZ=UTC ssh-keygen -L -f "/var/lib/ssh-ca/issued/$user-cert.pub" 2>/dev/null)
+    read -r cf ct <<EOF
+$(cert_validity "$cl")
+EOF
+    # ssh-keygen prints zone-less LOCAL time: TZ=UTC above makes it UTC, which iso() (date -u) then reads correctly
+    if [ "$cf" = - ]; then cfj=null; else cfj=$(isoj "$cf"); fi
+    case "$ct" in forever) ctj='"forever"' ;; -) ctj=null ;; *) ctj=$(isoj "$ct") ;; esac
+    iss="{\"user\":$(json_str "$user"),\"valid_from\":$cfj,\"valid_to\":$ctj,\"principals\":$(principals_json "$cl")}"
+  fi
+  sca="{\"fingerprint\":$(json_str "$cafp"),\"issued\":$iss}"
+fi
+
+# --- sshd trust (client): effective TrustedUserCAKeys and the fingerprints in that file ---------------------------
+ssd=null
+if [ "$role" = client ]; then
+  tp=$(sshd -T 2>/dev/null | awk '$1 == "trustedusercakeys" {print $2}')
+  [ -n "$tp" ] || err "sshd: sshd -T gave no trustedusercakeys (config error?)"
+  fl=""
+  if [ -n "$tp" ] && [ "$tp" != none ] && [ -r "$tp" ]; then
+    for f in $(ssh-keygen -lf "$tp" 2>/dev/null | awk '{print $2}'); do fl="$fl$(json_str "$f"),"; done
+  fi
+  ssd="{\"trusted_ca_path\":$(json_str "${tp:-none}"),\"trusted_ca_fingerprints\":[${fl%,}]}"
 fi
 
 # --- trust --------------------------------------------------------------------------------------------------------
@@ -135,6 +202,16 @@ if [ -f /etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt ] && \
 # --- SELinux ------------------------------------------------------------------------------------------------------
 se=$(getenforce 2>/dev/null || echo unknown)
 avc=$(ausearch --input-logs -m AVC -ts recent 2>/dev/null </dev/null | grep -c 'type=AVC' || true)
+# Labels that differ from policy on a FIXED list of identity paths (restorecon -n = dry run, changes nothing).
+# A wrong label here can fail logins with no AVC at all (dontaudit), so this is the evidence, not the AVC count.
+rl=""
+for pth in /run/kanidm-unixd /var/cache/kanidm-unixd /var/lib/kanidm-unixd /etc/kanidm /etc/ssh/trusted_user_ca_keys \
+           /etc/pki/ca-trust/source/anchors; do
+  [ -e "$pth" ] && rl="$rl $pth"
+done
+relab="[]"
+# shellcheck disable=SC2086  # $rl is a list of fixed paths; globbing is off (set -f)
+[ -n "$rl" ] && relab=$(relabel_json "$(restorecon -n -v -R $rl 2>/dev/null)")
 
 # --- emit ---------------------------------------------------------------------------------------------------------
 errs=""
@@ -145,5 +222,6 @@ printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s},' "$
   "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")"
 printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
-printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s},"errors":[%s]}\n' \
-  "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "${errs%,}"
+printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
+printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s,"relabel":%s},"errors":[%s]}\n' \
+  "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "$relab" "${errs%,}"

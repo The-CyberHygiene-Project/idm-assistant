@@ -1,0 +1,13 @@
+{
+ "reset": 33.092,
+ "inject": 0.243,
+ "collect": 1.039,
+ "interpret": 9.746,
+ "selinux-restorecon:precheck": 0.804,
+ "selinux-restorecon:approval": 0.0,
+ "selinux-restorecon:backup": 1.2,
+ "selinux-restorecon:apply": 1.027,
+ "selinux-restorecon:user": 0.0,
+ "selinux-restorecon:verify": 0.751,
+ "final-check": 0.765
+}

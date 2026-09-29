@@ -1,0 +1,32 @@
+{
+ "model": "mistralai/devstral-small-2-2512",
+ "valid": true,
+ "errors": [],
+ "response": {
+  "analysis": "The SSH key login failure for lab02 is due to an expired SSH user certificate. The newest certificate issued to lab02 expired on 2026-09-29T12:19:14Z, which is likely the root cause of the authentication failure. The principals associated with this certificate are 'lab02' and 'lab02@idm.kanidm.lab.test'.",
+  "confidence_level": "HIGH",
+  "confidence_score": 95,
+  "confidence_justification": "The evidence directly indicates an expired SSH certificate, which is a known cause of SSH key login failures. The timestamp and principals are clearly identified.",
+  "evidence": [
+   "newest certificate issued to lab02 expired 2026-09-29T12:19:14Z",
+   "principals ['lab02', 'lab02@idm.kanidm.lab.test']"
+  ],
+  "alternative_hypotheses": [
+   "The SSH server configuration on client2 was changed, causing the rejection of valid certificates.",
+   "Network issues or firewall rules are blocking SSH traffic to client2."
+  ],
+  "validation_steps": [
+   "Verify the current validity of lab02's SSH certificate by checking the expiration date.",
+   "Check SSH server logs on client2 for any errors related to certificate validation.",
+   "Ensure network connectivity and firewall rules are not interfering with SSH access."
+  ],
+  "human_review": "REQUIRED",
+  "repair_id": "ssh-user-cert-reissue"
+ },
+ "repair_id": "ssh-user-cert-reissue",
+ "default_repair": "ssh-user-cert-reissue",
+ "shown_repair": "ssh-user-cert-reissue",
+ "unsure": false,
+ "prompt_tokens_est": 517,
+ "agrees": true
+}

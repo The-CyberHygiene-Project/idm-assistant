@@ -1,0 +1,13 @@
+{
+ "reset": 33.129,
+ "inject": 0.445,
+ "collect": 2.046,
+ "interpret": 9.86,
+ "ssh-user-cert-reissue:precheck": 0.485,
+ "ssh-user-cert-reissue:approval": 0.0,
+ "ssh-user-cert-reissue:backup": 0.249,
+ "ssh-user-cert-reissue:apply": 0.279,
+ "ssh-user-cert-reissue:user": 0.001,
+ "ssh-user-cert-reissue:verify": 1.046,
+ "final-check": 1.902
+}

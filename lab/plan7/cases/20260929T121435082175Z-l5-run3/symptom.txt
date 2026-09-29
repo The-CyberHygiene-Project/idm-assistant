@@ -1,0 +1,1 @@
+lab06 could log in to client2 yesterday; today every login is refused.

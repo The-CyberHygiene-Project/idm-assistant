@@ -1,0 +1,15 @@
+== srv1: state diff lines: 2
+259c259
+< session-358.scope                                                                                              loaded    active   running   Session 358 of User itadmin
+---
+> session-360.scope                                                                                              loaded    active   running   Session 360 of User itadmin
+files newer than marker (excluding /proc,/sys,/run,journal,audit,lastlog, unixd cache):
+leftover temp dirs: 0
+
+Explanation (2026-09-29, srv1, collector with --user lab02 incl. the Plan 7 sections: account validity, SSH CA fingerprint
++ issuance record, sshd -T trust, restorecon -n dry run over the identity paths):
+  FILES: no change (sha256 of /etc/kanidm/*, nsswitch, authselect, pam.d, /etc/pki/kanidm/*, CA anchors,
+         /etc/idm-collect/*, /var/lib/ssh-ca/*/*, /etc/ssh/sshd_config.d/* identical).
+  UNITS: only the diag login session's units (uid 993) and the admin's own session id; they come from logging in.
+  No files newer than the marker; no leftover /tmp/idm-collect.* dirs.
+Verdict: the collector itself is read-only.

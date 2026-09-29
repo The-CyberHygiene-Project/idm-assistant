@@ -49,6 +49,19 @@ def final_status(final, probe_ok, interp, no_model, elapsed_s, clear_before_s):
     return "GREEN"
 
 
+def model_agrees(it, expected, may_decline=False):
+    """Did the model name an expected repair? A scenario may also accept 'no repair' (e.g. re-enabling an expired
+    account is a human decision, so declining is a correct answer)."""
+    if expected:
+        return it.get("repair_id") in expected or (may_decline and it.get("valid") and it.get("repair_id") is None)
+    return it.get("repair_id") is None and bool(it.get("valid"))
+
+
+def allowed_for_findings(fl, reps):
+    """Repairs for the roles of the hosts that actually have findings (not every host collected)."""
+    return interpret.allowed_for({reps[h]["role"] for h, fs in fl.items() if fs})
+
+
 def _evaluate_all(reps):
     """Client reports are also judged against the server's view (cross-host rules)."""
     srv = reps.get("srv1")
@@ -85,11 +98,11 @@ def run_scenario(sc, run_no):
         return case, "DIAGNOSIS-FAILED"
     no_model = os.environ.get("IDM_NO_MODEL") == "1"
     with case.step("interpret"):
-        allowed = interpret.allowed_for({r["role"] for r in reps.values()})
+        allowed = allowed_for_findings(fl, reps)
         it = None if no_model else interpret.interpret(sc.SYMPTOM, [f for h in fl for f in fl[h]], allowed)
     expected = [rid for _, rid in sc.REPAIRS]
     if it is not None:
-        it["agrees"] = (it["repair_id"] in expected) if expected else (it["repair_id"] is None and it["valid"])
+        it["agrees"] = bool(model_agrees(it, expected, getattr(sc, "MODEL_MAY_DECLINE", False)))
         case.write("interpretation.json", it)
         case.log(f"model {it['model']}: valid={it['valid']} repair_id={it['repair_id']} shown={it['shown_repair']} "
                  f"agrees={it['agrees']} errors={it['errors'][:2]}")

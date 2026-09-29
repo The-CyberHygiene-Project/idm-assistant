@@ -361,3 +361,213 @@ def test_client_ca_trust_installs_only_the_verified_certificate(tmp_path):
     repairs.ClientCaTrust().apply(c)
     installed = [s for h, s in sent if h == "client2"][0]
     assert installed.count("BEGIN CERTIFICATE") == 1 and repairs.fingerprint(installed) == repairs.PINNED_ROOT
+
+
+EXPIRED_SRV = dict(HEALTHY, host="srv1", role="server", time={"offset_s": 0.0, "synced": True, "source_offset_s": 0.0},
+                   kanidm_user={"name": "lab06", "exists": True, "account_expire": "2026-09-01T00:00:00Z"})
+
+
+class RecRemote:
+    """Records (host, argv) of every run/push; returns canned stdout."""
+    def __init__(self, out=""):
+        self.calls, self.out = [], out
+
+    def run(self, host, argv, stdin=None, **kw):
+        from types import SimpleNamespace
+        self.calls.append((host, list(argv))); return SimpleNamespace(stdout=self.out)
+
+    def push(self, host, src, dest):
+        self.calls.append((host, ["push", dest]))
+
+
+@pytest.mark.parametrize("bad", ["../x", "-D", ""])
+def test_account_unexpire_refuses_bad_names_before_anything(tmp_path, bad):
+    from engine import repairs
+    rr = RecRemote()
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV, remote=rr,
+            params={"user": bad})
+    assert "user name" in repairs.AccountUnexpire().precheck(c) and rr.calls == []
+
+
+def test_account_unexpire_warns_that_expiry_may_be_intentional(tmp_path):
+    from engine import repairs
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV,
+            params={"user": "lab06"})
+    assert "expiry may be intentional" in repairs.AccountUnexpire().describe(c)
+
+
+def test_account_unexpire_clears_exactly_that_user_on_the_case_host(tmp_path, monkeypatch):
+    from engine import labsecrets, repairs
+    monkeypatch.setattr(labsecrets, "read_json", lambda n: {"password": "x"})
+    rr = RecRemote()
+    c = Ctx(host="srv9", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV, remote=rr,
+            params={"user": "lab06"})
+    saved = repairs.AccountUnexpire().backup(c)
+    repairs.AccountUnexpire().apply(c)
+    assert saved == {"account_expire": "2026-09-01T00:00:00Z"}
+    assert {h for h, _ in rr.calls} == {"srv9"}
+    assert ["kanidm", "person", "validity", "expire-at", "lab06", "clear", "-D", "idm_admin"] in [a for _, a in rr.calls]
+    repairs.AccountUnexpire().undo(c, saved)
+    assert rr.calls[-1][1] == ["kanidm", "person", "validity", "expire-at", "lab06", "2026-09-01T00:00:00Z",
+                               "-D", "idm_admin"]
+
+
+def test_account_unexpire_verifies_the_expiry_is_gone():
+    from engine import repairs
+    assert repairs.AccountUnexpire().verify_present({"kanidm_user": {"exists": True, "account_expire": None}}) is None
+    assert repairs.AccountUnexpire().verify_present({"kanidm_user": {"exists": True, "account_expire": "x"}})
+
+
+def test_scenario_may_accept_a_declining_model():
+    from engine.cli import model_agrees
+    assert model_agrees({"valid": True, "repair_id": None}, ["account-unexpire"], may_decline=True)
+    assert not model_agrees({"valid": True, "repair_id": None}, ["account-unexpire"], may_decline=False)
+    assert model_agrees({"valid": True, "repair_id": "account-unexpire"}, ["account-unexpire"], may_decline=True)
+
+
+def _mislabelled(paths):
+    return dict(HEALTHY, host="client2", role="client",
+                selinux={"relabel": [{"path": p, "have": "var_run_t", "want": "kanidm_unixd_var_run_t"} for p in paths]})
+
+
+def test_restorecon_paths_match_the_collectors_fixed_list():
+    from engine import repairs
+    text = (Path(__file__).resolve().parents[1] / "collector" / "idm-collect").read_text()
+    for p in repairs.SelinuxRestorecon.PATHS:
+        assert p in text
+
+
+@pytest.mark.parametrize("bad", ["/etc/shadow", "/run/kanidm-unixd-evil/x", "/run/kanidm-unixd/a b", "/etc/kanidm/../shadow"])
+def test_restorecon_refuses_paths_outside_the_identity_list(tmp_path, bad):
+    from engine import repairs
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: _mislabelled([bad]),
+            remote=RecRemote())
+    assert "outside" in repairs.SelinuxRestorecon().precheck(c)
+
+
+def test_restorecon_touches_only_the_reported_paths_and_can_undo(tmp_path):
+    from engine import repairs
+    paths = ["/run/kanidm-unixd", "/run/kanidm-unixd/sock"]
+    rr = RecRemote(out="system_u:object_r:var_run_t:s0 /run/kanidm-unixd\nsystem_u:object_r:var_run_t:s0 /run/kanidm-unixd/sock\n")
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: _mislabelled(paths), remote=rr)
+    r = repairs.SelinuxRestorecon()
+    assert r.precheck(c) is None
+    saved = r.backup(c)
+    assert saved["labels"] == {"/run/kanidm-unixd": "system_u:object_r:var_run_t:s0",
+                               "/run/kanidm-unixd/sock": "system_u:object_r:var_run_t:s0"}
+    r.apply(c)
+    script = rr.calls[-1][1][-1]
+    assert script == "restorecon -v -- /run/kanidm-unixd /run/kanidm-unixd/sock"
+    r.undo(c, saved)
+    assert "chcon system_u:object_r:var_run_t:s0 -- /run/kanidm-unixd/sock" in rr.calls[-1][1][-1]
+
+
+def test_restorecon_verifies_no_label_differs():
+    from engine import repairs
+    assert repairs.SelinuxRestorecon().verify_present({"selinux": {"relabel": []}}) is None
+    assert repairs.SelinuxRestorecon().verify_present(_mislabelled(["/run/kanidm-unixd"]))
+
+
+CERT_SRV = dict(HEALTHY, host="srv1", role="server", time={"offset_s": 0.0, "synced": True, "source_offset_s": 0.0},
+                collected_at="2026-09-29T12:00:00Z",
+                ssh_ca={"fingerprint": "SHA256:x", "issued": {"user": "lab02", "valid_from": "2026-09-29T10:00:00Z",
+                                                              "valid_to": "2026-09-29T11:00:00Z", "principals": []}})
+
+
+def test_reissue_signs_only_the_registered_key_with_both_principals(tmp_path):
+    from engine import repairs
+    rr = RecRemote(out="ecdsa-sha2-nistp384-cert-v01@openssh.com AAAA lab02\n")
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV, remote=rr,
+            params={"user": "lab02"})
+    repairs.SshUserCertReissue().apply(c)
+    script = rr.calls[-1][1][-1]
+    assert "/var/lib/ssh-ca/keys/lab02.pub" in script and "-n lab02,lab02@idm.kanidm.lab.test" in script
+    assert "-V +1h" in script and "/var/lib/ssh-ca/issued/lab02-cert.pub" in script
+    assert c.params["_cert"].startswith("ecdsa-sha2-nistp384-cert-v01@openssh.com")
+
+
+@pytest.mark.parametrize("user,out,why", [("-x", "yes", "user name"), ("lab02", "", "registered")])
+def test_reissue_precheck_needs_a_valid_user_and_a_registered_key(tmp_path, user, out, why):
+    from engine import repairs
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV,
+            remote=RecRemote(out=out), params={"user": user})
+    assert why in repairs.SshUserCertReissue().precheck(c)
+
+
+def test_reissue_verifies_a_cert_valid_now():
+    from engine import repairs
+    good = dict(CERT_SRV, ssh_ca={"issued": {"valid_to": "2026-09-29T13:00:00Z"}})
+    assert repairs.SshUserCertReissue().verify_present(good) is None
+    assert repairs.SshUserCertReissue().verify_present(CERT_SRV)
+
+
+def test_reissue_lab_standin_delivers_the_certificate_to_the_user(tmp_path, monkeypatch):
+    from engine import labsecrets, repairs
+    got = {}
+    monkeypatch.setattr(labsecrets, "write", lambda n, t: got.update({n: t}) or tmp_path / n)
+    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "c", "s"), collect=lambda: CERT_SRV,
+            params={"user": "lab02", "lab_standin": True, "_cert": "CERT\n"})
+    repairs.SshUserCertReissue().wait_for_user(c)
+    assert got == {"lab02_ecdsa-cert.pub": "CERT\n"}
+
+
+CA_PUB = (Path(__file__).parent / "fixtures" / "ssh-user-ca.pub").read_text()
+
+
+def test_ssh_fingerprint_matches_ssh_keygen():
+    from engine import repairs
+    assert repairs.ssh_fingerprint(CA_PUB) == repairs.PINNED_SSH_CA
+
+
+def test_ca_trust_restore_refuses_a_ca_key_with_another_fingerprint(tmp_path):
+    from engine import repairs
+    other = "ecdsa-sha2-nistp384 " + CA_PUB.split()[1][:-8] + "AAAAAAA= x\n"
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY,
+            remote=RecRemote(out=other))
+    assert "fingerprint" in repairs.SshCaTrustRestore().precheck(c)
+
+
+def test_ca_trust_restore_validates_sshd_config_before_reload(tmp_path):
+    from engine import repairs
+    sent = []
+
+    class R(RecRemote):
+        def run(self, host, argv, stdin=None, **kw):
+            sent.append((host, stdin)); return super().run(host, argv, stdin)
+    rr = R(out=CA_PUB)
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY, remote=rr)
+    repairs.SshCaTrustRestore().apply(c)
+    script = rr.calls[-1][1][-1]
+    assert ("srv1", None) in sent and ("client2", CA_PUB) in sent
+    assert script.index("sshd -t") < script.index("systemctl reload sshd")
+    assert "TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys" in script and script.startswith("set -e")
+
+
+def test_ca_trust_restore_verifies_the_pinned_ca_is_trusted():
+    from engine import repairs
+    ok = {"sshd": {"trusted_ca_path": "/etc/ssh/trusted_user_ca_keys", "trusted_ca_fingerprints": [repairs.PINNED_SSH_CA]}}
+    assert repairs.SshCaTrustRestore().verify_present(ok) is None
+    assert repairs.SshCaTrustRestore().verify_present({"sshd": {"trusted_ca_path": "none", "trusted_ca_fingerprints": []}})
+
+
+def test_a_failing_backup_is_recorded_and_nothing_is_applied(tmp_path):
+    class B(FakeRepair):
+        def backup(self, ctx):
+            raise RuntimeError("cp: cannot stat")
+    r = B(); c = ctx(tmp_path, [HEALTHY])
+    assert run_repair(r.id, c, lambda p: True, registry={r.id: r}) == "BACKUP-FAILED"
+    assert "apply" not in r.calls and (c.case.dir / "status.txt").read_text() == "BACKUP-FAILED\n"
+    assert "RuntimeError" in (c.case.dir / "repair.log").read_text()
+
+
+def test_ca_trust_backup_tolerates_a_missing_keys_file_and_undo_removes_what_was_not_there(tmp_path):
+    from engine import repairs
+    rr = RecRemote(out="/etc/ssh/sshd_config.d/10-kanidm.conf\n")          # only the drop-in existed
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "t", "s"), collect=lambda: HEALTHY, remote=rr)
+    saved = repairs.SshCaTrustRestore().backup(c)
+    b = rr.calls[-1][1][-1]
+    assert '[ -e "$f" ] && cp -p' in b and "/etc/ssh/trusted_user_ca_keys" in b and b.rstrip().endswith("true")
+    assert saved["existed"] == ["/etc/ssh/sshd_config.d/10-kanidm.conf"]
+    repairs.SshCaTrustRestore().undo(c, saved)
+    undo = rr.calls[-1][1][-1]
+    assert "rm -f /etc/ssh/trusted_user_ca_keys" in undo and "cp -p" in undo and undo.index("sshd -t") < undo.index("reload")

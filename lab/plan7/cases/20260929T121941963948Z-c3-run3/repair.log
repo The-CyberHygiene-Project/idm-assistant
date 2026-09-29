@@ -1,0 +1,9 @@
+2026-09-29T12:20:15.373913+00:00 injected: lab02's newest certificate expired one minute ago
+2026-09-29T12:20:15.539566+00:00 certificate login probe lab02@client2: RESULT: DENIED
+2026-09-29T12:20:27.450521+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=ssh-user-cert-reissue shown=ssh-user-cert-reissue agrees=True errors=[]
+2026-09-29T12:20:28.190798+00:00 backup: ['record']
+2026-09-29T12:20:28.471955+00:00 applied
+2026-09-29T12:20:28.473011+00:00 lab stand-in: new certificate delivered to lab02 (public)
+2026-09-29T12:20:29.522148+00:00 verified
+2026-09-29T12:20:31.883026+00:00 certificate login probe lab02@client2: RESULT: OK lab02@idm.kanidm.lab.test
+2026-09-29T12:20:31.884071+00:00 inject->repairs done: 14.0 s; status GREEN

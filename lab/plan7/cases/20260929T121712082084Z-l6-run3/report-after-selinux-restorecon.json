@@ -1,0 +1,64 @@
+{
+ "schema": "idm-report/1",
+ "host": "client2",
+ "role": "client",
+ "collected_at": "2026-09-29T12:17:58Z",
+ "user": "lab01",
+ "time": {
+  "offset_s": 4.4e-08,
+  "synced": true,
+  "source": "192.168.100.1",
+  "source_offset_s": -3.8e-05
+ },
+ "nss": {
+  "passwd": "kanidm files systemd",
+  "group": "kanidm files [SUCCESS=merge] systemd",
+  "initgroups": "kanidm files"
+ },
+ "authselect": {
+  "profile": "custom/kanidm",
+  "valid": true
+ },
+ "user_nss": {
+  "name": "lab01",
+  "found": true,
+  "gecos": "Lab User 1",
+  "groups": [
+   "lab01@idm.kanidm.lab.test",
+   "lab_users@idm.kanidm.lab.test",
+   "lab_admins@idm.kanidm.lab.test"
+  ]
+ },
+ "services": {
+  "kanidm-unixd": "active",
+  "kanidm-unixd-tasks": "active",
+  "sshd": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-09-29T12:16:39Z",
+   "not_after": "2026-09-30T12:17:39Z",
+   "verify": "ok"
+  }
+ },
+ "unixd": {
+  "status": "online"
+ },
+ "kanidm_user": null,
+ "ssh_ca": null,
+ "sshd": {
+  "trusted_ca_path": "/etc/ssh/trusted_user_ca_keys",
+  "trusted_ca_fingerprints": [
+   "SHA256:fnyFGHP/iyOJEEzyd52gwSdf9GJuJZAEnS5z2hxGgmE"
+  ]
+ },
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 171,
+  "relabel": []
+ },
+ "errors": []
+}

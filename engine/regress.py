@@ -3,7 +3,7 @@ import importlib
 import json
 from statistics import median
 
-DEFAULT = ["l1", "c1", "l2", "l3", "l3n", "l4", "c2"]
+DEFAULT = ["l1", "c1", "l2", "l3", "l3n", "l4", "c2", "l5", "l6", "c3", "c4"]
 
 
 def _model(rows):

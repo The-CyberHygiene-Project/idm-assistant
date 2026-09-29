@@ -7,7 +7,7 @@ host=${1:?usage: readonly-proof.sh HOST [--user U]}; shift
 snap() {   # $1 = before|after
   ssh -n -o BatchMode=yes "$host" "sudo bash -c 'shopt -s nullglob
     { sha256sum /etc/kanidm/* /etc/nsswitch.conf /etc/authselect/* /etc/pam.d/* /etc/pki/kanidm/* \
-        /etc/pki/ca-trust/source/anchors/* /etc/idm-collect/* 2>/dev/null
+        /etc/pki/ca-trust/source/anchors/* /etc/idm-collect/* /var/lib/ssh-ca/*/* /etc/ssh/sshd_config.d/* 2>/dev/null
       systemctl list-units --all --plain --no-legend | sort; } > /root/ro-$1'"
 }
 ssh -n -o BatchMode=yes "$host" 'sudo touch /root/ro-marker'

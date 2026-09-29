@@ -1,0 +1,33 @@
+{
+ "model": "mistralai/devstral-small-2-2512",
+ "valid": true,
+ "errors": [],
+ "response": {
+  "analysis": "The SELinux labels on /run/kanidm-unixd and its sockets are incorrect. They are labeled as var_run_t instead of kanidm_unixd_var_run_t, which is the expected type according to the policy. This mislabeling would prevent kanidm_unixd from accessing its runtime directory and sockets, causing authentication failures for Kanidm accounts on client2.",
+  "confidence_level": "HIGH",
+  "confidence_score": 95,
+  "confidence_justification": "The evidence directly shows incorrect SELinux labels for critical kanidm_unixd paths, which aligns with the symptom of authentication failures. The runbook explicitly describes this scenario and its impact.",
+  "evidence": [
+   "SELINUX_LABEL_WRONG(/run/kanidm-unixd)",
+   "SELINUX_LABEL_WRONG(/run/kanidm-unixd/sock)",
+   "SELINUX_LABEL_WRONG(/run/kanidm-unixd/task_sock)"
+  ],
+  "alternative_hypotheses": [
+   "A recent patch or update modified the kanidm_unixd policy, causing a mismatch with existing labels.",
+   "The system's SELinux policy was updated but not fully applied, leading to inconsistent labeling."
+  ],
+  "validation_steps": [
+   "Verify the current SELinux labels on /run/kanidm-unixd and its sockets using ls -Z.",
+   "Check the SELinux policy definition for kanidm_unixd_var_run_t to confirm the expected label.",
+   "Review system logs for any SELinux denials related to kanidm_unixd."
+  ],
+  "human_review": "REQUIRED",
+  "repair_id": "selinux-restorecon"
+ },
+ "repair_id": "selinux-restorecon",
+ "default_repair": "selinux-restorecon",
+ "shown_repair": "selinux-restorecon",
+ "unsure": false,
+ "prompt_tokens_est": 604,
+ "agrees": true
+}

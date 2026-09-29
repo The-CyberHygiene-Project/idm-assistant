@@ -1,0 +1,7 @@
+2026-09-29T12:17:45.417914+00:00 injected: /run/kanidm-unixd relabelled var_run_t (no login attempted before the repair: faillock)
+2026-09-29T12:17:56.208624+00:00 model mistralai/devstral-small-2-2512: valid=True repair_id=selinux-restorecon shown=selinux-restorecon agrees=True errors=[]
+2026-09-29T12:17:58.216657+00:00 backup: ['labels']
+2026-09-29T12:17:59.245502+00:00 applied
+2026-09-29T12:17:59.999945+00:00 verified
+2026-09-29T12:18:01.621416+00:00 probe: lab01 password login on client2 OK
+2026-09-29T12:18:01.622083+00:00 inject->repairs done: 14.6 s; status GREEN

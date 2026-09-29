@@ -29,3 +29,12 @@ def test_unsure_or_invalid_model_is_still_explained_by_the_runbook():
 def test_fault_that_would_have_healed_itself_is_not_credited_to_the_repair():
     assert final_status({"c": []}, True, OK, False, 130, 100) == "NOT-CLEARED-BY-REPAIR"
     assert final_status({"c": []}, True, OK, False, 40, 100) == "GREEN"
+
+
+def test_allow_list_only_covers_roles_with_findings():
+    from engine.cli import allowed_for_findings
+    from engine.findings import Finding
+    from engine.repairs import REGISTRY
+    reps = {"srv1": {"role": "server"}, "client2": {"role": "client"}}
+    got = allowed_for_findings({"srv1": [], "client2": [Finding("NSS_ORDER_WRONG", "nss", ("x",))]}, reps)
+    assert got and all(REGISTRY[r].host_role == "client" for r in got)

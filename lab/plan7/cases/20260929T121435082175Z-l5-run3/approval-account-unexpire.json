@@ -1,0 +1,9 @@
+{
+ "repair": "account-unexpire",
+ "host": "srv1",
+ "prompt": "Repair account-unexpire on srv1: clear the account expiry of lab06 so they can log in again. WARNING: expiry may be intentional (off-boarding, contract end); approve only if you know it was a mistake. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T12:15:25Z"
+}

@@ -122,6 +122,55 @@ def cache_stale(server, client):
                                                       "the server no longer lists them (change not yet visible)"))
 
 
+def _time_suspect(r):
+    return _skewed(r) or _clock_unknown(r)
+
+
+def account_expired(r):
+    u = r.get("kanidm_user") or {}
+    exp = u.get("account_expire")
+    if r.get("role") == "server" and u.get("exists") and exp and not _time_suspect(r) \
+            and _t(exp) <= _t(r["collected_at"]):
+        return Finding("ACCOUNT_EXPIRED", "kanidm", (f"user {u['name']}: account expired at {exp}",))
+
+
+def account_not_yet_valid(r):
+    u = r.get("kanidm_user") or {}
+    vf = u.get("valid_from")
+    if r.get("role") == "server" and u.get("exists") and vf and not _time_suspect(r) \
+            and _t(vf) > _t(r["collected_at"]):
+        return Finding("ACCOUNT_NOT_YET_VALID", "kanidm", (f"user {u['name']}: account valid only from {vf}",))
+
+
+def ssh_cert_expired(r):
+    iss = (r.get("ssh_ca") or {}).get("issued")
+    if r.get("role") == "server" and iss and iss.get("valid_to") not in (None, "", "forever") and not _time_suspect(r) \
+            and _t(iss["valid_to"]) <= _t(r["collected_at"]):
+        return Finding("SSH_USER_CERT_EXPIRED", "ssh-ca", (f"newest certificate issued to {iss.get('user')} expired "
+                                                           f"{iss['valid_to']}", f"principals {iss.get('principals')}"))
+
+
+def ssh_ca_not_trusted(r):
+    d = r.get("sshd")
+    if r.get("role") == "client" and d and (d.get("trusted_ca_path") in (None, "none")
+                                            or not d.get("trusted_ca_fingerprints")):
+        return Finding("SSH_CA_NOT_TRUSTED", "sshd", (f"sshd TrustedUserCAKeys: {d.get('trusted_ca_path')}",
+                                                      "no SSH user CA is trusted: certificate logins fail"))
+
+
+def ssh_ca_not_trusted_cross(server, client):
+    fp, d = (server.get("ssh_ca") or {}).get("fingerprint"), client.get("sshd")
+    if fp and d and d.get("trusted_ca_fingerprints") and fp not in d["trusted_ca_fingerprints"]:
+        return Finding("SSH_CA_NOT_TRUSTED", "sshd", (f"client trusts {d['trusted_ca_fingerprints']}",
+                                                      f"the lab SSH CA is {fp}"))
+
+
+def labels_wrong(r):
+    return [Finding(f"SELINUX_LABEL_WRONG({x.get('path')})", "selinux",
+                    (f"{x.get('path')}: {x.get('have')} (policy says {x.get('want')})",))
+            for x in (r.get("selinux") or {}).get("relabel") or []]
+
+
 def services_down(r):
     out = []
     for unit, st in sorted((r.get("services") or {}).items()):
@@ -131,12 +180,14 @@ def services_down(r):
 
 
 RULES = (time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
-         posix_pw_missing, ca_root_missing, nss_order_wrong)
+         posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
+         ssh_ca_not_trusted)
 
 
 def evaluate(report, peer=None):
     found = [f for rule in RULES if (f := rule(report))]
-    found += services_down(report)
+    found += services_down(report) + labels_wrong(report)
     if peer and report.get("role") == "client" and peer.get("role") == "server":
-        found += [f for f in (cache_stale(peer, report),) if f]
+        found += [f for f in (cache_stale(peer, report), ssh_ca_not_trusted_cross(peer, report)) if f]
+        found = list({f.id: f for f in found}.values())           # one SSH_CA_NOT_TRUSTED even if both rules fire
     return sorted(found, key=lambda f: f.id)

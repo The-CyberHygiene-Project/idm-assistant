@@ -96,8 +96,13 @@ def run_repair(repair_id, ctx, approve, registry):
     if not ok:
         case.log("REFUSED: not approved"); case.write("status.txt", "REFUSED\n")
         return "REFUSED"
-    with case.step(f"{repair_id}:backup"):
-        saved = r.backup(ctx)
+    try:
+        with case.step(f"{repair_id}:backup"):
+            saved = r.backup(ctx)
+    except Exception as e:          # nothing has been applied: stop, and say so (class only; text may hold output)
+        case.log(f"BACKUP FAILED for {repair_id}: {type(e).__name__}; nothing applied")
+        case.write("status.txt", "BACKUP-FAILED\n")
+        return "BACKUP-FAILED"
     case.log(f"backup: {sorted(saved)}")
     try:
         with case.step(f"{repair_id}:apply"):
@@ -469,3 +474,230 @@ class ClientCaTrust(Repair):
 
 
 REGISTRY[ClientCaTrust.id] = ClientCaTrust()
+
+
+class AccountUnexpire(Repair):
+    """Re-enable an EXPIRED Kanidm account. Expiry is usually deliberate: the runbook default is 'none', and the
+    approval text says so. Only the named, validated user is touched; undo puts the old expiry back."""
+    id = "account-unexpire"
+    host_role = "server"
+    verify_absent = {"ACCOUNT_EXPIRED"}
+
+    def describe(self, ctx):
+        return (f"clear the account expiry of {ctx.params.get('user')} so they can log in again. WARNING: expiry may "
+                "be intentional (off-boarding, contract end); approve only if you know it was a mistake")
+
+    def precheck(self, ctx):
+        if not valid_user(ctx.params.get("user")):
+            return f"refusing: {ctx.params.get('user')!r} is not a valid user name"
+        if "ACCOUNT_EXPIRED" not in {f.id for f in evaluate(ctx.collect())}:
+            return f"{ctx.params['user']} is not expired; nothing to repair"
+        return None
+
+    def backup(self, ctx):
+        return {"account_expire": (ctx.collect().get("kanidm_user") or {}).get("account_expire")}
+
+    def _expire_at(self, ctx, value):
+        ctx.remote.run(ctx.host, ["kanidm", "person", "validity", "expire-at", ctx.params["user"], value,
+                                  "-D", "idm_admin"])
+
+    def apply(self, ctx):
+        if not valid_user(ctx.params.get("user")):
+            raise ValueError("invalid user name")
+        stage(ctx)
+        admin_login(ctx)
+        self._expire_at(ctx, "clear")
+
+    def undo(self, ctx, backup):
+        if backup.get("account_expire"):
+            self._expire_at(ctx, backup["account_expire"])
+
+    def verify_present(self, report):
+        u = report.get("kanidm_user") or {}
+        return None if u.get("exists") and u.get("account_expire") is None else f"account still has expiry: {u}"
+
+
+REGISTRY[AccountUnexpire.id] = AccountUnexpire()
+
+
+class SelinuxRestorecon(Repair):
+    """Put back policy-defined SELinux labels, only on the fixed identity paths the collector checks (never a path from
+    anywhere else). The previous labels are recorded so undo can put them back with chcon."""
+    id = "selinux-restorecon"
+    host_role = "client"
+    PATHS = ("/run/kanidm-unixd", "/var/cache/kanidm-unixd", "/var/lib/kanidm-unixd", "/etc/kanidm",
+             "/etc/ssh/trusted_user_ca_keys", "/etc/pki/ca-trust/source/anchors")
+
+    def describe(self, ctx):
+        return "restore the SELinux labels the policy defines (restorecon) on the identity paths that differ"
+
+    def _targets(self, report):
+        return [x.get("path") for x in (report.get("selinux") or {}).get("relabel") or []]
+
+    def _allowed(self, p):
+        return (isinstance(p, str) and _re.fullmatch(r"/[A-Za-z0-9_./-]+", p) and "/../" not in p + "/"
+                and any(p == a or p.startswith(a + "/") for a in self.PATHS))
+
+    def precheck(self, ctx):
+        t = self._targets(ctx.collect())
+        if not t:
+            return "no identity path has a wrong label; nothing to repair"
+        bad = [p for p in t if not self._allowed(p)]
+        return f"refusing: {bad} outside the identity path list" if bad else None
+
+    def backup(self, ctx):
+        t = [p for p in self._targets(ctx.collect()) if self._allowed(p)]
+        out = _sh(ctx, "ls -dZ -- " + " ".join(t))
+        labels = dict(reversed(ln.split(None, 1)) for ln in out.splitlines() if ln.strip())
+        return {"labels": {p: c for p, c in labels.items() if p in t}}
+
+    def apply(self, ctx):
+        t = [p for p in self._targets(ctx.collect()) if self._allowed(p)]
+        if t:
+            _sh(ctx, "restorecon -v -- " + " ".join(t))
+
+    def undo(self, ctx, backup):
+        for p, c in backup.get("labels", {}).items():
+            if self._allowed(p) and _re.fullmatch(r"[a-z_]+:[a-z_]+:[a-z0-9_]+:s0(:c[0-9.,]+)?", c):
+                _sh(ctx, f"chcon {c} -- {p}")
+
+    def verify_present(self, report):
+        t = self._targets(report)
+        return None if not t else f"labels still differ: {t}"
+
+    # verify_absent is dynamic (one finding per path); the positive check above covers every path
+
+
+REGISTRY[SelinuxRestorecon.id] = SelinuxRestorecon()
+
+
+SSH_REALM = "idm.kanidm.lab.test"
+
+
+def sign_user_cert(remote, host, user, validity):
+    """Sign the user's REGISTERED public key (/var/lib/ssh-ca/keys/<user>.pub) on the CA host, record the certificate
+    (public) as the newest issued one, and return it. No key material is sent from here."""
+    if not valid_user(user) or not _re.fullmatch(r"[-+0-9a-zA-Z:]+", validity):
+        raise ValueError("invalid user name or validity")
+    script = (f"set -e; T=$(mktemp -d); trap 'rm -rf \"$T\"' EXIT; cp /var/lib/ssh-ca/keys/{user}.pub \"$T/k.pub\"; "
+              f"ssh-keygen -q -s /etc/ssh-ca/user_ca -I {user}-cert -n {user},{user}@{SSH_REALM} -V {validity} "
+              f"\"$T/k.pub\"; install -m 0644 \"$T/k-cert.pub\" /var/lib/ssh-ca/issued/{user}-cert.pub; "
+              f"cat \"$T/k-cert.pub\"")
+    return remote.run(host, ["sudo", "sh", "-c", script]).stdout
+
+
+class SshUserCertReissue(Repair):
+    id = "ssh-user-cert-reissue"
+    host_role = "server"
+    verify_absent = {"SSH_USER_CERT_EXPIRED"}
+    VALIDITY = "+1h"
+
+    def describe(self, ctx):
+        return (f"sign {ctx.params.get('user')}'s registered public key again (principals user and user@realm, "
+                f"valid {self.VALIDITY}) and hand the new certificate to the user; no private key moves")
+
+    def precheck(self, ctx):
+        u = ctx.params.get("user")
+        if not valid_user(u):
+            return f"refusing: {u!r} is not a valid user name"
+        if _sh(ctx, f"test -r /var/lib/ssh-ca/keys/{u}.pub && echo yes || true").strip() != "yes":
+            return f"{u} has no registered public key on the CA; register it first (never sign a key from a report)"
+        return None
+
+    def backup(self, ctx):
+        u = ctx.params["user"]
+        return {"record": _sh(ctx, f"cat /var/lib/ssh-ca/issued/{u}-cert.pub 2>/dev/null || true")}
+
+    def apply(self, ctx):
+        ctx.params["_cert"] = sign_user_cert(ctx.remote, ctx.host, ctx.params["user"], self.VALIDITY)
+
+    def wait_for_user(self, ctx):
+        u = ctx.params["user"]
+        if not ctx.params.get("lab_standin"):
+            input(f"Give {u} the new certificate (public; in the case log dir as needed), press Enter when done: ")
+            return
+        labsecrets.write(f"{u}_ecdsa-cert.pub", ctx.params["_cert"])     # LAB STAND-IN: the user's machine
+        ctx.case.log(f"lab stand-in: new certificate delivered to {u} (public)")
+
+    def undo(self, ctx, backup):
+        # The newly issued certificate is public and short-lived; undo restores the CA's record of the previous one.
+        if backup.get("record"):
+            ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                      f"cat > /var/lib/ssh-ca/issued/{ctx.params['user']}-cert.pub"],
+                           stdin=backup["record"])
+
+    def verify_present(self, report):
+        iss = (report.get("ssh_ca") or {}).get("issued") or {}
+        vt = iss.get("valid_to")
+        if vt == "forever" or (vt and datetime.fromisoformat(vt.replace("Z", "+00:00"))
+                               > datetime.fromisoformat(report["collected_at"].replace("Z", "+00:00"))):
+            return None
+        return f"no currently valid certificate recorded: {iss}"
+
+
+REGISTRY[SshUserCertReissue.id] = SshUserCertReissue()
+
+
+PINNED_SSH_CA = (ROOT / "lab" / "trust" / "ssh-user-ca.sha256").read_text().strip()
+
+
+def ssh_fingerprint(publine):
+    """OpenSSH SHA256 fingerprint of a public-key line (what `ssh-keygen -lf` prints)."""
+    blob = _b64.b64decode(publine.split()[1], validate=True)
+    return "SHA256:" + _b64.b64encode(_hashlib.sha256(blob).digest()).decode().rstrip("=")
+
+
+class SshCaTrustRestore(Repair):
+    id = "ssh-ca-trust-restore"
+    host_role = "client"
+    verify_absent = {"SSH_CA_NOT_TRUSTED"}
+    CA_HOST = "srv1"                                    # where the SSH user CA lives (NOT the target host)
+    CA_PUB = "/etc/ssh-ca/user_ca.pub"
+    DROPIN = "/etc/ssh/sshd_config.d/10-kanidm.conf"
+    KEYS = "/etc/ssh/trusted_user_ca_keys"
+
+    def describe(self, ctx):
+        return (f"trust the lab SSH user CA again ({PINNED_SSH_CA[:19]}..., pinned): write {self.KEYS}, restore "
+                f"TrustedUserCAKeys in {self.DROPIN}, check sshd -t, reload sshd")
+
+    def _ca(self, ctx):
+        line = ctx.remote.run(self.CA_HOST, ["sudo", "cat", self.CA_PUB]).stdout.strip().splitlines()
+        try:
+            fp = ssh_fingerprint(line[-1])
+        except (IndexError, ValueError, _binascii.Error):
+            return None, "the CA host returned no readable public key"
+        return (line[-1] + "\n", None) if fp == PINNED_SSH_CA else (None, f"CA fingerprint {fp} does not match the pin")
+
+    def precheck(self, ctx):
+        return self._ca(ctx)[1]
+
+    def backup(self, ctx):
+        # Either file may be missing (that is one way SSH_CA_NOT_TRUSTED happens): record which ones existed.
+        d = f"/root/idm-backup/{ctx.case.dir.name}"
+        out = _sh(ctx, f"install -d -m 0700 {d}; for f in {self.DROPIN} {self.KEYS}; do "
+                       f"[ -e \"$f\" ] && cp -p \"$f\" {d}/ && echo \"$f\"; done; true")
+        return {"dir": d, "existed": [ln.strip() for ln in out.splitlines() if ln.strip() in (self.DROPIN, self.KEYS)]}
+
+    def apply(self, ctx):
+        key, why = self._ca(ctx)
+        if why:
+            raise RuntimeError(why)
+        ctx.remote.run(ctx.host, ["sudo", "sh", "-c",
+                                  f"set -e; cat > {self.KEYS}.new; install -m 0644 {self.KEYS}.new {self.KEYS}; "
+                                  f"rm -f {self.KEYS}.new; restorecon {self.KEYS}; "
+                                  f"grep -q '^TrustedUserCAKeys ' {self.DROPIN} || "
+                                  f"echo 'TrustedUserCAKeys {self.KEYS}' >> {self.DROPIN}; "
+                                  "sshd -t; systemctl reload sshd"], stdin=key)
+
+    def undo(self, ctx, backup):
+        d, existed = backup["dir"], backup.get("existed", [self.DROPIN, self.KEYS])
+        steps = [f"cp -p {d}/{f.rsplit('/', 1)[1]} {f}" if f in existed else f"rm -f {f}"
+                 for f in (self.DROPIN, self.KEYS)]
+        _sh(ctx, " && ".join(steps) + " && sshd -t && systemctl reload sshd")
+
+    def verify_present(self, report):
+        d = report.get("sshd") or {}
+        return None if PINNED_SSH_CA in (d.get("trusted_ca_fingerprints") or []) else f"pinned CA not trusted: {d}"
+
+
+REGISTRY[SshCaTrustRestore.id] = SshCaTrustRestore()

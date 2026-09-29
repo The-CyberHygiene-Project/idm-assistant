@@ -1,0 +1,9 @@
+{
+ "repair": "ssh-user-cert-reissue",
+ "host": "srv1",
+ "prompt": "Repair ssh-user-cert-reissue on srv1: sign lab02's registered public key again (principals user and user@realm, valid +1h) and hand the new certificate to the user; no private key moves. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T12:20:27Z"
+}

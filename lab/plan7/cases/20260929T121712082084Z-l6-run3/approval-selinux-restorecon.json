@@ -1,0 +1,9 @@
+{
+ "repair": "selinux-restorecon",
+ "host": "client2",
+ "prompt": "Repair selinux-restorecon on client2: restore the SELinux labels the policy defines (restorecon) on the identity paths that differ. Type yes to approve",
+ "approved": true,
+ "by": "regression-runner (IDM_TEST_APPROVE=1)",
+ "test_mode": true,
+ "at": "2026-09-29T12:17:57Z"
+}
