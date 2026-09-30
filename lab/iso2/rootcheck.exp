@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+# rootcheck.exp IP KEY (RUNS ON AERO): ssh in as chpadmin (key only), become root with `su` and the console password
+# read from STDIN (from the stick's escrow; never argv, never echoed), run the root-only checks, print their output.
+set timeout 60
+set ip [lindex $argv 0]; set key [lindex $argv 1]
+gets stdin pw
+log_user 0
+spawn ssh -tt -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null chpadmin@$ip \
+  {su -c 'echo UID=$(id -u); echo PASSGREP=$(grep -rlE -- "--passphrase=|LUKS_PASSPHRASE" /root /var/log/anaconda 2>/dev/null | wc -l); echo SHADOW=$(cut -d: -f2 /etc/shadow | head -1 | cut -c1-3); echo OSCAP=$(test -d /root/openscap_data && echo yes || echo no); echo END'}
+expect {
+  -re "Password: ?" { send -- "$pw\r" }
+  timeout { puts "ROOTCHECK: no su prompt"; exit 1 }
+}
+expect {
+  -re "UID=(\[0-9]+).*PASSGREP=(\[0-9]+).*SHADOW=(\\S*).*OSCAP=(\\S+).*END" {
+    puts "UID=$expect_out(1,string) PASSGREP=$expect_out(2,string) SHADOW=$expect_out(3,string) OSCAP=$expect_out(4,string)" }
+  -re "(Authentication failure|incorrect)" { puts "ROOTCHECK: su refused the escrowed root password"; exit 1 }
+  timeout { puts "ROOTCHECK: no output"; exit 1 }
+}

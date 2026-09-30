@@ -58,8 +58,10 @@ if ! mount -o rw LABEL=OEMDRV /mnt/oemdrv; then
 fi
 repo=file:///run/install/repo/chp
 for a in $(cat /proc/cmdline); do case $a in chp.repo=*) repo=${a#chp.repo=} ;; esac; done
+# chp-site: on the ISO at /run/install/repo/chp/; an earlier %pre (lab) may have placed it at /tmp/chp-site.pyz.
 pyz=/run/install/repo/chp/chp-site.pyz
-if [ -f /chp-site.pyz ]; then pyz=/chp-site.pyz; fi
+if [ -f /tmp/chp-site.pyz ]; then pyz=/tmp/chp-site.pyz; fi
+if [ ! -f "$pyz" ]; then echo "CHP: chp-site not found ($pyz). Nothing was changed." | tee /dev/console; exit 1; fi
 python3 "$pyz" pre --role @ROLE@ --stick /mnt/oemdrv --out /tmp/chp --repo-url "$repo" 2>&1 | tee /dev/console
 rc=${PIPESTATUS[0]}
 if [ "$rc" -ne 0 ]; then echo "CHP: install stopped before any disk was touched." | tee /dev/console; fi
