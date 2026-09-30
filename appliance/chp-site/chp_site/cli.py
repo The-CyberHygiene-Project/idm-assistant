@@ -60,9 +60,9 @@ def _render_cmd(a):
 
 
 def _pre(a):
-    from .facts import live
+    from .facts import live, stick_identity
     from .pre import run_pre
-    h = run_pre(a.role, Path(a.stick), Path(a.out), a.repo_url, live())
+    h = run_pre(a.role, Path(a.stick), Path(a.out), a.repo_url, live(), stick_id=stick_identity())
     print(f"CHP: installing {h.hostname} ({h.role}, {h.ip}). Recovery secrets were written to the site stick: "
           "keep it offline from now on.")
 
@@ -76,12 +76,12 @@ def _export(a):
     hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub)
-    mnt = None
+    from .usbstick import allow_stick, block_stick
+    mnt, usb = None, None
     stick = Path(a.stick) if a.stick else None
     if stick is None:                                   # the site stick, found by its label, mounted just for this
         dev = Path("/dev/disk/by-label/OEMDRV")
-        if not dev.exists():
-            raise SiteError("no site stick found (a USB volume labelled OEMDRV): plug it in, or pass --stick DIR")
+        usb = allow_stick(dev)                          # USBGuard: authorize only this stick, temporarily
         mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run")
         subprocess.run(["mount", str(dev), mnt], check=True)
         stick = Path(mnt)
@@ -96,6 +96,7 @@ def _export(a):
     finally:
         if mnt:
             subprocess.run(["sync"]); subprocess.run(["umount", mnt]); os.rmdir(mnt)
+        block_stick(usb)
 
 
 def main(argv=None):

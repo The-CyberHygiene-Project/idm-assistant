@@ -87,3 +87,9 @@ def test_units_enabled_per_role():
     for u in ("chp-firstboot-common.service", "chp-monitor.timer"):
         assert u in srv and u in cli_
     assert "chp-server-firstboot.service" in srv and "chp-server-firstboot.service" not in cli_
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_site_stick_pin_is_copied_to_etc_chp(role):
+    post = _section((KS / f"{role}.ks").read_text(), "%post --nochroot")
+    assert "/tmp/chp/site-stick.id" in post and "/mnt/sysimage/etc/chp/site-stick.id" in post

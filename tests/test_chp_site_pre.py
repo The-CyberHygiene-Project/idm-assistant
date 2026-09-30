@@ -108,3 +108,10 @@ def test_luks_pass_for_post_nochroot(tmp_path):                        # Plan 3a
     assert stat.S_IMODE(p.stat().st_mode) == 0o600 and p.read_text() == "S" * 32
     assert ("--passphrase=" + p.read_text()) in (out / "disk.ks").read_text()
     assert "S" * 32 not in (out / "users.ks").read_text()
+
+
+def test_site_stick_identity_is_recorded_for_the_host(tmp_path):        # user request: pin the site stick
+    s = stick(tmp_path); out = tmp_path / "out"
+    run_pre("server", s, out, "file:///x", facts(["52:54:00:c4:02:30"]), hasher=lambda p: "$6$h",
+            secret=lambda n: "S" * n, stick_id={"ID": "46f4:0001", "SERIAL": "ABC123", "NAME": "Site Stick"})
+    assert (out / "site-stick.id").read_text() == "ID=46f4:0001\nSERIAL=ABC123\nNAME=Site Stick\n"

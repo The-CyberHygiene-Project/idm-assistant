@@ -60,3 +60,30 @@ def test_renewal_falls_back_to_acme():
 def test_units_are_guarded():
     u = (SRV / "chp-server-firstboot.service").read_text()
     assert "ConditionPathExists=!/var/lib/chp/firstboot/server.done" in u and "After=" in u and "chp-firstboot-common.service" in u
+
+
+def test_recover_uses_the_scripting_interface():                       # found by the Plan 3a proof
+    t = (SRV / "server-firstboot.sh").read_text()
+    assert "kanidmd scripting -c /etc/kanidm/server.toml recover-account" in t
+    assert '"status"' in t and '"output"' in t
+
+
+def test_one_time_slot_is_killed_in_batch_mode_without_a_key_and_rebind_is_skipped():   # found by the proof
+    t = (BASE / "firstboot-common.sh").read_text()
+    kill = [l for l in t.splitlines() if "luksKillSlot" in l and not l.strip().startswith("#") and "log " not in l]
+    assert kill and all("--key-file" not in l for l in kill) and all(" -q " in l for l in kill)
+    assert "clevis luks list" in t
+
+
+def test_firstboot_unit_sets_home_for_the_kanidm_cli():                # found by the proof (token cache needs $HOME)
+    assert "Environment=HOME=/root" in (SRV / "chp-server-firstboot.service").read_text()
+
+
+def test_cert_monitor_threshold_fits_24h_acme_certificates():          # found by the proof (7 days always alerted)
+    t = (SRV / "monitor.d" / "30-kanidm-cert.sh").read_text()
+    assert "checkend 14400" in t and "604800" not in t
+
+
+def test_retry_hints_say_restart_not_start():                           # RemainAfterExit units ignore `start`
+    for p in (SRV / "server-firstboot.sh", BASE / "firstboot-common.sh"):
+        assert "systemctl start chp-" not in p.read_text(), p.name

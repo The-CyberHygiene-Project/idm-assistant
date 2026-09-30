@@ -78,6 +78,8 @@ install -d -m 0755 /mnt/sysimage/etc/chp
 for f in site.conf hosts client.conf; do
   if [ -f "/mnt/oemdrv/$f" ]; then install -m 0644 "/mnt/oemdrv/$f" "/mnt/sysimage/etc/chp/$f"; fi
 done
+# The site stick's USB identity (recorded by chp-site pre): post-install, only THIS stick may be allowed (USBGuard).
+if [ -f /tmp/chp/site-stick.id ]; then install -m 0644 /tmp/chp/site-stick.id /mnt/sysimage/etc/chp/site-stick.id; fi
 # One-time key for the first-boot TPM binding (chp-base): a random 64-byte key in its OWN LUKS slot, added with the
 # passphrase that exists only in installer RAM; first boot binds clevis with it, then kills that slot and shreds it.
 dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')

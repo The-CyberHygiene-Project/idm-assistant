@@ -8,7 +8,8 @@
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 name=$1 mac=$2 role=$3 stick=$4 ndisks=$5 expect_stop=${6:-}
-[[ $name == iso2-* ]] || { echo "refusing: only iso2-* VMs are managed here"; exit 1; }
+[[ $name == iso[23]-* ]] || { echo "refusing: only iso2-*/iso3-* lab VMs are managed here"; exit 1; }
+repo=${CHP_REPO:-0.2.0}
 iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso; log=/var/log/libvirt/qemu/$name-install.log
 # Remove a previous VM of this name and ONLY its own disks: --remove-all-storage would also delete the attached stick.
 rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
@@ -25,7 +26,7 @@ virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osi
   "${disks[@]}" --disk "path=$stick,format=raw,bus=usb,removable=on" \
   --location "$iso" --network "bridge=br-lab,mac=$mac" \
   --initrd-inject "/tmp/iso2/$role.ks" --initrd-inject /tmp/iso2/chp-site.pyz \
-  --extra-args "inst.ks=file:/$role.ks chp.repo=http://192.168.100.1:8080/chp/0.2.0 fips=1 console=ttyS0,115200 inst.text" \
+  --extra-args "inst.ks=file:/$role.ks chp.repo=http://192.168.100.1:8080/chp/$repo fips=1 console=ttyS0,115200 inst.text" \
   --graphics none --serial "pty,log.file=$log" --noautoconsole --noreboot "${wait_args[@]}" >"/tmp/iso2/$name-virt-install.out" 2>&1 \
   || { echo "virt-install exited non-zero (checking the VM):"; tail -5 "/tmp/iso2/$name-virt-install.out"; }
 if [[ $expect_stop == --expect-stop ]]; then

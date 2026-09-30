@@ -4,7 +4,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # server-firstboot.sh (root; chp-server-firstboot.service, once): turn an installed server into the identity server.
 # Steps run in order; each is skipped when its marker /var/lib/chp/firstboot/<step>.done exists, so a failed first boot
-# resumes where it stopped (systemctl start chp-server-firstboot). Every site value comes from `chp-site get`/`render`.
+# resumes where it stopped (systemctl restart chp-server-firstboot). Every site value comes from `chp-site get`/`render`.
 # Recovery secrets (Kanidm admin passwords, the step-ca password, the ROOT CA key) go to /root/chp-escrow-pending/ only;
 # `chp-site export-client` moves them onto the site stick. Nothing secret is printed or put on a command line.
 set -Eeuo pipefail
@@ -12,7 +12,7 @@ M=/var/lib/chp/firstboot; P=/root/chp-escrow-pending; ANCHOR=/etc/pki/ca-trust/s
 install -d -m 0700 "$M" "$P"
 log() { echo "chp-server-firstboot: $*"; logger -t chp-server-firstboot -- "$*"; }
 current=""
-trap 'log "CHP: server first boot failed at ${current:-setup} (resume: systemctl start chp-server-firstboot)"' ERR
+trap 'log "CHP: server first boot failed at ${current:-setup} (resume: systemctl restart chp-server-firstboot)"' ERR
 step() { local n=$1; shift; current=$n; if [ -e "$M/$n.done" ]; then return 0; fi; log "step $n"; "$@"; touch "$M/$n.done"; }
 g() { chp-site get "$1"; }
 DOMAIN=$(g DOMAIN); SIP=$(g SERVER_IP); FQDN=$(g SERVER_FQDN); IDM=$(g KANIDM_FQDN); CA=$(g CA_FQDN)
@@ -74,20 +74,19 @@ do_kanidmd() {
 do_recover() {
   # Passwords go kanidmd -> python (stdin) -> a 0600 JSON file. Nothing is printed.
   ( umask 077
-    { kanidmd recover-account admin -c /etc/kanidm/server.toml -o json 2>/dev/null; echo "@@"
-      kanidmd recover-account idm_admin -c /etc/kanidm/server.toml -o json 2>/dev/null; } \
+    { kanidmd scripting -c /etc/kanidm/server.toml recover-account admin 2>/dev/null; echo "@@"
+      kanidmd scripting -c /etc/kanidm/server.toml recover-account idm_admin 2>/dev/null; } \
     | python3 -c '
 import json, sys
 parts = sys.stdin.read().split("@@")
-def pw(t):
+def pw(t):   # kanidmd scripting prints {"output":"<password>","status":"ok"}
     for line in reversed(t.strip().splitlines()):
         line = line.strip()
         if line.startswith("{"):
             d = json.loads(line)
-            for k, v in d.items():
-                if "password" in k and isinstance(v, str) and v:
-                    return v
-    raise SystemExit("no password in recover-account output")
+            if d.get("status") == "ok" and isinstance(d.get("output"), str) and d["output"]:
+                return d["output"]
+    raise SystemExit("no password in kanidmd scripting recover-account output")
 json.dump({"admin": pw(parts[0]), "idm_admin": pw(parts[1])}, open(sys.argv[1], "w"))' "$P/kanidm-admins.json" )
 }
 
