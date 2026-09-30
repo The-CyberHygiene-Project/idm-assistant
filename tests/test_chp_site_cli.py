@@ -45,6 +45,14 @@ def test_export_client_writes_and_prints_fingerprints(tmp_path):
 def test_zipapp_builds_and_runs(tmp_path):
     subprocess.run(["bash", str(PKG / "build.sh")], check=True, capture_output=True)
     pyz = PKG / "dist" / "chp-site.pyz"
-    assert pyz.read_bytes().startswith(b"#!/usr/bin/python3\n")
+    # no shebang: a plain zip (application/zip) is not a "language" file to fapolicyd, so rpmbuild may read it;
+    # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
+    assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.1.0"
+
+
+def test_wrapper_runs_the_packaged_zipapp():
+    w = (PKG / "chp-site.sh").read_text()
+    assert w.startswith("#!/bin/sh\n")
+    assert 'exec /usr/bin/python3 /usr/share/chp-site/chp-site.pyz "$@"' in w

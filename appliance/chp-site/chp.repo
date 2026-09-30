@@ -1,0 +1,9 @@
+# CyberHygiene packages: updates arrive as a signed repo tarball unpacked into /var/lib/chp/repo.
+# Enable only after unpacking one (dnf will verify every package and the repo metadata against our key).
+[chp]
+name=CyberHygiene Project Lab Installer packages
+baseurl=file:///var/lib/chp/repo
+enabled=0
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
