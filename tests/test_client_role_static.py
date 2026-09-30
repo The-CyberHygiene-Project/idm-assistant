@@ -44,5 +44,43 @@ def test_sshd_validated_before_reload_and_removed_on_failure():
 
 def test_lab_and_appliance_patchers_do_not_drift():
     lab = (ROOT / "lab/client/authselect_patch.py").read_text()
-    app = text("authselect_patch.py")
+    app = (ROOT / "appliance/chp-site/chp_site/authselect.py").read_text()
     assert app.endswith(lab) and app.startswith("# CyberHygiene Project Lab Installer")
+    assert not (C / "authselect_patch.py").exists()          # no loose Python in the client RPM (fapolicyd)
+
+
+def test_enrol_patches_through_chp_site():
+    assert "chp-site authselect-patch /etc/authselect/custom/kanidm" in text("client-enrol.sh")
+    assert "authselect_patch" not in text("chp-identity-client.spec") and "authselect_patch" not in text("build-rpm.sh")
+
+
+def test_selinux_module_is_the_lab_policy_renamed():
+    te = text("selinux/chp_kanidm.te")
+    assert "module chp_kanidm 1.0;" in te and "type kanidm_unixd_var_run_t;" in te
+    assert "allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };" in te
+    assert "/run/kanidm-unixd(/.*)?" in text("selinux/chp_kanidm.fc")
+
+
+def test_monitors_print_ok_or_alert():
+    for n in ("50-authselect.sh", "51-sshd.sh", "52-kanidm-tls.sh"):
+        t = text(f"monitor.d/{n}")
+        assert t.startswith("#!/bin/bash\n# CyberHygiene") and "ALERT " in t and "OK " in t
+        assert subprocess.run(["bash", "-n", str(C / "monitor.d" / n)]).returncode == 0
+    assert "authselect check" in text("monitor.d/50-authselect.sh")
+    assert "sshd -T -C user=chp-monitor-probe" in text("monitor.d/51-sshd.sh")
+    assert "curl -fsS --max-time 10 --cacert /etc/pki/ca-trust/source/anchors/chp-root.crt" in text("monitor.d/52-kanidm-tls.sh")
+
+
+def test_spec_installs_policy_and_requires_the_stack():
+    s = text("chp-identity-client.spec")
+    for r in ("kanidm-unixd", "kanidm-clients", "idm-collect", "step-cli", "policycoreutils-python-utils", "chp-site", "chp-base"):
+        assert re.search(rf"^Requires:\s+.*\b{re.escape(r)}\b", s, re.M), r
+    assert "semodule -i %{_datadir}/selinux/packages/chp_kanidm.pp" in s
+    assert "semodule -r chp_kanidm" in s and "Vendor:         The CyberHygiene Project" in s
+
+
+def test_firstboot_unit_runs_enrol_once():
+    u = text("chp-client-firstboot.service")
+    assert "ConditionPathExists=!/var/lib/chp/firstboot/client.done" in u and "Environment=HOME=/root" in u
+    assert "After=chp-firstboot-common.service network-online.target" in u
+    assert "exec /usr/libexec/chp/client-enrol --role client" in text("client-firstboot.sh")

@@ -1,9 +1,5 @@
 from pathlib import Path
-import importlib.util
-_spec = importlib.util.spec_from_file_location(
-    "authselect_patch", Path(__file__).resolve().parents[1] / "appliance/rpm/chp-identity-client/authselect_patch.py")
-_m = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_m)
-patch_pam, patch_nsswitch = _m.patch_pam, _m.patch_nsswitch
+from chp_site.authselect import patch_nsswitch, patch_pam   # the shipped copy (in the trusted chp-site zipapp)
 
 FIX = Path(__file__).parent / "fixtures"
 

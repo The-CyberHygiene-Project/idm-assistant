@@ -154,6 +154,12 @@ def _client_token(a):
     print(f"token for {a.host} written to {p}; now run chp-site export-client with the site stick")
 
 
+def _authselect_patch(a):
+    from .authselect import main as patch
+    patch(a.dir)
+    print(f"patched {a.dir}: pam_kanidm placed jump-safe; kanidm first on passwd, group, initgroups")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -184,12 +190,15 @@ def main(argv=None):
     u.add_argument("--as", dest="as_", default="idm_admin"); u.add_argument("--site", default="/etc/chp")
     t = sub.add_parser("client-token", help="mint a read-only unixd token for a client added later (then export-client)")
     t.add_argument("host"); t.add_argument("--as", dest="as_", default="idm_admin"); t.add_argument("--site", default="/etc/chp")
+    ap_ = sub.add_parser("authselect-patch", help="add Kanidm to an authselect profile dir (client enrolment)")
+    ap_.add_argument("dir")
     a = ap.parse_args(argv)
     try:
         {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
          "onboard": _onboard, "revoke": _revoke,
          "unexpire": _unexpire,
-         "client-token": _client_token}[a.cmd](a)
+         "client-token": _client_token,
+         "authselect-patch": _authselect_patch}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

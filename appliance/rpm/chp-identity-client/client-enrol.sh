@@ -57,7 +57,7 @@ do_authselect() {
   case $base in custom/*) bdir=/etc/authselect/$base ;; *) bdir=/usr/share/authselect/default/$base ;; esac
   [ -d /etc/authselect/custom/kanidm ] || authselect create-profile kanidm -b "$base" >/dev/null
   for f in system-auth password-auth nsswitch.conf; do cp "$bdir/$f" "/etc/authselect/custom/kanidm/$f"; done
-  python3 /usr/libexec/chp/authselect-patch /etc/authselect/custom/kanidm
+  chp-site authselect-patch /etc/authselect/custom/kanidm
   authselect select custom/kanidm "${feats[@]}" --force >/dev/null
   for f in "${feats[@]}"; do authselect current -r | words | grep -qx -- "$f" || { log "CHP: LOST authselect feature: $f"; return 1; }; done
   for db in passwd group initgroups; do

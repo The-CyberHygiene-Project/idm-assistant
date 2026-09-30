@@ -90,3 +90,14 @@ def test_export_client_moves_pending_client_tokens(tmp_path):
 def test_client_token_help():
     r = cli("client-token", "--help")
     assert r.returncode == 0 and "--as" in r.stdout
+
+
+def test_authselect_patch_subcommand(tmp_path):
+    d = tmp_path / "p"; d.mkdir()
+    (d / "system-auth").write_text("auth        required      pam_env.so\nauth        sufficient    pam_unix.so\n")
+    (d / "password-auth").write_text("auth        sufficient    pam_unix.so\n")
+    (d / "nsswitch.conf").write_text("passwd:     files systemd\ngroup:      files\ninitgroups: files\n")
+    r = cli("authselect-patch", str(d))
+    assert r.returncode == 0, r.stderr
+    assert "pam_kanidm.so" in (d / "system-auth").read_text()
+    assert (d / "nsswitch.conf").read_text().splitlines()[2].split()[:2] == ["initgroups:", "kanidm"]
