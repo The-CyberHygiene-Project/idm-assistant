@@ -1,0 +1,13 @@
+[Unit]
+Description=CHP first boot (common): TPM binding, SELinux labels, remove installer kickstart copies
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/chp/firstboot/common.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/firstboot-common
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

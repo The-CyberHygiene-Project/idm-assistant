@@ -1,0 +1,7 @@
+[Unit]
+Description=CHP monitor: run the identity checks, alert on problems
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/monitor
+SuccessExitStatus=1
