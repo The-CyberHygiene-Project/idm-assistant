@@ -3,18 +3,19 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # chp_kanidm: SELinux policy for kanidm-unixd's socket (ISSO #12, shipped). From the lab module kanidm_lab (ISSO-approved
 # 2026-09-27; evidence lab/selinux/client2-avc-enrol.txt): every denied domain was in nsswitch_domain, resolving users
-# through libnss_kanidm -> /run/kanidm-unixd/sock. The socket directory gets its own type, and only name-service clients
+# through libnss_kanidm -> /run/kanidm-unixd/sock (context rule on /var/run: subs_dist maps /run to /var/run). The socket directory gets its own type, and only name-service clients
 # may use it. CAVEAT (POA&M, ISSO #12): kanidm-unixd itself stays unconfined, so the connectto rule lets nsswitch_domain
 # connect to any unconfined_service_t stream socket it can reach; full confinement of unixd is a follow-on project.
 module chp_kanidm 1.0;
 
 require {
     type unconfined_service_t;
+    type init_t;
     attribute nsswitch_domain;
     attribute file_type;
     attribute non_security_file_type;
-    class dir { getattr search open read };
-    class sock_file { getattr write };
+    class dir { create getattr setattr search open read write add_name remove_name rmdir };
+    class sock_file { getattr setattr write unlink };
     class unix_stream_socket connectto;
 }
 
@@ -24,3 +25,8 @@ typeattribute kanidm_unixd_var_run_t file_type, non_security_file_type;
 allow nsswitch_domain kanidm_unixd_var_run_t:dir { getattr search open read };
 allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };
 allow nsswitch_domain unconfined_service_t:unix_stream_socket connectto;
+
+# systemd creates and removes kanidm-unixd's RuntimeDirectory (/run/kanidm-unixd) and its sockets on start/stop
+# (proof: without this, init_t was denied remove_name/rmdir when unixd stopped). Management only; no connectto.
+allow init_t kanidm_unixd_var_run_t:dir { create getattr setattr search open read write add_name remove_name rmdir };
+allow init_t kanidm_unixd_var_run_t:sock_file { getattr setattr unlink };

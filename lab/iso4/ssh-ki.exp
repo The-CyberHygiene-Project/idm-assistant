@@ -1,0 +1,20 @@
+#!/usr/bin/expect -f
+# ssh-ki.exp IP USER KEY CERT MODE (RUNS ON AERO, root): an SSH login as a Kanidm user with key + CA certificate, answering
+# the keyboard-interactive password prompt (and, MODE=sudo, sudo's prompt) with STDIN line 1 (never argv, never logged).
+# MODE id: prints "LOGIN_OK <user>"; MODE sudo: "LOGIN_OK SUDO_OK" after `sudo -S true`. Anything else: "LOGIN_REFUSED".
+# NOTE: every expect block is multi-line on purpose - a one-line `expect { ... }` is read as ONE literal pattern.
+set timeout 40
+lassign $argv ip user key cert mode
+gets stdin pw
+log_user 0
+if {$mode eq "sudo"} { set cmd {sudo -S -p SUDO""PW: true && echo RES""ULT=SUDO_OK} } else { set cmd {echo RES""ULT=$(id -un)} }
+spawn ssh -tt -i $key -o CertificateFile=$cert -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -o ConnectTimeout=10 -o PreferredAuthentications=publickey,keyboard-interactive $user@$ip $cmd
+set n 0
+expect {
+  -re {SUDOPW:} { send -- "$pw\r"; exp_continue }
+  -re {[Pp]assword[^\r\n]*: ?} { incr n; if {$n > 2} { puts "LOGIN_REFUSED"; exit 0 }; send -- "$pw\r"; exp_continue }
+  -re {RESULT=([A-Za-z0-9_]+)} { puts "LOGIN_OK $expect_out(1,string)"; exit 0 }
+  timeout { puts "LOGIN_REFUSED"; exit 0 }
+  eof { puts "LOGIN_REFUSED"; exit 0 }
+}

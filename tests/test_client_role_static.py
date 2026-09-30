@@ -58,7 +58,7 @@ def test_selinux_module_is_the_lab_policy_renamed():
     te = text("selinux/chp_kanidm.te")
     assert "module chp_kanidm 1.0;" in te and "type kanidm_unixd_var_run_t;" in te
     assert "allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };" in te
-    assert "/run/kanidm-unixd(/.*)?" in text("selinux/chp_kanidm.fc")
+    assert "/var/run/kanidm-unixd(/.*)?" in text("selinux/chp_kanidm.fc")
 
 
 def test_monitors_print_ok_or_alert():
@@ -89,9 +89,19 @@ def test_firstboot_unit_runs_enrol_once():
 def test_fc_uses_a_raw_context_not_a_refpolicy_macro():          # proof finding: "Bad filecon declaration" at install
     fc = text("selinux/chp_kanidm.fc")
     assert "gen_context" not in fc
-    assert re.search(r"^/run/kanidm-unixd\(/\.\*\)\?\s+system_u:object_r:kanidm_unixd_var_run_t:s0$", fc, re.M)
+    # Rocky's file_contexts.subs_dist maps /run -> /var/run: a rule for /run/... never matches (proof finding 2)
+    assert re.search(r"^/var/run/kanidm-unixd\(/\.\*\)\?\s+system_u:object_r:kanidm_unixd_var_run_t:s0$", fc, re.M)
+    assert "semanage fcontext" not in text("chp-identity-client.spec")     # the module carries the context itself
 
 
 def test_build_checks_the_compiled_filecon():
     b = text("build-rpm.sh")
     assert "/usr/libexec/selinux/hll/pp" in b and "kanidm_unixd_var_run_t" in b.split("hll/pp", 1)[1]
+    assert 'filecon \\"/var/run/kanidm-unixd' in b
+
+
+def test_systemd_may_manage_the_runtime_dir():        # proof finding 3: init_t denied remove_name/rmdir on unixd stop
+    te = text("selinux/chp_kanidm.te")
+    assert "allow init_t kanidm_unixd_var_run_t:dir { create getattr setattr search open read write add_name remove_name rmdir };" in te
+    assert "allow init_t kanidm_unixd_var_run_t:sock_file { getattr setattr unlink };" in te
+    assert "allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };" in te   # clients' use unchanged

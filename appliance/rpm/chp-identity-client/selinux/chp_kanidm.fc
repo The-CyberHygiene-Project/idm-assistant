@@ -1,1 +1,1 @@
-/run/kanidm-unixd(/.*)?		system_u:object_r:kanidm_unixd_var_run_t:s0
+/var/run/kanidm-unixd(/.*)?		system_u:object_r:kanidm_unixd_var_run_t:s0

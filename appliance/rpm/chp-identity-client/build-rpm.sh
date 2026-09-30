@@ -8,8 +8,8 @@ scp -q "$here"/selinux/chp_kanidm.te "$here"/selinux/chp_kanidm.fc aero:/tmp/chp
 ssh aero 'cd /tmp/chpc/se && checkmodule -M -m -o chp_kanidm.mod chp_kanidm.te && semodule_package -o /tmp/chpc/SOURCES/chp_kanidm.pp -m chp_kanidm.mod -f chp_kanidm.fc'
 # The .pp must convert to CIL with a real file context (a refpolicy macro such as gen_context() passes here but makes
 # `semodule -i` fail at install time: "Bad filecon declaration"; RPM only warns about a failed %post).
-ssh aero '/usr/libexec/selinux/hll/pp < /tmp/chpc/SOURCES/chp_kanidm.pp > /tmp/chpc/se/chp_kanidm.cil && grep -q "filecon \"/run/kanidm-unixd(/.\*)?\" any (system_u object_r kanidm_unixd_var_run_t" /tmp/chpc/se/chp_kanidm.cil' \
-  || { echo "chp_kanidm.pp: no valid filecon for /run/kanidm-unixd (see /tmp/chpc/se/chp_kanidm.cil on aero)"; exit 1; }
+ssh aero '/usr/libexec/selinux/hll/pp < /tmp/chpc/SOURCES/chp_kanidm.pp > /tmp/chpc/se/chp_kanidm.cil && grep -q "filecon \"/var/run/kanidm-unixd(/.\*)?\" any (system_u object_r kanidm_unixd_var_run_t" /tmp/chpc/se/chp_kanidm.cil' \
+  || { echo "chp_kanidm.pp: no valid filecon for /var/run/kanidm-unixd (see /tmp/chpc/se/chp_kanidm.cil on aero)"; exit 1; }
 scp -q "$here"/client-enrol.sh "$here"/client-accounts.sh "$here"/diag-collect.sh "$here"/client-firstboot.sh \
   "$here"/chp-client-firstboot.service "$here"/unixd.toml.in "$here"/sshd-10-chp.conf "$here"/sshd-99-chp-exceptions.conf \
   "$here"/monitor.d/*.sh "$top/LICENSE" aero:/tmp/chpc/SOURCES/

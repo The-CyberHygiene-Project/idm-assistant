@@ -1,6 +1,6 @@
 Name:           chp-identity-client
 Version:        0.1.0
-Release:        2.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -50,7 +50,6 @@ install -Dm0644 %{SOURCE13} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
 %post
 semodule -i %{_datadir}/selinux/packages/chp_kanidm.pp
-semanage fcontext -a -t kanidm_unixd_var_run_t '/run/kanidm-unixd(/.*)?' 2>/dev/null || semanage fcontext -m -t kanidm_unixd_var_run_t '/run/kanidm-unixd(/.*)?'
 restorecon -R /run/kanidm-unixd 2>/dev/null || :
 %systemd_post chp-client-firstboot.service
 
@@ -59,7 +58,6 @@ restorecon -R /run/kanidm-unixd 2>/dev/null || :
 
 %postun
 if [ $1 -eq 0 ]; then
-  semanage fcontext -d '/run/kanidm-unixd(/.*)?' 2>/dev/null || :
   semodule -r chp_kanidm 2>/dev/null || :
 fi
 
@@ -80,6 +78,12 @@ fi
 %{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-4.chp
+- chp_kanidm: systemd (init_t) may create/remove the unixd runtime directory and sockets (denied on stop in the proof).
+
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-3.chp
+- chp_kanidm.fc names /var/run/kanidm-unixd: Rocky's file_contexts.subs_dist maps /run to /var/run, so a /run rule never matched; the module carries the context (no semanage).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-2.chp
 - chp_kanidm.fc: raw SELinux context (gen_context() is a refpolicy macro; semodule rejected the module at install).
 
