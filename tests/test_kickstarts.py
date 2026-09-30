@@ -17,7 +17,12 @@ HEADER = (Path(__file__).resolve().parents[1] / "appliance" / "branding" / "file
 
 @pytest.mark.parametrize("role", ["server", "client"])
 def test_committed_kickstart_equals_the_template(role):
-    assert (KS / f"{role}.ks").read_text() == (KS / "chp.ks.in").read_text().replace("@ROLE@", role)
+    import subprocess, tempfile, shutil
+    with tempfile.TemporaryDirectory() as d:
+        for f in ("chp.ks.in", "render-ks.sh"):
+            shutil.copy(KS / f, d)
+        subprocess.run(["bash", f"{d}/render-ks.sh"], check=True, capture_output=True)
+        assert (KS / f"{role}.ks").read_text() == open(f"{d}/{role}.ks").read()
 
 
 @pytest.mark.parametrize("role", ["server", "client"])
@@ -53,3 +58,32 @@ def test_nochroot_post_stops_on_failure_and_marks_the_escrow_completed(role):   
     post = post[:post.index("%end")]
     assert "--erroronfail" in post.splitlines()[0]
     assert "INSTALL COMPLETED" in post and "/tmp/chp/escrow-name" in post
+
+
+def _section(t, head):
+    s = t[t.index(head):]
+    return s[:s.index("%end")]
+
+
+def test_role_packages():                                              # Plan 3a Task 5
+    srv = _section((KS / "server.ks").read_text(), "%packages")
+    cli_ = _section((KS / "client.ks").read_text(), "%packages")
+    assert "\nchp-base\n" in srv and "\nchp-identity-server\n" in srv
+    assert "\nchp-base\n" in cli_ and "chp-identity-server" not in cli_
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_one_time_luks_key_for_the_first_boot_tpm_bind(role):
+    post = _section((KS / f"{role}.ks").read_text(), "%post --nochroot")
+    assert "cryptsetup luksAddKey --key-file=/tmp/chp/luks-pass" in post and "/mnt/sysimage/root/.chp-bind.key" in post
+    assert "head -c 64 /dev/urandom" in post and "umask 0377" in post
+    assert "shred -u /tmp/chp/luks-pass" in post
+    assert post.index("luksAddKey") < post.index("shred -u /tmp/chp/luks-pass")
+
+
+def test_units_enabled_per_role():
+    srv = _section((KS / "server.ks").read_text(), "%post --log=/root/chp-post.log")
+    cli_ = _section((KS / "client.ks").read_text(), "%post --log=/root/chp-post.log")
+    for u in ("chp-firstboot-common.service", "chp-monitor.timer"):
+        assert u in srv and u in cli_
+    assert "chp-server-firstboot.service" in srv and "chp-server-firstboot.service" not in cli_
