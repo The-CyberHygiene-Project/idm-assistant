@@ -84,3 +84,14 @@ def test_firstboot_unit_runs_enrol_once():
     assert "ConditionPathExists=!/var/lib/chp/firstboot/client.done" in u and "Environment=HOME=/root" in u
     assert "After=chp-firstboot-common.service network-online.target" in u
     assert "exec /usr/libexec/chp/client-enrol --role client" in text("client-firstboot.sh")
+
+
+def test_fc_uses_a_raw_context_not_a_refpolicy_macro():          # proof finding: "Bad filecon declaration" at install
+    fc = text("selinux/chp_kanidm.fc")
+    assert "gen_context" not in fc
+    assert re.search(r"^/run/kanidm-unixd\(/\.\*\)\?\s+system_u:object_r:kanidm_unixd_var_run_t:s0$", fc, re.M)
+
+
+def test_build_checks_the_compiled_filecon():
+    b = text("build-rpm.sh")
+    assert "/usr/libexec/selinux/hll/pp" in b and "kanidm_unixd_var_run_t" in b.split("hll/pp", 1)[1]

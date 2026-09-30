@@ -1,1 +1,1 @@
-/run/kanidm-unixd(/.*)?		gen_context(system_u:object_r:kanidm_unixd_var_run_t,s0)
+/run/kanidm-unixd(/.*)?		system_u:object_r:kanidm_unixd_var_run_t:s0

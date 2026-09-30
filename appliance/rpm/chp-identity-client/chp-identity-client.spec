@@ -1,6 +1,6 @@
 Name:           chp-identity-client
 Version:        0.1.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,5 +80,8 @@ fi
 %{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-2.chp
+- chp_kanidm.fc: raw SELinux context (gen_context() is a refpolicy macro; semodule rejected the module at install).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release (ISO Plan 4a): client enrolment, chp_kanidm policy, forced-command accounts, client monitors.
