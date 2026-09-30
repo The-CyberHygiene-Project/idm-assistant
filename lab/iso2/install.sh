@@ -10,7 +10,9 @@ set -Eeuo pipefail
 name=$1 mac=$2 role=$3 stick=$4 ndisks=$5 expect_stop=${6:-}
 [[ $name == iso2-* ]] || { echo "refusing: only iso2-* VMs are managed here"; exit 1; }
 iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso; log=/var/log/libvirt/qemu/$name-install.log
-if virsh dominfo "$name" >/dev/null 2>&1; then virsh destroy "$name" >/dev/null 2>&1 || true; virsh undefine "$name" --nvram --remove-all-storage >/dev/null; fi
+# Remove a previous VM of this name and ONLY its own disks: --remove-all-storage would also delete the attached stick.
+rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
+if virsh dominfo "$name" >/dev/null 2>&1; then rm_vm "$name"; fi
 rm -f "$log"
 disks=()
 for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=120,format=qcow2"); done
@@ -24,8 +26,8 @@ virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osi
   --location "$iso" --network "bridge=br-lab,mac=$mac" \
   --initrd-inject "/tmp/iso2/$role.ks" --initrd-inject /tmp/iso2/chp-site.pyz \
   --extra-args "inst.ks=file:/$role.ks chp.repo=http://192.168.100.1:8080/chp/0.2.0 fips=1 console=ttyS0,115200 inst.text" \
-  --graphics none --serial "pty,log.file=$log" --noautoconsole --noreboot "${wait_args[@]}" >/dev/null 2>&1 \
-  || echo "virt-install exited non-zero (checking the VM)"
+  --graphics none --serial "pty,log.file=$log" --noautoconsole --noreboot "${wait_args[@]}" >"/tmp/iso2/$name-virt-install.out" 2>&1 \
+  || { echo "virt-install exited non-zero (checking the VM):"; tail -5 "/tmp/iso2/$name-virt-install.out"; }
 if [[ $expect_stop == --expect-stop ]]; then
   for _ in $(seq 120); do if grep -q "CHP: install stopped" "$log" 2>/dev/null; then break; fi; sleep 5; done
   grep -q "CHP: install stopped" "$log" && echo "STOPPED: $(grep -m1 -o 'chp-site: .*' "$log" | tr -d '\r')" || echo "NOT STOPPED"
@@ -38,7 +40,7 @@ if [[ $expect_stop == --expect-stop ]]; then
     f=$(qemu-io -r -f qcow2 -c "read -P 0 0 1M" -c "read -P 0 $((sz - 1048576)) 1M" "$d" 2>&1 | grep -c "Pattern verification failed" || true)
     echo "disk $i zero-check-failures=$f"
   done
-  virsh undefine "$name" --nvram --remove-all-storage >/dev/null
+  rm_vm "$name"
   exit 0
 fi
 state=$(virsh domstate "$name" 2>/dev/null || echo missing)

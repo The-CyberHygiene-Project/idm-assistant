@@ -1,14 +1,16 @@
 #!/usr/bin/expect -f
 # rootcheck.exp IP KEY (RUNS ON AERO): ssh in as chpadmin (key only), become root with `su` and the console password
-# read from STDIN (from the stick's escrow; never argv, never echoed), run the root-only checks, print their output.
+# (stdin line 1) and search the disk for the LUKS passphrase VALUE (stdin line 2) - both from the stick's escrow, never
+# argv, never echoed. The value is sent to `read` inside the su session, so it is not on any command line either.
 set timeout 60
 set ip [lindex $argv 0]; set key [lindex $argv 1]
 gets stdin pw
+gets stdin luks
 log_user 0
 spawn ssh -tt -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null chpadmin@$ip \
-  {su -c 'echo UID=$(id -u); echo PASSGREP=$(grep -rlE -- "--passphrase=|LUKS_PASSPHRASE" /root /var/log/anaconda 2>/dev/null | wc -l); echo SHADOW=$(cut -d: -f2 /etc/shadow | head -1 | cut -c1-3); echo OSCAP=$(test -d /root/openscap_data && echo yes || echo no); echo END'}
+  {su -c 'read -r v; echo UID=$(id -u); echo PASSGREP=$(grep -rlF -- "$v" /root /var/log /etc /var/lib /home 2>/dev/null | wc -l); echo SHADOW=$(cut -d: -f2 /etc/shadow | head -1 | cut -c1-3); echo OSCAP=$(test -d /root/openscap_data && echo yes || echo no); echo END'}
 expect {
-  -re "Password: ?" { send -- "$pw\r" }
+  -re "Password: ?" { send -- "$pw\r"; sleep 1; send -- "$luks\r" }
   timeout { puts "ROOTCHECK: no su prompt"; exit 1 }
 }
 expect {

@@ -8,6 +8,7 @@
 #   neg2       a two-disk client with no disk named stops in %pre: both disks empty, no escrow
 #   client     install iso2-cli, unlock, check the host (+ client.conf)
 #   reinstall  install iso2-srv again on the same stick: previous escrow kept as *.old, new one differs
+#   check-server  unlock + host checks on an installed iso2-srv
 #   cleanup    remove every iso2-* VM, the stick, the helpers and the lab key copy on aero; shred the Mac render dir
 # Secrets (escrow values) are only ever handled ON AERO, piped between helpers; nothing here prints or logs them.
 set -uo pipefail
@@ -40,9 +41,9 @@ host_checks() {  # NAME IP FQDN ROLE
   check "$n: chp-site from our signed RPM" "$(V "$ip" "rpm -q --qf '%{RSAHEADER:pgpsig}' chp-site" | grep -c 521276f43c908f8e)" "1"
   check "$n: chp-site runs under the host's python3 (fapolicyd enforcing)" "$(V "$ip" 'chp-site --version')" "chp-site 0.1.0"
   out=$(V "$ip" 'chp-site validate --site /etc/chp'); [[ $out == OK:* ]] && pass "$n: chp-site validate /etc/chp" || fail "$n: chp-site validate /etc/chp" "$out"
-  out=$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK ${n}.txt | sed -n 's/^ROOT_CONSOLE_PASSWORD=//p' | expect /tmp/iso2/rootcheck.exp $ip /tmp/iso2/iso2_chpadmin")
+  out=$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK ${n}.txt | awk -F= '/^ROOT_CONSOLE_PASSWORD=/{r=\$2} /^LUKS_PASSPHRASE=/{l=\$2} END{print r; print l}' | expect /tmp/iso2/rootcheck.exp $ip /tmp/iso2/iso2_chpadmin")
   check "$n: su - with the escrowed root console password" "$(grep -o 'UID=[0-9]*' <<<"$out")" "UID=0"
-  check "$n: no LUKS passphrase in /root or anaconda logs (row 16)" "$(grep -o 'PASSGREP=[0-9]*' <<<"$out")" "PASSGREP=0"
+  check "$n: the LUKS passphrase VALUE is nowhere on disk (/root /var/log /etc /var/lib /home; row 16)" "$(grep -o 'PASSGREP=[0-9]*' <<<"$out")" "PASSGREP=0"
   check "$n: root has a SHA-512 hash" "$(grep -o 'SHADOW=[^ ]*' <<<"$out")" 'SHADOW=$6$'
   check "$n: CUI profile applied at install" "$(grep -o 'OSCAP=[a-z]*' <<<"$out")" "OSCAP=yes"
 }
@@ -86,7 +87,7 @@ case ${1:-} in
     scp -q "$R/../iso2-server.ks" aero:/tmp/iso2/server.ks; scp -q "$R/../iso2-client.ks" aero:/tmp/iso2/client.ks
     rm -f "$R/../iso2-server.ks" "$R/../iso2-client.ks"
     scp -q "$PYZ" "$here/stick.sh" "$here/install.sh" \
-      "$here/unlock.sh" "$here/rootcheck.exp" "$top/lab/host/luks-console-unlock.exp" "$KEY" aero:/tmp/iso2/
+      "$here/unlock.sh" "$here/rootcheck.exp" "$here/luks-send.exp" "$KEY" aero:/tmp/iso2/
     scp -q -r "$R" aero:/tmp/iso2/site
     out=$(A "sudo bash /tmp/iso2/stick.sh make /tmp/iso2/site $STICK && sudo bash /tmp/iso2/stick.sh list $STICK")
     [[ $out == *"./site.conf"* && $out == *"./hosts"* ]] && pass "stick image made (OEMDRV: site.conf, hosts)" || fail "stick" "$out" ;;
@@ -102,6 +103,9 @@ case ${1:-} in
     scp -q "$R/client.conf" aero:/tmp/iso2/client.conf
     out=$(A "sudo bash /tmp/iso2/stick.sh add $STICK /tmp/iso2/client.conf && sudo bash /tmp/iso2/stick.sh list $STICK")
     [[ $out == *"./client.conf"* && $out == *"./escrow/iso2-srv.txt"* ]] && pass "stick now holds client.conf (server escrow kept)" || fail "stick add" "$out" ;;
+  check-server)   # unlock + host checks on an already-installed iso2-srv (e.g. after fixing a helper)
+    out=$(A "sudo bash /tmp/iso2/unlock.sh iso2-srv $STICK iso2-srv"); [[ $out == *"passphrase sent"* || $out == *"already unlocked"* ]] && pass "iso2-srv: escrowed LUKS passphrase unlocked the disk" || fail "iso2-srv: LUKS unlock" "$out"
+    host_checks iso2-srv 192.168.100.30 iso2-srv.iso2.lab.test server ;;
   neg2) stop_ok iso2-neg2 52:54:00:c4:02:39 client 2 "name one in the hosts table" iso2-neg2 ;;
   client) install_ok iso2-cli 52:54:00:c4:02:31 client iso2-cli && host_checks iso2-cli 192.168.100.31 iso2-cli.iso2.lab.test client ;;
   reinstall)
@@ -111,7 +115,7 @@ case ${1:-} in
     new=$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK iso2-srv.txt | sed -n 's/^LUKS_PASSPHRASE=//p' | sha256sum | cut -c1-16")
     [[ -n $old && -n $new && $old != "$new" ]] && pass "reinstall made a new passphrase (escrow differs)" || fail "new escrow" "old/new hash equal or empty" ;;
   cleanup)
-    for v in iso2-srv iso2-cli iso2-neg1 iso2-neg2; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram --remove-all-storage >/dev/null 2>&1"; done
+    for v in iso2-srv iso2-cli iso2-neg1 iso2-neg2; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin 2>/dev/null; sudo rm -rf /tmp/iso2"
     rm -P "$R"/* 2>/dev/null; rm -rf "$R"; pass "cleanup (VMs, stick, helpers, lab key copy, render dir)" ;;
   *) echo "usage: prove.sh prep|neg1|server|export|neg2|client|reinstall|cleanup"; exit 2 ;;
