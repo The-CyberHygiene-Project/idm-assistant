@@ -1,0 +1,21 @@
+#!/usr/bin/expect -f
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+# kanidm-login.exp NAME : log the kanidm CLI in as NAME; the password is read from stdin (never on a command line).
+set timeout 30
+set name [lindex $argv 0]
+gets stdin pw
+log_user 0
+spawn kanidm login --name $name
+expect {
+  -re {(?i)password.*:} { send -- "$pw\r" }
+  eof { puts stderr "kanidm exited before asking for a password"; exit 2 }
+  timeout { puts stderr "no password prompt"; exit 2 }
+}
+expect {
+  -re {(?i)(login success|success)} { puts "login ok: $name"; exit 0 }
+  -re {(?i)(error|denied|fail)[^\r\n]*} { puts stderr "login failed: $expect_out(0,string)"; exit 1 }
+  eof { catch wait r; exit [lindex $r 3] }
+  timeout { puts stderr "timeout after password"; exit 2 }
+}

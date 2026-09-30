@@ -1,0 +1,7 @@
+[Unit]
+Description=Renew the Kanidm TLS certificate (step-ca; ACME re-issue if it already expired)
+After=step-ca.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/cert-renew-kanidm
