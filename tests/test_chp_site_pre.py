@@ -100,3 +100,11 @@ def test_escrow_header_says_it_is_valid_only_after_completion(tmp_path):   # fin
     assert "installed" not in esc.splitlines()[0]
     assert "valid only if a line 'INSTALL COMPLETED' follows" in esc
     assert (out / "escrow-name").read_text() == "iso2-srv"          # %post --nochroot appends the completion line
+
+
+def test_luks_pass_for_post_nochroot(tmp_path):                        # Plan 3a Task 2
+    h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
+    p = out / "luks-pass"
+    assert stat.S_IMODE(p.stat().st_mode) == 0o600 and p.read_text() == "S" * 32
+    assert ("--passphrase=" + p.read_text()) in (out / "disk.ks").read_text()
+    assert "S" * 32 not in (out / "users.ks").read_text()

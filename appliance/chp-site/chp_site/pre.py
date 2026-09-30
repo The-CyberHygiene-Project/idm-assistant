@@ -62,4 +62,8 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         with os.fdopen(fd, "w") as f:
             f.write(text)
     (out / "escrow-name").write_text(host.hostname)     # not secret: tells %post --nochroot which file to mark
+    # The passphrase once more, for %post --nochroot only (it adds the one-time TPM-bind key, then shreds this file).
+    fd = os.open(out / "luks-pass", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(luks)
     return host

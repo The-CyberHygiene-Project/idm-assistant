@@ -3,6 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | export-client."""
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -67,12 +68,34 @@ def _pre(a):
 
 
 def _export(a):
+    import subprocess
+    import tempfile
+    import time
+    from .escrow import move_pending
     site = parse_site(read_file(Path(a.site), "site.conf"))
+    hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub)
-    (Path(a.stick) / "client.conf").write_text(text)
-    print(f"wrote {Path(a.stick) / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
-          "Compare both with the server console before installing clients.")
+    mnt = None
+    stick = Path(a.stick) if a.stick else None
+    if stick is None:                                   # the site stick, found by its label, mounted just for this
+        dev = Path("/dev/disk/by-label/OEMDRV")
+        if not dev.exists():
+            raise SiteError("no site stick found (a USB volume labelled OEMDRV): plug it in, or pass --stick DIR")
+        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run")
+        subprocess.run(["mount", str(dev), mnt], check=True)
+        stick = Path(mnt)
+    try:
+        (stick / "client.conf").write_text(text)
+        print(f"wrote {stick / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
+              "Compare both with the server console before installing clients.")
+        pending = Path(a.pending)
+        moved = move_pending(pending, stick, values(site, hosts)["SERVER_HOSTNAME"],
+                             time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) if pending.is_dir() else []
+        print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
+    finally:
+        if mnt:
+            subprocess.run(["sync"]); subprocess.run(["umount", mnt]); os.rmdir(mnt)
 
 
 def main(argv=None):
@@ -86,7 +109,8 @@ def main(argv=None):
     p.add_argument("--repo-url", default="file:///run/install/repo/chp")
     g = sub.add_parser("get"); g.add_argument("key"); g.add_argument("--site", default="/etc/chp")
     r = sub.add_parser("render"); r.add_argument("what"); r.add_argument("--site", default="/etc/chp")
-    e = sub.add_parser("export-client"); e.add_argument("--stick", required=True)
+    e = sub.add_parser("export-client"); e.add_argument("--stick")
+    e.add_argument("--pending", default="/root/chp-escrow-pending")
     e.add_argument("--site", default="/etc/chp/site.conf"); e.add_argument("--root", default="/etc/step-ca/certs/root_ca.crt")
     e.add_argument("--ssh-ca", default="/etc/ssh-ca/user_ca.pub")
     a = ap.parse_args(argv)
