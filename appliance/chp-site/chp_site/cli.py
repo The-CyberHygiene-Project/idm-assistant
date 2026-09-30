@@ -74,7 +74,7 @@ def _export(a):
     site = parse_site(read_file(Path(a.site), "site.conf"))
     hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
-    text = make_client_conf(site["DOMAIN"], pem, pub)
+    text = make_client_conf(site["DOMAIN"], pem, pub, Path(a.cache_key).read_text())
     if a.stick:
         _export_to(a, site, hosts, text, pem, pub, Path(a.stick))
         return
@@ -127,6 +127,7 @@ def main(argv=None):
     e.add_argument("--pending", default="/root/chp-escrow-pending")
     e.add_argument("--site", default="/etc/chp/site.conf"); e.add_argument("--root", default="/etc/step-ca/certs/root_ca.crt")
     e.add_argument("--ssh-ca", default="/etc/ssh-ca/user_ca.pub")
+    e.add_argument("--cache-key", default="/var/lib/chp/cache-key/id_ecdsa.pub")
     a = ap.parse_args(argv)
     try:
         {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd}[a.cmd](a)

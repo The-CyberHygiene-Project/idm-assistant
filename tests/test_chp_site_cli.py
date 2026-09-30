@@ -23,7 +23,7 @@ def site(tmp_path, extra=""):
 def test_validate_ok_and_host_found(tmp_path):
     from chp_site.clientconf import make_client_conf
     d = site(tmp_path)
-    (d / "client.conf").write_text(make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text()))
+    (d / "client.conf").write_text(make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text(), (FX / "cache_key.pub").read_text()))
     r = cli("validate", "--site", str(d), "--mac", "52-54-00-C4-02-31")
     assert r.returncode == 0 and "iso2-cli" in r.stdout and "client" in r.stdout
 
@@ -36,7 +36,7 @@ def test_validate_error_is_one_readable_line(tmp_path):
 def test_export_client_writes_and_prints_fingerprints(tmp_path):
     d = site(tmp_path); stick = tmp_path / "stick"; stick.mkdir()
     r = cli("export-client", "--stick", str(stick), "--site", str(d / "site.conf"),
-            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"))
+            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"))
     assert r.returncode == 0, r.stderr
     assert "CA root SHA-256:" in r.stdout and "SSH CA fingerprint: SHA256:" in r.stdout
     c = cli("validate", "--site", str(d), "--role", "client")      # spec 4.2: a client site needs client.conf (final review I2)

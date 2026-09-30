@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -61,6 +61,9 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-5.chp
+- cache-key first-boot step (chp-site revoke fan-out, ISSO #28); carries the 0.1.0-4 collector login retry.
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-4.chp
 - Retry the idm_admin login (5 x, 60 s each) while Kanidm settles after recover.
 

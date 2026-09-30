@@ -118,3 +118,10 @@ def test_collector_login_retries_while_kanidm_settles():                # proof 
     col = t[t.index("do_collector() {"):t.index("do_sshca() {")]
     assert re.search(r"for [a-z]+ in 1 2 3 4 5", col) and "sleep 10" in col
     assert "set timeout 60" in (SRV / "kanidm-login.exp").read_text()
+
+
+def test_firstboot_makes_the_cache_key_before_server_done():
+    t = (ROOT / "appliance/rpm/chp-identity-server/server-firstboot.sh").read_text()
+    assert "ssh-keygen -q -t ecdsa -b 384 -N '' -C \"chpcache@$FQDN\" -f /var/lib/chp/cache-key/id_ecdsa" in t
+    assert t.index("step cache-key do_cachekey") < t.index('touch "$M/server.done"')
+    assert "install -d -m 0700 /var/lib/chp/cache-key" in t

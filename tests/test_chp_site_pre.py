@@ -7,7 +7,7 @@ import pytest
 
 from chp_site.pre import Facts, run_pre
 from chp_site.sitefile import SiteError
-from tests.test_chp_site_clientconf import PEM, PUB
+from tests.test_chp_site_clientconf import CACHE, PEM, PUB
 from chp_site.clientconf import make_client_conf
 from tests.test_chp_site_hosts import HOSTS
 from tests.test_chp_site_sitefile import GOOD
@@ -26,7 +26,7 @@ def stick(tmp_path, client_conf=True):
     s = tmp_path / "stick"; s.mkdir()
     (s / "site.conf").write_text(GOOD); (s / "hosts").write_text(HOSTS)
     if client_conf:
-        (s / "client.conf").write_text(make_client_conf("iso2.lab.test", PEM, PUB))
+        (s / "client.conf").write_text(make_client_conf("iso2.lab.test", PEM, PUB, CACHE))
     return s
 
 
