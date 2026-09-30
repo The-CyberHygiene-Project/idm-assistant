@@ -33,16 +33,22 @@ class SshCa:
         p = self.keys / f"{self._user(user)}.pub"
         return p.read_text().strip() if p.exists() else None
 
-    def register(self, user, pub_text, replace=False):
+    def check(self, user, pub_text, replace=False):
+        """Validate a key for `register` WITHOUT changing anything -> (key, old). onboard calls this before any Kanidm
+        change, so a bad key never leaves a half-onboarded person and an orphaned reset token."""
         try:
             key = ssh_pubkey(pub_text.strip())
         except SiteError as e:
             raise SiteError(str(e).replace("ADMIN_SSH_PUBKEY", f"{user}'s SSH key")) from None
         old = self.registered(user)
+        if old is not None and old.split()[:2] != key.split()[:2] and not replace:
+            raise SiteError(f"a different key is already registered for {user}; pass --replace-key to replace it")
+        return key, old
+
+    def register(self, user, pub_text, replace=False):
+        key, old = self.check(user, pub_text, replace)
         if old is not None and old.split()[:2] == key.split()[:2]:
             return "same"
-        if old is not None and not replace:
-            raise SiteError(f"a different key is already registered for {user}; pass --replace-key to replace it")
         p = self.keys / f"{user}.pub"
         tmp = p.with_suffix(".pub.new")
         tmp.write_text(f"{key} {user}\n")

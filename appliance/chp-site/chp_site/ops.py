@@ -48,6 +48,8 @@ def onboard(k, ca, user, domain, display=None, groups=(), ssh_key=None, replace_
     if e is not None and expired(e):
         raise SiteError(f"{user} is expired; re-enabling needs the ISSO's approval: "
                         f"chp-site unexpire {user} --approver NAME --reason TEXT")
+    if ssh_key is not None:
+        ca.check(user, ssh_key, replace=replace_key)          # a bad key is refused before anything changes
     fields = {"user": user, "groups": ",".join(groups), "operator": audit.operator(), "as": k.as_}
     rec("onboard", fields)
     if e is None:

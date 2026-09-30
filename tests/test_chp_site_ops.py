@@ -193,3 +193,21 @@ def test_unexpire_reminds_that_the_ssh_key_was_revoked(ca):
 def test_unexpire_builtin_refused(ca):
     with pytest.raises(SiteError, match="built-in"):
         ops.unexpire(FakeK(), ca, SITE, [], "admin", "Pat Isso", "expired by mistake on the wrong ticket", rec=Rec())
+
+
+ED25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGyHV2oRj8Uf8QdTf6eK8f5dDAXHhpxS5X0mGmAcBwUP x"
+
+
+def test_onboard_bad_ssh_key_is_refused_before_any_change(ca, tmp_path):    # final review Important #2
+    k, rec = FakeK(), Rec()
+    with pytest.raises(SiteError, match="FIPS"):
+        ops.onboard(k, ca, "lab09", "x.test", ssh_key=ED25519, out=tmp_path / "o", rec=rec)
+    assert k.log == [] and rec.calls == [] and not (tmp_path / "o").exists()
+
+
+def test_onboard_different_key_without_replace_is_refused_before_any_change(ca, tmp_path):
+    ca.register("lab09", keypair(tmp_path, "old"))
+    k, rec = FakeK(), Rec()
+    with pytest.raises(SiteError, match="--replace-key"):
+        ops.onboard(k, ca, "lab09", "x.test", ssh_key=keypair(tmp_path, "new"), out=tmp_path / "o", rec=rec)
+    assert k.log == [] and rec.calls == []
