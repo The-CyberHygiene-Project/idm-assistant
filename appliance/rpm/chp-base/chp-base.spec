@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -53,5 +53,8 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/firstboot
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-2.chp
+- Kill the one-time LUKS slot in batch mode; a retry skips re-binding; retry hints say restart.
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release: first-boot TPM binding via a one-time LUKS key, restorecon, ks shred; monitor framework.

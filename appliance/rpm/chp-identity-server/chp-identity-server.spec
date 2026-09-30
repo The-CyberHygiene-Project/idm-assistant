@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -61,5 +61,8 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-2.chp
+- kanidmd scripting recover-account; HOME for the kanidm CLI; 4 h certificate monitor threshold.
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release: unattended server first boot, renewal with ACME fallback, server monitor checks.

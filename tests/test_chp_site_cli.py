@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.2.0"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.2.1"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
