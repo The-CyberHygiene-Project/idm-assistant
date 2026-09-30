@@ -112,3 +112,32 @@ def revoke(k, ca, hosts, user, group=None, rec=audit.record, fan=fanout.invalida
     if failed:
         raise SiteError(f"the Kanidm change IS in effect, but {', '.join(failed)} may keep cached access for up to "
                         "~2 min (fix and re-run, or wait)")
+
+
+def unexpire(k, ca, site, hosts, user, approver, reason, rec=audit.record, fan=fanout.invalidate_all, say=print):
+    """ISSO #32: only the ISSO or a delegate named in site.conf approves; approver + reason are audited; never automatic."""
+    _user(user)
+    names = [site["ISSO_NAME"], *site.get("UNEXPIRE_DELEGATES", [])]
+    approver = (approver or "").strip()
+    if approver.casefold() not in {n.strip().casefold() for n in names}:
+        raise SiteError(f"refusing: {approver!r} is not the ISSO ({site['ISSO_NAME']}) or a delegate in UNEXPIRE_DELEGATES")
+    reason = (reason or "").strip()
+    if not 10 <= len(reason) <= 300 or any(ord(c) < 32 for c in reason):
+        raise SiteError("--reason: 10 to 300 characters on one line, saying why the expiry was a mistake")
+    e = k.person(user)
+    if e is None:
+        raise SiteError(f"no Kanidm person {user}")
+    if not expired(e):
+        raise SiteError(f"{user} is not expired; nothing to do")
+    fields = {"user": user, "approver": approver, "reason": reason, "operator": audit.operator(), "as": k.as_}
+    rec("unexpire", fields)
+    k.clear_expiry(user)
+    rec("unexpire.done", fields, after=True)
+    say(f"{user}: expiry cleared (approved by {approver}; recorded in the audit log)")
+    text, failed = fanout.report(fan(hosts))
+    say(text)
+    if failed:
+        say(f"note: {', '.join(failed)} may refuse {user} for up to ~2 min (cached expiry)")
+    if ca.registered(user) is None:
+        say(f"{user} has no registered SSH key (revoke takes it out of service): "
+            f"chp-site onboard {user} --ssh-key FILE")

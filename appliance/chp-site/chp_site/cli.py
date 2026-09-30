@@ -1,7 +1,7 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-"""chp-site command line: validate | pre | export-client."""
+"""chp-site command line: validate | pre | get | render | export-client | onboard | revoke | unexpire."""
 import argparse
 import os
 import sys
@@ -136,6 +136,12 @@ def _revoke(a):
     revoke(k, ca, hosts, a.user, group=a.group)
 
 
+def _unexpire(a):
+    from .ops import unexpire
+    site, hosts, k, ca = _ops_env(a)
+    unexpire(k, ca, site, hosts, a.user, a.approver, a.reason)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -161,10 +167,14 @@ def main(argv=None):
     v = sub.add_parser("revoke", help="expire a person now (or remove one group membership) and clear every client's cache")
     v.add_argument("user"); v.add_argument("--group")
     v.add_argument("--as", dest="as_", default="idm_admin"); v.add_argument("--site", default="/etc/chp")
+    u = sub.add_parser("unexpire", help="re-enable an expired person (ISSO or delegate approval, audited; ISSO #32)")
+    u.add_argument("user"); u.add_argument("--approver", required=True); u.add_argument("--reason", required=True)
+    u.add_argument("--as", dest="as_", default="idm_admin"); u.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
         {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
-         "onboard": _onboard, "revoke": _revoke}[a.cmd](a)
+         "onboard": _onboard, "revoke": _revoke,
+         "unexpire": _unexpire}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

@@ -144,3 +144,52 @@ def test_revoke_session_lost_midway_writes_no_done_record(ca):      # Review Foc
     with pytest.raises(SiteError, match="not logged in"):
         ops.revoke(Dies(people()), ca, [], "lab09", rec=rec, fan=fan_ok)
     assert [c[0] for c in rec.calls] == ["revoke"]
+
+
+SITE = {"ISSO_NAME": "Pat Isso", "UNEXPIRE_DELEGATES": ["Sam Deputy"]}
+
+
+def expired_people():
+    return {"lab04": {"name": ["lab04"], "class": ["person", "posixaccount"], "directmemberof": [],
+                      "account_expire": ["2000-01-01T00:00:00Z"]}}
+
+
+@pytest.mark.parametrize("approver", ["Pat Isso", "  pat isso ", "Sam Deputy"])
+def test_unexpire_by_isso_or_delegate(ca, approver):
+    k, rec = FakeK(expired_people()), Rec()
+    ops.unexpire(k, ca, SITE, [], "lab04", approver, "expired by mistake on the wrong ticket", rec=rec, fan=fan_ok,
+                 say=lambda *_: None)
+    assert k.log == [("clear", "lab04")] and [c[0] for c in rec.calls] == ["unexpire", "unexpire.done"]
+    assert rec.calls[0][1]["approver"] == approver.strip() and "wrong ticket" in rec.calls[0][1]["reason"]
+
+
+def test_unexpire_refuses_anyone_else(ca):
+    k, rec = FakeK(expired_people()), Rec()
+    with pytest.raises(SiteError, match=r"not the ISSO \(Pat Isso\) or a delegate"):
+        ops.unexpire(k, ca, SITE, [], "lab04", "Chris Admin", "please let me back in now", rec=rec, fan=fan_ok)
+    assert k.log == [] and rec.calls == []
+
+
+@pytest.mark.parametrize("reason", ["", "short", "x" * 301, "line one\nline two is here"])
+def test_unexpire_needs_a_real_reason(ca, reason):
+    with pytest.raises(SiteError, match="--reason"):
+        ops.unexpire(FakeK(expired_people()), ca, SITE, [], "lab04", "Pat Isso", reason, rec=Rec(), fan=fan_ok)
+
+
+def test_unexpire_not_expired_is_refused(ca):
+    k = FakeK(people())
+    with pytest.raises(SiteError, match="lab09 is not expired"):
+        ops.unexpire(k, ca, SITE, [], "lab09", "Pat Isso", "expired by mistake on the wrong ticket", rec=Rec(), fan=fan_ok)
+    assert k.log == []
+
+
+def test_unexpire_reminds_that_the_ssh_key_was_revoked(ca):
+    said = []
+    ops.unexpire(FakeK(expired_people()), ca, SITE, [], "lab04", "Pat Isso", "expired by mistake on the wrong ticket",
+                 rec=Rec(), fan=fan_ok, say=said.append)
+    assert any("chp-site onboard lab04 --ssh-key" in s for s in said)
+
+
+def test_unexpire_builtin_refused(ca):
+    with pytest.raises(SiteError, match="built-in"):
+        ops.unexpire(FakeK(), ca, SITE, [], "admin", "Pat Isso", "expired by mistake on the wrong ticket", rec=Rec())
