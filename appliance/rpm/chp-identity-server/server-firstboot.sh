@@ -92,8 +92,13 @@ json.dump({"admin": pw(parts[0]), "idm_admin": pw(parts[1])}, open(sys.argv[1], 
 }
 
 do_collector() {
-  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["idm_admin"])' "$P/kanidm-admins.json" \
-    | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null
+  # Kanidm can still be busy right after recover (password hashing is deliberately slow): retry the login a few times.
+  for try in 1 2 3 4 5; do
+    if python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["idm_admin"])' "$P/kanidm-admins.json" \
+         | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null; then break; fi
+    if [ "$try" -eq 5 ]; then return 1; fi
+    log "kanidm login not ready yet (try $try/5); retrying in 10 s"; sleep 10
+  done
   k() { kanidm "$@" -D idm_admin >/dev/null 2>&1; }
   # capture first, then grep: piping kanidm into an early-exiting grep can fail on EPIPE under pipefail and look like "not found" on a resume
   existing=$(kanidm service-account get idm-collect -D idm_admin 2>/dev/null || true)

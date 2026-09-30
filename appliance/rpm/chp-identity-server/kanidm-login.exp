@@ -3,7 +3,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # kanidm-login.exp NAME : log the kanidm CLI in as NAME; the password is read from stdin (never on a command line).
-set timeout 30
+set timeout 60
 set name [lindex $argv 0]
 gets stdin pw
 log_user 0

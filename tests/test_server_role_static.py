@@ -111,3 +111,10 @@ def test_collector_step_resumes_cleanly_and_logs_out():                 # final 
 
 def test_failing_renewal_service_is_an_alert():                        # final review Minor 12
     assert "is-failed" in (SRV / "monitor.d" / "31-renew-timer.sh").read_text()
+
+
+def test_collector_login_retries_while_kanidm_settles():                # proof run 2: login timed out 2 s after recover
+    t = (SRV / "server-firstboot.sh").read_text()
+    col = t[t.index("do_collector() {"):t.index("do_sshca() {")]
+    assert re.search(r"for [a-z]+ in 1 2 3 4 5", col) and "sleep 10" in col
+    assert "set timeout 60" in (SRV / "kanidm-login.exp").read_text()

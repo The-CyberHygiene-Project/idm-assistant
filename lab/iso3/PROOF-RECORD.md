@@ -40,3 +40,15 @@ has the same identity and descriptors, so "a different stick is refused" is prov
 
 The design change the plan made (TPM binding through a one-time LUKS key whose slot is killed) is proven: after binding, only the
 escrowed-passphrase slot and the TPM slot remain.
+
+## Re-proof after the final review: repo 0.3.2, a fresh install (13:35 to 13:43)
+
+- prep 2/2, server 2/2, reboot (TPM unlock), export 6/6, renew 4/4: **PASS**.
+- firstboot: **13/15 on the first boot.** The `collector` step's `idm_admin` login timed out 2 s after `recover` (Kanidm still busy;
+  the same step passed on the 0.3.1 run, so this is timing). What happened next is Review Focus 1 working on a real install:
+  - the new monitor check alerted "chp-server-firstboot failed"
+  - the failed step had no `.done` marker
+  - **at the next boot the unit resumed at `collector`**, finished `collector` and `ssh-ca`, and marked the server done
+  - the collector then reported `errors: []`, and the monitor was quiet
+- Fixed afterwards (test-first): the login is retried 5 times, with a 60 s expect timeout each. That change is in
+  **chp-identity-server 0.1.0-4**, which the next repo cut (Plan 3b) must include (carry-forward).
