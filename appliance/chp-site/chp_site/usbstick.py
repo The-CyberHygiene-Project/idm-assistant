@@ -24,7 +24,9 @@ def _devices(list_output):
         idm = re.search(r"\bid ([0-9a-f]{4}:[0-9a-f]{4})", line)
         ser = re.search(r'\bserial "([^"]*)"', line)
         hsh = re.search(r'\bhash "([^"]*)"', line)
+        ifaces = re.findall(r"[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}", m.group(3))
         yield {"dev": m.group(1), "status": m.group(2), "storage": bool(re.search(r"(^|[\s{])08:", m.group(3))),
+               "storage_only": bool(ifaces) and all(i.startswith("08:") for i in ifaces),
                "id": idm.group(1) if idm else "", "serial": ser.group(1) if ser else "", "hash": hsh.group(1) if hsh else ""}
 
 
@@ -40,6 +42,9 @@ def pick_pinned(list_output, pin, pinned_hash):
     if len(match) > 1:
         raise SiteError("more than one device matches the site-stick pin; leave only the site stick plugged in")
     d = match[0]
+    if not d["storage_only"]:     # allow-device authorizes EVERY interface: a keyboard inside the "stick" would type
+        raise SiteError("the device matching the site-stick pin is not only USB storage (it also has other interfaces, "
+                        "e.g. a keyboard); refused")
     if pinned_hash and d["hash"] != pinned_hash:
         raise SiteError("the device looks like the site stick but its USBGuard hash differs from the pinned one; refused")
     return d["dev"], d["hash"]
@@ -77,12 +82,12 @@ def allow_stick(label_path, wait=20, pin_file=PIN_FILE, hash_file=HASH_FILE):
         raise SiteError("no site stick found: plug in the USB stick labelled OEMDRV")
     hp = Path(hash_file)
     dev, dev_hash = pick_pinned(out, _read_pin(pin_file), hp.read_text().strip() if hp.exists() else None)
-    if not hp.exists():
-        hp.write_text(dev_hash + "\n"); hp.chmod(0o644)                   # first use: pin the full device hash
     subprocess.run(["usbguard", "allow-device", dev], check=True)          # temporary: no -p, the policy is unchanged
     subprocess.run(["logger", "-t", "chp-site", f"USBGuard: temporarily allowed device {dev} (site stick) for export-client"])
     for _ in range(wait * 2):
         if Path(label_path).exists():
+            if not hp.exists():                                             # first use: pin the full device hash, only
+                hp.write_text(dev_hash + "\n"); hp.chmod(0o644)             # once the device really is the OEMDRV stick
             return dev
         time.sleep(0.5)
     block_stick(dev)
@@ -91,5 +96,9 @@ def allow_stick(label_path, wait=20, pin_file=PIN_FILE, hash_file=HASH_FILE):
 
 def block_stick(dev):
     if dev:
-        subprocess.run(["usbguard", "block-device", dev])
-        subprocess.run(["logger", "-t", "chp-site", f"USBGuard: blocked device {dev} again"])
+        r = subprocess.run(["usbguard", "block-device", dev])
+        msg = (f"USBGuard: blocked device {dev} again" if r.returncode == 0
+               else f"USBGuard: FAILED to block device {dev} again (exit {r.returncode}): unplug the stick now")
+        subprocess.run(["logger", "-t", "chp-site", "-p", "auth.warning" if r.returncode else "auth.info", msg])
+        if r.returncode:
+            raise SiteError(msg)

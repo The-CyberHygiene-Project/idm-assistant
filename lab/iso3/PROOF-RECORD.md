@@ -12,9 +12,9 @@ commands sent base64-encoded)
 | prep | 2/2: site validates; stick image made |
 | server | 2/2: installed from repo 0.3.1; first boot unlocked with the escrowed passphrase |
 | firstboot (unattended) | **15/15:** every step done; one-time bind key gone; LUKS = 2 keyslots (escrowed passphrase + TPM) + 1 clevis token; kickstart copies shredded; DNS `idm`/`ca`; step-ca healthy on the **intermediate only**; **no root CA key under /etc/step-ca**; Kanidm `/status` over TLS verified by the site root; renewal timer active; collector `errors: []`; three recovery secrets pending; the monitor alerts only "secrets still on the server"; fapolicyd 0 denials; SELinux 0 AVCs since boot |
-| reboot | 2/2: **the TPM unlocks the disk** (no passphrase sent) |
+| reboot | **the TPM unlocks the disk**: SSH comes back and this stage never sends the passphrase (a second "no prompt answered" check was removed after the final review: it could not fail) |
 | export | 6/6: `export-client` moved the Kanidm admin passwords, the step-ca password and the **root CA key** to the stick (`escrow/iso3-srv-server.txt`); none are left on the server; the monitor is quiet; **USBGuard allowed only the pinned stick, temporarily, then blocked it again**; step-ca still issues without the root key |
-| renew | 4/4: an **already-expired** Kanidm certificate is replaced by the renewal unit (ACME fallback, row 26) and served |
+| renew | 4/4: an **already-expired** Kanidm certificate is replaced by the renewal unit and served. The unit sees the expiry and goes straight to an ACME re-issue; `step ca renew` is never tried on an expired certificate (row 26) |
 
 The pins exist on the server: `/etc/chp/site-stick.id` (vendor:product, serial, name, recorded at install) and
 `/etc/chp/site-stick.hash` (USBGuard's device hash, pinned on first use). **Not demonstrable in the lab:** every QEMU USB disk

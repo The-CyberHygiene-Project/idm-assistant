@@ -17,6 +17,11 @@ step() { local n=$1; shift; current=$n; if [ -e "$M/$n.done" ]; then return 0; f
 g() { chp-site get "$1"; }
 DOMAIN=$(g DOMAIN); SIP=$(g SERVER_IP); FQDN=$(g SERVER_FQDN); IDM=$(g KANIDM_FQDN); CA=$(g CA_FQDN)
 export STEPPATH=/etc/step-ca
+# One-way door, checked before ANY step: once Kanidm was initialised for a domain, a changed site DOMAIN is refused.
+if [ -f /var/lib/chp/kanidm-domain ] && [ "$(cat /var/lib/chp/kanidm-domain)" != "$IDM" ]; then
+  log "CHP: refusing: Kanidm was initialised for $(cat /var/lib/chp/kanidm-domain), site.conf now says $IDM (the domain is a one-way door)"
+  exit 1
+fi
 
 do_bind() {
   chp-site render named-conf > /etc/named.conf.chp && install -o root -g named -m 0640 /etc/named.conf.chp /etc/named.conf && rm -f /etc/named.conf.chp
@@ -58,17 +63,13 @@ do_kanidm_cert() {
 }
 
 do_kanidmd() {
-  if [ -f /var/lib/chp/kanidm-domain ] && [ "$(cat /var/lib/chp/kanidm-domain)" != "$IDM" ]; then
-    log "CHP: refusing: Kanidm was initialised for $(cat /var/lib/chp/kanidm-domain), site.conf now says $IDM (the domain is a one-way door)"
-    return 1
-  fi
-  echo "$IDM" > /var/lib/chp/kanidm-domain
   chp-site render kanidm-server > /etc/kanidm/server.toml; chmod 0644 /etc/kanidm/server.toml
   chp-site render kanidm-config > /etc/kanidm/config; chmod 0644 /etc/kanidm/config
   systemctl daemon-reload; systemctl enable --now kanidmd
   firewall-cmd -q --permanent --add-service=https; firewall-cmd -q --reload
   for _ in $(seq 30); do if curl -fsS --cacert "$ANCHOR" "https://$IDM/status" >/dev/null 2>&1; then break; fi; sleep 2; done
   curl -fsS --cacert "$ANCHOR" "https://$IDM/status" >/dev/null
+  echo "$IDM" > /var/lib/chp/kanidm-domain      # the guard is set once Kanidm really runs (a typo fixed before this is fine)
 }
 
 do_recover() {
@@ -94,8 +95,11 @@ do_collector() {
   python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["idm_admin"])' "$P/kanidm-admins.json" \
     | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null
   k() { kanidm "$@" -D idm_admin >/dev/null 2>&1; }
-  kanidm service-account get idm-collect -D idm_admin 2>/dev/null | grep -q '^name: idm-collect$' \
-    || k service-account create idm-collect "CHP read-only collector" idm_admins
+  # capture first, then grep: piping kanidm into an early-exiting grep can fail on EPIPE under pipefail and look like "not found" on a resume
+  existing=$(kanidm service-account get idm-collect -D idm_admin 2>/dev/null || true)
+  if ! grep -qx 'name: idm-collect' <<< "$existing"; then
+    k service-account create idm-collect "CHP read-only collector" idm_admins
+  fi
   for grp in idm_service_desk idm_unix_admins; do k group add-members "$grp" idm-collect; done
   install -d -m 0700 /etc/idm-collect
   ( umask 077
@@ -104,6 +108,7 @@ do_collector() {
   [ -s /etc/idm-collect/kanidm.token ]
   chp-site render collect-conf > /etc/idm-collect/collect.conf; chmod 0644 /etc/idm-collect/collect.conf
   restorecon -R /etc/idm-collect
+  kanidm logout -D idm_admin >/dev/null 2>&1 || true   # do not leave an idm_admin session token in /root/.cache
 }
 
 do_sshca() {

@@ -70,8 +70,7 @@ case ${1:-} in
   reboot)
     A "sudo virsh reboot $VM >/dev/null"; sleep 20
     ok=no; for _ in $(seq 30); do if V true; then ok=yes; break; fi; sleep 10; done
-    check "after reboot the disk unlocked by the TPM (SSH back, no passphrase sent)" "$ok" "yes"
-    check "no LUKS prompt was answered this boot" "$(A "sudo tail -c 20000 /var/log/libvirt/qemu/$VM-install.log | grep -c 'passphrase sent'")" "0" ;;
+    check "after reboot the disk unlocked by the TPM (SSH back; this stage never sends the passphrase)" "$ok" "yes" ;;
   export)
     A "sudo virsh attach-disk $VM $STICK sdz --targetbus usb --type disk --live >/dev/null"; sleep 5
     out=$(Rv 'chp-site export-client')

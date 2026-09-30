@@ -70,33 +70,46 @@ def _pre(a):
 def _export(a):
     import subprocess
     import tempfile
-    import time
-    from .escrow import move_pending
+    from .usbstick import allow_stick, block_stick
     site = parse_site(read_file(Path(a.site), "site.conf"))
     hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub)
-    from .usbstick import allow_stick, block_stick
-    mnt, usb = None, None
-    stick = Path(a.stick) if a.stick else None
-    if stick is None:                                   # the site stick, found by its label, mounted just for this
-        dev = Path("/dev/disk/by-label/OEMDRV")
-        usb = allow_stick(dev)                          # USBGuard: authorize only this stick, temporarily
-        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run")
-        subprocess.run(["mount", str(dev), mnt], check=True)
-        stick = Path(mnt)
+    if a.stick:
+        _export_to(a, site, hosts, text, pem, pub, Path(a.stick))
+        return
+    dev = Path("/dev/disk/by-label/OEMDRV")
+    usb = allow_stick(dev)                              # USBGuard: authorize ONLY the pinned stick, temporarily
     try:
-        (stick / "client.conf").write_text(text)
-        print(f"wrote {stick / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
-              "Compare both with the server console before installing clients.")
-        pending = Path(a.pending)
-        moved = move_pending(pending, stick, values(site, hosts)["SERVER_HOSTNAME"],
-                             time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) if pending.is_dir() else []
-        print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
+        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run" if os.path.isdir("/run") else None)
+        try:
+            if subprocess.run(["mount", str(dev), mnt]).returncode != 0:
+                raise SiteError("could not mount the site stick")
+            try:
+                _export_to(a, site, hosts, text, pem, pub, Path(mnt))
+            finally:
+                subprocess.run(["sync"])
+                if subprocess.run(["umount", mnt]).returncode != 0:
+                    raise SiteError(f"could not unmount the site stick ({mnt}); do not unplug it yet")
+        finally:
+            try:
+                os.rmdir(mnt)
+            except OSError:
+                pass
     finally:
-        if mnt:
-            subprocess.run(["sync"]); subprocess.run(["umount", mnt]); os.rmdir(mnt)
-        block_stick(usb)
+        block_stick(usb)                                # always, whatever happened above
+
+
+def _export_to(a, site, hosts, text, pem, pub, stick):
+    import time
+    from .escrow import move_pending
+    (stick / "client.conf").write_text(text)
+    print(f"wrote {stick / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
+          "Compare both with the server console before installing clients.")
+    pending = Path(a.pending)
+    moved = move_pending(pending, stick, values(site, hosts)["SERVER_HOSTNAME"],
+                         time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) if pending.is_dir() else []
+    print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
 
 
 def main(argv=None):

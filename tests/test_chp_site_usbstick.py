@@ -57,3 +57,36 @@ def test_once_the_hash_is_pinned_it_must_match():
 def test_no_pin_is_refused():
     with pytest.raises(SiteError, match="no site-stick pin"):
         pick_pinned(STICK, None, None)
+
+
+COMPOSITE = '15: block id 46f4:0001 serial "1-0000:00:1d.7-1" name "Evil" hash "c=" parent-hash "d=" via-port "2-1" with-interface { 08:06:50 03:01:01 } with-connect-type ""'
+
+
+def test_a_composite_device_with_a_keyboard_interface_is_refused():        # final review Minor 9 (BadUSB)
+    with pytest.raises(SiteError, match="not only USB storage"):
+        pick_pinned(COMPOSITE, PIN, None)
+
+
+def test_export_blocks_the_stick_again_when_mount_fails(tmp_path, monkeypatch):   # final review I4
+    import subprocess
+    import chp_site.cli as cli_mod
+    import chp_site.usbstick as us
+    from tests.test_chp_site_sitefile import GOOD            # import BEFORE subprocess.run is patched (they run openssl)
+    from tests.test_chp_site_hosts import HOSTS
+    from tests.test_chp_site_clientconf import FX
+    blocked = []
+    monkeypatch.setattr(us, "allow_stick", lambda *a, **k: "7")
+    monkeypatch.setattr(us, "block_stick", lambda dev: blocked.append(dev))
+    real_run = subprocess.run
+    seen = []
+    def fake_run(cmd, *a, **k):
+        seen.append(cmd[0])
+        if cmd[0] == "mount":
+            return subprocess.CompletedProcess(cmd, 32)            # what a real failed mount returns
+        return real_run(["true"])
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    d = tmp_path / "s"; d.mkdir(); (d / "site.conf").write_text(GOOD); (d / "hosts").write_text(HOSTS)
+    rc = cli_mod.main(["export-client", "--site", str(d / "site.conf"), "--root", str(FX / "root_ca.crt"),
+                       "--ssh-ca", str(FX / "user_ca.pub"), "--pending", str(tmp_path / "none")])
+    assert "mount" in seen                                    # the failure really came from mount
+    assert rc == 2 and blocked == ["7"]

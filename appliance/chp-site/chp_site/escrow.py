@@ -12,34 +12,69 @@ KEYS = {"kanidm-admins.json": "KANIDM_ADMINS_JSON", "step-ca-password": "STEP_CA
 
 
 def _shred(p):
+    """Best effort: overwrite, fsync, unlink. XFS reflink and SSD wear levelling can keep old blocks; LUKS protects the rest."""
     n = p.stat().st_size
     with open(p, "r+b") as f:
         f.write(os.urandom(max(n, 1))); f.flush(); os.fsync(f.fileno())
     p.unlink()
 
 
+def _read_back(path):
+    """Read the file back FROM THE DEVICE: its pages were fsync'd, now drop them from the page cache so the read is
+    served by the stick, not by memory (Linux; elsewhere this is a plain read)."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        if hasattr(os, "posix_fadvise"):
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+        chunks = []
+        while True:
+            b = os.read(fd, 65536)
+            if not b:
+                break
+            chunks.append(b)
+        return b"".join(chunks).decode()
+    finally:
+        os.close(fd)
+
+
+def _write_synced(path, text):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, text.encode())
+        os.fsync(fd)                       # raises on a device write error (EIO): nothing is shredded then
+    finally:
+        os.close(fd)
+    dfd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dfd)                      # the directory entry too
+    finally:
+        os.close(dfd)
+
+
 def move_pending(pending, stick, server_hostname, now):
+    """Write the pending secrets to the stick, fsync file + directory, read them back from the DEVICE and compare every
+    decoded value with its source; only then shred them on the server. Any doubt keeps them on the server."""
     pending, stick = Path(pending), Path(stick)
     files = sorted(f for f in pending.iterdir() if f.is_file()) if pending.is_dir() else []
     if not files:
         return []
+    src = {KEYS.get(f.name, f.name.upper().replace("-", "_").replace(".", "_")): f.read_bytes() for f in files}
     body = [f"# {server_hostname} server recovery secrets, moved off the server {now}. KEEP THIS STICK OFFLINE."]
-    for f in files:
-        body.append(f"{KEYS.get(f.name, f.name.upper().replace('-', '_').replace('.', '_'))}="
-                    f"{base64.b64encode(f.read_bytes()).decode()}")
+    body += [f"{k}={base64.b64encode(v).decode()}" for k, v in src.items()]
     text = "\n".join(body) + "\n"
     d, out = stick / "escrow", stick / "escrow" / f"{server_hostname}-server.txt"
     try:
         d.mkdir(exist_ok=True)
         if out.exists():
             out.rename(d / f"{out.name}.{now}.old")
-        out.write_text(text)
-        os.sync()
-        if out.read_text() != text:
-            raise OSError(0, "read-back mismatch")
-    except OSError as e:
-        raise SiteError(f"could not write the server secrets to the stick ({e.strerror}); they are kept on the server "
-                        "and the monitor keeps warning") from None
+        _write_synced(out, text)
+        got = dict(line.split("=", 1) for line in _read_back(out).splitlines() if "=" in line and not line.startswith("#"))
+        for k, v in src.items():
+            if base64.b64decode(got.get(k, "")) != v:
+                raise OSError(0, f"read-back of {k} from the stick does not match")
+    except (OSError, ValueError) as e:
+        raise SiteError(f"could not write the server secrets to the stick ({getattr(e, 'strerror', None) or e}); they are "
+                        "kept on the server and the monitor keeps warning") from None
     for f in files:
         _shred(f)
     return [f.name for f in files]

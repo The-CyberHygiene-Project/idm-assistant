@@ -9,6 +9,10 @@
 set -Eeuo pipefail
 export STEPPATH=/root/.step
 IDM=$(chp-site get KANIDM_FQDN); D=/etc/pki/kanidm; C=$D/chain.pem; K=$D/key.pem
+# One-way door: never request a certificate for a name Kanidm was not initialised for (a changed site DOMAIN).
+if [ -f /var/lib/chp/kanidm-domain ] && [ "$(cat /var/lib/chp/kanidm-domain)" != "$IDM" ]; then
+  logger -t cert-renew-kanidm "refusing: Kanidm serves $(cat /var/lib/chp/kanidm-domain), site.conf now says $IDM"; exit 1
+fi
 issue() {
   firewall-cmd -q --add-service=http
   if step-cli ca certificate "$IDM" "$C" "$K" --provisioner acme --kty EC --crv P-384 --force >/dev/null; then rc=0; else rc=$?; fi

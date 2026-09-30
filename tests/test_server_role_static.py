@@ -87,3 +87,27 @@ def test_cert_monitor_threshold_fits_24h_acme_certificates():          # found b
 def test_retry_hints_say_restart_not_start():                           # RemainAfterExit units ignore `start`
     for p in (SRV / "server-firstboot.sh", BASE / "firstboot-common.sh"):
         assert "systemctl start chp-" not in p.read_text(), p.name
+
+
+def test_tpm_binding_requires_secure_boot():                            # final review I2 (spec 5.2)
+    t = (BASE / "firstboot-common.sh").read_text()
+    assert "mokutil --sb-state" in t and "SecureBoot enabled" in t
+    assert t.index("mokutil --sb-state") < t.index("clevis luks bind")
+
+
+def test_domain_guard_at_the_top_and_in_renewal():                      # final review I5
+    t = (SRV / "server-firstboot.sh").read_text()
+    assert t.index("/var/lib/chp/kanidm-domain") < t.index("step bind ")
+    assert "kanidm-domain" in (SRV / "cert-renew-kanidm.sh").read_text()
+    kd = t[t.index("do_kanidmd() {"):t.index("do_recover() {")]
+    assert kd.index("/status") < kd.rindex("> /var/lib/chp/kanidm-domain")   # guard written only once Kanidm answers
+
+
+def test_collector_step_resumes_cleanly_and_logs_out():                 # final review Minor 8
+    t = (SRV / "server-firstboot.sh").read_text()
+    col = t[t.index("do_collector() {"):t.index("do_sshca() {")]
+    assert "| grep -q" not in col and "kanidm logout" in col
+
+
+def test_failing_renewal_service_is_an_alert():                        # final review Minor 12
+    assert "is-failed" in (SRV / "monitor.d" / "31-renew-timer.sh").read_text()

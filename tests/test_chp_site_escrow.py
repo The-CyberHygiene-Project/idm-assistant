@@ -45,3 +45,23 @@ def test_second_export_keeps_the_first_as_old(tmp_path):
 def test_nothing_pending(tmp_path):
     p = tmp_path / "empty"; p.mkdir(); s = tmp_path / "stick"; s.mkdir()
     assert move_pending(p, s, "iso3-srv", "A") == [] and not (s / "escrow").exists()
+
+
+def test_shreds_only_after_a_device_read_back_compares_equal(tmp_path, monkeypatch):   # final review C1
+    import chp_site.escrow as esc
+    p = pending(tmp_path); s = tmp_path / "stick"; s.mkdir()
+    monkeypatch.setattr(esc, "_read_back", lambda path: path.read_text().replace("ROOT_CA_KEY_PEM=", "ROOT_CA_KEY_PEM=X"))
+    with pytest.raises(SiteError, match="kept on the server"):
+        move_pending(p, s, "iso3-srv", "A")
+    assert len(list(p.iterdir())) == 3                      # nothing shredded after a bad read-back
+
+
+def test_write_is_fsynced_file_and_directory(tmp_path, monkeypatch):
+    import chp_site.escrow as esc
+    calls = []
+    real = esc.os.fsync
+    monkeypatch.setattr(esc.os, "fsync", lambda fd: (calls.append(fd), real(fd)))
+    monkeypatch.setattr(esc, "_shred", lambda path: None)   # count only the fsyncs of the WRITE, not of the shred
+    p = pending(tmp_path); s = tmp_path / "stick"; s.mkdir()
+    move_pending(p, s, "iso3-srv", "A")
+    assert len(calls) >= 2                                  # the escrow file AND its directory

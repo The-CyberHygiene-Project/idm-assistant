@@ -13,7 +13,11 @@ install -d -m 0700 "$M"
 log() { echo "chp-firstboot-common: $*"; logger -t chp-firstboot-common -- "$*"; }
 ok=1
 
-if [ -f "$K" ]; then
+if [ -f "$K" ] && ! mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"; then
+  # Spec 5.2: with Secure Boot off a PCR 7 binding would unseal for ANY boot chain. Keep the key + slot for a later retry.
+  log "CHP: TPM binding skipped: Secure Boot is not enabled; the escrowed passphrase still unlocks; enable Secure Boot, then: systemctl restart chp-firstboot-common"
+  touch "$M/common.bind-failed"; ok=0
+elif [ -f "$K" ]; then
   dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')
   if [ "$(printf '%s\n' "$dev" | grep -c .)" -ne 1 ]; then
     log "CHP: TPM binding failed (expected exactly one LUKS device, found: ${dev:-none}); the escrowed passphrase still unlocks; retry: systemctl restart chp-firstboot-common"
