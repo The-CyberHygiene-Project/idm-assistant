@@ -93,3 +93,16 @@ def test_units_enabled_per_role():
 def test_site_stick_pin_is_copied_to_etc_chp(role):
     post = _section((KS / f"{role}.ks").read_text(), "%post --nochroot")
     assert "/tmp/chp/site-stick.id" in post and "/mnt/sysimage/etc/chp/site-stick.id" in post
+
+
+def test_role_packages_and_units():
+    s, c = (KS / "server.ks").read_text(), (KS / "client.ks").read_text()
+    assert "chp-identity-client" in s and "chp-identity-server" in s
+    assert "chp-identity-client" in c and "chp-identity-server" not in c
+    assert "chp-client-firstboot.service" in c and "chp-client-firstboot.service" not in s
+
+
+def test_client_token_installed_0600_and_shredded():
+    c = (KS / "client.ks").read_text()
+    assert "install -D -m 0600 /tmp/chp/unixd.token /mnt/sysimage/etc/kanidm/token" in c
+    assert "shred -u /tmp/chp/unixd.token" in c

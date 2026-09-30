@@ -115,8 +115,10 @@ def test_failing_renewal_service_is_an_alert():                        # final r
 
 def test_collector_login_retries_while_kanidm_settles():                # proof run 2: login timed out 2 s after recover
     t = (SRV / "server-firstboot.sh").read_text()
+    helper = t[t.index("kanidm_login() {"):t.index("do_collector() {")]
     col = t[t.index("do_collector() {"):t.index("do_sshca() {")]
-    assert re.search(r"for [a-z]+ in 1 2 3 4 5", col) and "sleep 10" in col
+    assert re.search(r"for [a-z]+ in 1 2 3 4 5", helper) and "sleep 10" in helper     # the retry lives in the shared helper
+    assert col.lstrip("do_collector() {\n").startswith("kanidm_login")                # and the collector uses it first
     assert "set timeout 60" in (SRV / "kanidm-login.exp").read_text()
 
 
@@ -125,3 +127,16 @@ def test_firstboot_makes_the_cache_key_before_server_done():
     assert "ssh-keygen -q -t ecdsa -b 384 -N '' -C \"chpcache@$FQDN\" -f /var/lib/chp/cache-key/id_ecdsa" in t
     assert t.index("step cache-key do_cachekey") < t.index('touch "$M/server.done"')
     assert "install -d -m 0700 /var/lib/chp/cache-key" in t
+
+
+def test_firstboot_tokens_and_self_client_after_cache_key():
+    t = (ROOT / "appliance/rpm/chp-identity-server/server-firstboot.sh").read_text()
+    order = [t.index(s) for s in ("step cache-key do_cachekey", "step unixd-tokens do_unixd_tokens",
+                                  "step self-client do_self_client", 'touch "$M/server.done"')]
+    assert order == sorted(order)
+    assert 'service-account api-token generate "unixd-$h" "$h-unixd"' in t and "--readwrite" not in t
+    assert "idm_unix_authentication_read" in t
+    assert "for grp in chp_users chp_admins; do" in t and 'k group posix set "$grp"' in t
+    assert '"$P/tokens/$h.token"' in t and "/etc/kanidm/token" in t
+    assert "/usr/libexec/chp/client-enrol --role server" in t
+    assert t.count("kanidm_login") >= 3          # defined once, used by collector and unixd-tokens

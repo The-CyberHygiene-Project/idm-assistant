@@ -8,8 +8,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 python3 - "$here" <<'PY'
 import sys
 here = sys.argv[1]
-roles = {"server": {"@ROLE_PACKAGES@": "chp-base\nchp-identity-server", "@ROLE_ENABLE@": "chp-server-firstboot.service"},
-         "client": {"@ROLE_PACKAGES@": "chp-base", "@ROLE_ENABLE@": ""}}
+roles = {"server": {"@ROLE_PACKAGES@": "chp-base\nchp-identity-server\nchp-identity-client",
+                    "@ROLE_ENABLE@": "chp-server-firstboot.service"},
+         "client": {"@ROLE_PACKAGES@": "chp-base\nchp-identity-client", "@ROLE_ENABLE@": "chp-client-firstboot.service"}}
 t = open(f"{here}/chp.ks.in").read()
 for role, subs in roles.items():
     out = t.replace("@ROLE@", role)

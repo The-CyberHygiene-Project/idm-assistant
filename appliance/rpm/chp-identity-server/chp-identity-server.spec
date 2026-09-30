@@ -1,6 +1,6 @@
 Name:           chp-identity-server
-Version:        0.1.0
-Release:        5.chp%{?dist}
+Version:        0.1.1
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -17,7 +17,7 @@ Source7:        30-kanidm-cert.sh
 Source8:        31-renew-timer.sh
 Source9:        40-escrow-pending.sh
 Source10:       LICENSE
-Requires:       chp-base, chp-site, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
+Requires:       chp-base, chp-site, chp-identity-client, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
 
@@ -61,6 +61,9 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.1-1.chp
+- unixd-tokens step (login groups chp_users/chp_admins, one read-only unixd token per host) and self-client step (the server becomes its own Kanidm client, ISO Plan 4a).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-5.chp
 - cache-key first-boot step (chp-site revoke fan-out, ISSO #28); carries the 0.1.0-4 collector login retry.
 

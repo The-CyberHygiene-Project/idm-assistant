@@ -79,6 +79,8 @@ for f in site.conf hosts client.conf; do
 done
 # The site stick's USB identity (recorded by chp-site pre): post-install, only THIS stick may be allowed (USBGuard).
 if [ -f /tmp/chp/site-stick.id ]; then install -m 0644 /tmp/chp/site-stick.id /mnt/sysimage/etc/chp/site-stick.id; fi
+# This client's own unixd token (chp-site pre staged ONLY this host's token, 0600): to /etc/kanidm/token, then shred.
+if [ -f /tmp/chp/unixd.token ]; then install -D -m 0600 /tmp/chp/unixd.token /mnt/sysimage/etc/kanidm/token; shred -u /tmp/chp/unixd.token; fi
 # One-time key for the first-boot TPM binding (chp-base): a random 64-byte key in its OWN LUKS slot, added with the
 # passphrase that exists only in installer RAM; first boot binds clevis with it, then kills that slot and shreds it.
 dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')
