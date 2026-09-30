@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-from . import audit
+from . import audit, fanout
 from .kanidm import PROTECTED, expired, valid_name
 from .sitefile import SiteError
 
@@ -84,3 +84,31 @@ def onboard(k, ca, user, domain, display=None, groups=(), ssh_key=None, replace_
             ("SSH key registered", ca.registered(user) is not None, "" if ca.registered(user) else "pass --ssh-key FILE"),
             ("SSH certificate issued", cert_note is not None, cert_note or ""),
             ("Google Authenticator", False, "the user enrols on each client at first login (client role)")]
+
+
+def revoke(k, ca, hosts, user, group=None, rec=audit.record, fan=fanout.invalidate_all, say=print):
+    _user(user)
+    if user == k.as_:
+        raise SiteError(f"refusing: {user} is the Kanidm session you are using; revoking it locks out administration")
+    if group is not None and not valid_name(group):
+        raise SiteError(f"{group!r} is not a valid group name")
+    e = k.person(user)
+    if e is None:
+        raise SiteError(f"no Kanidm person {user}")
+    if group is not None and group not in {m.split("@")[0] for m in e.get("directmemberof", [])}:
+        raise SiteError(f"{user} is not a direct member of {group} (membership through another group: revoke that one)")
+    fields = {"user": user, "scope": f"group:{group}" if group else "account", "operator": audit.operator(), "as": k.as_}
+    rec("revoke", fields)
+    if group is not None:
+        k.remove_member(group, user)
+        say(f"removed {user} from {group}")
+    else:
+        k.expire_now(user)
+        moved = ca.revoke_key(user, _stamp())
+        say(f"{user}: account expired now" + ("; registered SSH key moved to /var/lib/ssh-ca/revoked/" if moved else ""))
+    rec("revoke.done", fields, after=True)
+    text, failed = fanout.report(fan(hosts))
+    say(text)
+    if failed:
+        raise SiteError(f"the Kanidm change IS in effect, but {', '.join(failed)} may keep cached access for up to "
+                        "~2 min (fix and re-run, or wait)")

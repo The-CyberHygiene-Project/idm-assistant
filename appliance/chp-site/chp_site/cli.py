@@ -130,6 +130,12 @@ def _onboard(a):
         print(f"  [{'x' if done else ' '}] {item}" + (f"  ({note})" if note else ""))
 
 
+def _revoke(a):
+    from .ops import revoke
+    _site, hosts, k, ca = _ops_env(a)
+    revoke(k, ca, hosts, a.user, group=a.group)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -152,10 +158,13 @@ def main(argv=None):
     o.add_argument("--replace-key", action="store_true")
     o.add_argument("--as", dest="as_", default="idm_admin", help="your Kanidm admin session (kanidm login -D NAME)")
     o.add_argument("--site", default="/etc/chp")
+    v = sub.add_parser("revoke", help="expire a person now (or remove one group membership) and clear every client's cache")
+    v.add_argument("user"); v.add_argument("--group")
+    v.add_argument("--as", dest="as_", default="idm_admin"); v.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
         {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
-         "onboard": _onboard}[a.cmd](a)
+         "onboard": _onboard, "revoke": _revoke}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

@@ -84,3 +84,63 @@ def test_onboard_audit_failure_changes_nothing(ca, tmp_path):
     with pytest.raises(SiteError, match="audit"):
         ops.onboard(k, ca, "lab09", "x.test", out=tmp_path / "o", rec=bad)
     assert k.log == []
+
+
+def people():
+    return {"lab09": {"name": ["lab09"], "class": ["person", "posixaccount"], "directmemberof": ["lab_users@idm.x"]}}
+
+
+def fan_ok(hosts):
+    return [("srv (this server)", True, "not a Kanidm client yet: nothing cached")]
+
+
+def test_revoke_user_expires_moves_key_audits_and_clears(ca, tmp_path):
+    ca.register("lab09", keypair(tmp_path, "u9"))
+    k, rec, fanned = FakeK(people()), Rec(), []
+    ops.revoke(k, ca, [], "lab09", rec=rec, fan=lambda h: fanned.append(1) or fan_ok(h), say=lambda *_: None)
+    assert k.log == [("expire", "lab09")] and ca.registered("lab09") is None and fanned == [1]
+    assert [c[0] for c in rec.calls] == ["revoke", "revoke.done"] and rec.calls[0][1]["scope"] == "account"
+
+
+def test_revoke_group_membership_only(ca):
+    k = FakeK(people())
+    ops.revoke(k, ca, [], "lab09", group="lab_users", rec=Rec(), fan=fan_ok, say=lambda *_: None)
+    assert k.log == [("remove", "lab_users", "lab09")]
+
+
+def test_revoke_group_not_a_direct_member_is_refused(ca):
+    k = FakeK(people())
+    with pytest.raises(SiteError, match="not a direct member of admins_x"):
+        ops.revoke(k, ca, [], "lab09", group="admins_x", rec=Rec(), fan=fan_ok)
+    assert k.log == []
+
+
+@pytest.mark.parametrize("who", ["admin", "idm_admin", "alice"])
+def test_revoke_refuses_builtins_and_yourself(ca, who):          # Review Focus 2
+    k = FakeK({"alice": {"name": ["alice"], "class": ["person"], "directmemberof": []}}, as_="alice")
+    with pytest.raises(SiteError, match="refusing"):
+        ops.revoke(k, ca, [], who, rec=Rec(), fan=fan_ok)
+    assert k.log == []
+
+
+def test_revoke_unknown_person(ca):
+    with pytest.raises(SiteError, match="no Kanidm person lab77"):
+        ops.revoke(FakeK(people()), ca, [], "lab77", rec=Rec(), fan=fan_ok)
+
+
+def test_revoke_with_an_unreachable_client_still_applies_and_says_so(ca):   # Review Focus 3
+    k, rec = FakeK(people()), Rec()
+    bad = lambda h: [("srv (this server)", True, "ok"), ("cli1", False, "timed out (host off or unreachable?)")]
+    with pytest.raises(SiteError, match=r"the Kanidm change IS in effect.*cli1.*~2 min"):
+        ops.revoke(k, ca, [], "lab09", rec=rec, fan=bad, say=lambda *_: None)
+    assert k.log == [("expire", "lab09")] and [c[0] for c in rec.calls] == ["revoke", "revoke.done"]
+
+
+def test_revoke_session_lost_midway_writes_no_done_record(ca):      # Review Focus 4
+    class Dies(FakeK):
+        def expire_now(self, n):
+            raise SiteError("not logged in to Kanidm as idm_admin: run `kanidm login -D idm_admin` first")
+    rec = Rec()
+    with pytest.raises(SiteError, match="not logged in"):
+        ops.revoke(Dies(people()), ca, [], "lab09", rec=rec, fan=fan_ok)
+    assert [c[0] for c in rec.calls] == ["revoke"]
