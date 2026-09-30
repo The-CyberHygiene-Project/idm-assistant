@@ -112,6 +112,24 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
 
 
+def _ops_env(a):
+    from .kanidm import Kanidm
+    from .sshca import SshCa
+    site, hosts = _load(a.site)
+    return site, hosts, Kanidm(a.as_), SshCa()
+
+
+def _onboard(a):
+    from .ops import onboard
+    site, _hosts, k, ca = _ops_env(a)
+    key = Path(a.ssh_key).read_text() if a.ssh_key else None
+    items = onboard(k, ca, a.user, site["DOMAIN"], display=a.display, groups=tuple(a.group), ssh_key=key,
+                    replace_key=a.replace_key)
+    print(f"onboarding checklist for {a.user}:")
+    for item, done, note in items:
+        print(f"  [{'x' if done else ' '}] {item}" + (f"  ({note})" if note else ""))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -128,9 +146,16 @@ def main(argv=None):
     e.add_argument("--site", default="/etc/chp/site.conf"); e.add_argument("--root", default="/etc/step-ca/certs/root_ca.crt")
     e.add_argument("--ssh-ca", default="/etc/ssh-ca/user_ca.pub")
     e.add_argument("--cache-key", default="/var/lib/chp/cache-key/id_ecdsa.pub")
+    o = sub.add_parser("onboard", help="create/complete a person: POSIX, groups, reset token, SSH key + certificate")
+    o.add_argument("user"); o.add_argument("--display"); o.add_argument("--group", action="append", default=[])
+    o.add_argument("--ssh-key", help="the user's OpenSSH public key file (ECDSA or RSA >= 3072)")
+    o.add_argument("--replace-key", action="store_true")
+    o.add_argument("--as", dest="as_", default="idm_admin", help="your Kanidm admin session (kanidm login -D NAME)")
+    o.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
-        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd}[a.cmd](a)
+        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
+         "onboard": _onboard}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

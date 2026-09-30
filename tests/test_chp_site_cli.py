@@ -68,3 +68,8 @@ def test_non_utf8_file_is_a_readable_error_not_a_traceback(tmp_path):    # final
     (d / "site.conf").write_bytes(GOOD.replace("D. Shannon", "Pat O\u2019Brien").encode("cp1252"))
     r = cli("validate", "--site", str(d))
     assert r.returncode == 2 and "not UTF-8 text" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_onboard_help_lists_the_options():
+    r = cli("onboard", "--help")
+    assert r.returncode == 0 and all(o in r.stdout for o in ("--group", "--ssh-key", "--replace-key", "--as", "--display"))
