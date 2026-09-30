@@ -436,7 +436,7 @@ lab/iso2/
 
   from chp_site.hosts import lookup, norm_mac, parse_hosts, server_of
   from chp_site.sitefile import SiteError, parse_site
-  from test_chp_site_sitefile import GOOD
+  from tests.test_chp_site_sitefile import GOOD
 
   SITE = parse_site(GOOD)
   HOSTS = """# MAC               hostname  IP              role    [disk]
@@ -658,7 +658,7 @@ lab/iso2/
 
   from chp_site.clientconf import cert_sha256, make_client_conf, parse_client_conf, ssh_fpr
   from chp_site.sitefile import SiteError, parse_site
-  from test_chp_site_sitefile import GOOD
+  from tests.test_chp_site_sitefile import GOOD
 
   FX = Path(__file__).parent / "fixtures" / "chp-site"
   PEM = (FX / "root_ca.crt").read_text()
@@ -825,8 +825,8 @@ lab/iso2/
   from chp_site.hosts import parse_hosts
   from chp_site.render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
   from chp_site.sitefile import parse_site
-  from test_chp_site_hosts import HOSTS
-  from test_chp_site_sitefile import ECDSA, GOOD
+  from tests.test_chp_site_hosts import HOSTS
+  from tests.test_chp_site_sitefile import ECDSA, GOOD
 
   SITE = parse_site(GOOD)
   HS = parse_hosts(HOSTS, SITE)
@@ -872,10 +872,10 @@ lab/iso2/
 
   from chp_site.pre import Facts, run_pre
   from chp_site.sitefile import SiteError
-  from test_chp_site_clientconf import PEM, PUB
+  from tests.test_chp_site_clientconf import PEM, PUB
   from chp_site.clientconf import make_client_conf
-  from test_chp_site_hosts import HOSTS
-  from test_chp_site_sitefile import GOOD
+  from tests.test_chp_site_hosts import HOSTS
+  from tests.test_chp_site_sitefile import GOOD
 
   G = 1_000_000_000
   ONE_DISK = [("vda", 120 * G, "virtio", False, "disk")]
@@ -1147,9 +1147,9 @@ lab/iso2/
   import sys
   from pathlib import Path
 
-  from test_chp_site_clientconf import FX
-  from test_chp_site_hosts import HOSTS
-  from test_chp_site_sitefile import GOOD
+  from tests.test_chp_site_clientconf import FX
+  from tests.test_chp_site_hosts import HOSTS
+  from tests.test_chp_site_sitefile import GOOD
 
   ROOT = Path(__file__).resolve().parents[1]
   PKG = ROOT / "appliance" / "chp-site"
@@ -1322,8 +1322,8 @@ lab/iso2/
   from chp_site.hosts import parse_hosts
   from chp_site.render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
   from chp_site.sitefile import parse_site
-  from test_chp_site_hosts import HOSTS
-  from test_chp_site_sitefile import GOOD
+  from tests.test_chp_site_hosts import HOSTS
+  from tests.test_chp_site_sitefile import GOOD
 
   KS = Path(__file__).resolve().parents[1] / "appliance" / "kickstart"
   HEADER = (Path(__file__).resolve().parents[1] / "appliance" / "branding" / "file-header.txt").read_text()
