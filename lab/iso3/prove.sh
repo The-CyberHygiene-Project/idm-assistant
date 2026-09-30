@@ -12,7 +12,7 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$top/lab/iso2"
 R=~/idm-lab-secrets/iso3-render; KEY=~/idm-lab-secrets/iso2_chpadmin; STICK=/data/libvirt/images/iso3-stick.img
 PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; IP=192.168.100.30; D=iso3.lab.test; VM=iso3-srv; fails=0
-export CHP_REPO=0.3.0
+export CHP_REPO=0.3.1
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
