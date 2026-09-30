@@ -22,11 +22,11 @@ Host checks (server and client):
 - the escrowed LUKS passphrase unlocks the disk at first boot (no TPM binding yet; that is Plans 3/4)
 - `chpadmin` logs in with the site key only
 - FQDN; static IP on the NIC matched by MAC
-- FIPS enabled; SELinux Enforcing; root on LUKS2
-- `/etc/chp` site files are 0644; **no escrow anywhere on the host**; `client.conf` only on the client
+- FIPS enabled; SELinux Enforcing; root on LUKS (`crypto_LUKS`; LUKS2 is what the kickstart requests, but the version itself was not checked)
+- `/etc/chp` site files are 0644; no escrow in `/etc/chp` or on the root filesystem (`find / -xdev`, which does not cover the separate `/var`, `/home` and `/tmp` volumes); `client.conf` only on the client
 - `chp-site` comes from our signed RPM and runs under the host's python3 with fapolicyd enforcing; `chp-site validate /etc/chp` passes
 - `su -` works with the escrowed root console password; root has a SHA-512 hash
-- **the LUKS passphrase value is nowhere on disk** (`/root /var/log /etc /var/lib /home`; row 16)
+- **the LUKS passphrase value is nowhere on disk** (`/root /var/log /etc /var/lib /home`; row 16). The root console password value was not searched for.
 - the CUI profile was applied at install (`/root/openscap_data`)
 
 Install time: about 12 minutes per host (graphical-server + CUI, local repo).
@@ -54,3 +54,14 @@ Install time: about 12 minutes per host (graphical-server + CUI, local repo).
    `repomd.xml.asc` against the pinned key before anything is installed, which covers every package through the metadata checksums.
 8. **A search for the words `--passphrase=` hit OpenSCAP's own rule documentation** in `/root/openscap_data` (harmless example
    text). The row-16 check now searches for the passphrase **value**, sent through stdin to `read` inside the `su` session.
+
+## Changes after the final review (2026-09-30)
+
+- The escrow header now reads "written at install start … valid only if a line 'INSTALL COMPLETED' follows". The kickstart's last
+  step (`%post --nochroot`, now `--erroronfail`) appends that line. So after an install that stopped early, the newest
+  **completed** escrow file (`*.old`) still says which secrets are on the disk. This was re-proven on aero; see below.
+- The wording above was corrected to say exactly what each check covers (final review, minor 12).
+
+**Re-proof after the fix (2026-09-30, 11:23):** prep 3/3 plus the server stage **19/19 PASS**. That includes the new
+check "escrow marked INSTALL COMPLETED by the kickstart's last step", then the unlock with the escrowed passphrase
+and every host check above. The lab was cleaned up afterwards.

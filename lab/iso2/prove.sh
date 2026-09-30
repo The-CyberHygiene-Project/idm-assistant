@@ -51,6 +51,7 @@ host_checks() {  # NAME IP FQDN ROLE
 install_ok() {  # NAME MAC ROLE HOST
   local out; out=$(A "sudo bash /tmp/iso2/install.sh $1 $2 $3 $STICK 1")
   [[ $out == *"INSTALLED and started $1"* ]] && pass "$1: install finished, stick detached" || { fail "$1: install" "$out"; return 1; }
+  check "$1: escrow marked INSTALL COMPLETED by the kickstart's last step" "$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK $4.txt | grep -c '^INSTALL COMPLETED'")" "1"
   out=$(A "sudo bash /tmp/iso2/unlock.sh $1 $STICK $4")
   [[ $out == *"passphrase sent"* ]] && pass "$1: escrowed LUKS passphrase unlocked the disk" || fail "$1: LUKS unlock" "$out"
 }

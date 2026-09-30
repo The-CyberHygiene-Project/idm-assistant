@@ -14,7 +14,20 @@ class SiteError(ValueError):
     """A problem in the site files; str() is the message shown at the install console."""
 
 
-def read_kv(text, name):
+def read_file(path, what):
+    """Read a site file as UTF-8. A missing, unreadable or non-UTF-8 file is a SiteError with a readable message
+    (files saved on Windows as ANSI or UTF-16 used to end in a Python traceback at the install console)."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise SiteError(f"the site stick has no {what} ({path.name})") from None
+    except UnicodeDecodeError:
+        raise SiteError(f"{path.name} is not UTF-8 text (saved as ANSI or UTF-16?); save it as UTF-8") from None
+    except (IsADirectoryError, PermissionError) as e:
+        raise SiteError(f"cannot read {path.name}: {e.strerror}") from None
+
+
+def read_kv(text, name, lines=None):
     """KEY=value lines; blank lines and '#' comments ignored. A UTF-8 BOM, CRLF and surrounding spaces are tolerated
     (files edited on Windows/macOS). A line without '=', a key that is not UPPER_CASE, or a repeated key is an error."""
     if text.startswith("﻿"):
@@ -31,13 +44,17 @@ def read_kv(text, name):
             raise SiteError(f"{name} line {n}: bad key {k!r} (keys are UPPER_CASE)")
         if k in out:
             raise SiteError(f"{name} line {n}: {k} is set twice")
+        if re.search(r"\s#", v):
+            raise SiteError(f"{name} line {n}: {k}: inline comments are not allowed (put the comment on its own line)")
         out[k] = v
+        if lines is not None:
+            lines[k] = n
     return out
 
 
-def _plain(k, v):
+def _plain(k, v, n):
     if re.search(r"[\"'“”‘’`$\\;|&<>]", v):
-        raise SiteError(f"{k}: quotes and shell characters are not allowed in values ({v!r})")
+        raise SiteError(f"site.conf line {n}: {k}: quotes and shell characters are not allowed in values ({v!r})")
     return v
 
 
@@ -103,9 +120,10 @@ _NAME = r"[^\x00-\x1f=,]{1,64}"
 
 
 def parse_site(text):
-    raw = read_kv(text, "site.conf")
+    where = {}
+    raw = read_kv(text, "site.conf", where)
     for k, v in raw.items():
-        _plain(k, v)
+        _plain(k, v, where[k])
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
              "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY"}
     for k in raw:
@@ -128,6 +146,13 @@ def parse_site(text):
     s["NTP_UPSTREAM"] = [_host_or_ip("NTP_UPSTREAM", x) for x in _list(raw["NTP_UPSTREAM"])]
     if not re.fullmatch(_TZ, raw["TIMEZONE"]):
         raise SiteError(f"TIMEZONE: {raw['TIMEZONE']!r} is not a zone name like America/Denver or UTC")
+    try:
+        import zoneinfo  # noqa: PLC0415  (3.9 stdlib; the database may be absent, e.g. on a minimal image)
+        zones = zoneinfo.available_timezones()
+    except Exception:
+        zones = set()
+    if zones and raw["TIMEZONE"] not in zones:
+        raise SiteError(f"TIMEZONE: {raw['TIMEZONE']!r} is not a known time zone (Anaconda would silently use its default)")
     s["TIMEZONE"] = raw["TIMEZONE"]
     if not re.fullmatch(_NAME, raw["ISSO_NAME"]):
         raise SiteError("ISSO_NAME: 1-64 printable characters, no '=' or ','")

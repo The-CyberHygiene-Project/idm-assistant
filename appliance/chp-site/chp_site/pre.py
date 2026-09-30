@@ -13,7 +13,7 @@ from .disks import choose_disk
 from .facts import Facts  # noqa: F401  (re-exported for callers and tests)
 from .hosts import lookup, parse_hosts
 from .render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
-from .sitefile import SiteError, parse_site
+from .sitefile import SiteError, parse_site, read_file
 
 
 def sha512_crypt(pw):
@@ -27,22 +27,15 @@ def sha512_crypt(pw):
                               check=True).stdout.strip()
 
 
-def _read(p, what):
-    try:
-        return p.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise SiteError(f"the site stick has no {what} ({p.name})") from None
-
-
 def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secrets.token_urlsafe):
     stick, out = Path(stick), Path(out)
-    site = parse_site(_read(stick / "site.conf", "site.conf"))
-    hosts = parse_hosts(_read(stick / "hosts", "hosts table"), site)
+    site = parse_site(read_file(stick / "site.conf", "site.conf"))
+    hosts = parse_hosts(read_file(stick / "hosts", "hosts table"), site)
     host = lookup(hosts, facts.macs)
     if host.role != role:
         raise SiteError(f"you booted the {role} installer, but the hosts table says {host.hostname} is a {host.role}")
     if role == "client":
-        parse_client_conf(_read(stick / "client.conf", "client.conf (run `chp-site export-client` on the server)"), site)
+        parse_client_conf(read_file(stick / "client.conf", "client.conf (run `chp-site export-client` on the server)"), site)
     disk = choose_disk(facts.disks, host.disk)
     # --- everything is valid: now the secrets, escrow first ---
     luks, rootpw = secret(32), secret(18)
@@ -51,7 +44,10 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         esc_dir.mkdir(exist_ok=True)
         if esc.exists():
             esc.rename(esc_dir / f"{host.hostname}.txt.{facts.now}.old")
-        esc.write_text(f"# {host.hostname}.{site['DOMAIN']}  installed {facts.now}\n"
+        esc.write_text(f"# {host.hostname}.{site['DOMAIN']}  written at install start {facts.now}\n"
+                       "# These secrets are valid only if a line 'INSTALL COMPLETED' follows (added by the installer's\n"
+                       "# last step). Without it the install stopped early: the disk still has the secrets in the newest\n"
+                       "# *.old file that does say INSTALL COMPLETED.\n"
                        "# KEEP THIS STICK OFFLINE: it now holds this host's recovery secrets.\n"
                        f"LUKS_PASSPHRASE={luks}\nROOT_CONSOLE_PASSWORD={rootpw}\n")
         os.sync()
@@ -65,4 +61,5 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(text)
+    (out / "escrow-name").write_text(host.hostname)     # not secret: tells %post --nochroot which file to mark
     return host

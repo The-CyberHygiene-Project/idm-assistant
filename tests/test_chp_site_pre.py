@@ -92,3 +92,11 @@ def test_disk_rules_apply(tmp_path):
     two = [("vda", 120 * G, "virtio", False, "disk"), ("vdb", 120 * G, "virtio", False, "disk")]
     with pytest.raises(SiteError, match="name one in the hosts table"):
         run(tmp_path, "server", ["52:54:00:c4:02:30"], facts=facts(["52:54:00:c4:02:30"], two))
+
+
+def test_escrow_header_says_it_is_valid_only_after_completion(tmp_path):   # final review I1
+    h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
+    esc = (s / "escrow" / "iso2-srv.txt").read_text()
+    assert "installed" not in esc.splitlines()[0]
+    assert "valid only if a line 'INSTALL COMPLETED' follows" in esc
+    assert (out / "escrow-name").read_text() == "iso2-srv"          # %post --nochroot appends the completion line

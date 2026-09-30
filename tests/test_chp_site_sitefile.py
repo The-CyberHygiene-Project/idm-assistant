@@ -105,3 +105,22 @@ def test_admin_key_types():                                      # Review Focus 
         ssh_pubkey("ecdsa-sha2-nistp256 " + ECDSA.split()[1])
     with pytest.raises(SiteError):
         ssh_pubkey('from="10.0.0.1" ' + ECDSA)                # options are not a key
+
+
+def test_quote_error_names_the_line():                                    # final review Minor 1
+    text = GOOD.replace("DOMAIN=iso2.lab.test", 'DOMAIN="iso2.lab.test"')
+    with pytest.raises(SiteError, match=r"line 2: DOMAIN"):
+        parse_site(text)
+
+
+def test_inline_comment_is_refused_not_kept_in_the_value():             # final review Minor 3
+    with pytest.raises(SiteError, match=r"line 8: ISSO_NAME.*comment"):
+        parse_site(GOOD.replace("ISSO_NAME=D. Shannon", "ISSO_NAME=D. Shannon   # the ISSO"))
+
+
+def test_timezone_must_exist_when_the_tz_database_is_present():          # final review Minor 4
+    import zoneinfo
+    if not zoneinfo.available_timezones():
+        pytest.skip("no tz database here")
+    with pytest.raises(SiteError, match="TIMEZONE.*America/Denvr"):
+        parse_site(GOOD.replace("America/Denver", "America/Denvr"))

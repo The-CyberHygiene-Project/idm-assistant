@@ -68,12 +68,16 @@ if [ "$rc" -ne 0 ]; then echo "CHP: install stopped before any disk was touched.
 exit "$rc"
 %end
 
-%post --nochroot --log=/mnt/sysimage/root/chp-post-nochroot.log
-# Non-secret site files to /etc/chp (0644). The escrow directory is NEVER copied to the host.
+%post --nochroot --erroronfail --log=/mnt/sysimage/root/chp-post-nochroot.log
+# Non-secret site files to /etc/chp (0644). The escrow directory is NEVER copied to the host. Any failure stops the
+# install (--erroronfail): a host without /etc/chp must not look installed.
+set -e
 install -d -m 0755 /mnt/sysimage/etc/chp
 for f in site.conf hosts client.conf; do
   if [ -f "/mnt/oemdrv/$f" ]; then install -m 0644 "/mnt/oemdrv/$f" "/mnt/sysimage/etc/chp/$f"; fi
 done
+# Mark this host's escrow as used: its secrets are now the ones on the disk (until this line exists they are not).
+echo "INSTALL COMPLETED $(date -u +%Y%m%dT%H%M%SZ)" >> "/mnt/oemdrv/escrow/$(cat /tmp/chp/escrow-name).txt"
 sync; umount /mnt/oemdrv || true
 echo "CHP: install finished. Remove the site stick and keep it OFFLINE: it holds this host's recovery secrets." > /dev/console
 %end

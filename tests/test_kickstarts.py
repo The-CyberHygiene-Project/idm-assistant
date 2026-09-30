@@ -44,3 +44,12 @@ def test_kickstart_with_snippets_validates(tmp_path, role, host):
     f = tmp_path / "ks.cfg"; f.write_text(t)
     r = subprocess.run(["uvx", "--from", "pykickstart", "ksvalidator", "-v", "RHEL9", str(f)], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_nochroot_post_stops_on_failure_and_marks_the_escrow_completed(role):   # final review I1 + Minor 7
+    t = (KS / f"{role}.ks").read_text()
+    post = t[t.index("%post --nochroot"):]
+    post = post[:post.index("%end")]
+    assert "--erroronfail" in post.splitlines()[0]
+    assert "INSTALL COMPLETED" in post and "/tmp/chp/escrow-name" in post

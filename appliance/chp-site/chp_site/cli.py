@@ -9,18 +9,20 @@ from pathlib import Path
 from . import VERSION
 from .clientconf import cert_sha256, make_client_conf, parse_client_conf, ssh_fpr
 from .hosts import lookup, parse_hosts
-from .sitefile import SiteError, parse_site
+from .sitefile import SiteError, parse_site, read_file
 
 
 def _validate(a):
     d = Path(a.site)
-    site = parse_site((d / "site.conf").read_text(encoding="utf-8"))
-    hosts = parse_hosts((d / "hosts").read_text(encoding="utf-8"), site)
-    if (d / "client.conf").exists():
-        parse_client_conf((d / "client.conf").read_text(encoding="utf-8"), site)
+    site = parse_site(read_file(d / "site.conf", "site.conf"))
+    hosts = parse_hosts(read_file(d / "hosts", "hosts table"), site)
+    host = lookup(hosts, a.mac) if a.mac else None
+    client = a.role == "client" or (host is not None and host.role == "client")
+    if client or (d / "client.conf").exists():         # spec 4.2: a client site needs a valid client.conf
+        parse_client_conf(read_file(d / "client.conf", "client.conf (run `chp-site export-client` on the server)"), site)
     msg = f"OK: {site['DOMAIN']}, {len(hosts)} hosts, server {next(h.hostname for h in hosts if h.role == 'server')}"
-    if a.mac:
-        h = lookup(hosts, a.mac)
+    if host:
+        h = host
         if a.role and h.role != a.role:
             raise SiteError(f"{h.hostname} is a {h.role}, not a {a.role}")
         msg += f"; this machine is {h.hostname} ({h.role}, {h.ip})"
@@ -36,7 +38,7 @@ def _pre(a):
 
 
 def _export(a):
-    site = parse_site(Path(a.site).read_text(encoding="utf-8"))
+    site = parse_site(read_file(Path(a.site), "site.conf"))
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub)
     (Path(a.stick) / "client.conf").write_text(text)
