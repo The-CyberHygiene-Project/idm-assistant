@@ -78,3 +78,33 @@ def move_pending(pending, stick, server_hostname, now):
     for f in files:
         _shred(f)
     return [f.name for f in files]
+
+
+def move_tokens(pending_tokens, stick, now):
+    """Per-client unixd tokens -> stick/tokens/<host>.token with the same guarantee as the escrow: written, fsync'd,
+    read back from the DEVICE and compared, only then shredded on the server."""
+    pending_tokens, d = Path(pending_tokens), Path(stick) / "tokens"
+    files = sorted(f for f in pending_tokens.iterdir() if f.is_file() and f.name.endswith(".token")) \
+        if pending_tokens.is_dir() else []
+    if not files:
+        return []
+    try:
+        d.mkdir(exist_ok=True)
+        for f in files:
+            v = f.read_text()
+            out = d / f.name
+            if out.exists():
+                out.rename(d / f"{f.name}.{now}.old")
+            _write_synced(out, v)
+            if _read_back(out) != v:
+                raise OSError(0, f"read-back of {f.name} from the stick does not match")
+    except OSError as e:
+        raise SiteError(f"could not write the client tokens to the stick ({getattr(e, 'strerror', None) or e}); they are "
+                        "kept on the server and the monitor keeps warning") from None
+    for f in files:
+        _shred(f)
+    try:
+        pending_tokens.rmdir()
+    except OSError:
+        pass
+    return [f.name[:-len(".token")] for f in files]

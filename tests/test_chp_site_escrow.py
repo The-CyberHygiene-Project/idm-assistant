@@ -65,3 +65,32 @@ def test_write_is_fsynced_file_and_directory(tmp_path, monkeypatch):
     p = pending(tmp_path); s = tmp_path / "stick"; s.mkdir()
     move_pending(p, s, "iso3-srv", "A")
     assert len(calls) >= 2                                  # the escrow file AND its directory
+
+
+def test_move_tokens_writes_reads_back_then_shreds(tmp_path):
+    from chp_site.escrow import move_tokens
+    p = tmp_path / "pending" / "tokens"; p.mkdir(parents=True); stick = tmp_path / "stick"; stick.mkdir()
+    (p / "cli1.token").write_text("A" * 30 + "." + "B" * 30 + "." + "C" * 30 + "\n")
+    assert move_tokens(p, stick, "20260930T000000Z") == ["cli1"]
+    assert (stick / "tokens" / "cli1.token").read_text().startswith("AAAA") and not (p / "cli1.token").exists()
+    assert oct((stick / "tokens" / "cli1.token").stat().st_mode & 0o777) == "0o600"
+
+
+def test_move_tokens_keeps_source_when_readback_differs(tmp_path, monkeypatch):
+    from chp_site import escrow
+    from chp_site.sitefile import SiteError
+    p = tmp_path / "t"; p.mkdir(); stick = tmp_path / "s"; stick.mkdir()
+    (p / "cli1.token").write_text("x" * 20 + ".y" + "y" * 20 + ".z" + "z" * 20)
+    monkeypatch.setattr(escrow, "_read_back", lambda path: "corrupted")
+    with pytest.raises(SiteError, match="kept on the server"):
+        escrow.move_tokens(p, stick, "N")
+    assert (p / "cli1.token").exists()
+
+
+def test_move_tokens_replaces_old_as_dot_old(tmp_path):
+    from chp_site.escrow import move_tokens
+    p = tmp_path / "t"; p.mkdir(); stick = tmp_path / "s"; (stick / "tokens").mkdir(parents=True)
+    (stick / "tokens" / "cli1.token").write_text("old")
+    (p / "cli1.token").write_text("n" * 20 + ".n" + "n" * 20 + ".n" + "n" * 20)
+    move_tokens(p, stick, "NOW")
+    assert (stick / "tokens" / "cli1.token.NOW.old").read_text() == "old"

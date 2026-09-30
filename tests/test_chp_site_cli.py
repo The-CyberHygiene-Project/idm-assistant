@@ -73,3 +73,20 @@ def test_non_utf8_file_is_a_readable_error_not_a_traceback(tmp_path):    # final
 def test_onboard_help_lists_the_options():
     r = cli("onboard", "--help")
     assert r.returncode == 0 and all(o in r.stdout for o in ("--group", "--ssh-key", "--replace-key", "--as", "--display"))
+
+
+def test_export_client_moves_pending_client_tokens(tmp_path):
+    d = site(tmp_path); stick = tmp_path / "stick"; stick.mkdir()
+    pend = tmp_path / "pend"; (pend / "tokens").mkdir(parents=True)
+    tok = "a" * 20 + "." + "b" * 20 + "." + "c" * 20
+    (pend / "tokens" / "iso2-cli.token").write_text(tok + "\n")
+    r = cli("export-client", "--stick", str(stick), "--site", str(d / "site.conf"), "--pending", str(pend),
+            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"))
+    assert r.returncode == 0, r.stderr
+    assert "tokens moved to the stick: iso2-cli" in r.stdout and tok not in r.stdout
+    assert (stick / "tokens" / "iso2-cli.token").read_text().strip() == tok and not (pend / "tokens" / "iso2-cli.token").exists()
+
+
+def test_client_token_help():
+    r = cli("client-token", "--help")
+    assert r.returncode == 0 and "--as" in r.stdout

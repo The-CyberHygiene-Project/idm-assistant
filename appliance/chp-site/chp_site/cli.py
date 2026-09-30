@@ -104,7 +104,7 @@ def _export(a):
 
 def _export_to(a, site, hosts, text, pem, pub, stick):
     import time
-    from .escrow import move_pending
+    from .escrow import move_pending, move_tokens
     (stick / "client.conf").write_text(text)
     print(f"wrote {stick / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
           "Compare both with the server console before installing clients.")
@@ -112,6 +112,9 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     moved = move_pending(pending, stick, values(site, hosts)["SERVER_HOSTNAME"],
                          time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) if pending.is_dir() else []
     print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
+    toks = move_tokens(pending / "tokens", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
+        if (pending / "tokens").is_dir() else []
+    print("tokens moved to the stick: " + ", ".join(toks) if toks else "no client tokens pending")
 
 
 def _ops_env(a):
@@ -144,6 +147,13 @@ def _unexpire(a):
     unexpire(k, ca, site, hosts, a.user, a.approver, a.reason)
 
 
+def _client_token(a):
+    from .ops import client_token
+    _site, hosts, k, _ca = _ops_env(a)
+    p = client_token(k, hosts, a.host)
+    print(f"token for {a.host} written to {p}; now run chp-site export-client with the site stick")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -172,11 +182,14 @@ def main(argv=None):
     u = sub.add_parser("unexpire", help="re-enable an expired person (ISSO or delegate approval, audited; ISSO #32)")
     u.add_argument("user"); u.add_argument("--approver", required=True); u.add_argument("--reason", required=True)
     u.add_argument("--as", dest="as_", default="idm_admin"); u.add_argument("--site", default="/etc/chp")
+    t = sub.add_parser("client-token", help="mint a read-only unixd token for a client added later (then export-client)")
+    t.add_argument("host"); t.add_argument("--as", dest="as_", default="idm_admin"); t.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
         {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
          "onboard": _onboard, "revoke": _revoke,
-         "unexpire": _unexpire}[a.cmd](a)
+         "unexpire": _unexpire,
+         "client-token": _client_token}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

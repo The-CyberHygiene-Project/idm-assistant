@@ -10,6 +10,7 @@ import subprocess
 from .sitefile import SiteError
 
 NAME_RE = r"[a-z][a-z0-9_]{0,31}"
+SA_RE = r"[a-z][a-z0-9_-]{0,63}"          # service accounts, e.g. unixd-<hostname>
 PROTECTED = frozenset({"admin", "idm_admin"})
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -21,6 +22,12 @@ def valid_name(n):
 def _name(n, what="name"):
     if not valid_name(n):
         raise SiteError(f"{n!r} is not a valid {what} (lower-case letters, digits, _; starts with a letter; max 32)")
+    return n
+
+
+def _sa(n):
+    if not re.fullmatch(SA_RE, n or ""):
+        raise SiteError(f"{n!r} is not a valid service account name")
     return n
 
 
@@ -90,7 +97,7 @@ class Kanidm:
         self._k("person", "posix", "set", _name(name))
 
     def add_member(self, group, name):
-        self._k("group", "add-members", _name(group, "group name"), _name(name))
+        self._k("group", "add-members", _name(group, "group name"), _sa(name))
 
     def remove_member(self, group, name):
         self._k("group", "remove-members", _name(group, "group name"), _name(name))
@@ -100,6 +107,20 @@ class Kanidm:
         if not re.search(r"use-reset-token [A-Za-z0-9-]+", out):
             raise SiteError("no reset token in the kanidm output")
         return out
+
+    def service_account_exists(self, name):
+        return parse_entry(self._k("service-account", "get", _sa(name))) is not None
+
+    def service_account_create(self, name, display):
+        self._k("service-account", "create", _sa(name), display, "idm_admins")
+
+    def api_token(self, name, label):
+        """A READ-ONLY API token (no --readwrite). The token is returned, never logged."""
+        out = self._k("service-account", "api-token", "generate", _sa(name), _sa(label))
+        m = re.findall(r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}", out)
+        if not m:
+            raise SiteError("no API token in the kanidm output")
+        return m[-1]
 
     def expire_now(self, name):
         self._k("person", "validity", "expire-at", _name(name), "now")
