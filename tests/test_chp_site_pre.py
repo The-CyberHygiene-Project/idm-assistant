@@ -115,3 +115,32 @@ def test_site_stick_identity_is_recorded_for_the_host(tmp_path):        # user r
     run_pre("server", s, out, "file:///x", facts(["52:54:00:c4:02:30"]), hasher=lambda p: "$6$h",
             secret=lambda n: "S" * n, stick_id={"ID": "46f4:0001", "SERIAL": "ABC123", "NAME": "Site Stick"})
     assert (out / "site-stick.id").read_text() == "ID=46f4:0001\nSERIAL=ABC123\nNAME=Site Stick\n"
+
+
+TOKEN = "eyJhbGciOiJFUzI1NiJ9AAAAAAAAAAAA.eyJzdWIiOiJ1bml4ZC1jbGkifQAAAAAAA.c2lnbmF0dXJlc2lnbmF0dXJlc2ln"
+CLI_MAC = ["52:54:00:c4:02:31"]
+
+
+def test_client_needs_its_own_token_before_any_disk(tmp_path):       # Review Focus 3
+    s = stick(tmp_path)
+    with pytest.raises(SiteError, match=r"no unixd token for iso2-cli.*chp-site client-token iso2-cli"):
+        run(tmp_path, "client", CLI_MAC, stick_dir=s)
+    assert not (s / "escrow").exists() and not (tmp_path / "out").exists()
+
+
+def test_client_token_staged_0600(tmp_path):
+    s = stick(tmp_path); (s / "tokens").mkdir(); (s / "tokens" / "iso2-cli.token").write_text(TOKEN + "\n")
+    h, s, out = run(tmp_path, "client", CLI_MAC, stick_dir=s)
+    t = out / "unixd.token"
+    assert h.hostname == "iso2-cli" and t.read_text() == TOKEN and stat.S_IMODE(t.stat().st_mode) == 0o600
+
+
+def test_client_token_garbage_refused(tmp_path):
+    s = stick(tmp_path); (s / "tokens").mkdir(); (s / "tokens" / "iso2-cli.token").write_text("not a token\n")
+    with pytest.raises(SiteError, match="is not a Kanidm API token"):
+        run(tmp_path, "client", CLI_MAC, stick_dir=s)
+
+
+def test_server_gets_no_token_file(tmp_path):
+    h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
+    assert not (out / "unixd.token").exists()

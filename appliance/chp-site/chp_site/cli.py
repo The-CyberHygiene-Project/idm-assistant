@@ -40,7 +40,9 @@ def _load(site_dir):
 
 def _get(a):
     site, hosts = _load(a.site)
-    v = values(site, hosts)
+    cc = Path(a.site) / "client.conf"
+    client = parse_client_conf(read_file(cc, "client.conf"), site) if cc.exists() else None
+    v = values(site, hosts, client)
     if a.key not in v:
         raise SiteError(f"unknown key {a.key} (known: {', '.join(sorted(v))})")
     print(v[a.key])
