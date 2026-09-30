@@ -9,6 +9,8 @@ from pathlib import Path
 from . import VERSION
 from .clientconf import cert_sha256, make_client_conf, parse_client_conf, ssh_fpr
 from .hosts import lookup, parse_hosts
+from . import render as _render
+from .sitevars import values
 from .sitefile import SiteError, parse_site, read_file
 
 
@@ -27,6 +29,33 @@ def _validate(a):
             raise SiteError(f"{h.hostname} is a {h.role}, not a {a.role}")
         msg += f"; this machine is {h.hostname} ({h.role}, {h.ip})"
     print(msg)
+
+
+def _load(site_dir):
+    d = Path(site_dir)
+    site = parse_site(read_file(d / "site.conf", "site.conf"))
+    return site, parse_hosts(read_file(d / "hosts", "hosts table"), site)
+
+
+def _get(a):
+    site, hosts = _load(a.site)
+    v = values(site, hosts)
+    if a.key not in v:
+        raise SiteError(f"unknown key {a.key} (known: {', '.join(sorted(v))})")
+    print(v[a.key])
+
+
+def _render_cmd(a):
+    import time
+    site, hosts = _load(a.site)
+    out = {"zone": lambda: _render.zone(site, hosts, int(time.strftime("%Y%m%d")) * 100 + 1),
+           "named-conf": lambda: _render.named_conf(site, hosts),
+           "kanidm-server": lambda: _render.kanidm_server_toml(site, hosts),
+           "kanidm-config": lambda: _render.kanidm_client_config(site),
+           "collect-conf": lambda: _render.collect_conf(site)}
+    if a.what not in out:
+        raise SiteError(f"unknown render target {a.what} (known: {', '.join(out)})")
+    sys.stdout.write(out[a.what]())
 
 
 def _pre(a):
@@ -55,12 +84,14 @@ def main(argv=None):
     p = sub.add_parser("pre"); p.add_argument("--role", required=True, choices=("server", "client"))
     p.add_argument("--stick", required=True); p.add_argument("--out", required=True)
     p.add_argument("--repo-url", default="file:///run/install/repo/chp")
+    g = sub.add_parser("get"); g.add_argument("key"); g.add_argument("--site", default="/etc/chp")
+    r = sub.add_parser("render"); r.add_argument("what"); r.add_argument("--site", default="/etc/chp")
     e = sub.add_parser("export-client"); e.add_argument("--stick", required=True)
     e.add_argument("--site", default="/etc/chp/site.conf"); e.add_argument("--root", default="/etc/step-ca/certs/root_ca.crt")
     e.add_argument("--ssh-ca", default="/etc/ssh-ca/user_ca.pub")
     a = ap.parse_args(argv)
     try:
-        {"validate": _validate, "pre": _pre, "export-client": _export}[a.cmd](a)
+        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2
