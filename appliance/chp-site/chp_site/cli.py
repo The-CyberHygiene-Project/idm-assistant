@@ -156,8 +156,11 @@ def _client_token(a):
 
 def _authselect_patch(a):
     from .authselect import main as patch
+    from .authselect_ga import main as patch_ga
     patch(a.dir)
-    print(f"patched {a.dir}: pam_kanidm placed jump-safe; kanidm first on passwd, group, initgroups")
+    patch_ga(a.dir)
+    print(f"patched {a.dir}: pam_kanidm placed jump-safe; Google Authenticator before it for Kanidm users (local "
+          "accounts skip it); kanidm first on passwd, group, initgroups")
 
 
 def _pam_test(a):
