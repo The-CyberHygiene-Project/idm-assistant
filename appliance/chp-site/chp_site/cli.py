@@ -160,6 +160,21 @@ def _authselect_patch(a):
     print(f"patched {a.dir}: pam_kanidm placed jump-safe; kanidm first on passwd, group, initgroups")
 
 
+def _pam_test(a):
+    import re as _re
+    from . import pamtest
+    from .kanidm import valid_name
+    if not _re.fullmatch(r"[a-z0-9-]{1,32}", a.service):
+        raise SiteError(f"{a.service!r} is not a valid PAM service name")
+    if not valid_name(a.user):
+        raise SiteError(f"{a.user!r} is not a valid user name")
+    lines = sys.stdin.read().splitlines()
+    pw, code = (lines + ["", ""])[0], (lines[1] if len(lines) > 1 and lines[1] else None)
+    ok, why, prompts = pamtest.authenticate(a.service, a.user, pw, code)
+    print(("PAM_OK" if ok else f"PAM_FAIL {why}") + " prompts=" + "|".join(p.strip() for p in prompts))
+    return 0 if ok else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -192,13 +207,18 @@ def main(argv=None):
     t.add_argument("host"); t.add_argument("--as", dest="as_", default="idm_admin"); t.add_argument("--site", default="/etc/chp")
     ap_ = sub.add_parser("authselect-patch", help="add Kanidm to an authselect profile dir (client enrolment)")
     ap_.add_argument("dir")
+    pt = sub.add_parser("pam-test", help="authenticate USER through PAM service SERVICE (secrets on stdin; root)")
+    pt.add_argument("service"); pt.add_argument("user")
     a = ap.parse_args(argv)
     try:
-        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
+        rc = {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
          "onboard": _onboard, "revoke": _revoke,
          "unexpire": _unexpire,
          "client-token": _client_token,
-         "authselect-patch": _authselect_patch}[a.cmd](a)
+         "authselect-patch": _authselect_patch,
+         "pam-test": _pam_test}[a.cmd](a)
+        if isinstance(rc, int):
+            return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2
