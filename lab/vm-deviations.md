@@ -22,3 +22,4 @@
 | client1 | pty serial console with file log (all new VMs via `vm-lib.sh`) | answer LUKS prompts via `virsh console` |
 | aero | `expect` installed (DVD) | `luks-console-unlock.exp` |
 | all | `sysctl_user_max_user_namespaces` left as dc2 tailoring has it (unselected) | mirror dc2 |
+| build1 | **fapolicyd `permissive = 1`** for ISO Plan 1 builds (Kanidm FIPS-variant RPMs, step-ca/step-cli from source), ISSO-approved 2026-09-29 | same cause as Plan 2 (non-RPM toolchains and build scripts are untrusted). **Reverted** 2026-09-29 after ISO Plan 1 Task 7 (`permissive = 0`, restart and reboot; build1 shut down) |

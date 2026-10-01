@@ -1,0 +1,50 @@
+CyberHygiene Project Lab Installer
+=================================
+
+This image is an internal test artifact of The CyberHygiene Project.
+It is not published, sponsored, endorsed, or supported by the Rocky
+Enterprise Software Foundation (RESF).
+
+Base system
+-----------
+This installer is built from Rocky Linux 9 packages and official
+Rocky Linux 9 installation media, with project-specific kickstart
+data, packages, and configuration added by The CyberHygiene Project.
+
+Compatibility statement (factual only)
+--------------------------------------
+CyberHygiene Project Lab Installer for use with Rocky Linux 9.
+Compatible with Rocky Linux 9.
+
+Trademarks
+----------
+Rocky Linux, Rocky Enterprise Software Foundation, and RESF are
+trademarks of the Rocky Enterprise Software Foundation.
+Linux is a registered trademark of Linus Torvalds.
+
+This product name is "CyberHygiene Project Lab Installer."
+Do not refer to this image as "Rocky Linux," a "Rocky Linux edition,"
+or any name that implies official origin.
+
+Copyright and licenses
+----------------------
+Elements developed by Rocky Linux project contributors are licensed
+under the 3-Clause BSD license. Redistribution of those elements must
+retain the copyright notice, conditions, and disclaimer. The names of
+the copyright holder and contributors may not be used to endorse or
+promote products derived from that software without specific prior
+written permission.
+
+The operating system also includes independently licensed components
+(including GPL, LGPL, MIT, Apache, and others). Each component remains
+under its own license. On an installed system, package licenses can be
+listed with:
+
+    rpm -qa --qf '%{NAME} - %{LICENSE}\n'
+
+This image is provided AS IS, with no warranty of any kind.
+
+Distribution status
+-------------------
+Internal team testing only. Not authorized for public distribution
+under this notice.

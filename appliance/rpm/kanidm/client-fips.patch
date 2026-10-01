@@ -1,0 +1,20 @@
+--- libs/client/Cargo.toml.orig
++++ libs/client/Cargo.toml
+@@ -19,6 +19,7 @@
+ compact_jwt = { workspace = true }
+ tracing = { workspace = true }
+ reqwest = { workspace = true }
++rustls = { workspace = true }   # CHP: unify rustls "fips" into unixd/CLI TLS (ISSO #14)
+ kanidm_proto = { workspace = true }
+ kanidm_lib_file_permissions = { workspace = true }
+ http = { workspace = true }
+--- Cargo.lock.orig
++++ Cargo.lock
+@@ -3694,6 +3694,7 @@
+  "kanidm_lib_file_permissions",
+  "kanidm_proto",
+  "reqwest",
++ "rustls",
+  "serde",
+  "serde_json",
+  "serde_urlencoded",

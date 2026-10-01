@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+# keygen.exp (RUNS ON THE MAC, once): generate the CyberHygiene release signing key ON the YubiKey's OpenPGP applet.
+# The secret key is created by the card and can never be exported. PINs are asked by pinentry-mac, never here.
+# Every gpg prompt arrives as "[GNUPG:] GET_LINE|GET_BOOL <keyword>"; unknown keywords abort (fail closed).
+set timeout 600
+array set answer {
+  cardedit.genkeys.algo        1
+  cardedit.genkeys.size        3072
+  cardedit.genkeys.backup_enc  n
+  cardedit.genkeys.replace_keys y
+  keygen.valid                 2y
+  keygen.valid.okay            y
+  keygen.email                 ""
+  keygen.userid.cmd            O
+}
+set answer(keygen.name)    "The CyberHygiene Project Release Signing"
+set answer(keygen.comment) "Lab Installer packages"
+set menu {admin key-attr generate quit}
+spawn gpg --command-fd 0 --status-fd 1 --card-edit
+expect {
+  -re {\[GNUPG:\] GET_LINE cardedit\.prompt} {
+    if {[llength $menu] == 0} { puts "\nABORT: card-edit prompted after quit"; exit 1 }
+    send "[lindex $menu 0]\r"; set menu [lrange $menu 1 end]; exp_continue }
+  -re {\[GNUPG:\] GET_(LINE|BOOL|HIDDEN) ([a-z._]+)} {
+    set kw $expect_out(2,string)
+    if {![info exists answer($kw)]} { puts "\nABORT: unexpected prompt '$kw' (nothing answered)"; exit 1 }
+    send "$answer($kw)\r"; exp_continue }
+  -re {\[GNUPG:\] KEY_CREATED \S+ ([0-9A-F]{40})} { set fpr $expect_out(1,string); exp_continue }
+  timeout { puts "\nABORT: timed out"; exit 1 }
+  eof
+}
+if {![info exists fpr]} { puts "\nFAILED: no key was created"; exit 1 }
+puts "\nKEY CREATED $fpr"
+

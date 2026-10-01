@@ -1,0 +1,5 @@
+CyberHygiene Project Lab Installer
+Internal test image — not an official Rocky Linux product
+
+Built for use with Rocky Linux 9
+Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.

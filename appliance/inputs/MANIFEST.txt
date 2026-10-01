@@ -1,0 +1,6 @@
+step-ca-0.30.2.tar.gz|0.30.2|899827|327391f301b79818f2418302516b4f6b41bdf08e38edc9011cc7f1b351e19452|github smallstep/certificates tag v0.30.2|sha256 pinned on first fetch (tag archive unsigned)
+step-cli-0.31.0.tar.gz|0.31.0|1655040|7eb9ba3d1d8edc07fe6e3bae0ee5a3b6fc7a60bbd850d334ccc74d02b5e4f0fe|github smallstep/cli tag v0.31.0|sha256 pinned on first fetch (tag archive unsigned)
+go1.26.8.linux-amd64.tar.gz|1.26.8|66897291|d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b|https://go.dev/dl/go1.26.8.linux-amd64.tar.gz|sha256 == go.dev published sha256
+go1.26.8.darwin-arm64.tar.gz|1.26.8|64626620|a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b|https://go.dev/dl/go1.26.8.darwin-arm64.tar.gz|sha256 == go.dev published sha256 (vendoring only)
+step-ca-0.30.2-vendor.tar.gz|0.30.2|10473670|c1521ad1b5fa84e8a9c27b5ffafd7b9bf7fd704b8750b6b70994b0fb377920b4|go mod vendor (go1.26.8)|module hashes enforced by go.sum (go mod verify)
+step-cli-0.31.0-vendor.tar.gz|0.31.0|9339809|8154ea38341f8cc23a0d45f52c0b06b49e9ff6030eea0bd3c82e5929269ee4b8|go mod vendor (go1.26.8)|module hashes enforced by go.sum (go mod verify)

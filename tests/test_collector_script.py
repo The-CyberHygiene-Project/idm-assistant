@@ -16,7 +16,7 @@ def _redact_path(uid):
 
 
 def test_root_always_uses_the_installed_rules():
-    assert _redact_path(0) == "/usr/local/sbin/idm-collect.redact.sed"
+    assert _redact_path(0) == "/usr/share/idm-collect/redact.sed"
 
 
 def test_non_root_may_point_at_test_rules():
@@ -150,3 +150,136 @@ def test_certificate_times_are_read_in_utc():
 def test_an_unconvertible_certificate_time_is_emitted_as_null():
     text = SCRIPT.read_text()
     assert 'isoj()' in text and 'json_str "$(iso "$cf")"' not in text and 'json_str "$(iso "$ct")"' not in text
+
+
+def _kanidm_url(conf_text, uid=1000):
+    import tempfile, os
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> kanidm-url"), lines.index("# <<< kanidm-url")
+    with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f:
+        f.write(conf_text)
+    try:
+        sh = f'id() {{ echo {uid}; }}\nIDM_COLLECT_CONF={f.name}\n' + "\n".join(lines[i + 1:j]) + '\necho "$KANIDM_URL"'
+        return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout.strip()
+    finally:
+        os.unlink(f.name)
+
+
+def test_kanidm_url_comes_from_the_config():
+    assert _kanidm_url("KANIDM_URL=https://idm.example.test\n") == "https://idm.example.test"
+
+
+def test_kanidm_url_allows_a_port():
+    assert _kanidm_url("KANIDM_URL=https://idm.example.test:8443\n") == "https://idm.example.test:8443"
+
+
+def test_kanidm_url_last_assignment_wins():
+    assert _kanidm_url("KANIDM_URL=https://a.test\nKANIDM_URL=https://b.test\n") == "https://b.test"
+
+
+import pytest
+
+
+@pytest.mark.parametrize("bad", [
+    "KANIDM_URL=http://idm.example.test",            # not TLS
+    "KANIDM_URL=https://idm.example.test/v1",        # a path
+    "KANIDM_URL=https://x.test;touch /tmp/pwn",      # shell metacharacters
+    "KANIDM_URL=https://$(id).test",                 # command substitution text
+    "KANIDM_URL=https://IDM.EXAMPLE.TEST",           # upper case: not the form we write
+    "KANIDM_URL=",                                   # empty
+    "",                                              # missing
+])
+def test_kanidm_url_rejects_anything_else(bad):
+    assert _kanidm_url(bad + "\n") == ""
+
+
+def test_root_always_reads_the_installed_config():
+    # as root the installed config is used whatever the environment says (same rule as redact.sed)
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> kanidm-url"), lines.index("# <<< kanidm-url")
+    sh = 'id() { echo 0; }\nIDM_COLLECT_CONF=/tmp/evil.conf\n' + "\n".join(lines[i + 1:j]) + '\necho "$CONF"'
+    out = subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout.strip()
+    assert out == "/etc/idm-collect/collect.conf"
+
+
+def test_no_site_value_is_baked_in():
+    assert "kanidm.lab.test" not in SCRIPT.read_text()
+
+
+def test_shipped_script_carries_the_file_header():
+    head = SCRIPT.read_text().splitlines()[1:4]
+    assert head == [
+        "# CyberHygiene Project Lab Installer — based on Rocky Linux 9.",
+        "# Not an official Rocky Linux product.",
+        "# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.",
+    ]
+
+
+
+def _conf_block(conf_text, echo):
+    import tempfile, os
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> kanidm-url"), lines.index("# <<< kanidm-url")
+    with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f:
+        f.write(conf_text)
+    try:
+        sh = f'id() {{ echo 1000; }}\nIDM_COLLECT_CONF={f.name}\n' + "\n".join(lines[i + 1:j]) + f'\necho "{echo}"'
+        return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout.strip()
+    finally:
+        os.unlink(f.name)
+
+
+def test_tls_target_defaults_to_port_443():
+    assert _conf_block("KANIDM_URL=https://idm.example.test\n", "$KANIDM_HOSTPORT") == "idm.example.test:443"
+
+
+def test_tls_target_keeps_an_explicit_port():
+    assert _conf_block("KANIDM_URL=https://idm.example.test:8443\n", "$KANIDM_HOSTPORT") == "idm.example.test:8443"
+
+
+def test_tls_target_is_empty_without_a_valid_url():
+    assert _conf_block("KANIDM_URL=http://idm.example.test\n", "$KANIDM_HOSTPORT") == ""
+
+
+def test_ca_anchor_comes_from_the_config():
+    conf = "CA_ANCHOR=/etc/pki/ca-trust/source/anchors/site-root.crt\n"
+    assert _conf_block(conf, "$CA_ANCHOR") == "/etc/pki/ca-trust/source/anchors/site-root.crt"
+
+
+@pytest.mark.parametrize("bad", [
+    "CA_ANCHOR=/etc/passwd",                                        # outside the anchors directory
+    "CA_ANCHOR=/etc/pki/ca-trust/source/anchors/../../../shadow",   # traversal
+    "CA_ANCHOR=/etc/pki/ca-trust/source/anchors/x;rm -rf /",        # shell metacharacters
+    "CA_ANCHOR=",
+    "",
+])
+def test_ca_anchor_rejects_anything_else(bad):
+    assert _conf_block(bad + "\n", "$CA_ANCHOR") == ""
+
+
+def _block_run(marker, prelude, echo=""):
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index(f"# >>> {marker}"), lines.index(f"# <<< {marker}")
+    sh = 'err() { printf "ERR %s\\n" "$1"; }\n' + prelude + "\n" + "\n".join(lines[i + 1:j]) + (f'\necho "{echo}"' if echo else "")
+    return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
+
+
+def test_unusable_config_values_are_reported_as_config_errors():
+    out = _block_run("config-errors", 'KANIDM_URL=""; CA_ANCHOR=""')
+    assert "ERR collect.conf: KANIDM_URL missing or invalid" in out
+    assert "ERR collect.conf: CA_ANCHOR missing or invalid" in out
+
+
+def test_good_config_values_report_nothing():
+    out = _block_run("config-errors", 'KANIDM_URL=https://idm.example.test; CA_ANCHOR=/etc/pki/ca-trust/source/anchors/x.crt')
+    assert out == ""
+
+
+def test_no_tls_probe_and_no_unreachable_error_without_a_usable_url():
+    out = _block_run("tls", 'KANIDM_HOSTPORT=""; openssl() { echo PROBED; }; timeout() { shift; "$@"; }', "$tls")
+    assert "PROBED" not in out and "could not fetch" not in out and out.strip() == "{}"
+
+
+def test_trust_is_unknown_not_false_without_an_anchor():
+    out = _block_run("trust", 'CA_ANCHOR=""', "$tr_ok")
+    assert out.strip() == "null"

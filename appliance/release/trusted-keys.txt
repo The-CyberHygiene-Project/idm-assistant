@@ -1,0 +1,3 @@
+# <fingerprint> <label> <file>: the ONLY keys a CyberHygiene repo may carry signatures from
+2DE0D71BF37D8F5E4201A590521276F43C908F8E cyberhygiene RPM-GPG-KEY-cyberhygiene
+FF8AD1344597106ECE813B918A3872BF3228467C epel9 RPM-GPG-KEY-EPEL-9
