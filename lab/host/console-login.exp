@@ -14,7 +14,7 @@ expect {
   -re {([Vv]erification code[^\r\n]*): ?$} { puts "PROMPT: $expect_out(1,string)"; send -- "$code\r"; exp_continue }
   -re {([Pp]assword[^\r\n]*): ?$} { puts "PROMPT: $expect_out(1,string)"; send -- "$pw\r"; exp_continue }
   -re {[Ll]ogin incorrect} { puts "RESULT: DENIED (Login incorrect)" }
-  -re {[$#] ?$} { send -- "echo RES\"\"ULT=\$(id -un); exit\r"; expect -re {RESULT=([a-z0-9@._-]+)}; puts "RESULT: logged in as $expect_out(1,string)" }
+  -re {[$#] ?$} { send -- "echo RES\"\"ULT=\$(id -un); exit\r"; expect -re {RESULT=([a-z0-9@._-]+)\r?\n}; puts "RESULT: logged in as $expect_out(1,string)" }
   timeout { puts "RESULT: timeout" }
 }
 send -- "\035"

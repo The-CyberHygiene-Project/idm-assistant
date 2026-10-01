@@ -1,4 +1,8 @@
 version = '2'
+# Short names everywhere (not the SPN user@idm.<domain>): sudo's PAM user, Google Authenticator token paths,
+# audit records and file ownership must all agree with the login name (ISO Plan 4b proof; row 9).
+uid_attr_map = "name"
+gid_attr_map = "name"
 
 [kanidm]
 pam_allowed_login_groups = ["@LOGIN_GROUP@"]

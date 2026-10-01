@@ -152,3 +152,9 @@ def test_ga_monitor():
     assert "400|600" in m                                  # owner-only: 0400 as the module writes it (Task 4)
     assert "restorecon -nRv /var/lib/google-authenticator" in m
     assert subprocess.run(["bash", "-n", str(C / "monitor.d/53-ga.sh")]).returncode == 0
+
+
+def test_unixd_reports_short_names():         # 4b proof: sudo's PAM_USER was the SPN (uid_attr_map default "spn"),
+    u = text("unixd.toml.in")                  # so GA looked for /var/lib/google-authenticator/<user>@idm.<domain>
+    assert 'uid_attr_map = "name"' in u and 'gid_attr_map = "name"' in u
+    assert u.index("uid_attr_map") < u.index("[kanidm]")                # top-level options in config version 2
