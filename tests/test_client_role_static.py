@@ -138,9 +138,9 @@ def test_enrolment_failure_is_alerted_and_retried():               # final revie
 def test_client_rpm_carries_the_second_factor():
     s = text("chp-identity-client.spec")
     assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
-    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.0", s, re.M)
+    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.1", s, re.M)
     assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
-    assert "53-ga.sh" in s and "Version:        0.2.0" in s
+    assert "53-ga.sh" in s and "Version:        0.2.1" in s
     assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
 
 
@@ -158,3 +158,8 @@ def test_unixd_reports_short_names():         # 4b proof: sudo's PAM_USER was th
     u = text("unixd.toml.in")                  # so GA looked for /var/lib/google-authenticator/<user>@idm.<domain>
     assert 'uid_attr_map = "name"' in u and 'gid_attr_map = "name"' in u
     assert u.index("uid_attr_map") < u.index("[kanidm]")                # top-level options in config version 2
+
+
+def test_monitor_alerts_on_local_account_override():          # final review I1: local accounts must keep winning
+    m = text("monitor.d/53-ga.sh")
+    assert "allow_local_account_override" in m

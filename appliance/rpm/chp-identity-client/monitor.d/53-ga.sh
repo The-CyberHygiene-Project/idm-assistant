@@ -6,6 +6,10 @@
 # directory 700 root root, every token owner-only root (0400 as the PAM module writes it, or 0600) and labelled as policy.
 M=/var/lib/chp/firstboot; D=/var/lib/google-authenticator
 if [ ! -e "$M/client.done" ]; then echo "OK GA (not enrolled yet)"; exit 0; fi
+# Local accounts must keep winning over a Kanidm account of the same name (the GA exemption and sudo rules go by name).
+if grep -qE '^[[:space:]]*allow_local_account_override' /etc/kanidm/unixd 2>/dev/null; then
+  echo "ALERT GA: allow_local_account_override is set in /etc/kanidm/unixd (a Kanidm account could take a local name)"; exit 0
+fi
 for f in /etc/pam.d/system-auth /etc/pam.d/password-auth; do
   grep -q "pam_google_authenticator.so secret=$D/\${USER} user=root" "$f" || { echo "ALERT GA: $f has no pam_google_authenticator line (second factor off)"; exit 0; }
 done

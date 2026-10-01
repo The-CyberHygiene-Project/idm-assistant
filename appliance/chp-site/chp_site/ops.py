@@ -12,7 +12,22 @@ from .kanidm import PROTECTED, expired, valid_name
 from .sitefile import SiteError
 
 OUT = Path("/root/chp-onboard")
-LOGIN_GROUP = "chp_users"          # clients allow logins from this Kanidm POSIX group (the server: chp_admins)
+LOGIN_GROUP = "chp_users"
+# Kanidm names are SHORT on the hosts (unixd uid_attr_map = "name"), so a Kanidm person or group must never share a name
+# with a local account or group: GA exempts LOCAL users by name (pam_localuser), and sudo rules grant by name (%wheel,
+# diag). Local accounts win in kanidm-unixd today; this refuses the collision outright (final review I1).
+RESERVED_USERS = frozenset({"root", "bin", "daemon", "adm", "lp", "sync", "shutdown", "halt", "mail", "operator", "games",
+                            "ftp", "nobody", "chpadmin", "diag", "chpcache", "sshd", "chrony", "named", "kanidm", "step",
+                            "usbguard", "tss", "dbus", "polkitd", "systemd-coredump", "gdm", "pipewire", "rtkit"})
+RESERVED_GROUPS = frozenset({"root", "wheel", "adm", "sys", "disk", "sudo", "tty", "kmem", "systemd-journal", "ssh_keys",
+                             "chpadmin", "diag", "chpcache", "kanidm", "named", "gdm", "audio", "video", "users"})
+
+
+def _local_names(path):
+    try:
+        return {l.split(":", 1)[0] for l in Path(path).read_text().splitlines() if ":" in l and not l.startswith("#")}
+    except OSError:
+        return set()          # clients allow logins from this Kanidm POSIX group (the server: chp_admins)
 
 
 def _stamp():
@@ -40,8 +55,13 @@ def write_private(out, name, text):
 
 
 def onboard(k, ca, user, domain, display=None, groups=(), ssh_key=None, replace_key=False, out=OUT,
-            rec=audit.record, say=print):
+            rec=audit.record, say=print, passwd=Path("/etc/passwd"), group=Path("/etc/group")):
     _user(user)
+    if user in RESERVED_USERS or user in _local_names(passwd):
+        raise SiteError(f"refusing: {user} is the name of a local account; a Kanidm person must not share it")
+    for g in groups:
+        if g in RESERVED_GROUPS or g in _local_names(group):
+            raise SiteError(f"refusing: {g} is the name of a local group; a Kanidm group must not share it")
     for g in groups:
         if not valid_name(g):
             raise SiteError(f"{g!r} is not a valid group name")

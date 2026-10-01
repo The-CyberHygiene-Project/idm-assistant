@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.5.0
+Version:        0.5.1
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Oct 01 2026 The CyberHygiene Project - 0.5.1-1.chp
+- onboard refuses a person or group named like a local account/group (short names on the hosts; final review I1).
+
 * Thu Oct 01 2026 The CyberHygiene Project - 0.5.0-1.chp
 - Second factor (ISO Plan 4b): GA PAM lines in authselect-patch (Kanidm users; local accounts skip), ga-enrol USER [--reset] [--no-confirm] (host-local token, 5 scratch codes, audited), pam-test SERVICE USER (row 36).
 

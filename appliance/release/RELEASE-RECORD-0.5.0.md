@@ -1,5 +1,7 @@
 # Release record: package repository 0.5.0
 
+> **SUPERSEDED by 0.5.1 — not for installs.** 0.5.0 lacks the short-name unixd setting: `sudo` with the second factor fails for every Kanidm user (ISO Plan 4b final review I2).
+
 **Date:** 2026-10-01 · **Location:** `aero:/data/chp-release/0.5.0/repo` (a lab copy is served at
 `http://192.168.100.1:8080/chp/0.5.0/`) · **Audience:** CyberHygiene Project development team only.
 

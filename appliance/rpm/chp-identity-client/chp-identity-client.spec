@@ -1,5 +1,5 @@
 Name:           chp-identity-client
-Version:        0.2.0
+Version:        0.2.1
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
@@ -21,7 +21,7 @@ Source12:       52-kanidm-tls.sh
 Source13:       LICENSE
 Source14:       49-client-enrolled.sh
 Source15:       53-ga.sh
-Requires:       chp-base, chp-site >= 0.5.0, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
+Requires:       chp-base, chp-site >= 0.5.1, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
 Requires:       authselect, policycoreutils, policycoreutils-python-utils, openssh-server, openssl, curl, python3, sudo, shadow-utils
 Requires(post): policycoreutils, policycoreutils-python-utils
 Requires(postun): policycoreutils, policycoreutils-python-utils
@@ -86,8 +86,11 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Thu Oct 01 2026 The CyberHygiene Project - 0.2.1-1.chp
+- unixd reports SHORT names (uid_attr_map/gid_attr_map = name): sudo's PAM user and GA token paths match the login name (Plan 4b proof); 53-ga alerts if allow_local_account_override is set (final review I1).
+
 * Thu Oct 01 2026 The CyberHygiene Project - 0.2.0-1.chp
-- Second factor (ISO Plan 4b): requires google-authenticator and chp-site >= 0.5.0 (GA PAM lines via authselect-patch, ga-enrol, pam-test); owns /var/lib/google-authenticator (0700); 53-ga monitor. No chp_ga module: the policy's var_auth_t covers it (measured: 0 AVC).
+- Second factor (ISO Plan 4b): requires google-authenticator and chp-site >= 0.5.1 (GA PAM lines via authselect-patch, ga-enrol, pam-test); owns /var/lib/google-authenticator (0700); 53-ga monitor. No chp_ga module: the policy's var_auth_t covers it (measured: 0 AVC).
 
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-5.chp
 - Trust refusal logs what the CA serves (or that it is unreachable); enrolment refuses without chp_kanidm and checks the socket label; 49-client-enrolled monitor; the first-boot unit retries every 5 min (final review).

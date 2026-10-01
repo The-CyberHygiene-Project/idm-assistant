@@ -285,6 +285,14 @@ case ${1:-} in
     out=$(gal $C1IP $C1 $U id /tmp/iso2/$C1-$U.old.ga); [[ $out == *LOGIN_REFUSED* ]] && pass "after --reset the old secret no longer works" || fail "reset old" "$out"
     gasecret "$C1" "$C1IP" "$U"; fresh_window
     check "after --reset the new secret works" "$(gal $C1IP $C1 $U)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    # I1 (final review): a Kanidm person + group with LOCAL names, created directly (bypassing chp-site's guard) —
+    # with short names on the hosts, the LOCAL account/group must still win (GA exemption and sudo rules go by name)
+    Rv "for c in 'person create chpcache Collision' 'person posix set chpcache' 'group add-members chp_users chpcache' 'group create wheel' 'group posix set wheel' 'group add-members wheel $U'; do kanidm \$c -D idm_admin >/dev/null 2>&1; done; echo ok" >/dev/null
+    for v in "$C1 $C1IP" "$C2 $C2IP"; do set -- $v; Rh "$1" "$2" 'kanidm-unix cache-invalidate >/dev/null 2>&1; true' >/dev/null; done
+    check "collision: Kanidm 'chpcache' exists" "$(Rv "kanidm person get chpcache -D idm_admin | grep -c '^name: chpcache'")" "1"
+    check "collision: on $C1 'chpcache' still resolves to the LOCAL account" "$(Rh $C1 $C1IP "getent passwd chpcache | cut -d: -f3"):$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd")" "$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd"):$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd")"
+    check "collision: Kanidm group 'wheel' does not give $U the local wheel group on $C1" "$(Rh $C1 $C1IP "id -G $U | tr ' ' '\n' | grep -cx \$(getent group wheel | cut -d: -f3)")" "0"
+    check "collision: chp-site onboard refuses the local name" "$(Rv 'chp-site onboard diag 2>&1 | grep -c "local account"')" "1"
     # 9. revoke fan-out still reaches both clients; then monitors and denials
     out=$(Rv "chp-site revoke $U; echo rc=\$?"); [[ $out == *"ok   $C1"* && $out == *"ok   $C2"* && $out == *rc=0* ]] && pass "revoke $U: fan-out reached both clients (chpcache, local)" || fail "revoke" "$out"
     Rv 'kanidm logout -D idm_admin' >/dev/null
