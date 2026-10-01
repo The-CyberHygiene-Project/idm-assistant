@@ -3,12 +3,15 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | export-client."""
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from . import VERSION
 from .clientconf import cert_sha256, make_client_conf, parse_client_conf, ssh_fpr
 from .hosts import lookup, parse_hosts
+from . import render as _render
+from .sitevars import values
 from .sitefile import SiteError, parse_site, read_file
 
 
@@ -29,21 +32,84 @@ def _validate(a):
     print(msg)
 
 
+def _load(site_dir):
+    d = Path(site_dir)
+    site = parse_site(read_file(d / "site.conf", "site.conf"))
+    return site, parse_hosts(read_file(d / "hosts", "hosts table"), site)
+
+
+def _get(a):
+    site, hosts = _load(a.site)
+    v = values(site, hosts)
+    if a.key not in v:
+        raise SiteError(f"unknown key {a.key} (known: {', '.join(sorted(v))})")
+    print(v[a.key])
+
+
+def _render_cmd(a):
+    import time
+    site, hosts = _load(a.site)
+    out = {"zone": lambda: _render.zone(site, hosts, int(time.strftime("%Y%m%d")) * 100 + 1),
+           "named-conf": lambda: _render.named_conf(site, hosts),
+           "kanidm-server": lambda: _render.kanidm_server_toml(site, hosts),
+           "kanidm-config": lambda: _render.kanidm_client_config(site),
+           "collect-conf": lambda: _render.collect_conf(site)}
+    if a.what not in out:
+        raise SiteError(f"unknown render target {a.what} (known: {', '.join(out)})")
+    sys.stdout.write(out[a.what]())
+
+
 def _pre(a):
-    from .facts import live
+    from .facts import live, stick_identity
     from .pre import run_pre
-    h = run_pre(a.role, Path(a.stick), Path(a.out), a.repo_url, live())
+    h = run_pre(a.role, Path(a.stick), Path(a.out), a.repo_url, live(), stick_id=stick_identity())
     print(f"CHP: installing {h.hostname} ({h.role}, {h.ip}). Recovery secrets were written to the site stick: "
           "keep it offline from now on.")
 
 
 def _export(a):
+    import subprocess
+    import tempfile
+    from .usbstick import allow_stick, block_stick
     site = parse_site(read_file(Path(a.site), "site.conf"))
+    hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub)
-    (Path(a.stick) / "client.conf").write_text(text)
-    print(f"wrote {Path(a.stick) / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
+    if a.stick:
+        _export_to(a, site, hosts, text, pem, pub, Path(a.stick))
+        return
+    dev = Path("/dev/disk/by-label/OEMDRV")
+    usb = allow_stick(dev)                              # USBGuard: authorize ONLY the pinned stick, temporarily
+    try:
+        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run" if os.path.isdir("/run") else None)
+        try:
+            if subprocess.run(["mount", str(dev), mnt]).returncode != 0:
+                raise SiteError("could not mount the site stick")
+            try:
+                _export_to(a, site, hosts, text, pem, pub, Path(mnt))
+            finally:
+                subprocess.run(["sync"])
+                if subprocess.run(["umount", mnt]).returncode != 0:
+                    raise SiteError(f"could not unmount the site stick ({mnt}); do not unplug it yet")
+        finally:
+            try:
+                os.rmdir(mnt)
+            except OSError:
+                pass
+    finally:
+        block_stick(usb)                                # always, whatever happened above
+
+
+def _export_to(a, site, hosts, text, pem, pub, stick):
+    import time
+    from .escrow import move_pending
+    (stick / "client.conf").write_text(text)
+    print(f"wrote {stick / 'client.conf'}\nCA root SHA-256: {cert_sha256(pem)}\nSSH CA fingerprint: {ssh_fpr(pub)}\n"
           "Compare both with the server console before installing clients.")
+    pending = Path(a.pending)
+    moved = move_pending(pending, stick, values(site, hosts)["SERVER_HOSTNAME"],
+                         time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) if pending.is_dir() else []
+    print("moved to the stick: " + ", ".join(moved) + " (shredded on this server)" if moved else "no pending server secrets")
 
 
 def main(argv=None):
@@ -55,12 +121,15 @@ def main(argv=None):
     p = sub.add_parser("pre"); p.add_argument("--role", required=True, choices=("server", "client"))
     p.add_argument("--stick", required=True); p.add_argument("--out", required=True)
     p.add_argument("--repo-url", default="file:///run/install/repo/chp")
-    e = sub.add_parser("export-client"); e.add_argument("--stick", required=True)
+    g = sub.add_parser("get"); g.add_argument("key"); g.add_argument("--site", default="/etc/chp")
+    r = sub.add_parser("render"); r.add_argument("what"); r.add_argument("--site", default="/etc/chp")
+    e = sub.add_parser("export-client"); e.add_argument("--stick")
+    e.add_argument("--pending", default="/root/chp-escrow-pending")
     e.add_argument("--site", default="/etc/chp/site.conf"); e.add_argument("--root", default="/etc/step-ca/certs/root_ca.crt")
     e.add_argument("--ssh-ca", default="/etc/ssh-ca/user_ca.pub")
     a = ap.parse_args(argv)
     try:
-        {"validate": _validate, "pre": _pre, "export-client": _export}[a.cmd](a)
+        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd}[a.cmd](a)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2

@@ -8,3 +8,5 @@ step-cli ours
 idm-collect ours
 google-authenticator epel
 chp-site ours
+chp-base ours
+chp-identity-server ours

@@ -46,6 +46,7 @@ clevis-systemd
 tpm2-tools
 mokutil
 chp-site
+chp-base
 %end
 
 %pre --interpreter=/usr/bin/bash --erroronfail --log=/tmp/chp-pre.log
@@ -76,6 +77,15 @@ install -d -m 0755 /mnt/sysimage/etc/chp
 for f in site.conf hosts client.conf; do
   if [ -f "/mnt/oemdrv/$f" ]; then install -m 0644 "/mnt/oemdrv/$f" "/mnt/sysimage/etc/chp/$f"; fi
 done
+# The site stick's USB identity (recorded by chp-site pre): post-install, only THIS stick may be allowed (USBGuard).
+if [ -f /tmp/chp/site-stick.id ]; then install -m 0644 /tmp/chp/site-stick.id /mnt/sysimage/etc/chp/site-stick.id; fi
+# One-time key for the first-boot TPM binding (chp-base): a random 64-byte key in its OWN LUKS slot, added with the
+# passphrase that exists only in installer RAM; first boot binds clevis with it, then kills that slot and shreds it.
+dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')
+[ "$(printf '%s\n' "$dev" | grep -c .)" -eq 1 ]
+( umask 0377; head -c 64 /dev/urandom > /mnt/sysimage/root/.chp-bind.key )
+cryptsetup luksAddKey --key-file=/tmp/chp/luks-pass "$dev" /mnt/sysimage/root/.chp-bind.key
+shred -u /tmp/chp/luks-pass
 # Mark this host's escrow as used: its secrets are now the ones on the disk (until this line exists they are not).
 echo "INSTALL COMPLETED $(date -u +%Y%m%dT%H%M%SZ)" >> "/mnt/oemdrv/escrow/$(cat /tmp/chp/escrow-name).txt"
 sync; umount /mnt/oemdrv || true
@@ -85,6 +95,7 @@ echo "CHP: install finished. Remove the site stick and keep it OFFLINE: it holds
 %post --log=/root/chp-post.log
 # Trust our signing key (the chp-site RPM ships it) and keep vendor online repos off (offline appliance).
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+systemctl enable chp-firstboot-common.service chp-monitor.timer
 dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
 # dc2 tailoring: dc2 UNSELECTS sysctl_user_max_user_namespaces; the CUI files are also inside the initramfs.
 grep -rlE 'user\.max_user_namespaces' /etc/sysctl.d /etc/sysctl.conf 2>/dev/null | xargs -r sed -i '/user\.max_user_namespaces/d'

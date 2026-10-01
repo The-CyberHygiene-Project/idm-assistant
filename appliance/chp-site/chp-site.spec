@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.1.0
+Version:        0.2.2
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,5 +36,15 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.2.2-1.chp
+- Escrow write fsync'd and read back from the device before shredding; only a storage-only pinned stick; stick always re-blocked.
+
+* Wed Sep 30 2026 The CyberHygiene Project - 0.2.1-1.chp
+- export-client allows only the pinned site stick through USBGuard, temporarily; pre records the stick identity.
+
+* Wed Sep 30 2026 The CyberHygiene Project - 0.2.0-1.chp
+- get/render for server config; export-client moves the server's pending recovery secrets to the stick
+  (write, sync, read back, then shred); final-review fixes from 0.1.0.
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release: validate, pre, export-client; project key; disabled local repo definition.

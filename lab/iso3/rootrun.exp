@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+# rootrun.exp IP KEY CMD_BASE64 (RUNS ON AERO): ssh in as chpadmin (key only), `su -` with the root console password
+# read from STDIN (from the stick's escrow; never argv, never echoed), run CMD (base64, so no quoting trouble) as root,
+# print its output and "RC=<exit code>". Prompts are matched as ']$ ' / ']# ' (bash adds an invisible
+# bracketed-paste escape after the prompt, so an end-of-output anchor never matches). NOTE: multi-pattern expect
+# blocks must span lines; `expect { -re A {} timeout {} }` on ONE line is read as a single literal pattern. Markers are built from pieces so the echoed command line never matches them.
+set timeout 180
+set ip [lindex $argv 0]; set key [lindex $argv 1]; set cmd [lindex $argv 2]
+gets stdin pw
+log_user 0
+spawn ssh -tt -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 chpadmin@$ip
+expect {
+  -re {\]\$ } {}
+  timeout { puts "RC=255 (no chpadmin prompt)"; exit 1 }
+  eof { puts "RC=255 (ssh closed)"; exit 1 }
+}
+send "su -\r"
+expect {
+  -re "Password: ?" { send -- "$pw\r" }
+  timeout { puts "RC=255 (no su prompt)"; exit 1 }
+}
+expect {
+  -re {\]# } {}
+  -re "(Authentication failure|incorrect)" { puts "RC=254 (su refused)"; exit 1 }
+  timeout { puts "RC=255 (no root prompt)"; exit 1 }
+}
+send "echo __CHP\"\"BEGIN__; echo $cmd | base64 -d | bash 2>&1; echo __CHP\"\"END__ rc=\$?\r"
+expect {
+  -re {__CHPBEGIN__\r?\n(.*?)__CHPEND__ rc=([0-9]+)} { puts -nonewline [string map {"\r" ""} $expect_out(1,string)]; puts "\nRC=$expect_out(2,string)" }
+  timeout { puts "RC=255 (command timed out)" }
+}
+send "exit\r"; send "exit\r"

@@ -1,0 +1,16 @@
+[Unit]
+Description=CHP first boot (identity server): DNS, step-ca, Kanidm, collector token, SSH CA
+After=chp-firstboot-common.service network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/chp/firstboot/server.done
+
+[Service]
+Type=oneshot
+# The kanidm CLI keeps its login token under $HOME; system services get no HOME by default (found by the proof).
+Environment=HOME=/root
+ExecStart=/usr/libexec/chp/server-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

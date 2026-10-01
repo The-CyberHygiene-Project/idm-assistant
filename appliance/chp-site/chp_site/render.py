@@ -3,6 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """Kickstart snippets written by %pre and %include'd by server.ks/client.ks."""
 from .hosts import server_of
+from .sitevars import ANCHOR, values
 
 
 def misc_ks(site):
@@ -43,3 +44,56 @@ def disk_ks(disk, passphrase):
 
 def repo_ks(url):
     return f"repo --name=chp --baseurl={url}\n"
+
+
+def zone(site, hosts, serial):
+    v = values(site, hosts)
+    lines = ["$TTL 300",
+             f"@ IN SOA {v['SERVER_FQDN']}. hostmaster.{v['DOMAIN']}. ( {serial} 3600 600 86400 300 )",
+             f"@ IN NS {v['SERVER_FQDN']}."]
+    for h in hosts:
+        lines.append(f"{h.hostname:<12} IN A {h.ip}")
+    lines += [f"{'idm':<12} IN A {v['SERVER_IP']}", f"{'ca':<12} IN A {v['SERVER_IP']}"]
+    return "\n".join(lines) + "\n"
+
+
+def named_conf(site, hosts):
+    v = values(site, hosts)
+    fw = site["DNS_FORWARDERS"]
+    rec = (f"    recursion yes;\n    allow-recursion {{ 127.0.0.1; {v['SUBNET_CIDR']}; }};\n"
+           f"    forwarders {{ {'; '.join(fw)}; }};\n    forward only;\n") if fw else "    recursion no;\n"
+    return ("options {\n"
+            f"    listen-on port 53 {{ 127.0.0.1; {v['SERVER_IP']}; }};\n"
+            "    listen-on-v6 { none; };\n"
+            '    directory "/var/named";\n'
+            f"    allow-query {{ 127.0.0.1; {v['SUBNET_CIDR']}; }};\n"
+            + rec +
+            "    dnssec-validation no;\n"
+            '    pid-file "/run/named/named.pid";\n'
+            "};\n"
+            'logging { channel default_debug { file "data/named.run"; severity dynamic; }; };\n'
+            f'zone "{v["DOMAIN"]}" IN {{ type primary; file "{v["DOMAIN"]}.zone"; allow-update {{ none; }}; }};\n')
+
+
+def kanidm_server_toml(site, hosts):
+    v = values(site, hosts)
+    return ('version = "2"\n'
+            f'bindaddress = "{v["SERVER_IP"]}:443"\n'
+            'db_path = "/var/lib/private/kanidm/kanidm.db"\n'
+            'tls_chain = "/run/kanidmd/tls_chain.pem"\n'
+            'tls_key = "/run/kanidmd/tls_key.pem"\n'
+            f'domain = "{v["KANIDM_FQDN"]}"\n'
+            f'origin = "https://{v["KANIDM_FQDN"]}"\n'
+            'log_level = "info"\n\n'
+            "[online_backup]\n"
+            'path = "/var/lib/private/kanidm/backups/"\n'
+            'schedule = "00 22 * * *"\n'
+            "versions = 7\n")
+
+
+def kanidm_client_config(site):
+    return f'uri = "https://idm.{site["DOMAIN"]}"\nca_path = "{ANCHOR}"\n'
+
+
+def collect_conf(site):
+    return f"KANIDM_URL=https://idm.{site['DOMAIN']}\nCA_ANCHOR={ANCHOR}\n"

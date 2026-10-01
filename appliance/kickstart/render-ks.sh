@@ -5,5 +5,16 @@
 # render-ks.sh: server.ks and client.ks from chp.ks.in (the only difference is @ROLE@).
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-for r in server client; do sed "s/@ROLE@/$r/g" "$here/chp.ks.in" > "$here/$r.ks"; done
+python3 - "$here" <<'PY'
+import sys
+here = sys.argv[1]
+roles = {"server": {"@ROLE_PACKAGES@": "chp-base\nchp-identity-server", "@ROLE_ENABLE@": "chp-server-firstboot.service"},
+         "client": {"@ROLE_PACKAGES@": "chp-base", "@ROLE_ENABLE@": ""}}
+t = open(f"{here}/chp.ks.in").read()
+for role, subs in roles.items():
+    out = t.replace("@ROLE@", role)
+    for k, v in subs.items():
+        out = out.replace(k, v)
+    open(f"{here}/{role}.ks", "w").write(out.replace("chp-monitor.timer \n", "chp-monitor.timer\n"))
+PY
 echo "rendered: $here/server.ks $here/client.ks"

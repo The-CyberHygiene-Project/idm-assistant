@@ -27,7 +27,7 @@ def sha512_crypt(pw):
                               check=True).stdout.strip()
 
 
-def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secrets.token_urlsafe):
+def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secrets.token_urlsafe, stick_id=None):
     stick, out = Path(stick), Path(out)
     site = parse_site(read_file(stick / "site.conf", "site.conf"))
     hosts = parse_hosts(read_file(stick / "hosts", "hosts table"), site)
@@ -62,4 +62,10 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         with os.fdopen(fd, "w") as f:
             f.write(text)
     (out / "escrow-name").write_text(host.hostname)     # not secret: tells %post --nochroot which file to mark
+    if stick_id:        # the site stick's USB identity, pinned so only THIS stick is ever allowed post-install
+        (out / "site-stick.id").write_text("".join(f"{k}={stick_id.get(k, '')}\n" for k in ("ID", "SERIAL", "NAME")))
+    # The passphrase once more, for %post --nochroot only (it adds the one-time TPM-bind key, then shreds this file).
+    fd = os.open(out / "luks-pass", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(luks)
     return host

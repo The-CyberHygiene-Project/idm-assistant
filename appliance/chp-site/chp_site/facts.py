@@ -29,3 +29,19 @@ def live():
         for p in bid.iterdir():
             by_id.setdefault(os.path.basename(os.path.realpath(p)), []).append(str(p))
     return Facts(macs, disks_from_lsblk(js, by_id), time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
+
+
+def stick_identity(label="/dev/disk/by-label/OEMDRV"):
+    """USB identity of the device holding the OEMDRV volume ({ID, SERIAL, NAME}), or None if it is not USB."""
+    try:
+        name = os.path.basename(os.path.realpath(label))
+        node = Path(os.path.realpath(f"/sys/class/block/{name}"))
+        while node != node.parent:
+            if (node / "idVendor").exists():
+                rd = lambda f: (node / f).read_text().strip() if (node / f).exists() else ""
+                return {"ID": f"{rd('idVendor')}:{rd('idProduct')}", "SERIAL": rd("serial"), "NAME": rd("product")}
+            node = node.parent
+    except OSError:
+        return None
+    return None
+

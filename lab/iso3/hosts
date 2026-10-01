@@ -1,0 +1,3 @@
+# iso3 lab test site (ISO Plan 3a proof: the server role). The client line is for export-client / Plan 4.
+52:54:00:c4:03:30  iso3-srv  192.168.100.30  server
+52:54:00:c4:03:31  iso3-cli  192.168.100.31  client
