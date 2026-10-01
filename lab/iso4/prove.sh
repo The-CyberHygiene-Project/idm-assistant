@@ -31,7 +31,8 @@ Rv() { Rh "$SRV" "$SIP" "$1"; }
 Rs() { local b; b=$(printf '%s' "$1" | base64 | tr -d '\n'); A "sudo bash /tmp/iso2/rs.sh $STICK $SRV $SIP $2 $b" | tr -d '\r' | sed '/^RC=/d' | sed '/^[[:space:]]*$/d'; }
 Rx() { local b; b=$(printf '%s' "$1" | base64 | tr -d '\n'); A "sudo bash /tmp/iso2/rsx.sh $STICK $SRV $SIP /tmp/iso2/ops.pw $b" | tr -d '\r' | sed '/^RC=/d' | sed '/^[[:space:]]*$/d'; }
 # login IP USER [id|sudo]: key + that user's certificate + the lab password (stdin) -> "LOGIN_OK <x>" | "LOGIN_REFUSED"
-login() { A "sudo expect /tmp/iso2/ssh-ki.exp $1 $2 /tmp/iso2/ops_key /tmp/iso2/$2-cert.pub ${3:-id} < /tmp/iso2/ops.pw" | tr -d '\r' | grep -E '^LOGIN_' | tail -1; }
+# (the password file is root-only: the redirect must happen in a ROOT shell, not in the ssh user's)
+login() { A "sudo sh -c 'expect /tmp/iso2/ssh-ki.exp $1 $2 /tmp/iso2/ops_key /tmp/iso2/$2-cert.pub ${3:-id} < /tmp/iso2/ops.pw'" | tr -d '\r' | grep -E '^LOGIN_' | tail -1; }
 # refused_within IP USER SECS: keep trying until LOGIN_REFUSED (prints the seconds it took) or give up (prints NEVER)
 refused_within() { local t0=$SECONDS; while (( SECONDS - t0 <= $3 )); do [[ $(login "$1" "$2") == LOGIN_REFUSED ]] && { echo "$((SECONDS - t0))"; return; }; sleep 3; done; echo NEVER; }
 waitdone() {   # waitdone VM IP MARKER: wait for the first boot to finish (DONE) or fail (FAILED)
@@ -138,14 +139,14 @@ case ${1:-} in
       extra=""; [[ $x == "$AD" ]] && extra="--group chp_admins"
       out=$(Rv "chp-site onboard $x --display 'Ops $x' --ssh-key /root/chp-lab/user.pub $extra")
       [[ $out == *"[x] SSH certificate issued"* ]] || fail "onboard $x" "$out"
-      out=$(Rx "cd /root/chp-lab && tok=\$(sed -n 's/.*use-reset-token \([A-Za-z0-9-]*\).*/\1/p' /root/chp-onboard/$x.reset-token.txt | head -1) && pw=\$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))') && printf '%s\n%s\n%s\ntotp\n' \"\$tok\" \"\$pw\" \"\$CHP_SECRET\" | expect enrol-user.exp > $x.totp && echo ENROLLED")
+      out=$(Rx "cd /root/chp-lab && sed 's/^log_user 0/log_user 1/' enrol-user.exp > e.exp && tok=\$(sed -n 's/.*use-reset-token \([A-Za-z0-9-]*\).*/\1/p' /root/chp-onboard/$x.reset-token.txt | head -1) && pw=\$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))') && if printf '%s\n%s\n%s\ntotp\n' \"\$tok\" \"\$pw\" \"\$CHP_SECRET\" | expect e.exp > e.log 2>&1; then echo ENROLLED; else sed \"s/\$tok/TOKEN/g\" e.log | tr -d '\\r' | grep -viE 'secret|otpauth' | tail -6; fi; rm -f e.exp; shred -u e.log")
       check "onboard + lab stand-in enrolment: $x" "$out" "ENROLLED"
       Rv "cat /root/chp-onboard/$x-cert.pub" | A "sudo tee /tmp/iso2/$x-cert.pub >/dev/null"
     done
     check "SSH cert + Kanidm password: $U on $C1" "$(login $C1IP "$U")" "LOGIN_OK $U"
     check "SSH cert + Kanidm password: $U on $C2" "$(login $C2IP "$U")" "LOGIN_OK $U"
     check "SSH cert + Kanidm password: $G on $C1" "$(login $C1IP "$G")" "LOGIN_OK $G"
-    out=$(A "sudo expect /tmp/iso2/ssh-ki.exp $C1IP $U /tmp/iso2/ops_key /dev/null id < /tmp/iso2/ops.pw" | tr -d '\r' | grep -E '^LOGIN_' | tail -1)
+    out=$(A "sudo sh -c 'expect /tmp/iso2/ssh-ki.exp $C1IP $U /tmp/iso2/ops_key /dev/null id < /tmp/iso2/ops.pw'" | tr -d '\r' | grep -E '^LOGIN_' | tail -1)
     check "key without the CA certificate: refused" "$out" "LOGIN_REFUSED"
     out=$(Rv "chp-site revoke $G --group chp_users; echo rc=\$?")
     [[ $out == *"ok   $C1"* && $out == *"ok   $C2"* && $out == *rc=0* ]] && pass "revoke $G --group chp_users: fan-out reached both clients" || fail "revoke group" "$out"

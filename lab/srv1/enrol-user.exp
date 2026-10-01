@@ -18,13 +18,15 @@ proc prompt {} {
     eof { fail "REPL exited" }
   }
 }
+# `after 400`: the hidden-input prompt switches the terminal mode AFTER printing; typing at once intermittently lost the
+# line ("no Confirm prompt", ~1 in 5 in ISO Plans 3b/4a; hypothesis, the delay is cheap).
 proc newpass {p} {
   expect {
-    -re {New [^\n]*: $} { send -- "$p\r" }
+    -re {New [^\n]*: $} { after 400; send -- "$p\r" }
     timeout { fail "no New password prompt" }
   }
   expect {
-    -re {Confirm [^\n]*: $} { send -- "$p\r" }
+    -re {Confirm [^\n]*: $} { after 400; send -- "$p\r" }
     timeout { fail "no Confirm prompt" }
   }
   # The result line is styled (terminal codes), so don't match it; wait for the next REPL prompt instead.
