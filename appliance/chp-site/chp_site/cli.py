@@ -178,6 +178,17 @@ def _pam_test(a):
     return 0 if ok else 1
 
 
+def _ga_enrol(a):
+    import socket
+    from .ga import enrol
+    if os.geteuid() != 0:
+        raise SiteError("run as root: sudo chp-site ga-enrol USER")
+    site = parse_site(read_file(Path(a.site) / "site.conf", "site.conf"))
+    p = enrol(a.user, socket.getfqdn(), site["DOMAIN"], reset=a.reset)
+    print(f"\nGoogle Authenticator token for {a.user} on {socket.getfqdn()} saved ({p}). The user scans the QR code above "
+          "and keeps the 5 emergency scratch codes somewhere safe; each works once.")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -212,6 +223,8 @@ def main(argv=None):
     ap_.add_argument("dir")
     pt = sub.add_parser("pam-test", help="authenticate USER through PAM service SERVICE (secrets on stdin; root)")
     pt.add_argument("service"); pt.add_argument("user")
+    ge = sub.add_parser("ga-enrol", help="host-local Google Authenticator token for a Kanidm user (root; audited)")
+    ge.add_argument("user"); ge.add_argument("--reset", action="store_true"); ge.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -219,7 +232,8 @@ def main(argv=None):
          "unexpire": _unexpire,
          "client-token": _client_token,
          "authselect-patch": _authselect_patch,
-         "pam-test": _pam_test}[a.cmd](a)
+         "pam-test": _pam_test,
+         "ga-enrol": _ga_enrol}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
