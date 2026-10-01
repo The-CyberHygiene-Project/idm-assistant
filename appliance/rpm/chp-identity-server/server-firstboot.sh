@@ -123,6 +123,16 @@ do_sshca() {
   restorecon -R /etc/ssh-ca /var/lib/ssh-ca
 }
 
+do_cachekey() {
+  # The server's key for `chp-site revoke`: clients (Plan 4) accept it only from this server's IP, only for the forced
+  # command `sudo -n /usr/bin/kanidm-unix cache-invalidate` (ISSO #28). Public half goes to client.conf (CACHE_PUBKEY).
+  install -d -m 0700 /var/lib/chp/cache-key
+  if [ ! -f /var/lib/chp/cache-key/id_ecdsa ]; then
+    ssh-keygen -q -t ecdsa -b 384 -N '' -C "chpcache@$FQDN" -f /var/lib/chp/cache-key/id_ecdsa
+  fi
+  restorecon -R /var/lib/chp/cache-key
+}
+
 step bind do_bind
 step step-ca do_stepca
 step kanidm-cert do_kanidm_cert
@@ -130,6 +140,7 @@ step kanidmd do_kanidmd
 step recover do_recover
 step collector do_collector
 step ssh-ca do_sshca
+step cache-key do_cachekey
 current=done
 touch "$M/server.done"
 log "CHP: server first boot complete. Move the recovery secrets offline: plug in the site stick and run chp-site export-client"

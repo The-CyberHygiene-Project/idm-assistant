@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.2.2
+Version:        0.3.0
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.3.0-1.chp
+- onboard / revoke / unexpire (spec 4.4; ISSO #28, #32); client.conf CACHE_PUBKEY; audit records before and after every change.
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.2.2-1.chp
 - Escrow write fsync'd and read back from the device before shredding; only a storage-only pinned stick; stick always re-blocked.
 

@@ -87,6 +87,6 @@ def test_export_blocks_the_stick_again_when_mount_fails(tmp_path, monkeypatch): 
     monkeypatch.setattr(subprocess, "run", fake_run)
     d = tmp_path / "s"; d.mkdir(); (d / "site.conf").write_text(GOOD); (d / "hosts").write_text(HOSTS)
     rc = cli_mod.main(["export-client", "--site", str(d / "site.conf"), "--root", str(FX / "root_ca.crt"),
-                       "--ssh-ca", str(FX / "user_ca.pub"), "--pending", str(tmp_path / "none")])
+                       "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"), "--pending", str(tmp_path / "none")])
     assert "mount" in seen                                    # the failure really came from mount
     assert rc == 2 and blocked == ["7"]

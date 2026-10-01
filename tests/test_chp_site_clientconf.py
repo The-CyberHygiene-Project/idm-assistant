@@ -10,6 +10,7 @@ from tests.test_chp_site_sitefile import GOOD
 FX = Path(__file__).parent / "fixtures" / "chp-site"
 PEM = (FX / "root_ca.crt").read_text()
 PUB = (FX / "user_ca.pub").read_text()
+CACHE = (FX / "cache_key.pub").read_text()
 SITE = parse_site(GOOD)
 # Expected values come from the reference tools, not from our own code:
 ROOT_SHA = subprocess.run(["openssl", "x509", "-in", str(FX / "root_ca.crt"), "-noout", "-fingerprint", "-sha256"],
@@ -24,7 +25,7 @@ def test_fingerprints_match_openssl_and_ssh_keygen():
 
 
 def test_round_trip():
-    c = parse_client_conf(make_client_conf("iso2.lab.test", PEM, PUB), SITE)
+    c = parse_client_conf(make_client_conf("iso2.lab.test", PEM, PUB, CACHE), SITE)
     assert c["KANIDM_URL"] == "https://idm.iso2.lab.test" and c["SSH_CA_FPR"] == SSH_FPR
 
 
@@ -36,9 +37,24 @@ def test_round_trip():
 ])
 def test_tampered_client_conf_is_refused(edit, why):
     with pytest.raises(SiteError, match=why):
-        parse_client_conf(edit(make_client_conf("iso2.lab.test", PEM, PUB)), SITE)
+        parse_client_conf(edit(make_client_conf("iso2.lab.test", PEM, PUB, CACHE)), SITE)
 
 
 def test_no_certificate_in_pem():
     with pytest.raises(SiteError, match="no CERTIFICATE"):
         cert_sha256("hello")
+
+
+def test_client_conf_carries_the_cache_key():
+    t = make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text(),
+                         (FX / "cache_key.pub").read_text())
+    c = parse_client_conf(t, {"DOMAIN": "iso2.lab.test"})
+    assert c["CACHE_PUBKEY"].startswith("ecdsa-sha2-nistp384 ")
+
+
+def test_client_conf_without_cache_key_is_refused():
+    t = make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text(),
+                         (FX / "cache_key.pub").read_text())
+    t = "\n".join(ln for ln in t.splitlines() if not ln.startswith("CACHE_PUBKEY=")) + "\n"
+    with pytest.raises(SiteError, match="CACHE_PUBKEY is required"):
+        parse_client_conf(t, {"DOMAIN": "iso2.lab.test"})

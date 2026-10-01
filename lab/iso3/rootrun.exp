@@ -1,6 +1,6 @@
 #!/usr/bin/expect -f
 # rootrun.exp IP KEY CMD_BASE64 (RUNS ON AERO): ssh in as chpadmin (key only), `su -` with the root console password
-# read from STDIN (from the stick's escrow; never argv, never echoed), run CMD (base64, so no quoting trouble) as root,
+# read from STDIN line 1 (line 2, optional: a second secret -> $CHP_SECRET) (from the stick's escrow; never argv, never echoed), run CMD (base64, so no quoting trouble) as root,
 # print its output and "RC=<exit code>". Prompts are matched as ']$ ' / ']# ' (bash adds an invisible
 # bracketed-paste escape after the prompt, so an end-of-output anchor never matches). NOTE: multi-pattern expect
 # blocks must span lines; `expect { -re A {} timeout {} }` on ONE line is read as a single literal pattern. Markers are built from pieces so the echoed command line never matches them.
@@ -23,6 +23,17 @@ expect {
   -re {\]# } {}
   -re "(Authentication failure|incorrect)" { puts "RC=254 (su refused)"; exit 1 }
   timeout { puts "RC=255 (no root prompt)"; exit 1 }
+}
+# Optional SECOND secret (stdin line 2, e.g. a Kanidm admin password from the stick): read by the root shell with
+# `read -rs` and exported as CHP_SECRET for the command; it never reaches argv, the log or the echoed command line.
+if {[gets stdin sec] > 0} {
+  send "IFS= read -rs CHP_SECRET; export CHP_SECRET\r"
+  after 300
+  send -- "$sec\r"
+  expect {
+    -re {\]# } {}
+    timeout { puts "RC=255 (no prompt after secret)"; exit 1 }
+  }
 }
 send "echo __CHP\"\"BEGIN__; echo $cmd | base64 -d | bash 2>&1; echo __CHP\"\"END__ rc=\$?\r"
 expect {

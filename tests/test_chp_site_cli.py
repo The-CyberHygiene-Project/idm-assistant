@@ -23,7 +23,7 @@ def site(tmp_path, extra=""):
 def test_validate_ok_and_host_found(tmp_path):
     from chp_site.clientconf import make_client_conf
     d = site(tmp_path)
-    (d / "client.conf").write_text(make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text()))
+    (d / "client.conf").write_text(make_client_conf("iso2.lab.test", (FX / "root_ca.crt").read_text(), (FX / "user_ca.pub").read_text(), (FX / "cache_key.pub").read_text()))
     r = cli("validate", "--site", str(d), "--mac", "52-54-00-C4-02-31")
     assert r.returncode == 0 and "iso2-cli" in r.stdout and "client" in r.stdout
 
@@ -36,7 +36,7 @@ def test_validate_error_is_one_readable_line(tmp_path):
 def test_export_client_writes_and_prints_fingerprints(tmp_path):
     d = site(tmp_path); stick = tmp_path / "stick"; stick.mkdir()
     r = cli("export-client", "--stick", str(stick), "--site", str(d / "site.conf"),
-            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"))
+            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"))
     assert r.returncode == 0, r.stderr
     assert "CA root SHA-256:" in r.stdout and "SSH CA fingerprint: SHA256:" in r.stdout
     c = cli("validate", "--site", str(d), "--role", "client")      # spec 4.2: a client site needs client.conf (final review I2)
@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.2.2"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.3.0"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
@@ -68,3 +68,8 @@ def test_non_utf8_file_is_a_readable_error_not_a_traceback(tmp_path):    # final
     (d / "site.conf").write_bytes(GOOD.replace("D. Shannon", "Pat O\u2019Brien").encode("cp1252"))
     r = cli("validate", "--site", str(d))
     assert r.returncode == 2 and "not UTF-8 text" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_onboard_help_lists_the_options():
+    r = cli("onboard", "--help")
+    assert r.returncode == 0 and all(o in r.stdout for o in ("--group", "--ssh-key", "--replace-key", "--as", "--display"))

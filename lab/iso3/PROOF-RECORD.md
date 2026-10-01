@@ -52,3 +52,47 @@ escrowed-passphrase slot and the TPM slot remain.
   - the collector then reported `errors: []`, and the monitor was quiet
 - Fixed afterwards (test-first): the login is retried 5 times, with a 60 s expect timeout each. That change is in
   **chp-identity-server 0.1.0-4**, which the next repo cut (Plan 3b) must include (carry-forward).
+
+## ISO Plan 3b: onboard / revoke / unexpire, repo 0.3.3 (2026-09-30, fresh install)
+
+Repo 0.3.3 (`appliance/release/RELEASE-RECORD-0.3.3.md`): chp-site 0.3.0, chp-identity-server 0.1.0-5 (cache-key step + the
+collector login retry carried from 0.1.0-4).
+
+| Stage | Result |
+|---|---|
+| prep, server (install from 0.3.3 + escrow unlock) | 2/2 + 2/2 PASS |
+| firstboot | **15/15 PASS on the first boot**, now including `cache-key.done` (the collector login retry was not needed this time) |
+| reboot | PASS (TPM unlock, no passphrase) |
+| export | **9/9 PASS**, new: `client.conf` on the stick carries `CACHE_PUBKEY` equal to the server's cache key; the key is `600 root` in a `700` directory |
+| ops (new) | **23/23 PASS** (second run; see findings) |
+| cleanup | PASS (no iso3 VMs left) |
+
+`ops` checks, all run as root on the installed server. The `idm_admin` password went from the stick to the VM over pipes only (`rs.sh`, `rootrun.exp` line 2):
+- **No Kanidm session:** `chp-site onboard` refuses with "run `kanidm login -D idm_admin` first" (exit 2).
+- **onboard (new user):** the checklist shows the account, POSIX, SSH key and certificate `[x]`, and the primary credential, unix password and GA `[ ]`.
+  - The reset token is **not on the screen**; it is in `/root/chp-onboard/<user>.reset-token.txt` (dir 700, file 600).
+  - The user (lab stand-in) completed the reset with password + TOTP + unix password.
+  - A re-run shows everything `[x]` but GA, and **writes no new token**.
+  - The certificate has principals `<user>` and `<user>@idm.iso3.lab.test`.
+- **revoke:**
+  - It is refused for `idm_admin`, and for a group the user is not a direct member of.
+  - `revoke <user>` expires the account in Kanidm and moves the SSH key to `revoked/`.
+  - The hosts table's client `iso3-cli` is **not installed**, so the fan-out could not reach it. The command exits 2 naming it: "the Kanidm change IS in effect, but iso3-cli may keep cached access for up to ~2 min". This is **Review Focus 3 on a real host**.
+- **onboard of the expired user is refused** and points to `unexpire` (no bypass of #32).
+- **unexpire:** it is refused for a non-approver ("Chris Admin"). Approved by the ISSO (`ISSO_NAME`), it clears the expiry.
+- **Audit log:** it has exactly 2 `unexpire` records (request + done) naming the approver and reason, and 2 `revoke` records. The journal (authpriv) has the same.
+  - **`auditctl -m` works under the CUI profile** (the one assumption the plan left open).
+  - A real record:
+    `type=USER … auid=1000 … msg='text=chp-site unexpire user="ops1442" approver="D. Shannon" reason="expired by mistake in the Plan 3b proof" operator="chpadmin" as="idm_admin" exe="/usr/sbin/auditctl" … res=success'`
+    `operator` is the **login** identity (`chpadmin`, from the audit login uid), kept through `su -`.
+- fapolicyd: 0 denials; SELinux: 0 AVC since boot.
+
+**Not proven here:** clearing the cache on a real client (no clients until Plan 4). The Plan 4 proof must include that, and a client whose host key changed after a reinstall.
+
+**Findings:**
+1. **Lab harness only.** The first `ops` run failed 4 checks:
+   - My checklist parser kept the notes. It is fixed: item names are cut at the note.
+   - The user stand-in (`lab/srv1/enrol-user.exp`, run on the appliance) once reported "no Confirm prompt" after the new password. Run again, it enrolled normally, and the second full run passed. The cause is unknown (a single occurrence).
+   - The stage now keeps the REPL log root-only and prints a redacted tail if enrolment ever fails again.
+   - The stage is **re-runnable**: a fresh user per run (`OPS_USER`, default `opsHHMM`), and journal counts are measured as increases.
+   - The product checks (revoke, unexpire, refusals, audit) passed in both runs.
