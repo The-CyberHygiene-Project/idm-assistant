@@ -69,7 +69,8 @@ Requirements: rows **11, 19, 36**.
 2. **A wrong code, a replayed code, or a scratch code used twice.** Expected: refused; the password is still asked (no early "wrong code" signal); `faillock` counts the failure.
 3. **`ga-enrol` for a local account, an unknown user, or a user who already has a token (without `--reset`).** Expected: refused before anything changes; no file is created or replaced; no `.done` audit record.
 4. **After a GDM/sshd/sudo login the token file is rewritten** (rate-limit / replay state). Expected: still `root:root 0600` and `var_auth_t` (the dc1 label-flip lockout must not recur).
-5. **The first admin on a fresh host.** Expected: enrolment works through root (console or `chpadmin` + `su -`) and is audited the same way. After it, that admin enrols others with `sudo`, and their own `sudo` asks for code + password.
+5. **Break-glass after GA is switched on** (user review, 2026-10-01). Expected: root at the console, `chpadmin` + `su -` and `chpadmin` SSH all work **with no code prompt**, also **while Kanidm (unixd) is down**. A Kanidm user can never take the local-account path around GA. Pinned by Task 7 Step 2b and the Task 4 quick check.
+6. **The first admin on a fresh host.** Expected: enrolment works through root (console or `chpadmin` + `su -`) and is audited the same way. After it, that admin enrols others with `sudo`, and their own `sudo` asks for code + password.
 
 ---
 
@@ -586,6 +587,7 @@ def _ga_enrol(a):
   - **login:** `pam-test login <user>` → `PAM_OK`
   - **sudo** for a `chp_admins` user: `ssh-ki.exp` MODE sudo → `LOGIN_OK SUDO_OK`
   - **a local account:** `pam-test login root` with the escrowed root password and **no code** → `PAM_OK`, and prompts contain no verification-code prompt
+  - **break-glass, quick check:** `chpadmin` SSH key-only still logs in, and `chpadmin` → `su -` (escrowed root password) shows only a `Password:` prompt and gives a root shell
   - after each: `ausearch -m AVC -ts <baseline>`, and the token file is still `root:root 0600 var_auth_t`
 - [ ] **Step 4: Apply the decision rule.** Record the AVC lines (or "0") per stack in `PROOF-RECORD.md`. If any appear, write `appliance/rpm/chp-identity-client/selinux/chp_ga.te`/`.fc` from them (the build's CIL check applies), load it on the VM, and repeat Step 3 to 0.
 - [ ] **Step 5: Clean up** the VMs (`prove.sh cleanup`). Commit the script and the record: `git commit -m "ISO Plan 4b Task 4: GA stacks measured on an installed client (SELinux: <result>)"`.
@@ -676,6 +678,12 @@ def test_ga_monitor():
      - `chpadmin` key-only SSH on all hosts → ok
      - diag report from a client → ok
      - the revoke fan-out (`chpcache`) → `ok` for both clients
+  7b. **Break-glass, explicitly** (user review). It runs on every host unless noted:
+      1. **`chpadmin` SSH key-only**: logs in, and no verification-code prompt is seen.
+      2. **`chpadmin` → `su -`** with the escrowed root password (`rootrun.exp`, extended to record the prompts it answered): the only prompt is `Password:`, and `id -u` = `0`.
+      3. **Root at the real console** (`virsh console` + `lab/host/console-login.exp` with the escrowed root password): logged in, and no code prompt.
+      4. **With Kanidm down** on `iso4-cli2` (`systemctl stop kanidm-unixd kanidm-unixd-tasks`): repeat 1–3, all pass. Then start unixd again and confirm it is online.
+      5. **No bypass:** a Kanidm user (`U`) is always asked for the code. On `iso4-cli1` with unixd running, `pam-test login U` with the right password and **no** code → `PAM_FAIL`, and the prompts include the verification-code prompt.
   8. **ga-enrol refusals:** `chp-site ga-enrol chpadmin` → refused (local); an unknown user → refused; `ga-enrol U` again without `--reset` → refused; with `--reset` → new token, and the old secret no longer works.
   9. **Monitors quiet**, 0 AVC and 0 fapolicyd on all three hosts.
 - [ ] **Step 3: `cleanup`.** Update `PROOF-RECORD.md`. In `lab/iso-requirements.md`:
