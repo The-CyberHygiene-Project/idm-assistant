@@ -11,6 +11,9 @@ Environment=HOME=/root
 ExecStart=/usr/libexec/chp/client-firstboot
 RemainAfterExit=yes
 TimeoutStartSec=15min
+# Retry (e.g. the server was down): the ConditionPathExists above ends it once client.done exists.
+Restart=on-failure
+RestartSec=5min
 
 [Install]
 WantedBy=multi-user.target

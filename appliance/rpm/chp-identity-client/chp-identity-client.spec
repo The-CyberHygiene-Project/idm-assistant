@@ -1,6 +1,6 @@
 Name:           chp-identity-client
 Version:        0.1.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -19,6 +19,7 @@ Source10:       50-authselect.sh
 Source11:       51-sshd.sh
 Source12:       52-kanidm-tls.sh
 Source13:       LICENSE
+Source14:       49-client-enrolled.sh
 Requires:       chp-base, chp-site, kanidm-unixd, kanidm-clients, idm-collect, step-cli
 Requires:       authselect, policycoreutils, policycoreutils-python-utils, openssh-server, openssl, curl, python3, sudo, shadow-utils
 Requires(post): policycoreutils, policycoreutils-python-utils
@@ -47,6 +48,7 @@ install -Dm0755 %{SOURCE10} %{buildroot}%{_prefix}/lib/chp/monitor.d/50-authsele
 install -Dm0755 %{SOURCE11} %{buildroot}%{_prefix}/lib/chp/monitor.d/51-sshd.sh
 install -Dm0755 %{SOURCE12} %{buildroot}%{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
 install -Dm0644 %{SOURCE13} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+install -Dm0755 %{SOURCE14} %{buildroot}%{_prefix}/lib/chp/monitor.d/49-client-enrolled.sh
 
 %post
 semodule -i %{_datadir}/selinux/packages/chp_kanidm.pp
@@ -73,11 +75,15 @@ fi
 %{_datadir}/chp/client/sshd-10-chp.conf
 %{_datadir}/chp/client/sshd-99-chp-exceptions.conf
 %{_datadir}/selinux/packages/chp_kanidm.pp
+%{_prefix}/lib/chp/monitor.d/49-client-enrolled.sh
 %{_prefix}/lib/chp/monitor.d/50-authselect.sh
 %{_prefix}/lib/chp/monitor.d/51-sshd.sh
 %{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-5.chp
+- Trust refusal logs what the CA serves (or that it is unreachable); enrolment refuses without chp_kanidm and checks the socket label; 49-client-enrolled monitor; the first-boot unit retries every 5 min (final review).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-4.chp
 - chp_kanidm: systemd (init_t) may create/remove the unixd runtime directory and sockets (denied on stop in the proof).
 

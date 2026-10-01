@@ -21,14 +21,26 @@ if [ "$ROLE" = server ]; then LOGIN_GROUP=chp_admins; else LOGIN_GROUP=chp_users
 do_trust() {
   if [ "$ROLE" = server ]; then [ -s "$ANCHOR" ]; return; fi       # the server made the root itself (first boot)
   PIN=$(g CA_ROOT_SHA256); T=$(mktemp -d); trap 'rm -rf "$T"' RETURN
-  STEPPATH="$T" step-cli ca root "$T/root.pem" --ca-url "https://$CA:9000" --fingerprint "$PIN" --force >/dev/null 2>&1 \
-    || { log "CHP: refusing: step-ca at $CA did not serve a root matching the pinned $PIN"; return 1; }
+  if ! STEPPATH="$T" step-cli ca root "$T/root.pem" --ca-url "https://$CA:9000" --fingerprint "$PIN" --force >/dev/null 2>"$T/err"; then
+    # Diagnosis ONLY: what root does the CA serve now (if any)? Fetched without verification, never installed.
+    served=$(curl -fsS --insecure --max-time 10 "https://$CA:9000/roots.pem" 2>/dev/null | openssl x509 -outform DER 2>/dev/null \
+             | sha256sum | cut -d' ' -f1)
+    why=$(tr '\n' ' ' < "$T/err" | head -c 200)
+    if [ -z "$served" ] || [ "$served" = "$(printf '' | sha256sum | cut -d' ' -f1)" ]; then
+      log "CHP: refusing: step-ca at $CA:9000 is unreachable or served no root (pinned $PIN): $why"
+    else
+      log "CHP: refusing: step-ca at $CA did not serve a root matching the pinned $PIN (it serves $served): $why"
+    fi
+    return 1
+  fi
   got=$(openssl x509 -in "$T/root.pem" -outform DER | sha256sum | cut -d' ' -f1)
   [ "$got" = "$PIN" ] || { log "CHP: refusing: root fingerprint $got is not the pinned $PIN (client.conf)"; return 1; }
   install -m 0644 "$T/root.pem" "$ANCHOR"; restorecon "$ANCHOR"; update-ca-trust extract
 }
 
 do_unixd() {
+  # Without chp_kanidm (its %post only WARNS on failure) every NSS lookup through unixd is denied: refuse, loudly.
+  semodule -l | grep -qx chp_kanidm || { log "CHP: SELinux module chp_kanidm is not loaded (rpm %post failed?): reinstall chp-identity-client"; return 1; }
   [ -s /etc/kanidm/token ] || { log "CHP: no unixd token at /etc/kanidm/token (installer staged none)"; return 1; }
   chmod 0600 /etc/kanidm/token; chown root:root /etc/kanidm/token
   chp-site render kanidm-config > /etc/kanidm/config
@@ -39,8 +51,10 @@ do_unixd() {
     > /etc/systemd/system/kanidm-unixd.service.d/chp-token.conf
   restorecon -R /etc/kanidm /etc/systemd/system/kanidm-unixd.service.d
   systemctl daemon-reload; systemctl enable --now kanidm-unixd kanidm-unixd-tasks; systemctl restart kanidm-unixd
-  for _ in $(seq 30); do if kanidm-unix status 2>/dev/null | grep -q "Kanidm: online"; then return 0; fi; sleep 2; done
-  log "CHP: kanidm-unixd is not online (check https://$IDM reachability and the token)"; return 1
+  for _ in $(seq 30); do if kanidm-unix status 2>/dev/null | grep -q "Kanidm: online"; then break; fi; sleep 2; done
+  kanidm-unix status 2>/dev/null | grep -q "Kanidm: online" || { log "CHP: kanidm-unixd is not online (check https://$IDM reachability and the token)"; return 1; }
+  lbl=$(stat -c %C /run/kanidm-unixd | cut -d: -f3)
+  [ "$lbl" = kanidm_unixd_var_run_t ] || { log "CHP: /run/kanidm-unixd is labelled $lbl, not kanidm_unixd_var_run_t (chp_kanidm file context)"; return 1; }
 }
 
 words() { tr ' ' '\n' | sed '/^$/d'; }

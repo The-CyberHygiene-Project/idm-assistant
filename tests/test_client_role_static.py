@@ -105,3 +105,31 @@ def test_systemd_may_manage_the_runtime_dir():        # proof finding 3: init_t 
     assert "allow init_t kanidm_unixd_var_run_t:dir { create getattr setattr search open read write add_name remove_name rmdir };" in te
     assert "allow init_t kanidm_unixd_var_run_t:sock_file { getattr setattr unlink };" in te
     assert "allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };" in te   # clients' use unchanged
+
+
+def _fn(t, name):
+    return t[t.index(f"{name}() {{"):t.index("\n}\n", t.index(f"{name}() {{"))]
+
+
+def test_trust_refusal_says_what_was_served():                       # final review Important #1
+    tr = _fn(text("client-enrol.sh"), "do_trust")
+    assert "roots.pem" in tr and "--insecure" in tr and "never installed" in tr     # diagnosis only
+    assert "served" in tr and "unreachable" in tr
+    assert "2>/dev/null \\\n    || {" not in tr                         # step-cli's own reason is kept for the log
+
+
+def test_unixd_step_refuses_without_the_selinux_module():          # final review Important #3
+    ux = _fn(text("client-enrol.sh"), "do_unixd")
+    assert "semodule -l | grep -qx chp_kanidm" in ux
+    assert "stat -c %C /run/kanidm-unixd" in ux and "kanidm_unixd_var_run_t" in ux
+
+
+def test_enrolment_failure_is_alerted_and_retried():               # final review Important #2
+    m = text("monitor.d/49-client-enrolled.sh")
+    assert m.startswith("#!/bin/bash\n# CyberHygiene") and "ALERT " in m and "OK " in m
+    assert "client.done" in m and "/proc/uptime" in m and "is-failed" in m
+    assert "semodule -l" in m and "kanidm_unixd_var_run_t" in m
+    assert subprocess.run(["bash", "-n", str(C / "monitor.d/49-client-enrolled.sh")]).returncode == 0
+    assert "49-client-enrolled.sh" in text("chp-identity-client.spec")
+    u = text("chp-client-firstboot.service")
+    assert "Restart=on-failure" in u and "RestartSec=5min" in u
