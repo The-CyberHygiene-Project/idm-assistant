@@ -1,0 +1,4 @@
+version = '2'
+
+[kanidm]
+pam_allowed_login_groups = ["@LOGIN_GROUP@"]

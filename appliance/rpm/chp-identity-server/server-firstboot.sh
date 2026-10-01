@@ -3,6 +3,8 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # server-firstboot.sh (root; chp-server-firstboot.service, once): turn an installed server into the identity server.
+# Steps: bind, step-ca, kanidm-cert, kanidmd, recover, collector, ssh-ca, cache-key, unixd-tokens (login groups + one
+# read-only unixd token per client, pending for export-client), self-client (client-enrol --role server).
 # Steps run in order; each is skipped when its marker /var/lib/chp/firstboot/<step>.done exists, so a failed first boot
 # resumes where it stopped (systemctl restart chp-server-firstboot). Every site value comes from `chp-site get`/`render`.
 # Recovery secrets (Kanidm admin passwords, the step-ca password, the ROOT CA key) go to /root/chp-escrow-pending/ only;
@@ -91,14 +93,17 @@ def pw(t):   # kanidmd scripting prints {"output":"<password>","status":"ok"}
 json.dump({"admin": pw(parts[0]), "idm_admin": pw(parts[1])}, open(sys.argv[1], "w"))' "$P/kanidm-admins.json" )
 }
 
-do_collector() {
-  # Kanidm can still be busy right after recover (password hashing is deliberately slow): retry the login a few times.
+kanidm_login() {   # log in as idm_admin with the pending password (stdin only); Kanidm may still be busy after recover
   for try in 1 2 3 4 5; do
     if python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["idm_admin"])' "$P/kanidm-admins.json" \
-         | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null; then break; fi
-    if [ "$try" -eq 5 ]; then return 1; fi
+         | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null; then return 0; fi
     log "kanidm login not ready yet (try $try/5); retrying in 10 s"; sleep 10
   done
+  return 1
+}
+
+do_collector() {
+  kanidm_login      # Kanidm can still be busy right after recover (password hashing is deliberately slow)
   k() { kanidm "$@" -D idm_admin >/dev/null 2>&1; }
   # capture first, then grep: piping kanidm into an early-exiting grep can fail on EPIPE under pipefail and look like "not found" on a resume
   existing=$(kanidm service-account get idm-collect -D idm_admin 2>/dev/null || true)
@@ -133,6 +138,33 @@ do_cachekey() {
   restorecon -R /var/lib/chp/cache-key
 }
 
+do_unixd_tokens() {
+  # Login groups (decision: clients allow chp_users, the server chp_admins) and one READ-ONLY unixd token per host.
+  kanidm_login
+  k() { kanidm "$@" -D idm_admin >/dev/null 2>&1; }
+  for grp in chp_users chp_admins; do
+    got=$(kanidm group get "$grp" -D idm_admin 2>/dev/null || true)
+    grep -qx "name: $grp" <<< "$got" || k group create "$grp"
+    k group posix set "$grp"
+  done
+  install -d -m 0700 "$P/tokens"
+  for h in $(g CLIENT_HOSTS) "$(g SERVER_HOSTNAME)"; do
+    got=$(kanidm service-account get "unixd-$h" -D idm_admin 2>/dev/null || true)
+    grep -qx "name: unixd-$h" <<< "$got" || k service-account create "unixd-$h" "unixd on $h" idm_admins
+    k group add-members idm_unix_authentication_read "unixd-$h"
+    if [ "$h" = "$(g SERVER_HOSTNAME)" ]; then out=/etc/kanidm/token; else out="$P/tokens/$h.token"; fi
+    if [ ! -s "$out" ]; then
+      ( umask 077
+        kanidm service-account api-token generate "unixd-$h" "$h-unixd" -D idm_admin 2>/dev/null \
+          | grep -oE '[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}' | tail -1 > "$out.new"
+        [ -s "$out.new" ] && mv "$out.new" "$out" )
+    fi
+  done
+  kanidm logout -D idm_admin >/dev/null 2>&1 || true
+}
+
+do_self_client() { /usr/libexec/chp/client-enrol --role server; }
+
 step bind do_bind
 step step-ca do_stepca
 step kanidm-cert do_kanidm_cert
@@ -141,6 +173,8 @@ step recover do_recover
 step collector do_collector
 step ssh-ca do_sshca
 step cache-key do_cachekey
+step unixd-tokens do_unixd_tokens
+step self-client do_self_client
 current=done
 touch "$M/server.done"
 log "CHP: server first boot complete. Move the recovery secrets offline: plug in the site stick and run chp-site export-client"

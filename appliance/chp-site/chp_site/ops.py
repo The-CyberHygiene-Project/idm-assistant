@@ -12,6 +12,7 @@ from .kanidm import PROTECTED, expired, valid_name
 from .sitefile import SiteError
 
 OUT = Path("/root/chp-onboard")
+LOGIN_GROUP = "chp_users"          # clients allow logins from this Kanidm POSIX group (the server: chp_admins)
 
 
 def _stamp():
@@ -44,6 +45,7 @@ def onboard(k, ca, user, domain, display=None, groups=(), ssh_key=None, replace_
     for g in groups:
         if not valid_name(g):
             raise SiteError(f"{g!r} is not a valid group name")
+    groups = (LOGIN_GROUP,) + tuple(g for g in groups if g != LOGIN_GROUP)
     e = k.person(user)
     if e is not None and expired(e):
         raise SiteError(f"{user} is expired; re-enabling needs the ISSO's approval: "
@@ -143,3 +145,22 @@ def unexpire(k, ca, site, hosts, user, approver, reason, rec=audit.record, fan=f
     if ca.registered(user) is None:
         say(f"{user} has no registered SSH key (revoke takes it out of service): "
             f"chp-site onboard {user} --ssh-key FILE")
+
+
+def client_token(k, hosts, hostname, pending=Path("/root/chp-escrow-pending"), rec=audit.record):
+    """A read-only unixd token for a client added after the server's first boot. It goes to the pending dir; the next
+    `chp-site export-client` moves it onto the site stick. Never printed."""
+    if not any(h.hostname == hostname and h.role == "client" for h in hosts):
+        raise SiteError(f"{hostname} is not a client in the hosts table (/etc/chp/hosts)")
+    sa = f"unixd-{hostname}"
+    fields = {"host": hostname, "operator": audit.operator(), "as": k.as_}
+    rec("client-token", fields)
+    if not k.service_account_exists(sa):
+        k.service_account_create(sa, f"unixd on {hostname}")
+    k.add_member("idm_unix_authentication_read", sa)
+    tok = k.api_token(sa, f"{hostname}-unixd")
+    d = Path(pending) / "tokens"
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    p = write_private(d, f"{hostname}.token", tok + "\n")
+    rec("client-token.done", fields, after=True)
+    return p

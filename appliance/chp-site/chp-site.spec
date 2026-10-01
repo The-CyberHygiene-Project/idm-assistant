@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.3.0
+Version:        0.4.0
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Wed Sep 30 2026 The CyberHygiene Project - 0.4.0-1.chp
+- Per-client unixd tokens (pre stages the client's own; export-client moves them with read-back; client-token HOST), chp-site get with client.conf values, COLLECTOR_SSH_PUBKEY, authselect-patch, onboard adds chp_users (ISO Plan 4a).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.3.0-1.chp
 - onboard / revoke / unexpire (spec 4.4; ISSO #28, #32); client.conf CACHE_PUBKEY; audit records before and after every change.
 

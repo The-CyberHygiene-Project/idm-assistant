@@ -4,6 +4,7 @@
 """The %pre gate: validate EVERYTHING, then write the escrow to the stick, then write the kickstart snippets.
 Any failure raises SiteError before a disk is touched; the install never proceeds without its recovery secrets."""
 import os
+import re
 import secrets
 import subprocess
 from pathlib import Path
@@ -14,6 +15,8 @@ from .facts import Facts  # noqa: F401  (re-exported for callers and tests)
 from .hosts import lookup, parse_hosts
 from .render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
 from .sitefile import SiteError, parse_site, read_file
+
+TOKEN_RE = r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"   # a Kanidm API token (JWS)
 
 
 def sha512_crypt(pw):
@@ -34,8 +37,16 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
     host = lookup(hosts, facts.macs)
     if host.role != role:
         raise SiteError(f"you booted the {role} installer, but the hosts table says {host.hostname} is a {host.role}")
+    token = None
     if role == "client":
         parse_client_conf(read_file(stick / "client.conf", "client.conf (run `chp-site export-client` on the server)"), site)
+        tp = stick / "tokens" / f"{host.hostname}.token"
+        if not tp.is_file():
+            raise SiteError(f"no unixd token for {host.hostname} on the site stick: on the server run "
+                            f"`chp-site client-token {host.hostname}` then `chp-site export-client`")
+        token = read_file(tp, f"unixd token for {host.hostname}").strip()
+        if not re.fullmatch(TOKEN_RE, token):
+            raise SiteError(f"tokens/{host.hostname}.token is not a Kanidm API token")
     disk = choose_disk(facts.disks, host.disk)
     # --- everything is valid: now the secrets, escrow first ---
     luks, rootpw = secret(32), secret(18)
@@ -68,4 +79,8 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
     fd = os.open(out / "luks-pass", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(luks)
+    if token is not None:    # this client's OWN unixd token, for %post --nochroot (installs it 0600, then shreds this)
+        fd = os.open(out / "unixd.token", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token)
     return host

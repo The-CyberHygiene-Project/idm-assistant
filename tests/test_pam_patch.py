@@ -1,5 +1,5 @@
 from pathlib import Path
-from lab.client.authselect_patch import patch_pam, patch_nsswitch
+from chp_site.authselect import patch_nsswitch, patch_pam   # the shipped copy (in the trusted chp-site zipapp)
 
 FIX = Path(__file__).parent / "fixtures"
 

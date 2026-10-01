@@ -111,3 +111,29 @@ def test_bad_names_never_reach_the_cli():
 
 def test_whoami_returns_name():
     assert Kanidm("alice", run=Fake((0, "---\nname: alice\nspn: alice@x\n", ""))).whoami() == "alice"
+
+
+JWS = "eyJhbGciOiJFUzI1NiJ9AAAAAAAAAAAA.eyJzdWIiOiJ1bml4ZC1jbGkifQAAAAAAA.c2lnbmF0dXJlc2lnbmF0dXJlc2ln"
+
+
+def test_service_account_and_token():
+    f = Fake((0, "No matching entries\n", ""), (0, "Success\n", ""), (0, f"blah\n{JWS}\n", ""))
+    k = Kanidm("idm_admin", run=f)
+    assert k.service_account_exists("unixd-cli1") is False
+    k.service_account_create("unixd-cli1", "unixd on cli1")
+    assert k.api_token("unixd-cli1", "cli1-unixd") == JWS
+    assert f.calls[1][:4] == ["service-account", "create", "unixd-cli1", "unixd on cli1"]
+    assert f.calls[2][:5] == ["service-account", "api-token", "generate", "unixd-cli1", "cli1-unixd"]
+    assert "--readwrite" not in f.calls[2]
+
+
+def test_service_account_names_allow_a_hostname():
+    f = Fake((0, "---\nname: unixd-iso4-cli\n", ""))
+    assert Kanidm("idm_admin", run=f).service_account_exists("unixd-iso4-cli") is True
+    with pytest.raises(SiteError, match="not a valid service account"):
+        Kanidm("idm_admin", run=Fake()).service_account_exists("unixd-X;")
+
+
+def test_api_token_missing_is_an_error():
+    with pytest.raises(SiteError, match="no API token"):
+        Kanidm("idm_admin", run=Fake((0, "odd\n", ""))).api_token("unixd-cli1", "cli1-unixd")

@@ -63,3 +63,31 @@ def test_cli_get_and_render(tmp_path):
     assert cli("get", "NOPE", "--site", str(tmp_path)).returncode == 2
     r = cli("render", "zone", "--site", str(tmp_path))
     assert r.returncode == 0 and "idm" in r.stdout
+
+
+def test_values_client_hosts_and_collector():
+    v = values(SITE, HS)
+    assert v["CLIENT_HOSTS"] == "iso2-cli" and v["COLLECTOR_IP"] == "192.168.100.1"
+    assert v["COLLECTOR_SSH_PUBKEY"] == "" and "CA_ROOT_SHA256" not in v
+
+
+def test_values_with_client_conf():
+    from chp_site.clientconf import make_client_conf, parse_client_conf
+    from tests.test_chp_site_clientconf import CACHE, PEM, PUB
+    c = parse_client_conf(make_client_conf(SITE["DOMAIN"], PEM, PUB, CACHE), SITE)
+    v = values(SITE, HS, c)
+    assert v["CA_ROOT_SHA256"] == c["CA_ROOT_SHA256"] and v["CACHE_PUBKEY"] == c["CACHE_PUBKEY"]
+    assert v["KANIDM_URL"] == f"https://idm.{SITE['DOMAIN']}" and v["SSH_CA_FPR"] == c["SSH_CA_FPR"]
+
+
+def test_get_reads_client_conf_when_present(tmp_path):
+    from chp_site.clientconf import make_client_conf
+    from tests.test_chp_site_clientconf import CACHE, PEM, PUB
+    d = tmp_path / "s"; d.mkdir(); (d / "site.conf").write_text(GOOD); (d / "hosts").write_text(HOSTS)
+    PKG = Path(__file__).resolve().parents[1] / "appliance" / "chp-site"
+    get = lambda k: subprocess.run([sys.executable, "-m", "chp_site.cli", "get", k, "--site", str(d)], cwd=PKG,
+                                   capture_output=True, text=True)
+    assert get("CACHE_PUBKEY").returncode == 2                     # no client.conf (the server): not a key
+    (d / "client.conf").write_text(make_client_conf(SITE["DOMAIN"], PEM, PUB, CACHE))
+    r = get("CACHE_PUBKEY")
+    assert r.returncode == 0 and r.stdout.startswith("ecdsa-sha2-nistp384 ")

@@ -1,0 +1,19 @@
+[Unit]
+Description=CHP first boot (client): pinned trust, Kanidm unixd, authselect, sshd, forced-command accounts
+After=chp-firstboot-common.service network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/chp/firstboot/client.done
+
+[Service]
+Type=oneshot
+# The kanidm tools keep state under $HOME; system services get no HOME by default (Plan 3a finding).
+Environment=HOME=/root
+ExecStart=/usr/libexec/chp/client-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=15min
+# Retry (e.g. the server was down): the ConditionPathExists above ends it once client.done exists.
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

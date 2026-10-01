@@ -125,7 +125,8 @@ def parse_site(text):
     for k, v in raw.items():
         _plain(k, v, where[k])
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
-             "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY"}
+             "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY",
+             "COLLECTOR_SSH_PUBKEY"}
     for k in raw:
         if k not in known:
             raise SiteError(f"site.conf: unknown key {k}")
@@ -175,4 +176,13 @@ def parse_site(text):
         raise SiteError(f"ALERT_HOOK: {h!r} is not an absolute path")
     s["ALERT_HOOK"] = h
     s["ADMIN_SSH_PUBKEY"] = ssh_pubkey(raw["ADMIN_SSH_PUBKEY"])
+    ck = raw.get("COLLECTOR_SSH_PUBKEY", "")
+    if ck:
+        if not s["COLLECTOR_IP"]:
+            raise SiteError("COLLECTOR_SSH_PUBKEY needs COLLECTOR_IP (the diag key is pinned to the collector's address)")
+        try:
+            ck = ssh_pubkey(ck)
+        except SiteError as e:
+            raise SiteError(str(e).replace("ADMIN_SSH_PUBKEY", "COLLECTOR_SSH_PUBKEY")) from None
+    s["COLLECTOR_SSH_PUBKEY"] = ck
     return s

@@ -124,3 +124,23 @@ def test_timezone_must_exist_when_the_tz_database_is_present():          # final
         pytest.skip("no tz database here")
     with pytest.raises(SiteError, match="TIMEZONE.*America/Denvr"):
         parse_site(GOOD.replace("America/Denver", "America/Denvr"))
+
+
+COLL = (Path(__file__).parent / "fixtures" / "chp-site" / "cache_key.pub").read_text().strip()
+
+
+def test_collector_key_optional_and_validated():
+    assert parse_site(GOOD)["COLLECTOR_SSH_PUBKEY"] == ""
+    s = parse_site(GOOD + f"COLLECTOR_SSH_PUBKEY={COLL}\n")
+    assert s["COLLECTOR_SSH_PUBKEY"] == " ".join(COLL.split()[:2])
+
+
+def test_collector_key_ed25519_refused_with_its_own_name():
+    with pytest.raises(SiteError, match="COLLECTOR_SSH_PUBKEY.*FIPS"):
+        parse_site(GOOD + "COLLECTOR_SSH_PUBKEY=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGyH x\n")
+
+
+def test_collector_key_needs_collector_ip():
+    text = "\n".join(l for l in GOOD.splitlines() if not l.startswith("COLLECTOR_IP=")) + "\n"
+    with pytest.raises(SiteError, match="COLLECTOR_SSH_PUBKEY needs COLLECTOR_IP"):
+        parse_site(text + f"COLLECTOR_SSH_PUBKEY={COLL}\n")

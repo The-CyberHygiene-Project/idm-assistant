@@ -10,3 +10,4 @@ google-authenticator epel
 chp-site ours
 chp-base ours
 chp-identity-server ours
+chp-identity-client ours

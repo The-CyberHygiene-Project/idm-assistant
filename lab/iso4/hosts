@@ -1,0 +1,4 @@
+# iso4 lab test site (ISO Plan 4a proof: the server + two clients).
+52:54:00:c4:04:40  iso4-srv   192.168.100.40  server
+52:54:00:c4:04:41  iso4-cli1  192.168.100.41  client
+52:54:00:c4:04:42  iso4-cli2  192.168.100.42  client
