@@ -122,3 +122,53 @@ Script: `lab/iso4/ga-measure.sh`. **Final run: 21/21 PASS, `AVC since start = 0`
 3. **Harness:** `expect`'s literal "gate" ignores `(?i)`, so `console-login.exp` never tried its case-insensitive regexes. It now uses `[Vv]`/`[Pp]`/`[Ll]` classes, and reads `id` through an explicit `RESULT=` marker.
 4. **Harness:** the first `idm_admin` login on the server can time out (as in Plan 3a); the harness retries 3×.
 5. **Observed:** a user with **no token** on the host is denied on every stack (code asked, then refused; Review Focus 1).
+
+## Plan 4b run 2 (the proof of record): fresh installs from SIGNED repo 0.5.1, no hot-patch (2026-10-01)
+
+Repo 0.5.1 = chp-site 0.5.1 + chp-identity-client 0.2.1. It adds the short-name setting and the local-name guard on top of 0.5.0.
+**All stages: 123 checks PASS, 0 FAIL.**
+
+| Stage | Result |
+|---|---|
+| prep, server, firstboot, reboot (TPM), export | PASS (GA lines active on the server-as-client; monitors quiet) |
+| client1, client2 | PASS (sequential installs) |
+| **ga** | **59/59** |
+| negtrust | PASS |
+
+**`ga` covers:**
+- **Bootstrap:** root enrols the first admin on the server; the admin then uses certificate + code + password, and `sudo` asks for code + password.
+- **Enrolment over SSH:** the admin enrols a user on a client with `sudo chp-site ga-enrol`; the audit record names the admin.
+- **Logins and refusals:**
+  - the user logs in with certificate + code + password
+  - **the identical code twice is refused**
+  - **a 4th attempt within 30 s is refused by the rate limit**, without a code prompt
+  - **a wrong code is refused, and the password is still asked**
+  - **`faillock` counted the 3 GA failures** and locked the account (an admin reset it)
+- **Host-local tokens:** with no token on the other client the user is refused; after enrolment there, the login works.
+- **Scratch code:** works once, refused the second time; 4 remain.
+- **Row 36:** `pam-test gdm-password`, `login` and `sudo` → PAM_OK (code, then password); the token stays `400 root root var_auth_t`.
+- **No bypass:** a Kanidm user without a code fails.
+- **Break-glass on all 3 hosts:**
+  - `chpadmin` SSH key-only works
+  - `chpadmin` + `su -` gives root
+  - root at the real console is asked for **a password only**
+  - **all three also pass with Kanidm (unixd) stopped**
+- **Name collision (final review I1), created directly in Kanidm and bypassing the guard:**
+  - a Kanidm person `chpcache` exists, yet on the client the name **still resolves to the local account**
+  - a Kanidm group `wheel` does **not** give its member the local `wheel` group
+  - `chp-site onboard diag` is refused
+- **The rest:**
+  - diag reports work
+  - `ga-enrol` refuses `chpadmin` (local), an unknown user, and an existing token without `--reset`
+  - after `--reset` the old secret fails and the new one works
+  - the revoke fan-out still reaches both clients
+- **Monitors quiet, 0 fapolicyd, 0 AVC** on all three hosts.
+
+**Findings from run 1, all fixed and shipped in 0.5.1:**
+1. **Product.** Inside a session, Kanidm reported users by SPN, so `sudo`'s PAM user was `u@idm.<domain>` and the second factor looked for the wrong token. Fixed by `uid_attr_map`/`gid_attr_map = "name"`.
+2. **Product (final review I1).** Short names made Kanidm/local name collisions possible. Fixed three ways: `onboard` refuses local/reserved names, `53-ga` alerts on `allow_local_account_override`, and the lab collision checks above.
+3. **Harness:**
+   - `sudo -p` replaced the GA prompt; it is now plain `sudo`
+   - the replay test sends the identical code
+   - the rate-limit and lockout behaviour is asserted, not tripped over
+   - `console-login.exp` waits for the end of the line
