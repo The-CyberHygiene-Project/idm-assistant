@@ -1,0 +1,4 @@
+# iso2 lab test site (ISO Plan 2 proof). MACs deliberately in three notations (Review Focus 2).
+52:54:00:c4:02:30  iso2-srv   192.168.100.30  server
+52:54:00:C4:02:31  iso2-cli   192.168.100.31  client
+52-54-00-c4-02-39  iso2-neg2  192.168.100.39  client

@@ -1,0 +1,21 @@
+#!/usr/bin/expect -f
+# rootcheck.exp IP KEY (RUNS ON AERO): ssh in as chpadmin (key only), become root with `su` and the console password
+# (stdin line 1) and search the disk for the LUKS passphrase VALUE (stdin line 2) - both from the stick's escrow, never
+# argv, never echoed. The value is sent to `read` inside the su session, so it is not on any command line either.
+set timeout 60
+set ip [lindex $argv 0]; set key [lindex $argv 1]
+gets stdin pw
+gets stdin luks
+log_user 0
+spawn ssh -tt -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null chpadmin@$ip \
+  {su -c 'read -r v; echo UID=$(id -u); echo PASSGREP=$(grep -rlF -- "$v" /root /var/log /etc /var/lib /home 2>/dev/null | wc -l); echo SHADOW=$(cut -d: -f2 /etc/shadow | head -1 | cut -c1-3); echo OSCAP=$(test -d /root/openscap_data && echo yes || echo no); echo END'}
+expect {
+  -re "Password: ?" { send -- "$pw\r"; sleep 1; send -- "$luks\r" }
+  timeout { puts "ROOTCHECK: no su prompt"; exit 1 }
+}
+expect {
+  -re "UID=(\[0-9]+).*PASSGREP=(\[0-9]+).*SHADOW=(\\S*).*OSCAP=(\\S+).*END" {
+    puts "UID=$expect_out(1,string) PASSGREP=$expect_out(2,string) SHADOW=$expect_out(3,string) OSCAP=$expect_out(4,string)" }
+  -re "(Authentication failure|incorrect)" { puts "ROOTCHECK: su refused the escrowed root password"; exit 1 }
+  timeout { puts "ROOTCHECK: no output"; exit 1 }
+}

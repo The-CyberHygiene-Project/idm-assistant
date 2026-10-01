@@ -12,3 +12,4 @@ idm-lab-secrets/
 *.secret.json
 *.token
 *.key
+appliance/chp-site/dist/

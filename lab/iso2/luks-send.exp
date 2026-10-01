@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+# luks-send.exp VM (on aero, as root): send the LUKS passphrase (stdin, never argv) to the VM's serial console.
+# unlock.sh has already checked that a prompt is PENDING (prompt seen since the last boot, no login:/unlock since).
+set timeout 60
+set vm [lindex $argv 0]
+gets stdin pass
+log_user 0
+spawn virsh console --force $vm
+sleep 2
+send -- "$pass\r"
+puts "passphrase sent (pending prompt confirmed by unlock.sh)"
+sleep 3
+send -- "\035"
+expect eof

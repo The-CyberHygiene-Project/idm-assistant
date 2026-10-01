@@ -7,3 +7,4 @@ step-ca ours
 step-cli ours
 idm-collect ours
 google-authenticator epel
+chp-site ours
