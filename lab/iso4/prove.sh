@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso4-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso4_diag_ecdsa; UKEY=$S/iso4_ops_ecdsa
 STICK=/data/libvirt/images/iso4-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso4.lab.test
 SRV=iso4-srv; SIP=192.168.100.40; C1=iso4-cli1; C1IP=192.168.100.41; C2=iso4-cli2; C2IP=192.168.100.42; fails=0
-export CHP_REPO=0.4.0
+export CHP_REPO=0.4.1
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }

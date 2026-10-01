@@ -67,3 +67,24 @@ Hosts: `iso4-srv` (.40), `iso4-cli1` (.41), `iso4-cli2` (.42), site `iso4.lab.te
 - `semodule -i` takes > 3 min on these VMs. The lab hot-patch runs it in the background.
 
 **Still to do:** re-prove everything from a **signed** repo (0.4.1, with `chp-identity-client` 0.1.0-4) on fresh installs.
+
+## Run 2 (the proof of record): fresh installs from SIGNED repo 0.4.1, no hot-patch (2026-10-01)
+
+Repo 0.4.1 = 0.4.0 + `chp-identity-client` 0.1.0-5 (the three SELinux packaging fixes + the final-review fixes).
+
+| Stage | Result |
+|---|---|
+| prep, server | PASS |
+| firstboot | **16/16** (the server is its own client: `chp_kanidm` loaded at install, socket dir labelled, **0 AVC**) |
+| reboot (TPM), export | 2/2, 5/5 (server secrets + both client tokens to the stick) |
+| client1, client2 | **17/17 each** (pinned anchor, own token, unixd, authselect + CUI features, nsswitch, sshd, SELinux, 0 AVC, chpcache pin, monitors incl. the new 49-client-enrolled quiet, TPM reboot) |
+| ops | **30/30**: revoke cut access in **1 s** (group) and **3 s / 3 s** (account) on both clients |
+| negtrust | **3/3**. The refusal now names both values: `refusing: step-ca at ca.iso4.lab.test did not serve a root matching the pinned 0000… (it serves a514991111d9…)` |
+
+**Extra checks (final review):**
+- **sshd `Match` leak, on an installed appliance VM** (`iso4-cli1`, **OpenSSH_9.9p1**, the same as aero): `sshd-match-check.sh` passes.
+  - The live `sshd -T` gives the same `permitrootlogin=no` / `maxauthtries=6` for `alice`, `chpadmin`, `diag` and `chpcache`; only `authenticationmethods` differs, as designed.
+  - The review's premise ("Rocky 9 ships 8.7p1") does not hold for Rocky 9.8.
+- **The one lab mistake:** I started the two client installs in parallel on the one shared stick image. Client 2's install did not finish.
+  - Checked afterwards: `fsck.vfat` clean, every file present, no partial escrow.
+  - Client 2 was re-installed alone and passed 17/17. **Client installs stay sequential** (one stick, one writer).
