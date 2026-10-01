@@ -1,6 +1,6 @@
 Name:           chp-identity-client
-Version:        0.1.0
-Release:        5.chp%{?dist}
+Version:        0.2.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -20,7 +20,8 @@ Source11:       51-sshd.sh
 Source12:       52-kanidm-tls.sh
 Source13:       LICENSE
 Source14:       49-client-enrolled.sh
-Requires:       chp-base, chp-site, kanidm-unixd, kanidm-clients, idm-collect, step-cli
+Source15:       53-ga.sh
+Requires:       chp-base, chp-site >= 0.5.0, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
 Requires:       authselect, policycoreutils, policycoreutils-python-utils, openssh-server, openssl, curl, python3, sudo, shadow-utils
 Requires(post): policycoreutils, policycoreutils-python-utils
 Requires(postun): policycoreutils, policycoreutils-python-utils
@@ -49,6 +50,8 @@ install -Dm0755 %{SOURCE11} %{buildroot}%{_prefix}/lib/chp/monitor.d/51-sshd.sh
 install -Dm0755 %{SOURCE12} %{buildroot}%{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
 install -Dm0644 %{SOURCE13} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -Dm0755 %{SOURCE14} %{buildroot}%{_prefix}/lib/chp/monitor.d/49-client-enrolled.sh
+install -Dm0755 %{SOURCE15} %{buildroot}%{_prefix}/lib/chp/monitor.d/53-ga.sh
+install -d -m 0700 %{buildroot}%{_sharedstatedir}/google-authenticator
 
 %post
 semodule -i %{_datadir}/selinux/packages/chp_kanidm.pp
@@ -79,8 +82,13 @@ fi
 %{_prefix}/lib/chp/monitor.d/50-authselect.sh
 %{_prefix}/lib/chp/monitor.d/51-sshd.sh
 %{_prefix}/lib/chp/monitor.d/52-kanidm-tls.sh
+%{_prefix}/lib/chp/monitor.d/53-ga.sh
+%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Thu Oct 01 2026 The CyberHygiene Project - 0.2.0-1.chp
+- Second factor (ISO Plan 4b): requires google-authenticator and chp-site >= 0.5.0 (GA PAM lines via authselect-patch, ga-enrol, pam-test); owns /var/lib/google-authenticator (0700); 53-ga monitor. No chp_ga module: the policy's var_auth_t covers it (measured: 0 AVC).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-5.chp
 - Trust refusal logs what the CA serves (or that it is unreachable); enrolment refuses without chp_kanidm and checks the socket label; 49-client-enrolled monitor; the first-boot unit retries every 5 min (final review).
 

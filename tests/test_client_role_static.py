@@ -133,3 +133,22 @@ def test_enrolment_failure_is_alerted_and_retried():               # final revie
     assert "49-client-enrolled.sh" in text("chp-identity-client.spec")
     u = text("chp-client-firstboot.service")
     assert "Restart=on-failure" in u and "RestartSec=5min" in u
+
+
+def test_client_rpm_carries_the_second_factor():
+    s = text("chp-identity-client.spec")
+    assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
+    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.0", s, re.M)
+    assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
+    assert "53-ga.sh" in s and "Version:        0.2.0" in s
+    assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
+
+
+def test_ga_monitor():
+    m = text("monitor.d/53-ga.sh")
+    assert m.startswith("#!/bin/bash\n# CyberHygiene") and "ALERT " in m and "OK " in m
+    assert "pam_google_authenticator.so" in m and "/etc/pam.d/system-auth" in m and "/etc/pam.d/password-auth" in m
+    assert "stat -c" in m and "root root" in m and "700 root root" in m
+    assert "400|600" in m                                  # owner-only: 0400 as the module writes it (Task 4)
+    assert "restorecon -nRv /var/lib/google-authenticator" in m
+    assert subprocess.run(["bash", "-n", str(C / "monitor.d/53-ga.sh")]).returncode == 0
