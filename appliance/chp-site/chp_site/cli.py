@@ -184,7 +184,7 @@ def _ga_enrol(a):
     if os.geteuid() != 0:
         raise SiteError("run as root: sudo chp-site ga-enrol USER")
     site = parse_site(read_file(Path(a.site) / "site.conf", "site.conf"))
-    p = enrol(a.user, socket.getfqdn(), site["DOMAIN"], reset=a.reset)
+    p = enrol(a.user, socket.getfqdn(), site["DOMAIN"], reset=a.reset, no_confirm=a.no_confirm)
     print(f"\nGoogle Authenticator token for {a.user} on {socket.getfqdn()} saved ({p}). The user scans the QR code above "
           "and keeps the 5 emergency scratch codes somewhere safe; each works once.")
 
@@ -224,7 +224,8 @@ def main(argv=None):
     pt = sub.add_parser("pam-test", help="authenticate USER through PAM service SERVICE (secrets on stdin; root)")
     pt.add_argument("service"); pt.add_argument("user")
     ge = sub.add_parser("ga-enrol", help="host-local Google Authenticator token for a Kanidm user (root; audited)")
-    ge.add_argument("user"); ge.add_argument("--reset", action="store_true"); ge.add_argument("--site", default="/etc/chp")
+    ge.add_argument("user"); ge.add_argument("--reset", action="store_true")
+    ge.add_argument("--no-confirm", action="store_true", help="skip the app-code confirmation (scripted use only)"); ge.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,

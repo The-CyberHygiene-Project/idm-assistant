@@ -27,13 +27,14 @@ def fake_ga(cmds):
 def env(tmp_path, local=("root", "chpadmin")):
     pw = tmp_path / "passwd"; pw.write_text("".join(f"{u}:x:0:0::/:/bin/bash\n" for u in local))
     return dict(tokdir=tmp_path / "ga", passwd=pw, resolves=lambda u: u in ("alice", "chpadmin", "root"),
-                chown=lambda *a: None)
+                chown=lambda *a: None, tty=lambda: True)
 
 
 def test_enrol_creates_a_root_0600_token_with_the_chosen_options(tmp_path):
     cmds, rec = [], Rec()
     p = ga.enrol("alice", "cli1.x.test", "x.test", run=fake_ga(cmds), rec=rec, **env(tmp_path))
-    assert p == tmp_path / "ga" / "alice" and oct(p.stat().st_mode & 0o777) == "0o600"
+    # 0400: what pam_google_authenticator itself writes when it updates the file (seen in Task 4), so one mode everywhere
+    assert p == tmp_path / "ga" / "alice" and oct(p.stat().st_mode & 0o777) == "0o400"
     assert oct((tmp_path / "ga").stat().st_mode & 0o777) == "0o700"
     g = cmds[0]
     for opt in (["-t"], ["-d"], ["-f"], ["-r", "3"], ["-R", "30"], ["-w", "3"], ["-e", "5"], ["-l", "alice@cli1.x.test"],
@@ -73,3 +74,23 @@ def test_failed_generator_keeps_the_old_token(tmp_path):
     with pytest.raises(SiteError, match="google-authenticator failed"):
         ga.enrol("alice", "h.x.test", "x.test", reset=True, run=bad, rec=rec, **e)
     assert (tmp_path / "ga" / "alice").read_text() == before and [c[0] for c in rec.calls] == ["ga-enrol"]
+
+
+def test_interactive_enrolment_keeps_the_app_confirmation(tmp_path):       # Task 4 finding: GA 1.09 confirms a code
+    cmds = []
+    ga.enrol("alice", "h.x.test", "x.test", run=fake_ga(cmds), rec=Rec(), **env(tmp_path))
+    assert "-C" not in cmds[0]
+
+
+def test_no_confirm_for_scripted_use(tmp_path):
+    cmds = []
+    ga.enrol("alice", "h.x.test", "x.test", no_confirm=True, run=fake_ga(cmds), rec=Rec(),
+             **{**env(tmp_path), "tty": lambda: False})
+    assert "-C" in cmds[0]
+
+
+def test_no_terminal_without_no_confirm_is_refused_before_anything(tmp_path):
+    cmds, rec = [], Rec()
+    with pytest.raises(SiteError, match="needs a terminal"):
+        ga.enrol("alice", "h.x.test", "x.test", run=fake_ga(cmds), rec=rec, **{**env(tmp_path), "tty": lambda: False})
+    assert cmds == [] and rec.calls == [] and not (tmp_path / "ga").exists()

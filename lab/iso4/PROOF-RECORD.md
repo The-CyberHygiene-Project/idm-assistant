@@ -88,3 +88,37 @@ Repo 0.4.1 = 0.4.0 + `chp-identity-client` 0.1.0-5 (the three SELinux packaging 
 - **The one lab mistake:** I started the two client installs in parallel on the one shared stick image. Client 2's install did not finish.
   - Checked afterwards: `fsck.vfat` clean, every file present, no partial escrow.
   - Client 2 was re-installed alone and passed 17/17. **Client installs stay sequential** (one stick, one writer).
+
+## Plan 4b Task 4: GA stacks measured on an installed client (2026-10-01)
+
+Hosts: fresh `iso4-srv` + `iso4-cli1` from signed repo 0.4.1. The 4b changes were hand-applied on the client (lab only):
+- `google-authenticator` (EPEL-signed, from the chp repo)
+- the dev `chp-site.pyz` for `authselect-patch` (the GA lines) and `ga-enrol --no-confirm`
+
+Script: `lab/iso4/ga-measure.sh`. **Final run: 21/21 PASS, `AVC since start = 0`.**
+
+| Stack (SELinux domain) | How | Result |
+|---|---|---|
+| sshd (`sshd_t`) | a real SSH login: key + certificate + code + Kanidm password | LOGIN_OK; prompts `Verification code`, `Password`; **0 AVC** |
+| console `login` (`local_login_t`) | a real serial-console login (`console-login.exp`) | logged in; prompts code then password; **0 AVC** |
+| `gdm-password`, `login`, `sudo` (stacks) | `chp-site pam-test` (runs as root, `unconfined_t`: proves the stack) | PAM_OK, code then password |
+| GDM (`xdm_t`) | policy query (`sesearch` on aero; same `selinux-policy-targeted` 38.1.75-2) | `login_pgm` (incl. `xdm_t`, `sshd_t`, `local_login_t`) has full create/write/rename/unlink on `var_auth_t` files and directories |
+| token after logins | `stat`, `ls -Z` | `400 root root`, `var_auth_t` (no label flip) |
+
+**Break-glass (quick check):** all PASS.
+- `chpadmin` SSH key-only works.
+- `chpadmin` + `su -` (escrowed root password) shows only a Password prompt.
+- **Root at the real console: password only, no code prompt.**
+- A Kanidm user is always asked for the code (no bypass).
+
+**Decision (rule set before measuring): no `chp_ga` module.** Rocky's policy labels `/var/lib/google-authenticator` `var_auth_t` and already grants the login domains what `pam_google_authenticator` needs. The spec's `auth_home_t` + `chp_ga` (written when the tokens were in home directories) is superseded.
+
+**Findings (fixed test-first or in the harness):**
+1. **Product:** `google-authenticator` 1.09 asks the user to **confirm a code from the app** after the QR code. It needs a terminal (`getline(): Inappropriate ioctl for device` otherwise).
+   - `ga-enrol` keeps that confirmation by default (it proves the phone is set up).
+   - `--no-confirm` (passes `-C`) exists for scripted use.
+   - Without a terminal and without `--no-confirm`, it refuses **before** any audit record or change.
+2. **Product:** the PAM module rewrites the token as **0400**. `ga-enrol` now writes 0400 too (one mode everywhere), and makes the old token writable before shredding it on `--reset`.
+3. **Harness:** `expect`'s literal "gate" ignores `(?i)`, so `console-login.exp` never tried its case-insensitive regexes. It now uses `[Vv]`/`[Pp]`/`[Ll]` classes, and reads `id` through an explicit `RESULT=` marker.
+4. **Harness:** the first `idm_admin` login on the server can time out (as in Plan 3a); the harness retries 3×.
+5. **Observed:** a user with **no token** on the host is denied on every stack (code asked, then refused; Review Focus 1).

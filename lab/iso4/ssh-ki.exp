@@ -1,20 +1,28 @@
 #!/usr/bin/expect -f
-# ssh-ki.exp IP USER KEY CERT MODE (RUNS ON AERO, root): an SSH login as a Kanidm user with key + CA certificate, answering
+# ssh-ki.exp IP USER KEY CERT MODE [GA_SECRET_FILE] (RUNS ON AERO, root): an SSH login as a Kanidm user with key + CA certificate, answering
 # the keyboard-interactive password prompt (and, MODE=sudo, sudo's prompt) with STDIN line 1 (never argv, never logged).
 # MODE id: prints "LOGIN_OK <user>"; MODE sudo: "LOGIN_OK SUDO_OK" after `sudo -S true`. Anything else: "LOGIN_REFUSED".
+# GA_SECRET_FILE (root-only, the lab stand-in for the user's phone): a "Verification code" prompt is answered with the
+# current TOTP from it (lab/srv1/totp.py, SHA1). Every prompt seen is recorded and printed as PROMPTS=a|b (never answers).
+# MODE enrol: `sudo chp-site ga-enrol <ENROL_USER env>` with the QR discarded.
 # NOTE: every expect block is multi-line on purpose - a one-line `expect { ... }` is read as ONE literal pattern.
 set timeout 40
-lassign $argv ip user key cert mode
+lassign $argv ip user key cert mode sf
+set prompts {}
 gets stdin pw
 log_user 0
-if {$mode eq "sudo"} { set cmd {sudo -S -p SUDO""PW: true && echo RES""ULT=SUDO_OK} } else { set cmd {echo RES""ULT=$(id -un)} }
+if {$mode eq "sudo"} { set cmd {sudo -S -p SUDO""PW: true && echo RES""ULT=SUDO_OK}
+} elseif {$mode eq "enrol"} { set cmd "sudo -S -p SUDO\"\"PW: chp-site ga-enrol $env(ENROL_USER) > /dev/null && echo RES\"\"ULT=ENROLLED"
+} else { set cmd {echo RES""ULT=$(id -un)} }
+proc code {} { global sf; if {$sf eq ""} { return "000000" }; return [string trim [exec python3 /tmp/iso2/totp.py - sha1 < $sf]] }
 spawn ssh -tt -i $key -o CertificateFile=$cert -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
   -o ConnectTimeout=10 -o PreferredAuthentications=publickey,keyboard-interactive $user@$ip $cmd
 set n 0
 expect {
-  -re {SUDOPW:} { send -- "$pw\r"; exp_continue }
-  -re {[Pp]assword[^\r\n]*: ?} { incr n; if {$n > 2} { puts "LOGIN_REFUSED"; exit 0 }; send -- "$pw\r"; exp_continue }
-  -re {RESULT=([A-Za-z0-9_]+)} { puts "LOGIN_OK $expect_out(1,string)"; exit 0 }
-  timeout { puts "LOGIN_REFUSED"; exit 0 }
-  eof { puts "LOGIN_REFUSED"; exit 0 }
+  -re {SUDOPW:} { lappend prompts "sudo-password"; send -- "$pw\r"; exp_continue }
+  -re {[Vv]erification code[^\r\n]*: ?} { lappend prompts "Verification code"; send -- "[code]\r"; exp_continue }
+  -re {[Pp]assword[^\r\n]*: ?} { lappend prompts "Password"; incr n; if {$n > 2} { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }; send -- "$pw\r"; exp_continue }
+  -re {RESULT=([A-Za-z0-9_]+)} { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_OK $expect_out(1,string)"; exit 0 }
+  timeout { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }
+  eof { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }
 }
