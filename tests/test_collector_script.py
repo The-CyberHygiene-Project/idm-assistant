@@ -345,3 +345,96 @@ def test_faillock_time_is_read_as_local_and_printed_in_utc():
 
 def test_report_emits_faillock():
     assert '\\"faillock\\":' in SCRIPT.read_text() or '"faillock":' in SCRIPT.read_text()
+
+
+def _name(tmp, role="client", hostport="idm.kanidm.lab.test:443", getent="192.168.100.10 STREAM idm.kanidm.lab.test\n",
+          hosts="127.0.0.1 localhost\n", resolv="search kanidm.lab.test\nnameserver 192.168.100.10\n", probe=(0, ""),
+          hostname_i="192.168.100.10 fe80::1 ", strict=False, missing_resolv=False):
+    import json as _j
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
+    k, m = lines.index("# >>> name"), lines.index("# <<< name")
+    (tmp / "hosts").write_text(hosts); (tmp / "getent.out").write_text(getent)
+    if missing_resolv:
+        (tmp / "resolv.conf").unlink(missing_ok=True)
+    else:
+        (tmp / "resolv.conf").write_text(resolv)
+    (tmp / "curl.args").write_text("")
+    sh = (("set -euf\n" if strict else "") + f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nrole={role}\nKANIDM_HOSTPORT={hostport}\n'
+          f'IDM_HOSTS_FILE={tmp / "hosts"}\nIDM_RESOLV_CONF={tmp / "resolv.conf"}\n'
+          f'timeout() {{ shift; "$@"; }}\ngetent() {{ cat "{tmp / "getent.out"}"; }}\n'
+          f'bash() {{ echo "$*" >> "{tmp / "curl.args"}"; [ -z "{probe[1]}" ] || echo "bash: connect: {probe[1]}" >&2; return {probe[0]}; }}\n'
+          f'curl() {{ echo "curl must not be used for the DNS probe" >&2; exit 99; }}\nhostname() {{ echo "{hostname_i}"; }}\n'
+          + "\n".join(lines[i + 1:j]) + "\n" + "\n".join(lines[k + 1:m]) + '\nprintf "%s|%s" "$nm" "$own"')
+    out = subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
+    nm, own = out.split("|")
+    return _j.loads(nm), _j.loads(own), (tmp / "curl.args").read_text()
+
+
+def test_name_from_dns_with_a_reachable_resolver(tmp_path):
+    nm, own, curl = _name(tmp_path)
+    assert nm == {"host": "idm.kanidm.lab.test", "addresses": ["192.168.100.10"], "source": "dns",
+                  "resolvers": ["192.168.100.10"], "resolver_state": "answers"}
+    assert own is None and "/dev/tcp/$1/53" in curl and curl.rstrip().endswith("192.168.100.10")
+
+
+def test_name_from_the_hosts_file_including_an_alias(tmp_path):
+    nm, _, _ = _name(tmp_path, hosts="192.168.100.99 other idm.kanidm.lab.test\n",
+                     getent="192.168.100.99 STREAM other\n")
+    assert nm["source"] == "files" and nm["addresses"] == ["192.168.100.99"]
+
+
+def test_a_commented_hosts_line_does_not_count(tmp_path):
+    nm, _, _ = _name(tmp_path, hosts="# 192.168.100.99 idm.kanidm.lab.test\n")
+    assert nm["source"] == "dns"
+
+
+def test_no_answer_and_resolver_states(tmp_path):
+    # measured on client2 2026-10-03 (bash /dev/tcp): connected 4 ms; firewall-rejected port "No route to host";
+    # blackholed route "Invalid argument"; dead address: timeout 124. Only "Connection refused" means a DNS service is down.
+    for probe, state in (((0, ""), "answers"), ((1, "Connection refused"), "refused"), ((1, "No route to host"), "unreachable"),
+                         ((1, "Invalid argument"), "unreachable"), ((124, ""), "unreachable")):
+        nm, _, _ = _name(tmp_path, getent="", probe=probe)
+        assert nm["addresses"] == [] and nm["source"] is None and nm["resolver_state"] == state, probe
+
+
+def test_no_resolver_is_unknown(tmp_path):
+    nm, _, _ = _name(tmp_path, resolv="search x\n")
+    assert nm["resolvers"] == [] and nm["resolver_state"] is None
+
+
+def test_ipv6_resolver_is_probed_as_is(tmp_path):
+    _, _, curl = _name(tmp_path, resolv="nameserver fd00::1\n")
+    assert curl.rstrip().endswith("fd00::1")
+
+
+def test_non_address_strings_are_dropped(tmp_path):
+    nm, _, _ = _name(tmp_path, getent="SYSTEM: STREAM x\n192.168.100.10 STREAM y\n", resolv="nameserver evil;rm\n")
+    assert nm["addresses"] == ["192.168.100.10"] and nm["resolvers"] == []
+
+
+def test_no_url_means_unknown(tmp_path):
+    nm, _, _ = _name(tmp_path, hostport="")
+    assert nm is None
+
+
+def test_server_reports_its_own_addresses(tmp_path):
+    nm, own, _ = _name(tmp_path, role="server")
+    assert nm is None and own == ["192.168.100.10", "fe80::1"]
+
+
+def test_report_emits_name_and_own_addresses():
+    text = SCRIPT.read_text()
+    assert '"name":%s,"own_addresses":%s,' in text
+
+
+def test_missing_resolv_conf_does_not_kill_the_report(tmp_path):
+    # final review I1: the collector runs under set -eu; a missing resolv.conf must not end the script.
+    nm, _, _ = _name(tmp_path, strict=True, missing_resolv=True)
+    assert nm["resolvers"] == [] and nm["resolver_state"] is None
+
+
+def test_upper_case_hosts_line_is_still_the_hosts_file(tmp_path):
+    # final review M1 (re-graded): glibc matches hosts names case-insensitively; a planted upper-case line must say files.
+    nm, _, _ = _name(tmp_path, hosts="192.168.100.99 IDM.KANIDM.LAB.TEST.\n", getent="192.168.100.99 STREAM x\n")
+    assert nm["source"] == "files"

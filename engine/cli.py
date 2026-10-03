@@ -59,8 +59,11 @@ def model_agrees(it, expected, may_decline=False):
 
 def allowed_for_findings(fl, reps):
     """Repairs for the roles of the hosts that actually have findings (not every host collected). A lockout's unlock is
-    never offered while its cause is present (ISSO row 44): the cause is fixed first."""
-    allowed = interpret.allowed_for({reps[h]["role"] for h, fs in fl.items() if fs})
+    never offered while its cause is present (ISSO row 44): the cause is fixed first. A host with a DNS fault is offered
+    nothing (row 45)."""
+    # ISSO row 45: a host with a DNS fault gets no repair at all; the name is fixed outside the engine.
+    allowed = interpret.allowed_for({reps[h]["role"] for h, fs in fl.items()
+                                     if fs and not any(f.id.startswith("DNS_") for f in fs)})
     if any(f.id.split("(")[0] in LOCKOUT_CAUSES for fs in fl.values() for f in fs):
         allowed = allowed - {"faillock-reset"}
     return allowed

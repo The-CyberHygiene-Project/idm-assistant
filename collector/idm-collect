@@ -189,6 +189,47 @@ EOF
   flk="{\"deny\":$fdeny,\"unlock_time_s\":$fut,\"failures\":[${ffl%,}]}"
 fi
 # <<< faillock
+# --- how the identity server's name resolves (clients) / own addresses (server) ----------------------------------
+# >>> name
+# getent is the lookup path the login service itself uses. source: files when a non-comment hosts line names the host
+# (compared as glibc does: case-insensitive, trailing dot ignored).
+# resolver_state: a TCP connect to the first DNS server's port 53: answers, refused (the machine is up but no DNS
+# service listens), or unreachable. Only address-shaped strings are kept.
+if [ "$(id -u)" -eq 0 ]; then HOSTS_FILE=/etc/hosts; RESOLV=/etc/resolv.conf
+else HOSTS_FILE="${IDM_HOSTS_FILE:-/etc/hosts}"; RESOLV="${IDM_RESOLV_CONF:-/etc/resolv.conf}"; fi
+isip() { case "$1" in ''|*[!0-9a-fA-F.:]*) return 1 ;; *[.:]*) return 0 ;; *) return 1 ;; esac; }
+nm=null; own=null
+if [ "$role" = client ] && [ -n "$KANIDM_HOSTPORT" ]; then
+  nh=${KANIDM_HOSTPORT%:*}
+  na=""
+  for a in $(timeout 5 getent ahosts "$nh" 2>/dev/null | awk '{print $1}' | awk '!s[$0]++'); do
+    isip "$a" && na="$na$(json_str "$a"),"
+  done
+  nsl=$(sed -n 's/^[[:space:]]*nameserver[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$RESOLV" 2>/dev/null) || nsl=""   # set -e: a missing resolv.conf must not end the report
+  ns=""; r1=""
+  for a in $nsl; do if isip "$a"; then ns="$ns$(json_str "$a"),"; [ -n "$r1" ] || r1=$a; fi; done
+  nsrc=null
+  if sed 's/#.*//' "$HOSTS_FILE" 2>/dev/null | awk -v h="$nh" '{for (i = 2; i <= NF; i++) { n = tolower($i); sub(/[.]$/, "", n); if (n == h) f = 1 }} END {exit !f}'; then
+    nsrc='"files"'
+  elif [ -n "$na" ]; then nsrc='"dns"'; fi
+  rst=null
+  if [ -n "$r1" ]; then
+    # A bare TCP connect (bash /dev/tcp), closed at once: curl's exit 7 also covers "no route", and curl telnet held the
+    # connection until named's 30 s idle limit (measured). Only the kernel's "Connection refused" means the machine is
+    # up with no DNS service; any other failure (no route, firewall reject, blackhole, timeout) is unreachable.
+    rc=0
+    # shellcheck disable=SC2016  # $1 is the inner bash's argument: the address is data, never part of the script text
+    perr=$(timeout 3 bash -c 'exec 3<>"/dev/tcp/$1/53"' _ "$r1" 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" -eq 0 ]; then rst='"answers"'
+    else case "$perr" in *"Connection refused"*) rst='"refused"' ;; *) rst='"unreachable"' ;; esac; fi
+  fi
+  nm="{\"host\":$(json_str "$nh"),\"addresses\":[${na%,}],\"source\":$nsrc,\"resolvers\":[${ns%,}],\"resolver_state\":$rst}"
+fi
+if [ "$role" = server ]; then
+  oa=""; for a in $(hostname -I 2>/dev/null); do isip "$a" && oa="$oa$(json_str "$a"),"; done
+  own="[${oa%,}]"
+fi
+# <<< name
 
 # --- NSS order + authselect (clients) -----------------------------------------------------------------------------
 nss=null; asel=null
@@ -298,5 +339,6 @@ printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
 printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
 printf '"faillock":%s,' "$flk"
+printf '"name":%s,"own_addresses":%s,' "$nm" "$own"
 printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s,"relabel":%s},"errors":[%s]}\n' \
   "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "$relab" "${errs%,}"

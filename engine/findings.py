@@ -76,12 +76,54 @@ def collect_conf_invalid(r):
         return Finding("COLLECT_CONF_INVALID", "collector", tuple(errs))
 
 
+_IP = re.compile(r"[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:]*")
+
+
+def _ips(xs):
+    """Only address-shaped strings: whatever else a report holds never reaches evidence or the model."""
+    return [x for x in xs or [] if isinstance(x, str) and _IP.fullmatch(x)]
+
+
+def _name(r):
+    n = r.get("name")
+    return n if isinstance(n, dict) else {}
+
+
+def dns_lookup_failed(r):
+    n = _name(r)
+    if r.get("role") != "client" or not n or _ips(n.get("addresses")) or n.get("resolver_state") not in ("answers", "refused"):
+        return None
+    res = (_ips(n.get("resolvers")) or ["(none)"])[0]
+    ev = [f"{n.get('host')} does not resolve on this host; DNS server {res}"]
+    if n.get("resolver_state") == "refused":
+        ev.append(f"DNS server {res} is up but no DNS service answers (connection refused)")
+    return Finding("DNS_LOOKUP_FAILED", "dns", tuple(ev))
+
+
+def dns_wrong_address(server, client):
+    n, own = _name(client), _ips(server.get("own_addresses"))
+    addrs = _ips(n.get("addresses"))
+    if not own or not addrs or set(addrs) & set(own):
+        return None
+    src = {"files": "from the hosts file", "dns": "from DNS"}.get(n.get("source"), "source unknown")
+    return Finding("DNS_WRONG_ADDRESS", "dns", (f"{n.get('host')} resolves to {', '.join(addrs)} ({src}); "
+                                                f"the identity server is at {', '.join(own)}",))
+
+
 def kanidm_unreachable(r):
     if _conf_errors(r):
         return None                      # no usable URL: the config is the fault, not the network
     if (r.get("tls") or {}).get("kanidm") is None and any(
             e.startswith("tls: could not fetch") for e in r.get("errors") or []):
-        return Finding("KANIDM_UNREACHABLE", "network", ("TLS handshake with idm.kanidm.lab.test failed from this host",))
+        n = _name(r)
+        addrs, res = _ips(n.get("addresses")), (_ips(n.get("resolvers")) or ["(none)"])[0]
+        if addrs:
+            ev = f"name resolves to {', '.join(addrs)}; the connection failed: check the route, firewall or the server"
+        elif n.get("resolver_state") == "unreachable":
+            ev = f"the DNS server {res} cannot be reached either: check the route or firewall"
+        else:
+            ev = "TLS handshake with idm.kanidm.lab.test failed from this host"
+        return Finding("KANIDM_UNREACHABLE", "network", (ev,))
 
 
 def renewal_stopped(r):
@@ -239,7 +281,7 @@ def account_locked(r, found_ids):
     return Finding("ACCOUNT_LOCKED", "faillock", tuple(ev))
 
 
-RULES = (collect_conf_invalid, time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
+RULES = (collect_conf_invalid, time_unverified, time_skew, dns_lookup_failed, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
          posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
          ssh_ca_not_trusted)
 
@@ -251,6 +293,13 @@ def evaluate(report, peer=None):
     if lk:
         found.append(lk)
     if peer and report.get("role") == "client" and peer.get("role") == "server":
-        found += [f for f in (cache_stale(peer, report), ssh_ca_not_trusted_cross(peer, report)) if f]
+        found += [f for f in (cache_stale(peer, report), ssh_ca_not_trusted_cross(peer, report),
+                              dns_wrong_address(peer, report)) if f]
         found = list({f.id: f for f in found}.values())           # one SSH_CA_NOT_TRUSTED even if both rules fire
+        st = (peer.get("services") or {}).get("named")
+        if st not in (None, "active"):
+            found = [Finding(f.id, f.component, f.evidence + (f"likely caused by: named is {st} on {peer.get('host')}",),
+                             f.severity) if f.id == "DNS_LOOKUP_FAILED" else f for f in found]
+    if any(f.id.startswith("DNS_") for f in found):
+        found = [f for f in found if f.id != "KANIDM_UNREACHABLE"]   # the name is the fault, not the path
     return sorted(found, key=lambda f: f.id)
