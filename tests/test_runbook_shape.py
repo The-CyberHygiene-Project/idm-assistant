@@ -4,7 +4,7 @@ from engine.case import Case
 from engine.findings import Finding
 from engine.form import render
 
-CONVERTED = {p.stem for p in runbooks.DIR.glob("*.md")}         # all of them
+CONVERTED = set(runbooks.ids())                                  # all of them
 
 
 def test_converted_runbooks_have_every_field():
@@ -60,3 +60,7 @@ def test_repair_prompt_is_the_form_for_a_converted_runbook(tmp_path):
     finally:
         r.precheck = r_pre
     assert "PROBLEM DETECTED" in seen[0] and "SAY NO IF" in seen[0]
+
+
+def test_the_format_readme_is_not_a_runbook():
+    assert (runbooks.DIR / "README.md").is_file() and "README" not in runbooks.ids()
