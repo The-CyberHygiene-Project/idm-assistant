@@ -96,11 +96,12 @@ time-limited reason."
 
 ## Part 3: scenarios and tests
 
-All on client2 (`HOSTS = ["srv1", "client2"]` not needed: client2 only), lab user lab04 for probes.
+All on client2 (`HOSTS = ["client2"]`); probes run as itadmin over ssh.
 
 - **P1 (`scenarios/p1.py`), stale trust:** fetch
   `http://192.168.100.1:8080/chp/0.5.4/google-authenticator-1.09-5.el9.x86_64.rpm` on client2, `rpm -i --noplugins`
-  it, run `/usr/bin/google-authenticator --help` (denied). Expect `{"client2": {"FAPOLICYD_TRUST_STALE"}}`;
+  it (EPEL's key is not imported on client2: if rpm's verify level refuses the install, the injection imports
+  `RPM-GPG-KEY-EPEL-9` first, recorded in the case log), run `/usr/bin/google-authenticator --help` (denied). Expect `{"client2": {"FAPOLICYD_TRUST_STALE"}}`;
   `REPAIRS = [("client2", "fapolicyd-trust-refresh")]`; final probe: the program runs (exit ≠ 126).
 - **P2 (`scenarios/p2.py`), unpackaged:** `cp /usr/bin/true /usr/local/bin/chp-helper`, run it (denied). Expect
   `{"client2": {"FAPOLICYD_DENIED_UNPACKAGED"}}`; `REPAIRS = []` (model must decline); `restore` removes the file;
