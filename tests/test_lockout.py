@@ -147,3 +147,21 @@ def test_run_repair_records_the_approver_on_the_context(tmp_path):
     c = ctx(tmp_path, LOCKED); c.approver = ""
     run_repair("faillock-reset", c, approve, REGISTRY)
     assert c.approver == "dshannon"
+
+
+from engine import runbooks
+from engine.cli import allowed_for_findings
+from engine.findings import Finding
+
+
+def test_reset_hidden_from_the_model_when_a_cause_is_present():
+    reps = {"client2": {"role": "client"}}
+    lk = Finding("ACCOUNT_LOCKED", "faillock", ("x",))
+    sk = Finding("TOTP_TIME_SKEW", "time", ("x",))
+    assert "faillock-reset" in allowed_for_findings({"client2": [lk]}, reps)
+    assert "faillock-reset" not in allowed_for_findings({"client2": [lk, sk]}, reps)
+
+
+def test_runbook_is_complete_and_follows_row_44():
+    rb = runbooks.load("ACCOUNT_LOCKED")
+    assert rb.complete and rb.default_repair == "faillock-reset" and rb.decisions == "44"
