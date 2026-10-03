@@ -1,0 +1,75 @@
+{
+ "schema": "idm-report/1",
+ "host": "srv1",
+ "role": "server",
+ "collected_at": "2026-10-03T22:02:23Z",
+ "user": "lab04",
+ "time": {
+  "offset_s": -4.98e-07,
+  "synced": true,
+  "source": "192.168.100.1",
+  "source_offset_s": 2e-06
+ },
+ "nss": null,
+ "authselect": null,
+ "user_nss": null,
+ "services": {
+  "kanidmd": "active",
+  "step-ca": "active",
+  "named": "active",
+  "cert-renew-kanidm.timer": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-10-03T22:01:10Z",
+   "not_after": "2026-10-04T22:02:10Z",
+   "verify": "ok"
+  }
+ },
+ "unixd": {
+  "status": "absent"
+ },
+ "kanidm_user": {
+  "name": "lab04",
+  "exists": true,
+  "posix": true,
+  "unix_password": true,
+  "primary_credential": true,
+  "memberof": [
+   "idm_all_persons@idm.kanidm.lab.test",
+   "idm_all_accounts@idm.kanidm.lab.test",
+   "idm_people_self_name_write@idm.kanidm.lab.test",
+   "lab_users@idm.kanidm.lab.test"
+  ],
+  "account_expire": null,
+  "valid_from": null
+ },
+ "ssh_ca": {
+  "fingerprint": "SHA256:fnyFGHP/iyOJEEzyd52gwSdf9GJuJZAEnS5z2hxGgmE",
+  "issued": null
+ },
+ "sshd": null,
+ "faillock": {
+  "deny": 3,
+  "unlock_time_s": 0,
+  "failures": []
+ },
+ "name": null,
+ "own_addresses": [
+  "192.168.100.10"
+ ],
+ "fapolicyd": {
+  "active": "active",
+  "permissive": false,
+  "denials": []
+ },
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 0,
+  "relabel": []
+ },
+ "errors": []
+}
