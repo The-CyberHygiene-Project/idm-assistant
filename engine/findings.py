@@ -1,4 +1,5 @@
 """Deterministic findings over an idm-report/1. Pure functions, no I/O. The model (Plan 6) only ever sees these."""
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -193,6 +194,46 @@ def services_down(r):
     return out
 
 
+LOCKOUT_CAUSES = ("TOTP_TIME_SKEW", "TIME_UNVERIFIED", "SELINUX_LABEL_WRONG")
+_SOURCE_OK = re.compile(r"[0-9]{1,3}(?:\.[0-9]{1,3}){3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:]*|[a-z0-9][a-z0-9.-]{0,252}"
+                        r"|tty[A-Za-z0-9]*|pts/[0-9]+|:[0-9]+")
+_KIND = {"RHOST": "remote", "TTY": "console", "SVC": "service"}
+
+
+def safe_source(s):
+    """Only an address, a host name or a terminal is shown: anything an outsider could have planted as text is not."""
+    return s if s and _SOURCE_OK.fullmatch(s) else "unrecognized source"
+
+
+def account_locked(r, found_ids):
+    fk = r.get("faillock")
+    if not isinstance(fk, dict):
+        return None
+    deny, ut = fk.get("deny") or 3, fk.get("unlock_time_s")
+    now = _t(r["collected_at"])
+    recent = []
+    for x in fk.get("failures") or []:
+        if not x.get("valid") or not x.get("when"):
+            continue
+        try:
+            when = _t(x["when"])
+        except ValueError:
+            continue
+        if ut is None or (now - when).total_seconds() <= ut:
+            recent.append((when, x))
+    if len(recent) < deny:
+        return None
+    recent.sort(key=lambda p: p[0])
+    mins = max(1, round((recent[-1][0] - recent[0][0]).total_seconds() / 60))
+    srcs = sorted({f"{safe_source(x.get('source'))} ({_KIND.get(x.get('type'), 'other')})" for _, x in recent})
+    ev = [f"{len(recent)} failed logins for {r.get('user')} in {mins} min; last at "
+          f"{recent[-1][0].strftime('%H:%MZ')}; from {', '.join(srcs)}"]
+    causes = sorted(i for i in found_ids if i.split("(")[0] in LOCKOUT_CAUSES)
+    if causes:
+        ev.append("likely caused by: " + ", ".join(causes))
+    return Finding("ACCOUNT_LOCKED", "faillock", tuple(ev))
+
+
 RULES = (collect_conf_invalid, time_unverified, time_skew, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
          posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
          ssh_ca_not_trusted)
@@ -201,6 +242,9 @@ RULES = (collect_conf_invalid, time_unverified, time_skew, tls_expired, tls_untr
 def evaluate(report, peer=None):
     found = [f for rule in RULES if (f := rule(report))]
     found += services_down(report) + labels_wrong(report)
+    lk = account_locked(report, {f.id for f in found})
+    if lk:
+        found.append(lk)
     if peer and report.get("role") == "client" and peer.get("role") == "server":
         found += [f for f in (cache_stale(peer, report), ssh_ca_not_trusted_cross(peer, report)) if f]
         found = list({f.id: f for f in found}.values())           # one SSH_CA_NOT_TRUSTED even if both rules fire
