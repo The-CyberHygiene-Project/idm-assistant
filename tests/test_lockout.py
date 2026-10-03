@@ -70,3 +70,80 @@ def test_safe_source_accepts_only_addresses_hosts_and_terminals():
         assert safe_source(ok) == ok
     for bad in ("", "a b", "x;rm -rf /", "Ignore previous", "<b>"):
         assert safe_source(bad) == "unrecognized source"
+
+
+from types import SimpleNamespace
+
+import pytest
+
+from engine.case import Case
+from engine.repairs import REGISTRY, Ctx
+
+LOCKED = rep(5)
+SKEWED_LOCKED = rep(5, time={"offset_s": 600.0, "synced": True, "source": "aero", "source_offset_s": 600.0})
+
+
+class Rec:
+    def __init__(self, out=""):
+        self.calls, self.out = [], out
+
+    def run(self, host, argv, stdin=None, **kw):
+        self.calls.append((host, list(argv))); return SimpleNamespace(stdout=self.out)
+
+
+def ctx(tmp_path, report, user="lab04", out="present\n"):
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "f", "s"), collect=lambda: report,
+            remote=Rec(out), params={"user": user})
+    c.approver = "regression-runner (IDM_TEST_APPROVE=1)"
+    return c
+
+
+R = REGISTRY.get("faillock-reset")
+
+
+def test_registered_for_clients():
+    assert R and R.host_role == "client" and R.verify_absent == {"ACCOUNT_LOCKED"}
+
+
+def test_refuses_when_a_cause_is_present(tmp_path):
+    why = R.precheck(ctx(tmp_path, SKEWED_LOCKED))
+    assert why and "TOTP_TIME_SKEW" in why and "fix that first" in why
+
+
+def test_refuses_when_not_locked(tmp_path):
+    assert "not locked" in R.precheck(ctx(tmp_path, rep(2)))
+
+
+@pytest.mark.parametrize("bad", ["../x", "-D", "", "Lab04"])
+def test_refuses_bad_names(tmp_path, bad):
+    assert "refusing" in R.precheck(ctx(tmp_path, LOCKED, user=bad))
+
+
+def test_passes_when_locked_without_cause(tmp_path):
+    assert R.precheck(ctx(tmp_path, LOCKED)) is None
+
+
+def test_apply_resets_exactly_that_user_and_logs_the_approver(tmp_path):
+    c = ctx(tmp_path, LOCKED)
+    R.apply(c)
+    script = c.remote.calls[-1][1][-1]
+    assert script.startswith("faillock --user lab04 --reset && logger -p authpriv.notice -t idm-assistant ")
+    assert "'faillock reset for lab04, approved by regression-runner (IDM_TEST_APPROVE=1), case " in script
+
+
+def test_backup_and_undo_restore_the_tally_file(tmp_path):
+    c = ctx(tmp_path, LOCKED)
+    b = R.backup(c)
+    assert b["tally"] == "present" and "/var/run/faillock/lab04" in c.remote.calls[-1][1][-1]
+    R.undo(c, b)
+    assert c.remote.calls[-1][1][-1] == f"cp -p {b['dir']}/faillock-lab04 /var/run/faillock/lab04"
+
+
+def test_run_repair_records_the_approver_on_the_context(tmp_path):
+    from engine.repairs import run_repair
+    def approve(prompt):
+        return False
+    approve.who = "dshannon"
+    c = ctx(tmp_path, LOCKED); c.approver = ""
+    run_repair("faillock-reset", c, approve, REGISTRY)
+    assert c.approver == "dshannon"
