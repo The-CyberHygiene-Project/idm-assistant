@@ -165,3 +165,14 @@ def test_reset_hidden_from_the_model_when_a_cause_is_present():
 def test_runbook_is_complete_and_follows_row_44():
     rb = runbooks.load("ACCOUNT_LOCKED")
     assert rb.complete and rb.default_repair == "faillock-reset" and rb.decisions == "44"
+
+
+import importlib
+
+
+def test_scenarios_declare_the_expected_shape():
+    f1, f2 = (importlib.import_module(f"scenarios.{n}") for n in ("f1", "f2"))
+    assert f1.USER == f2.USER == "lab04" and f1.CLEAR_BEFORE_S == 840
+    assert f1.EXPECT == {"client2": {"ACCOUNT_LOCKED"}} and f1.REPAIRS == [("client2", "faillock-reset")]
+    assert f2.EXPECT == {"client2": {"ACCOUNT_LOCKED", "TOTP_TIME_SKEW"}}
+    assert f2.REPAIRS == [("client2", "time-resync"), ("client2", "faillock-reset")]
