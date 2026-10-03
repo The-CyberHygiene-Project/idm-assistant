@@ -71,6 +71,20 @@ class Repair:
         pass
 
 
+def _prompt(repair_id, r, ctx):
+    """The decision form when the repair's runbook is in the approved shape; else the one-line prompt."""
+    from engine import form, runbooks
+    rb = runbooks.for_repair(repair_id, r.verify_absent)
+    if rb is None or not rb.complete:
+        return f"Repair {repair_id} on {ctx.host}: {r.describe(ctx)}. Type yes to approve"
+    try:
+        found = evaluate(ctx.collect())
+    except Exception as e:                       # the form still stands on the runbook; say why evidence is missing
+        ctx.case.log(f"form: could not re-read the host for evidence ({type(e).__name__})")
+        found = []
+    return form.render(ctx.host, rb, found, repair_id)
+
+
 def run_repair(repair_id, ctx, approve, registry):
     case = ctx.case
     r = registry.get(repair_id)
@@ -86,7 +100,7 @@ def run_repair(repair_id, ctx, approve, registry):
     if why:
         case.log(f"PRECHECK FAILED: {why}"); case.write("status.txt", "PRECHECK-FAILED\n")
         return "PRECHECK-FAILED"
-    prompt = f"Repair {repair_id} on {ctx.host}: {r.describe(ctx)}. Type yes to approve"
+    prompt = _prompt(repair_id, r, ctx)
     with case.step(f"{repair_id}:approval"):
         ok = bool(approve(prompt))
     case.write(f"approval-{repair_id}.json", {
