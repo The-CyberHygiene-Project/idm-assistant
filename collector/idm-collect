@@ -192,8 +192,8 @@ fi
 # --- how the identity server's name resolves (clients) / own addresses (server) ----------------------------------
 # >>> name
 # getent is the lookup path the login service itself uses. source: files when a non-comment hosts line names the host.
-# resolver_state: a TCP connect to the first DNS server's port 53 (curl exit 0 answers, 7 refused = the machine is up but
-# no DNS service listens, anything else unreachable). Only address-shaped strings are kept.
+# resolver_state: a TCP connect to the first DNS server's port 53: answers, refused (the machine is up but no DNS
+# service listens), or unreachable. Only address-shaped strings are kept.
 if [ "$(id -u)" -eq 0 ]; then HOSTS_FILE=/etc/hosts; RESOLV=/etc/resolv.conf
 else HOSTS_FILE="${IDM_HOSTS_FILE:-/etc/hosts}"; RESOLV="${IDM_RESOLV_CONF:-/etc/resolv.conf}"; fi
 isip() { case "$1" in ''|*[!0-9a-fA-F.:]*) return 1 ;; *[.:]*) return 0 ;; *) return 1 ;; esac; }
@@ -213,9 +213,14 @@ if [ "$role" = client ] && [ -n "$KANIDM_HOSTPORT" ]; then
   elif [ -n "$na" ]; then nsrc='"dns"'; fi
   rst=null
   if [ -n "$r1" ]; then
-    case "$r1" in *:*) rt="[$r1]" ;; *) rt=$r1 ;; esac
-    rc=0; curl -s --connect-timeout 3 "telnet://$rt:53" </dev/null >/dev/null 2>&1 || rc=$?
-    case $rc in 0) rst='"answers"' ;; 7) rst='"refused"' ;; *) rst='"unreachable"' ;; esac
+    # A bare TCP connect (bash /dev/tcp), closed at once: curl's exit 7 also covers "no route", and curl telnet held the
+    # connection until named's 30 s idle limit (measured). Only the kernel's "Connection refused" means the machine is
+    # up with no DNS service; any other failure (no route, firewall reject, blackhole, timeout) is unreachable.
+    rc=0
+    # shellcheck disable=SC2016  # $1 is the inner bash's argument: the address is data, never part of the script text
+    perr=$(timeout 3 bash -c 'exec 3<>"/dev/tcp/$1/53"' _ "$r1" 2>&1 >/dev/null) || rc=$?
+    if [ "$rc" -eq 0 ]; then rst='"answers"'
+    else case "$perr" in *"Connection refused"*) rst='"refused"' ;; *) rst='"unreachable"' ;; esac; fi
   fi
   nm="{\"host\":$(json_str "$nh"),\"addresses\":[${na%,}],\"source\":$nsrc,\"resolvers\":[${ns%,}],\"resolver_state\":$rst}"
 fi

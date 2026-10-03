@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -9,7 +9,7 @@ BuildArch:      noarch
 Source0:        idm-collect
 Source1:        redact.sed
 Source2:        LICENSE
-Requires:       curl, sed, gawk, openssl, chrony, openssh-server, authselect, policycoreutils, audit, glibc-common
+Requires:       bash, curl, sed, gawk, openssl, chrony, openssh-server, authselect, policycoreutils, audit, glibc-common
 
 %description
 idm-collect prints one idm-report/1 JSON document describing the identity stack (Kanidm, unixd, step-ca trust,
@@ -31,6 +31,9 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-4.chp
+- name record (getent, source, resolvers, resolver_state) and server own_addresses.
+
 * Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-3.chp
 - faillock section for --user: lockout limit, lock time and each failure (unknown = null).
 

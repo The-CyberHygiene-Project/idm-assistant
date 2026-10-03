@@ -28,10 +28,12 @@ server**, so a blocked route to srv1 blocks DNS too (scenario L3n).
 - Client: `"name": {"host": <host part of KANIDM_URL>, "addresses": [<IPs from getent ahosts, unique>],
   "source": "files"|"dns"|null, "resolvers": [<nameserver IPs from /etc/resolv.conf>],
   "resolver_state": "answers"|"refused"|"unreachable"|null}`. `source` is `files` when `/etc/hosts` has a non-comment
-  line naming the host, else `dns` when addresses were found, else null. `resolver_state`: a TCP connect to the first
-  resolver's port 53 (`curl --connect-timeout 3 telnet://IP:53 </dev/null`): exit 0 = `answers`, 7 = `refused` (the
-  machine is up but no DNS service listens: measured on client2), anything else (28 = timeout) = `unreachable`; null
-  when there is no resolver. Lookups time out at 5 s. No
+  line naming the host, else `dns` when addresses were found, else null. `resolver_state`: a bare TCP connect to the first
+  resolver's port 53 (`timeout 3 bash -c 'exec 3<>/dev/tcp/$1/53' _ IP`, closed at once): connected = `answers`;
+  the kernel's "Connection refused" = `refused` (the machine is up but no DNS service listens); anything else
+  ("No route to host" from a firewall reject, "Invalid argument" from a blackhole route, timeout) = `unreachable`;
+  null when there is no resolver. (Corrected 2026-10-03 after the first regression: curl's exit 7 also covers "no
+  route", which made L3n look like a DNS fault, and curl telnet held the connection for named's 30 s idle limit.) Lookups time out at 5 s. No
   usable `KANIDM_URL`: `"name": null`.
 - Server: `"own_addresses": [<IPs from hostname -I>]`.
 - Only strings that are IPv4/IPv6 addresses are kept in `addresses`, `resolvers` and `own_addresses` (code filter).

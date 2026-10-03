@@ -348,7 +348,7 @@ def test_report_emits_faillock():
 
 
 def _name(tmp, role="client", hostport="idm.kanidm.lab.test:443", getent="192.168.100.10 STREAM idm.kanidm.lab.test\n",
-          hosts="127.0.0.1 localhost\n", resolv="search kanidm.lab.test\nnameserver 192.168.100.10\n", curl_rc=0,
+          hosts="127.0.0.1 localhost\n", resolv="search kanidm.lab.test\nnameserver 192.168.100.10\n", probe=(0, ""),
           hostname_i="192.168.100.10 fe80::1 "):
     import json as _j
     lines = SCRIPT.read_text().splitlines()
@@ -359,7 +359,8 @@ def _name(tmp, role="client", hostport="idm.kanidm.lab.test:443", getent="192.16
     sh = (f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nrole={role}\nKANIDM_HOSTPORT={hostport}\n'
           f'IDM_HOSTS_FILE={tmp / "hosts"}\nIDM_RESOLV_CONF={tmp / "resolv.conf"}\n'
           f'timeout() {{ shift; "$@"; }}\ngetent() {{ cat "{tmp / "getent.out"}"; }}\n'
-          f'curl() {{ echo "$*" >> "{tmp / "curl.args"}"; return {curl_rc}; }}\nhostname() {{ echo "{hostname_i}"; }}\n'
+          f'bash() {{ echo "$*" >> "{tmp / "curl.args"}"; [ -z "{probe[1]}" ] || echo "bash: connect: {probe[1]}" >&2; return {probe[0]}; }}\n'
+          f'curl() {{ echo "curl must not be used for the DNS probe" >&2; exit 99; }}\nhostname() {{ echo "{hostname_i}"; }}\n'
           + "\n".join(lines[i + 1:j]) + "\n" + "\n".join(lines[k + 1:m]) + '\nprintf "%s|%s" "$nm" "$own"')
     out = subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
     nm, own = out.split("|")
@@ -370,7 +371,7 @@ def test_name_from_dns_with_a_reachable_resolver(tmp_path):
     nm, own, curl = _name(tmp_path)
     assert nm == {"host": "idm.kanidm.lab.test", "addresses": ["192.168.100.10"], "source": "dns",
                   "resolvers": ["192.168.100.10"], "resolver_state": "answers"}
-    assert own is None and "telnet://192.168.100.10:53" in curl
+    assert own is None and "/dev/tcp/$1/53" in curl and curl.rstrip().endswith("192.168.100.10")
 
 
 def test_name_from_the_hosts_file_including_an_alias(tmp_path):
@@ -385,9 +386,12 @@ def test_a_commented_hosts_line_does_not_count(tmp_path):
 
 
 def test_no_answer_and_resolver_states(tmp_path):
-    for rc, state in ((0, "answers"), (7, "refused"), (28, "unreachable")):
-        nm, _, _ = _name(tmp_path, getent="", curl_rc=rc)
-        assert nm["addresses"] == [] and nm["source"] is None and nm["resolver_state"] == state
+    # measured on client2 2026-10-03 (bash /dev/tcp): connected 4 ms; firewall-rejected port "No route to host";
+    # blackholed route "Invalid argument"; dead address: timeout 124. Only "Connection refused" means a DNS service is down.
+    for probe, state in (((0, ""), "answers"), ((1, "Connection refused"), "refused"), ((1, "No route to host"), "unreachable"),
+                         ((1, "Invalid argument"), "unreachable"), ((124, ""), "unreachable")):
+        nm, _, _ = _name(tmp_path, getent="", probe=probe)
+        assert nm["addresses"] == [] and nm["source"] is None and nm["resolver_state"] == state, probe
 
 
 def test_no_resolver_is_unknown(tmp_path):
@@ -395,9 +399,9 @@ def test_no_resolver_is_unknown(tmp_path):
     assert nm["resolvers"] == [] and nm["resolver_state"] is None
 
 
-def test_ipv6_resolver_is_bracketed(tmp_path):
+def test_ipv6_resolver_is_probed_as_is(tmp_path):
     _, _, curl = _name(tmp_path, resolv="nameserver fd00::1\n")
-    assert "telnet://[fd00::1]:53" in curl
+    assert curl.rstrip().endswith("fd00::1")
 
 
 def test_non_address_strings_are_dropped(tmp_path):
