@@ -1,5 +1,6 @@
-"""L5: a user's Kanidm account has expired, so every login is refused (spec §6). Expiry is usually deliberate, so the
-model may rightly decline to propose a repair (MODEL_MAY_DECLINE)."""
+"""L5: a user's Kanidm account has expired, so every login is refused (spec §6). ISSO decision #32: the engine never
+re-enables an account, so no repair is offered and the model must decline; the operator re-enables it outside the engine
+(chp-site unexpire, ISSO or named delegate with a written reason). Here restore() stands in for that step."""
 import subprocess
 from pathlib import Path
 
@@ -11,9 +12,7 @@ USER = "lab06"
 SYMPTOM = f"{USER} could log in to client2 yesterday; today every login is refused."
 EXPECT = {"srv1": {"ACCOUNT_EXPIRED"}}
 HOSTS = ["srv1", "client2"]
-REPAIRS = [("srv1", "account-unexpire")]
-PARAMS = {"user": USER}
-MODEL_MAY_DECLINE = True
+REPAIRS = []
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -36,6 +35,14 @@ def inject(log):
     log(f"injected: {USER}'s account expired now")
     if probe(log) != "DENIED":          # the one failed password login this scenario allows (faillock)
         raise RuntimeError(f"{USER} was not refused after expiry; injection did not take")
+
+
+def restore(log):
+    # Lab stand-in for `chp-site unexpire` (not installed on these lab VMs; its approver/reason rule is tested in
+    # tests/test_chp_site_ops.py). The engine itself has no such repair (#32).
+    stage(_S); admin_login(_S)
+    remote.run("srv1", ["kanidm", "person", "validity", "expire-at", USER, "clear", "-D", "idm_admin"])
+    log(f"operator restore: {USER}'s expiry cleared outside the engine (stand-in for chp-site unexpire, ISSO #32)")
 
 
 def final_probe(log):
