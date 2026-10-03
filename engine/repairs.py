@@ -439,6 +439,31 @@ class FaillockReset(Repair):
 REGISTRY[FaillockReset.id] = FaillockReset()
 
 
+class FapolicydTrustRefresh(Repair):
+    """ISSO row 46: refresh fapolicyd's trust from the package database; never trusts an unpackaged program."""
+    id = "fapolicyd-trust-refresh"
+    host_role = "client"
+    verify_absent = {"FAPOLICYD_TRUST_STALE"}
+
+    def describe(self, ctx):
+        return "refresh fapolicyd's trust list from the package database (fapolicyd-cli --update) and log who approved it"
+
+    def precheck(self, ctx):
+        ids = {f.id for f in evaluate(ctx.collect())}
+        if "FAPOLICYD_PERMISSIVE" in ids:
+            return "refusing: fapolicyd is not enforcing; a refresh proves nothing (row 46: that is the ISSO's)"
+        if "FAPOLICYD_TRUST_STALE" not in ids:
+            return "nothing stale: no denied program from a signed package is waiting"
+        return None
+
+    def apply(self, ctx):
+        note = f"fapolicyd trust refresh approved by {ctx.approver or 'unknown'}, case {ctx.case.dir.name}"
+        _sh(ctx, f"fapolicyd-cli --update && logger -p authpriv.notice -t idm-assistant {shlex.quote(note)}")
+
+
+REGISTRY[FapolicydTrustRefresh.id] = FapolicydTrustRefresh()
+
+
 class TimeResync(Repair):
     id = "time-resync"
     host_role = "client"

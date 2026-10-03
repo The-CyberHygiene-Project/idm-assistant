@@ -283,6 +283,7 @@ def account_locked(r, found_ids):
 
 PINNED_SIGNERS = {"702d426d350d275d": "Rocky Linux 9", "8a3872bf3228467c": "EPEL 9",
                   "521276f43c908f8e": "The CyberHygiene Project"}
+ROW46_DIAGNOSE_ONLY = {"FAPOLICYD_DENIED_UNPACKAGED", "FAPOLICYD_PERMISSIVE"}   # no repair, ever (ISSO row 46)
 _PATH = re.compile(r"/[A-Za-z0-9._/+-]+")
 _PKG = re.compile(r"[A-Za-z0-9._+-]+")
 

@@ -62,3 +62,61 @@ def test_hostile_strings_never_reach_evidence():
 def test_not_installed_is_silent():
     r = copy.deepcopy(BASE); r["fapolicyd"] = None
     assert got(r) == {}
+
+
+from types import SimpleNamespace
+
+from engine import runbooks
+from engine.case import Case
+from engine.cli import allowed_for_findings
+from engine.repairs import REGISTRY, Ctx
+
+R = REGISTRY.get("fapolicyd-trust-refresh")
+
+
+class Rec:
+    def __init__(self):
+        self.calls = []
+
+    def run(self, host, argv, stdin=None, **kw):
+        self.calls.append(list(argv)); return SimpleNamespace(stdout="")
+
+
+def ctx(tmp_path, report):
+    c = Ctx(host="client2", role="client", case=Case(tmp_path, "p", "s"), collect=lambda: report, remote=Rec())
+    c.approver = "operator1"
+    return c
+
+
+def test_refresh_registered():
+    assert R and R.host_role == "client" and R.verify_absent == {"FAPOLICYD_TRUST_STALE"}
+
+
+def test_refresh_refuses_when_permissive_or_nothing_stale(tmp_path):
+    assert "refusing" in R.precheck(ctx(tmp_path, rep(GA, permissive=True)))
+    assert "nothing" in R.precheck(ctx(tmp_path, rep(HELPER)))
+    assert R.precheck(ctx(tmp_path, rep(GA))) is None
+
+
+def test_refresh_runs_exactly_the_update_and_logs(tmp_path):
+    c = ctx(tmp_path, rep(GA)); R.apply(c)
+    s = c.remote.calls[-1][-1]
+    assert s.startswith("fapolicyd-cli --update && logger -p authpriv.notice -t idm-assistant ")
+    assert "approved by operator1" in s
+
+
+def test_row_46_in_code():
+    reps = {"client2": {"role": "client"}}
+    assert "fapolicyd-trust-refresh" in allowed_for_findings({"client2": list(got(rep(GA)).values())}, reps)
+    assert allowed_for_findings({"client2": list(got(rep(GA, HELPER)).values())}, reps) == set()
+    assert allowed_for_findings({"client2": list(got(rep(permissive=True)).values())}, reps) == set()
+    for fid in ("FAPOLICYD_DENIED_UNPACKAGED", "FAPOLICYD_PERMISSIVE"):
+        assert runbooks.load(fid).default_repair is None
+        assert not [r.id for r in REGISTRY.values() if fid in r.verify_absent]
+
+
+def test_runbooks_complete_and_follow_row_46():
+    for fid in ("FAPOLICYD_TRUST_STALE", "FAPOLICYD_DENIED_UNPACKAGED", "FAPOLICYD_PERMISSIVE"):
+        rb = runbooks.load(fid)
+        assert rb.complete and rb.decisions == "46"
+    assert runbooks.load("FAPOLICYD_TRUST_STALE").default_repair == "fapolicyd-trust-refresh"
