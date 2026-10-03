@@ -92,3 +92,15 @@ def test_wrong_address_is_treated_as_an_incident():
 
 def test_unreachable_now_means_the_name_resolved():
     assert runbooks.load("KANIDM_UNREACHABLE").evidence.startswith("The name resolves to the right address")
+
+
+import importlib
+
+
+def test_dns_scenarios_expect_a_decline_and_collect_both_hosts():
+    d1, d2 = (importlib.import_module(f"scenarios.{n}") for n in ("d1", "d2"))
+    assert d1.EXPECT == {"client2": {"DNS_LOOKUP_FAILED"}, "srv1": {"SERVICE_DOWN(named)"}}
+    assert d2.EXPECT == {"client2": {"DNS_WRONG_ADDRESS"}}
+    for d in (d1, d2):
+        assert d.REPAIRS == [] and set(d.HOSTS) == {"srv1", "client2"} and d.USER == "lab04"
+        assert hasattr(d, "restore") and hasattr(d, "final_probe")
