@@ -104,3 +104,11 @@ def test_dns_scenarios_expect_a_decline_and_collect_both_hosts():
     for d in (d1, d2):
         assert d.REPAIRS == [] and set(d.HOSTS) == {"srv1", "client2"} and d.USER == "lab04"
         assert hasattr(d, "restore") and hasattr(d, "final_probe")
+
+
+def test_captured_healthy_pair_has_no_findings():
+    from pathlib import Path
+    from engine.report import load_report
+    fx = Path(__file__).parent / "fixtures" / "reports"
+    s, c = load_report(fx / "healthy-srv1-dns.json"), load_report(fx / "healthy-client2-dns.json")
+    assert evaluate(s) == [] and evaluate(c, s) == []

@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -31,6 +31,9 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-5.chp
+- DNS server probe: bare TCP connect (bash /dev/tcp), closed at once; only 'Connection refused' reads as refused. Requires bash.
+
 * Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-4.chp
 - name record (getent, source, resolvers, resolver_state) and server own_addresses.
 

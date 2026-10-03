@@ -6,8 +6,8 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"; K=~/idm-lab-secrets/diag_ecdsa
 [[ -f $K ]] || ssh-keygen -q -t ecdsa -b 384 -N '' -C 'idm-assistant diag' -f "$K"
 # the CUI profile enforces localpkg_gpgcheck: install the SIGNED RPM and trust the project key first
-RPM=idm-collect-0.1.0-3.chp.el9.noarch.rpm          # from the signed repo (RELEASE-RECORD-0.5.2.md)
-scp -q aero:/data/chp-release/0.5.2/repo/$RPM /tmp/
+RPM=idm-collect-0.1.0-5.chp.el9.noarch.rpm          # from the signed repo (RELEASE-RECORD-0.5.4.md)
+scp -q aero:/data/chp-release/0.5.4/repo/$RPM /tmp/
 for h in "$@"; do
   scp -q /tmp/$RPM "$K.pub" "$here/../appliance/release/RPM-GPG-KEY-cyberhygiene" "$h:/tmp/"
   ssh "$h" "sudo RPM=$RPM bash -s" <<'REMOTE'          # the remote half is quoted: RPM is passed in
