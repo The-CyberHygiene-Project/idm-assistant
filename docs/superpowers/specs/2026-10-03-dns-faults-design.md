@@ -78,8 +78,9 @@ server**, so a blocked route to srv1 blocks DNS too (scenario L3n).
 | rollback | Nothing is changed by this tool. |
 | say_no_if | Someone proposes just changing the address back before the ISSO has seen it. |
 
-`runbooks/KANIDM_UNREACHABLE.md`: `evidence` becomes "The name resolves to the right address, but the connection
-fails: the route, the firewall, or the server itself." Other fields unchanged.
+`runbooks/KANIDM_UNREACHABLE.md`: `evidence` becomes "A connection to the identity server failed. The evidence below
+says whether its name resolved, and to what." Other fields unchanged. (ISSO, 2026-10-03, after the final review: the
+first wording, "The name resolves to the right address…", was false when the whole path is down, as in L3n.)
 
 `lab/iso-requirements.md` gains row 45.
 

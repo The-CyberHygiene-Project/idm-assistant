@@ -90,8 +90,10 @@ def test_wrong_address_is_treated_as_an_incident():
     assert "possible security incident" in runbooks.load("DNS_WRONG_ADDRESS").repair
 
 
-def test_unreachable_now_means_the_name_resolved():
-    assert runbooks.load("KANIDM_UNREACHABLE").evidence.startswith("The name resolves to the right address")
+def test_unreachable_wording_is_true_whether_or_not_the_name_resolved():
+    # ISSO 2026-10-03 (final review M2): the old line claimed the name resolved, false when the whole path is down (L3n)
+    assert runbooks.load("KANIDM_UNREACHABLE").evidence == (
+        "A connection to the identity server failed. The evidence below says whether its name resolved, and to what.")
 
 
 import importlib
