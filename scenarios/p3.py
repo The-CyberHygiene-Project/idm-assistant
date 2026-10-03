@@ -27,6 +27,6 @@ def restore(log):
 
 
 def final_probe(log):
-    out = remote.run("client2", ["sh", "-c", f"grep -x 'permissive = 0' {CONF} && systemctl is-active fapolicyd"],
+    out = remote.run("client2", ["sudo", "sh", "-c", f"grep -x 'permissive = 0' {CONF} && systemctl is-active fapolicyd"],
                      check=False).stdout
     return "permissive = 0" in out and "active" in out

@@ -132,3 +132,23 @@ def test_fapolicyd_scenarios():
     assert p3.EXPECT == {"client2": {"FAPOLICYD_PERMISSIVE"}} and p3.REPAIRS == [] and hasattr(p3, "restore")
     for p in (p1, p2, p3):
         assert p.HOSTS == ["client2"] and hasattr(p, "final_probe")
+
+
+def test_captured_healthy_pair_has_no_findings():
+    from pathlib import Path
+    from engine.report import load_report
+    fx = Path(__file__).parent / "fixtures" / "reports"
+    s, c = load_report(fx / "healthy-srv1-fapolicyd.json"), load_report(fx / "healthy-client2-fapolicyd.json")
+    assert c["fapolicyd"] == {"active": "active", "permissive": False, "denials": []}
+    assert evaluate(s) == [] and evaluate(c, s) == []
+
+
+def test_p3_probe_reads_the_root_only_config_with_sudo(monkeypatch):
+    # P3 regression 2026-10-03: /etc/fapolicyd is root-only; an unprivileged grep said "not restored" (NOT-CLEARED 3/3).
+    import subprocess
+    p3 = importlib.import_module("scenarios.p3")
+    seen = []
+    monkeypatch.setattr(p3.remote, "run", lambda host, argv, **kw: seen.append(argv) or
+                        subprocess.CompletedProcess(argv, 0, "permissive = 0\nactive\n", ""))
+    assert p3.final_probe(print) is True
+    assert seen[0][0] == "sudo"
