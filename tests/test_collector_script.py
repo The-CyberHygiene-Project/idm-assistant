@@ -283,3 +283,65 @@ def test_no_tls_probe_and_no_unreachable_error_without_a_usable_url():
 def test_trust_is_unknown_not_false_without_an_anchor():
     out = _block_run("trust", 'CA_ANCHOR=""', "$tr_ok")
     assert out.strip() == "null"
+
+
+FAILLOCK_OUT = """lab04:
+When                Type  Source                                           Valid
+2026-10-03 14:00:01 RHOST 192.168.100.20                                       V
+2026-10-03 14:01:02 TTY   tty1                                                 V
+2026-10-03 14:02:03 SVC                                                        I
+"""
+
+
+def _faillock(out, conf="deny = 5\nunlock_time = 900\n", has_tool=True, user="lab04", tmp=None):
+    import json as _j
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
+    k, m = lines.index("# >>> faillock"), lines.index("# <<< faillock")
+    conf_path = tmp / "faillock.conf"
+    conf_path.write_text(conf)
+    out_path = tmp / "faillock.out"
+    out_path.write_text(out)
+    stub = (f'faillock() {{ cat "{out_path}"; }}\n' if has_tool else "")
+    # The Mac's date is BSD (no -d): stand in for the two GNU forms the block uses, reading the faillock time as UTC.
+    stub += ("date() { if [ \"$1\" = -d ]; then python3 -c 'import sys,calendar,time; print(calendar.timegm("
+             "time.strptime(sys.argv[1], \"%Y-%m-%d %H:%M:%S\")))' \"$2\"; else python3 -c 'import sys,time; "
+             "print(time.strftime(\"%Y-%m-%dT%H:%M:%SZ\", time.gmtime(int(sys.argv[1][1:]))))' \"$3\"; fi; }\n")
+    sh = (f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nuser={user}\nTZ=UTC; export TZ\n'
+          f'FAILLOCK_CONF={conf_path}\n{stub}' + "\n".join(lines[i + 1:j]) + "\n"
+          + ("" if has_tool else 'command() { return 1; }\n') + "\n".join(lines[k + 1:m]) + '\nprintf "%s" "$flk"')
+    raw = subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
+    return _j.loads(raw)
+
+
+def test_faillock_parses_limit_lock_time_and_failures(tmp_path):
+    f = _faillock(FAILLOCK_OUT, tmp=tmp_path)
+    assert f["deny"] == 5 and f["unlock_time_s"] == 900
+    assert f["failures"][0] == {"when": "2026-10-03T14:00:01Z", "type": "RHOST", "source": "192.168.100.20", "valid": True}
+    assert f["failures"][1]["source"] == "tty1"
+    assert f["failures"][2] == {"when": "2026-10-03T14:02:03Z", "type": "SVC", "source": "", "valid": False}
+
+
+def test_faillock_defaults_when_unset(tmp_path):
+    f = _faillock(FAILLOCK_OUT, conf="# deny = 4\n", tmp=tmp_path)
+    assert f["deny"] == 3 and f["unlock_time_s"] == 600
+
+
+def test_faillock_unlock_never_is_null(tmp_path):
+    assert _faillock(FAILLOCK_OUT, conf="unlock_time = never\n", tmp=tmp_path)["unlock_time_s"] is None
+
+
+def test_faillock_unknown_without_tool_or_user(tmp_path):
+    assert _faillock(FAILLOCK_OUT, has_tool=False, tmp=tmp_path) is None
+    assert _faillock(FAILLOCK_OUT, user="", tmp=tmp_path) is None
+
+
+def test_faillock_time_is_read_as_local_and_printed_in_utc():
+    # srv1 runs America/Denver (2026-09-29 lesson): faillock prints zone-less LOCAL time; reading it with `date -u -d`
+    # would shift it by the zone offset. Read it as local (+%s), then print UTC.
+    text = SCRIPT.read_text()
+    assert 'fs=$(date -d "$fw" +%s' in text and 'date -u -d "@$fs"' in text and 'date -u -d "$fw"' not in text
+
+
+def test_report_emits_faillock():
+    assert '\\"faillock\\":' in SCRIPT.read_text() or '"faillock":' in SCRIPT.read_text()
