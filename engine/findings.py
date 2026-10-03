@@ -281,6 +281,46 @@ def account_locked(r, found_ids):
     return Finding("ACCOUNT_LOCKED", "faillock", tuple(ev))
 
 
+PINNED_SIGNERS = {"702d426d350d275d": "Rocky Linux 9", "8a3872bf3228467c": "EPEL 9",
+                  "521276f43c908f8e": "The CyberHygiene Project"}
+ROW46_DIAGNOSE_ONLY = {"FAPOLICYD_DENIED_UNPACKAGED", "FAPOLICYD_PERMISSIVE"}   # no repair, ever (ISSO row 46)
+FAP_PATH = _PATH = re.compile(r"/[A-Za-z0-9._/+-]+")
+_PKG = re.compile(r"[A-Za-z0-9._+-]+")
+
+
+def fapolicyd_findings(r):
+    """Row 46. Only denials whose program still exists and is not trusted now count."""
+    fk = r.get("fapolicyd")
+    if not isinstance(fk, dict):
+        return []
+    out = []
+    if fk.get("permissive") is True:
+        out.append(Finding("FAPOLICYD_PERMISSIVE", "fapolicyd", ("fapolicyd is in permissive mode",)))
+    elif fk.get("active") not in ("active", None):
+        out.append(Finding("FAPOLICYD_PERMISSIVE", "fapolicyd", (f"fapolicyd is {fk.get('active')}",)))
+    stale, unpk = [], []
+    for d in fk.get("denials") or []:
+        p = d.get("path")
+        if not (isinstance(p, str) and _PATH.fullmatch(p)) or d.get("exists") is not True or d.get("in_trust") is True:
+            continue
+        pkg, sg, n = d.get("package"), d.get("signer"), d.get("count") or 1
+        pkg = pkg if isinstance(pkg, str) and _PKG.fullmatch(pkg) else None
+        sg = sg if isinstance(sg, str) and re.fullmatch(r"[0-9a-f]{16}", sg) else None
+        if pkg and sg in PINNED_SIGNERS:
+            stale.append(f"fapolicyd blocked {p} (package {pkg}, signed {PINNED_SIGNERS[sg]}), {n} time(s) in the last 10 minutes")
+        elif not pkg:
+            unpk.append(f"fapolicyd blocked {p} (no package owns it)")
+        elif not sg:
+            unpk.append(f"fapolicyd blocked {p} (package {pkg} is unsigned)")
+        else:
+            unpk.append(f"fapolicyd blocked {p} (package {pkg} signed by unknown key {sg})")
+    if stale:
+        out.append(Finding("FAPOLICYD_TRUST_STALE", "fapolicyd", tuple(stale)))
+    if unpk:
+        out.append(Finding("FAPOLICYD_DENIED_UNPACKAGED", "fapolicyd", tuple(unpk)))
+    return out
+
+
 RULES = (collect_conf_invalid, time_unverified, time_skew, dns_lookup_failed, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
          posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
          ssh_ca_not_trusted)
@@ -288,7 +328,7 @@ RULES = (collect_conf_invalid, time_unverified, time_skew, dns_lookup_failed, tl
 
 def evaluate(report, peer=None):
     found = [f for rule in RULES if (f := rule(report))]
-    found += services_down(report) + labels_wrong(report)
+    found += services_down(report) + labels_wrong(report) + fapolicyd_findings(report)
     lk = account_locked(report, {f.id for f in found})
     if lk:
         found.append(lk)
