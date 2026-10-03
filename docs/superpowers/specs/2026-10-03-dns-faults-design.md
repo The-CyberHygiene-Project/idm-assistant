@@ -27,24 +27,27 @@ server**, so a blocked route to srv1 blocks DNS too (scenario L3n).
 
 - Client: `"name": {"host": <host part of KANIDM_URL>, "addresses": [<IPs from getent ahosts, unique>],
   "source": "files"|"dns"|null, "resolvers": [<nameserver IPs from /etc/resolv.conf>],
-  "resolver_reachable": true|false|null}`. `source` is `files` when `/etc/hosts` has a non-comment line naming the host,
-  else `dns` when addresses were found, else null. `resolver_reachable`: a TCP connect to the first resolver's port 53
-  (`curl --connect-timeout 3 telnet://IP:53 </dev/null`), null when there is no resolver. Lookups time out at 5 s. No
+  "resolver_state": "answers"|"refused"|"unreachable"|null}`. `source` is `files` when `/etc/hosts` has a non-comment
+  line naming the host, else `dns` when addresses were found, else null. `resolver_state`: a TCP connect to the first
+  resolver's port 53 (`curl --connect-timeout 3 telnet://IP:53 </dev/null`): exit 0 = `answers`, 7 = `refused` (the
+  machine is up but no DNS service listens: measured on client2), anything else (28 = timeout) = `unreachable`; null
+  when there is no resolver. Lookups time out at 5 s. No
   usable `KANIDM_URL`: `"name": null`.
 - Server: `"own_addresses": [<IPs from hostname -I>]`.
 - Only strings that are IPv4/IPv6 addresses are kept in `addresses`, `resolvers` and `own_addresses` (code filter).
 
 **Findings** (`engine/findings.py`):
 
-- `DNS_LOOKUP_FAILED` (client, component `dns`): `name.addresses` empty and `resolver_reachable` is true. Evidence:
-  `"<host> does not resolve on this host; DNS server <resolver>"`. Cross-host: if the server report shows
+- `DNS_LOOKUP_FAILED` (client, component `dns`): `name.addresses` empty and `resolver_state` is `answers` or
+  `refused`. Evidence: `"<host> does not resolve on this host; DNS server <resolver>"`, plus for `refused`:
+  `"DNS server <resolver> is up but no DNS service answers (connection refused)"`. Cross-host: if the server report shows
   `SERVICE_DOWN(named)`, add `"likely caused by: named stopped on <server host>"`.
 - `DNS_WRONG_ADDRESS` (cross-host, client vs server, component `dns`): addresses non-empty and none of them is in the
   server's `own_addresses`. Evidence: `"<host> resolves to <addrs> (from the hosts file|from DNS); the identity server
   is at <own>"`. Not raised when the server report or its `own_addresses` is missing (unknown is not wrong).
 - `KANIDM_UNREACHABLE` (existing rule, sharpened): not raised when `DNS_LOOKUP_FAILED` or `DNS_WRONG_ADDRESS` is.
   Evidence when the name resolves: `"name resolves to <addrs>; the connection failed: check the route, firewall or the
-  server"`. When `resolver_reachable` is false: `"the DNS server <resolver> cannot be reached either: check the route or
+  server"`. When `resolver_state` is `unreachable`: `"the DNS server <resolver> cannot be reached either: check the route or
   firewall"`.
 
 ## Part 2: runbooks (no repair; `decisions: 45` on the two DNS pages)
