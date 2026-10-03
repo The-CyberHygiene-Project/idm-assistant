@@ -1,5 +1,5 @@
-"""F1: five wrong-password logins lock lab04 out of client2 (pam_faillock, CUI profile: 5 tries, 15-minute lock).
-The approved unlock must clear it before the lock would expire by itself (CLEAR_BEFORE_S). ISSO row 44."""
+"""F1: wrong-password logins lock lab04 out of client2. pam_faillock in the CUI profile: deny = 3 within
+fail_interval = 900 s, unlock_time = 0, so the lock never expires by itself; the approved unlock clears it. ISSO row 44."""
 import subprocess
 from pathlib import Path
 
@@ -13,7 +13,6 @@ EXPECT = {"client2": {"ACCOUNT_LOCKED"}}
 HOSTS = ["client2"]
 REPAIRS = [("client2", "faillock-reset")]
 PARAMS = {"user": USER}
-CLEAR_BEFORE_S = 840
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -28,7 +27,7 @@ def lock_out(log):
         login("wrong")
     if "ACCOUNT_LOCKED" not in {f.id for f in evaluate(remote.collect("client2-diag", USER))}:
         raise RuntimeError("five wrong passwords did not lock the account; injection did not take")
-    log(f"injected: five wrong-password logins locked {USER} on client2")
+    log(f"injected: five wrong-password logins locked {USER} on client2 (limit 3)")
 
 
 def inject(log):

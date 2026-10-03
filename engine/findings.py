@@ -206,6 +206,9 @@ def safe_source(s):
 
 
 def account_locked(r, found_ids):
+    """pam_faillock: faillock(8) marks the failures that count (V = within fail_interval). The account is locked when
+    they reach deny, until unlock_time has passed since the last one; unlock_time 0 (the CUI profile) or never means
+    it stays locked until someone clears it."""
     fk = r.get("faillock")
     if not isinstance(fk, dict):
         return None
@@ -216,18 +219,20 @@ def account_locked(r, found_ids):
         if not x.get("valid") or not x.get("when"):
             continue
         try:
-            when = _t(x["when"])
+            recent.append((_t(x["when"]), x))
         except ValueError:
             continue
-        if ut is None or (now - when).total_seconds() <= ut:
-            recent.append((when, x))
+    expires = bool(ut)                                   # 0 or None: the lock does not expire by itself
     if len(recent) < deny:
         return None
     recent.sort(key=lambda p: p[0])
+    if expires and (now - recent[-1][0]).total_seconds() > ut:
+        return None
     mins = max(1, round((recent[-1][0] - recent[0][0]).total_seconds() / 60))
     srcs = sorted({f"{safe_source(x.get('source'))} ({_KIND.get(x.get('type'), 'other')})" for _, x in recent})
     ev = [f"{len(recent)} failed logins for {r.get('user')} in {mins} min; last at "
-          f"{recent[-1][0].strftime('%H:%MZ')}; from {', '.join(srcs)}"]
+          f"{recent[-1][0].strftime('%H:%MZ')}; from {', '.join(srcs)}"
+          + ("" if expires else "; stays locked until cleared")]
     causes = sorted(i for i in found_ids if i.split("(")[0] in LOCKOUT_CAUSES)
     if causes:
         ev.append("likely caused by: " + ", ".join(causes))

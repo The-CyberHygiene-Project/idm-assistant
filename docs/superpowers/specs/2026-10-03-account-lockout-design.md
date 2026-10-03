@@ -3,6 +3,14 @@
 Date: 2026-10-03. Status: design approved in conversation by the ISSO; this spec awaits review.
 First of the six "gap" runbooks (no public runbook covers faillock + Kanidm + the authenticator together).
 
+## Correction (2026-10-03, during Task 6)
+
+The lab's real CUI settings on client2 are `deny = 3`, `fail_interval = 900`, `unlock_time = 0`: three failures within
+15 minutes lock the account, and **the lock never expires by itself**. The "5 tries, 15-minute lock" first assumed here
+came from the CHP kit on another lab host. So: the finding counts the failures faillock itself marks valid (within
+`fail_interval`) and treats `unlock_time` 0 or `never` as "locked until cleared"; the runbook says so; F1 has no
+self-heal deadline (`CLEAR_BEFORE_S` dropped). Where this spec says 5 or 15 minutes below, read the live values.
+
 ## Goal
 
 When a person is locked out of a workstation after failed logins, the operator's decision form says so plainly, shows

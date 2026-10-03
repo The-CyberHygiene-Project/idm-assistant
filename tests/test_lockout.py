@@ -172,7 +172,28 @@ import importlib
 
 def test_scenarios_declare_the_expected_shape():
     f1, f2 = (importlib.import_module(f"scenarios.{n}") for n in ("f1", "f2"))
-    assert f1.USER == f2.USER == "lab04" and f1.CLEAR_BEFORE_S == 840
+    assert f1.USER == f2.USER == "lab04"
     assert f1.EXPECT == {"client2": {"ACCOUNT_LOCKED"}} and f1.REPAIRS == [("client2", "faillock-reset")]
     assert f2.EXPECT == {"client2": {"ACCOUNT_LOCKED", "TOTP_TIME_SKEW"}}
     assert f2.REPAIRS == [("client2", "time-resync"), ("client2", "faillock-reset")]
+
+
+# --- client2's real CUI settings (read 2026-10-03): deny = 3, fail_interval = 900, unlock_time = 0 -----------------
+def test_cui_profile_lock_never_expires_by_itself():
+    # unlock_time = 0: pam_faillock keeps the account locked until it is cleared, however old the failures are.
+    assert locked(rep(3, deny=3, ut=0, start_min=0))
+
+
+def test_cui_profile_evidence_says_it_stays_locked():
+    f = locked(rep(3, deny=3, ut=0))
+    assert "stays locked until cleared" in f.evidence[0]
+
+
+def test_lock_with_a_positive_unlock_time_ends_after_it_passes():
+    assert locked(rep(5, ut=60, start_min=0)) is None      # last failure 14:00:04, now 14:05:00: > 60 s, unlocked
+    assert locked(rep(5, ut=900, start_min=0))              # within 900 s: still locked
+
+
+def test_f1_has_no_self_heal_deadline():
+    import importlib
+    assert not hasattr(importlib.import_module("scenarios.f1"), "CLEAR_BEFORE_S")
