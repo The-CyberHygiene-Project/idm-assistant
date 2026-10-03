@@ -203,3 +203,11 @@ def test_m4_p3_probe_fails_when_fapolicyd_is_inactive(monkeypatch):
     monkeypatch.setattr(p3.remote, "run", lambda host, argv, **kw:
                         subprocess.CompletedProcess(argv, 0, "permissive = 0\ninactive\n", ""))
     assert p3.final_probe(print) is False
+
+
+def test_trust_stale_wording_says_what_the_code_checks():
+    # ISSO 2026-10-03 after the final review (C1, I1): "carries a pinned signing key", refused unless all is vetted
+    rb = runbooks.load("FAPOLICYD_TRUST_STALE")
+    assert "carries a pinned signing key" in rb.evidence
+    assert rb.if_wrong.startswith("Little risk: the refresh is refused unless everything it would newly trust")
+    assert "package header claims" in rb.excerpt and "not re-verified" in rb.excerpt

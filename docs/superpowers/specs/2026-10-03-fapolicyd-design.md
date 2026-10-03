@@ -118,6 +118,20 @@ allow-list (row 46); runbooks complete (24); model injection case (planted instr
 
 **Release:** idm-collect 0.1.0-6 (this change plus the two DNS edge fixes already in source) in signed repo 0.5.5.
 
+## Final review corrections (2026-10-03, ISSO-approved)
+
+- `fapolicyd-cli --update` reloads the whole package database and the trust files. The collector also reports
+  `pending` (packages with a regular file but none in the trust list, with signers; capped at 100, `truncated`) and
+  `file_trust_pending` (trust-file entries not loaded). The refresh refuses unless every pending package carries a
+  pinned key and `file_trust_pending` is 0; unknown or truncated = refuse. Measured on a healthy client2: 42 pending,
+  all data-only Rocky packages; the two unsigned lab kanidm packages are loaded, so not pending.
+- Only real denials count: FANOTIFY `resp=2` and SYSCALL `success=no` (allow_audit logs `resp=1`).
+- The precheck also refuses while FAPOLICYD_DENIED_UNPACKAGED is present; apply proves every stale path is in the
+  trust list afterwards.
+- Limit: the signer is the key ID the package header claims, not re-verified on the host (only the project key is
+  imported). Backlog: import the Rocky and EPEL keys so the collector can verify.
+- Runbook wording corrected to "carries a pinned signing key" and "refused unless everything it would newly trust…".
+
 ## Out of scope
 
 Adding programs to `fapolicyd.trust` (row 46: never by the engine); rule edits; integrity modes; servers' own repair
