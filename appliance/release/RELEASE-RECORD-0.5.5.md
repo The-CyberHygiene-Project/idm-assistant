@@ -1,4 +1,4 @@
-# Release record: package repository 0.5.5 (supersedes 0.5.4)
+# Release record: package repository 0.5.5 (supersedes 0.5.4) — SUPERSEDED by 0.5.6, do not use
 
 **Date:** 2026-10-03 · **Location:** `aero:/data/chp-release/0.5.5/repo` (a lab copy is published at
 `aero:/data/lab-inputs/chp/0.5.5`) · **Audience:** CyberHygiene Project development team only.

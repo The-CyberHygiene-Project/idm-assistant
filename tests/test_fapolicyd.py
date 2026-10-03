@@ -153,7 +153,9 @@ def test_captured_healthy_pair_has_no_findings():
     from engine.report import load_report
     fx = Path(__file__).parent / "fixtures" / "reports"
     s, c = load_report(fx / "healthy-srv1-fapolicyd.json"), load_report(fx / "healthy-client2-fapolicyd.json")
-    assert c["fapolicyd"] == {"active": "active", "permissive": False, "denials": []}
+    f = c["fapolicyd"]
+    assert (f["active"], f["permissive"], f["denials"], f["file_trust_pending"]) == ("active", False, [], 0)
+    assert not f["pending"]["truncated"] and all(x["signer"] in PINNED_SIGNERS for x in f["pending"]["packages"])
     assert evaluate(s) == [] and evaluate(c, s) == []
 
 
