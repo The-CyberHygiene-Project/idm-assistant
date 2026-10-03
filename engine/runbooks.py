@@ -2,6 +2,7 @@
 form by code: user_sees + means -> PROBLEM, evidence -> LIKELY CAUSE, repair -> PROPOSED ACTION, if_wrong + rollback ->
 POTENTIAL DOWNSIDE, say_no_if -> SAY NO IF. The body after the header is the excerpt the model reads."""
 from dataclasses import dataclass
+import re as _re
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parents[1] / "runbooks"
@@ -25,6 +26,11 @@ class Runbook:
     @property
     def complete(self):
         return all(getattr(self, f).strip() for f in FIELDS)
+
+
+def ids():
+    """Runbook pages are named by finding id (upper case, words joined by _); anything else in the folder (README.md) is not a runbook."""
+    return sorted(p.stem for p in DIR.glob("*.md") if _re.fullmatch(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+", p.stem))
 
 
 def load(finding_id):
@@ -58,5 +64,5 @@ def for_repair(repair_id, finding_ids):
         rb = load(fid)
         if rb and rb.default_repair == repair_id:
             return rb
-    named = [rb for rb in (load(p.stem) for p in sorted(DIR.glob("*.md"))) if rb and rb.default_repair == repair_id]
+    named = [rb for rb in (load(i) for i in ids()) if rb and rb.default_repair == repair_id]
     return named[0] if len(named) == 1 else None
