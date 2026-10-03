@@ -370,7 +370,8 @@ class UnixdRefresh(Repair):
     def precheck(self, ctx):
         if ctx.params.get("user") and not valid_user(ctx.params["user"]):
             return f"refusing: {ctx.params['user']!r} is not a valid user name"
-        if "KANIDM_UNREACHABLE" in {f.id for f in evaluate(ctx.collect())}:
+        if {f.id for f in evaluate(ctx.collect())} & {"KANIDM_UNREACHABLE", "DNS_LOOKUP_FAILED", "DNS_WRONG_ADDRESS"}:
+            # the DNS findings suppress KANIDM_UNREACHABLE, so they must block the refresh too
             return "Kanidm is unreachable from this host: refreshing the cache cannot help; fix the network first"
         return None
 

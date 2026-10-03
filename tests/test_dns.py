@@ -112,3 +112,21 @@ def test_captured_healthy_pair_has_no_findings():
     fx = Path(__file__).parent / "fixtures" / "reports"
     s, c = load_report(fx / "healthy-srv1-dns.json"), load_report(fx / "healthy-client2-dns.json")
     assert evaluate(s) == [] and evaluate(c, s) == []
+
+
+
+# --- final review fixes -------------------------------------------------------------------------------------------
+def test_row_45_in_code_no_repair_offered_for_a_host_with_a_dns_fault():
+    from engine.cli import allowed_for_findings
+    reps = {"client2": {"role": "client"}}
+    got = ids(client(addresses=[], source=None))
+    assert allowed_for_findings({"client2": list(got.values())}, reps) == set()
+
+
+def test_unixd_refresh_refused_in_the_d1_state(tmp_path):
+    # final review I2: suppressing KANIDM_UNREACHABLE must not remove unixd-refresh's "cannot reach Kanidm" refusal.
+    from engine.case import Case
+    from engine.repairs import Ctx
+    c = client(addresses=[], source=None)
+    ctx = Ctx(host="client2", role="client", case=Case(tmp_path, "d", "s"), collect=lambda: c, params={"user": "lab04"})
+    assert "refreshing the cache cannot help" in REGISTRY["unixd-refresh"].precheck(ctx)

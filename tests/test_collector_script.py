@@ -349,14 +349,18 @@ def test_report_emits_faillock():
 
 def _name(tmp, role="client", hostport="idm.kanidm.lab.test:443", getent="192.168.100.10 STREAM idm.kanidm.lab.test\n",
           hosts="127.0.0.1 localhost\n", resolv="search kanidm.lab.test\nnameserver 192.168.100.10\n", probe=(0, ""),
-          hostname_i="192.168.100.10 fe80::1 "):
+          hostname_i="192.168.100.10 fe80::1 ", strict=False, missing_resolv=False):
     import json as _j
     lines = SCRIPT.read_text().splitlines()
     i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
     k, m = lines.index("# >>> name"), lines.index("# <<< name")
-    (tmp / "hosts").write_text(hosts); (tmp / "resolv.conf").write_text(resolv); (tmp / "getent.out").write_text(getent)
+    (tmp / "hosts").write_text(hosts); (tmp / "getent.out").write_text(getent)
+    if missing_resolv:
+        (tmp / "resolv.conf").unlink(missing_ok=True)
+    else:
+        (tmp / "resolv.conf").write_text(resolv)
     (tmp / "curl.args").write_text("")
-    sh = (f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nrole={role}\nKANIDM_HOSTPORT={hostport}\n'
+    sh = (("set -euf\n" if strict else "") + f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nrole={role}\nKANIDM_HOSTPORT={hostport}\n'
           f'IDM_HOSTS_FILE={tmp / "hosts"}\nIDM_RESOLV_CONF={tmp / "resolv.conf"}\n'
           f'timeout() {{ shift; "$@"; }}\ngetent() {{ cat "{tmp / "getent.out"}"; }}\n'
           f'bash() {{ echo "$*" >> "{tmp / "curl.args"}"; [ -z "{probe[1]}" ] || echo "bash: connect: {probe[1]}" >&2; return {probe[0]}; }}\n'
@@ -422,3 +426,15 @@ def test_server_reports_its_own_addresses(tmp_path):
 def test_report_emits_name_and_own_addresses():
     text = SCRIPT.read_text()
     assert '"name":%s,"own_addresses":%s,' in text
+
+
+def test_missing_resolv_conf_does_not_kill_the_report(tmp_path):
+    # final review I1: the collector runs under set -eu; a missing resolv.conf must not end the script.
+    nm, _, _ = _name(tmp_path, strict=True, missing_resolv=True)
+    assert nm["resolvers"] == [] and nm["resolver_state"] is None
+
+
+def test_upper_case_hosts_line_is_still_the_hosts_file(tmp_path):
+    # final review M1 (re-graded): glibc matches hosts names case-insensitively; a planted upper-case line must say files.
+    nm, _, _ = _name(tmp_path, hosts="192.168.100.99 IDM.KANIDM.LAB.TEST.\n", getent="192.168.100.99 STREAM x\n")
+    assert nm["source"] == "files"
