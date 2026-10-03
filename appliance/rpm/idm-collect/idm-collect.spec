@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -31,6 +31,9 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-3.chp
+- faillock section for --user: lockout limit, lock time and each failure (unknown = null).
+
 * Tue Sep 29 2026 The CyberHygiene Project - 0.1.0-2.chp
 - Unusable collect.conf values are reported as collect.conf errors; TLS probe skipped and trust null without them.
 

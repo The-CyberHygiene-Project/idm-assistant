@@ -13,7 +13,7 @@ def ids(name):
     return [f.id for f in evaluate(load_report(FIX / f"{name}.json"))]
 
 
-@pytest.mark.parametrize("name", ["healthy-srv1", "healthy-client2"])
+@pytest.mark.parametrize("name", ["healthy-srv1", "healthy-client2", "healthy-client2-lab04"])
 def test_healthy_hosts_have_no_findings(name):
     assert ids(name) == []
 
@@ -222,3 +222,9 @@ def test_unreachable_is_still_reported_when_the_config_is_fine_but_tls_fails():
     c["errors"] = ["tls: could not fetch the Kanidm certificate (unreachable or handshake failed)"]
     got = cids(c)
     assert "KANIDM_UNREACHABLE" in got and "COLLECT_CONF_INVALID" not in got
+
+
+def test_live_cui_faillock_settings_are_reported():
+    # captured 2026-10-03 from client2 (idm-collect 0.1.0-3): the CUI profile's limit, and a lock that never expires
+    fk = load_report(FIX / "healthy-client2-lab04.json")["faillock"]
+    assert fk == {"deny": 3, "unlock_time_s": 0, "failures": []}
