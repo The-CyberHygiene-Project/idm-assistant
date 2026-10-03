@@ -411,10 +411,10 @@ def test_run_repair_records_the_approver_on_the_context(tmp_path):
     from engine.repairs import run_repair
     def approve(prompt):
         return False
-    approve.who = "dshannon"
+    approve.who = "operator1"
     c = ctx(tmp_path, LOCKED); c.approver = ""
     run_repair("faillock-reset", c, approve, REGISTRY)
-    assert c.approver == "dshannon"
+    assert c.approver == "operator1"
 ```
 
 - [ ] **Step 2: Run to verify they fail**
