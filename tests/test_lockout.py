@@ -197,3 +197,34 @@ def test_lock_with_a_positive_unlock_time_ends_after_it_passes():
 def test_f1_has_no_self_heal_deadline():
     import importlib
     assert not hasattr(importlib.import_module("scenarios.f1"), "CLEAR_BEFORE_S")
+
+
+def _faillock_engine(tmp, conf):
+    from tests.test_collector_script import FAILLOCK_OUT, _faillock
+    return _faillock(FAILLOCK_OUT, conf=conf, tmp=tmp)
+
+
+# --- final review fixes -------------------------------------------------------------------------------------------
+def test_explain_does_not_offer_the_unlock_while_a_cause_is_present(monkeypatch, capsys):
+    # I1: explain() is the operator's path; row 44 says no unlock is offered while a cause is found.
+    from engine import cli, interpret
+    seen = {}
+    monkeypatch.setattr(cli, "_collect_all", lambda hosts, user: {"client2": SKEWED_LOCKED,
+                                                                   "srv1": {**BASE, "host": "srv1", "role": "server"}})
+    def fake(symptom, findings, allowed, **kw):
+        seen["allowed"] = set(allowed)
+        return {"response": None, "errors": [], "shown_repair": None, "repair_id": None, "default_repair": None}
+    monkeypatch.setattr(interpret, "interpret", fake)
+    cli.explain("client2", "lab04", "lab04 is locked out")
+    assert "time-resync" in seen["allowed"] and "faillock-reset" not in seen["allowed"]
+
+
+def test_refuses_when_the_report_is_for_another_user(tmp_path):
+    # I2: the lock seen must be the lock of the user about to be reset.
+    assert "refusing" in R.precheck(ctx(tmp_path, LOCKED, user="lab06"))
+
+
+def test_zero_padded_config_values_stay_valid_json(tmp_path):
+    # M2 (re-graded Important): "deny = 03" must not print the invalid JSON number 03 and lose the whole report.
+    f = _faillock_engine(tmp_path, "deny = 03\nunlock_time = 0900\n")
+    assert f["deny"] == 3 and f["unlock_time_s"] == 900

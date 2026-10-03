@@ -404,7 +404,10 @@ class FaillockReset(Repair):
         u = ctx.params.get("user")
         if not valid_user(u):
             return f"refusing: {u!r} is not a valid user name"
-        ids = {f.id for f in evaluate(ctx.collect())}
+        rep = ctx.collect()
+        if rep.get("user") != u:                         # the lock seen must be the lock of the user being reset
+            return f"refusing: the report is for {rep.get('user')!r}, not {u!r}"
+        ids = {f.id for f in evaluate(rep)}
         causes = sorted(i for i in ids if i.split("(")[0] in LOCKOUT_CAUSES)
         if causes:
             return (f"refusing: {', '.join(causes)} found on {ctx.host}; fix that first (runbook "

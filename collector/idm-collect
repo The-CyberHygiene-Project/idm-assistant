@@ -183,6 +183,9 @@ $frows
 EOF
   case "$fdeny" in ''|*[!0-9]*) fdeny=3 ;; esac
   case "$fut" in '') fut=600 ;; *[!0-9]*) fut=null ;; esac
+  # A zero-padded value (deny = 03) would print an invalid JSON number and lose the whole report: drop leading zeros.
+  fdeny=$(printf '%s' "$fdeny" | sed 's/^0*\([0-9]\)/\1/')
+  [ "$fut" = null ] || fut=$(printf '%s' "$fut" | sed 's/^0*\([0-9]\)/\1/')
   flk="{\"deny\":$fdeny,\"unlock_time_s\":$fut,\"failures\":[${ffl%,}]}"
 fi
 # <<< faillock

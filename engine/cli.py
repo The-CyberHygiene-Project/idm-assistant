@@ -167,7 +167,7 @@ def explain(host, user, symptom):
         print(f"FINDING {f.id}: {'; '.join(f.evidence)}")
     if not fl:
         print("No findings.")
-    it = interpret.interpret(symptom, fl, interpret.allowed_for({reps[host]["role"]}))
+    it = interpret.interpret(symptom, fl, allowed_for_findings({host: fl}, reps))   # row 44 applies here too
     print("\n" + ((it["response"] or {}).get("analysis") or f"(model gave no valid analysis: {it['errors'][:2]})"))
     print(f"\nSuggested repair: {it['shown_repair'] or 'none'} (model: {it['repair_id'] or 'unsure'}; "
           f"runbook default: {it['default_repair'] or 'none'})")
