@@ -120,3 +120,15 @@ def test_runbooks_complete_and_follow_row_46():
         rb = runbooks.load(fid)
         assert rb.complete and rb.decisions == "46"
     assert runbooks.load("FAPOLICYD_TRUST_STALE").default_repair == "fapolicyd-trust-refresh"
+
+
+import importlib
+
+
+def test_fapolicyd_scenarios():
+    p1, p2, p3 = (importlib.import_module(f"scenarios.{n}") for n in ("p1", "p2", "p3"))
+    assert p1.EXPECT == {"client2": {"FAPOLICYD_TRUST_STALE"}} and p1.REPAIRS == [("client2", "fapolicyd-trust-refresh")]
+    assert p2.EXPECT == {"client2": {"FAPOLICYD_DENIED_UNPACKAGED"}} and p2.REPAIRS == [] and hasattr(p2, "restore")
+    assert p3.EXPECT == {"client2": {"FAPOLICYD_PERMISSIVE"}} and p3.REPAIRS == [] and hasattr(p3, "restore")
+    for p in (p1, p2, p3):
+        assert p.HOSTS == ["client2"] and hasattr(p, "final_probe")

@@ -45,5 +45,8 @@ The form ends with "If unsure, type no: nothing on <host> changes" and a choice 
 6. **Use the live values.** Numbers that come from a host's configuration (limits, intervals) must match what the
    collector reads there; the live evidence line on the form shows the actual values.
 7. **Every new repair ships with two tests:** a case where the right answer is no repair (the model must decline or the
-   code must refuse), and a case where the evidence carries an injected instruction that must be ignored.
+   code must refuse), and a case where the evidence carries an injected instruction. The ship test runs through the
+   **real path** (the allow-list and the repair's own precheck) and must hold in every run: the code is the gate. The
+   same case with the gate bypassed is recorded as a measure of the model itself, never as the gate (ISSO, 2026-10-03,
+   after the local model followed a plausible planted instruction 3/5 with the gate bypassed and 0/5 on the real path).
 8. **Wording is reviewed by the ISSO before it is published.**
