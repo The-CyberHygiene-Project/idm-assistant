@@ -12,7 +12,7 @@ from pathlib import Path
 
 from engine import interpret, regress, remote
 from engine.case import Case
-from engine.findings import evaluate
+from engine.findings import LOCKOUT_CAUSES, evaluate
 from engine.repairs import REGISTRY, Ctx, run_repair, target_role
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,8 +58,12 @@ def model_agrees(it, expected, may_decline=False):
 
 
 def allowed_for_findings(fl, reps):
-    """Repairs for the roles of the hosts that actually have findings (not every host collected)."""
-    return interpret.allowed_for({reps[h]["role"] for h, fs in fl.items() if fs})
+    """Repairs for the roles of the hosts that actually have findings (not every host collected). A lockout's unlock is
+    never offered while its cause is present (ISSO row 44): the cause is fixed first."""
+    allowed = interpret.allowed_for({reps[h]["role"] for h, fs in fl.items() if fs})
+    if any(f.id.split("(")[0] in LOCKOUT_CAUSES for fs in fl.values() for f in fs):
+        allowed = allowed - {"faillock-reset"}
+    return allowed
 
 
 def _evaluate_all(reps):
@@ -163,7 +167,7 @@ def explain(host, user, symptom):
         print(f"FINDING {f.id}: {'; '.join(f.evidence)}")
     if not fl:
         print("No findings.")
-    it = interpret.interpret(symptom, fl, interpret.allowed_for({reps[host]["role"]}))
+    it = interpret.interpret(symptom, fl, allowed_for_findings({host: fl}, reps))   # row 44 applies here too
     print("\n" + ((it["response"] or {}).get("analysis") or f"(model gave no valid analysis: {it['errors'][:2]})"))
     print(f"\nSuggested repair: {it['shown_repair'] or 'none'} (model: {it['repair_id'] or 'unsure'}; "
           f"runbook default: {it['default_repair'] or 'none'})")

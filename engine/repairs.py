@@ -4,13 +4,14 @@ import base64 as _b64
 import binascii as _binascii
 import hashlib as _hashlib
 import re as _re
+import shlex
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from engine.findings import evaluate
+from engine.findings import LOCKOUT_CAUSES, evaluate
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = "idm-lab/srv1"                      # relative to the admin user's home on srv1, mode 0700
@@ -35,6 +36,7 @@ class Ctx:
     sleep: Callable[[float], None] = time.sleep
     peer: Optional[Callable[[], dict]] = None   # the server's fresh report, for cross-host rules during verify
     verify_tries: int = 6            # a restarted service may need a few seconds before a fresh report shows it
+    approver: str = ""                # who typed yes (set by run_repair)
 
 
 def target_role(report, host):
@@ -103,6 +105,7 @@ def run_repair(repair_id, ctx, approve, registry):
     prompt = _prompt(repair_id, r, ctx)
     with case.step(f"{repair_id}:approval"):
         ok = bool(approve(prompt))
+    ctx.approver = getattr(approve, "who", "unknown")
     case.write(f"approval-{repair_id}.json", {
         "repair": repair_id, "host": ctx.host, "prompt": prompt, "approved": ok,
         "by": getattr(approve, "who", "unknown"), "test_mode": bool(getattr(approve, "test_mode", False)),
@@ -384,6 +387,55 @@ class UnixdRefresh(Repair):
 
 
 REGISTRY[UnixdRefresh.id] = UnixdRefresh()
+
+
+class FaillockReset(Repair):
+    """ISSO row 44: clear a workstation lockout only with approval, and never while a cause is found."""
+    id = "faillock-reset"
+    host_role = "client"
+    verify_absent = {"ACCOUNT_LOCKED"}
+    TALLY = "/var/run/faillock"
+
+    def describe(self, ctx):
+        return (f"clear the failed-login count of {ctx.params.get('user')} on {ctx.host} (faillock --reset) and "
+                "record who approved it in the host's log")
+
+    def precheck(self, ctx):
+        u = ctx.params.get("user")
+        if not valid_user(u):
+            return f"refusing: {u!r} is not a valid user name"
+        rep = ctx.collect()
+        if rep.get("user") != u:                         # the lock seen must be the lock of the user being reset
+            return f"refusing: the report is for {rep.get('user')!r}, not {u!r}"
+        ids = {f.id for f in evaluate(rep)}
+        causes = sorted(i for i in ids if i.split("(")[0] in LOCKOUT_CAUSES)
+        if causes:
+            return (f"refusing: {', '.join(causes)} found on {ctx.host}; fix that first (runbook "
+                    f"{causes[0].split('(')[0]}), then unlock (ISSO row 44)")
+        if "ACCOUNT_LOCKED" not in ids:
+            return f"{u} is not locked out on {ctx.host}; nothing to repair"
+        return None
+
+    def backup(self, ctx):
+        d, u = f"/root/idm-backup/{ctx.case.dir.name}", ctx.params["user"]
+        st = _sh(ctx, f"install -d -m 0700 {d}; if [ -e {self.TALLY}/{u} ]; then cp -p {self.TALLY}/{u} "
+                      f"{d}/faillock-{u} && echo present; else echo absent; fi").strip()
+        return {"dir": d, "tally": st}
+
+    def apply(self, ctx):
+        u = ctx.params["user"]
+        if not valid_user(u):
+            raise ValueError("invalid user name")
+        note = f"faillock reset for {u}, approved by {ctx.approver or 'unknown'}, case {ctx.case.dir.name}"
+        _sh(ctx, f"faillock --user {u} --reset && logger -p authpriv.notice -t idm-assistant {shlex.quote(note)}")
+
+    def undo(self, ctx, backup):
+        u = ctx.params["user"]
+        if backup.get("tally") == "present" and valid_user(u):
+            _sh(ctx, f"cp -p {backup['dir']}/faillock-{u} {self.TALLY}/{u}")
+
+
+REGISTRY[FaillockReset.id] = FaillockReset()
 
 
 class TimeResync(Repair):

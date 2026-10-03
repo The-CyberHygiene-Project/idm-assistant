@@ -157,6 +157,39 @@ if [ -n "$user" ] && [ "$role" = client ]; then
   else un="{\"name\":$(json_str "$user"),\"found\":false}"; fi
 fi
 
+# --- failed-login lockout (faillock) for --user ------------------------------------------------------------------
+# >>> faillock
+# The limit and lock time come from faillock.conf (pam_faillock's defaults 3 / 600 s when unset; "never" -> null),
+# the failures from faillock(8). Unknown (no user, no tool) is null, never "not locked".
+if [ "$(id -u)" -eq 0 ]; then FCONF=/etc/security/faillock.conf; else FCONF="${FAILLOCK_CONF:-/etc/security/faillock.conf}"; fi
+flk=null
+if [ -n "$user" ] && command -v faillock >/dev/null 2>&1 && fout=$(faillock --user "$user" 2>/dev/null); then
+  fdeny=$(sed -n 's/^[[:space:]]*deny[[:space:]]*=[[:space:]]*\([^[:space:]]*\).*/\1/p' "$FCONF" 2>/dev/null | tail -n 1)
+  fut=$(sed -n 's/^[[:space:]]*unlock_time[[:space:]]*=[[:space:]]*\([^[:space:]]*\).*/\1/p' "$FCONF" 2>/dev/null | tail -n 1)
+  ffl=""
+  frows=$(printf '%s\n' "$fout" | awk '$1 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ && NF >= 4 {
+            src = (NF >= 5) ? $4 : ""; printf "%s %s|%s|%s|%s\n", $1, $2, $3, $NF, src }')
+  # '|' (not tab): read merges runs of whitespace separators, so an empty Source column would vanish. Source is last,
+  # so a '|' inside it cannot shift the other fields.
+  while IFS='|' read -r fw fty fva fsrc; do
+    [ -n "$fw" ] || continue
+    # faillock prints LOCAL time without a zone: read it as local, print it in UTC.
+    fs=$(date -d "$fw" +%s 2>/dev/null) && fwi=$(date -u -d "@$fs" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || fwi=""
+    fwj=null; [ -n "$fwi" ] && fwj=$(json_str "$fwi")
+    fv=false; [ "$fva" = V ] && fv=true
+    ffl="$ffl{\"when\":$fwj,\"type\":$(json_str "$fty"),\"source\":$(json_str "$fsrc"),\"valid\":$fv},"
+  done <<EOF
+$frows
+EOF
+  case "$fdeny" in ''|*[!0-9]*) fdeny=3 ;; esac
+  case "$fut" in '') fut=600 ;; *[!0-9]*) fut=null ;; esac
+  # A zero-padded value (deny = 03) would print an invalid JSON number and lose the whole report: drop leading zeros.
+  fdeny=$(printf '%s' "$fdeny" | sed 's/^0*\([0-9]\)/\1/')
+  [ "$fut" = null ] || fut=$(printf '%s' "$fut" | sed 's/^0*\([0-9]\)/\1/')
+  flk="{\"deny\":$fdeny,\"unlock_time_s\":$fut,\"failures\":[${ffl%,}]}"
+fi
+# <<< faillock
+
 # --- NSS order + authselect (clients) -----------------------------------------------------------------------------
 nss=null; asel=null
 if [ "$role" = client ]; then
@@ -264,5 +297,6 @@ printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s},' "$
 printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
 printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
+printf '"faillock":%s,' "$flk"
 printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s,"relabel":%s},"errors":[%s]}\n' \
   "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "$relab" "${errs%,}"
