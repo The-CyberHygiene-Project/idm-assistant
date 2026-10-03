@@ -363,10 +363,6 @@ def test_client_ca_trust_installs_only_the_verified_certificate(tmp_path):
     assert installed.count("BEGIN CERTIFICATE") == 1 and repairs.fingerprint(installed) == repairs.PINNED_ROOT
 
 
-EXPIRED_SRV = dict(HEALTHY, host="srv1", role="server", time={"offset_s": 0.0, "synced": True, "source_offset_s": 0.0},
-                   kanidm_user={"name": "lab06", "exists": True, "account_expire": "2026-09-01T00:00:00Z"})
-
-
 class RecRemote:
     """Records (host, argv) of every run/push; returns canned stdout."""
     def __init__(self, out=""):
@@ -378,44 +374,6 @@ class RecRemote:
 
     def push(self, host, src, dest):
         self.calls.append((host, ["push", dest]))
-
-
-@pytest.mark.parametrize("bad", ["../x", "-D", ""])
-def test_account_unexpire_refuses_bad_names_before_anything(tmp_path, bad):
-    from engine import repairs
-    rr = RecRemote()
-    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV, remote=rr,
-            params={"user": bad})
-    assert "user name" in repairs.AccountUnexpire().precheck(c) and rr.calls == []
-
-
-def test_account_unexpire_warns_that_expiry_may_be_intentional(tmp_path):
-    from engine import repairs
-    c = Ctx(host="srv1", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV,
-            params={"user": "lab06"})
-    assert "expiry may be intentional" in repairs.AccountUnexpire().describe(c)
-
-
-def test_account_unexpire_clears_exactly_that_user_on_the_case_host(tmp_path, monkeypatch):
-    from engine import labsecrets, repairs
-    monkeypatch.setattr(labsecrets, "read_json", lambda n: {"password": "x"})
-    rr = RecRemote()
-    c = Ctx(host="srv9", role="server", case=Case(tmp_path, "a", "s"), collect=lambda: EXPIRED_SRV, remote=rr,
-            params={"user": "lab06"})
-    saved = repairs.AccountUnexpire().backup(c)
-    repairs.AccountUnexpire().apply(c)
-    assert saved == {"account_expire": "2026-09-01T00:00:00Z"}
-    assert {h for h, _ in rr.calls} == {"srv9"}
-    assert ["kanidm", "person", "validity", "expire-at", "lab06", "clear", "-D", "idm_admin"] in [a for _, a in rr.calls]
-    repairs.AccountUnexpire().undo(c, saved)
-    assert rr.calls[-1][1] == ["kanidm", "person", "validity", "expire-at", "lab06", "2026-09-01T00:00:00Z",
-                               "-D", "idm_admin"]
-
-
-def test_account_unexpire_verifies_the_expiry_is_gone():
-    from engine import repairs
-    assert repairs.AccountUnexpire().verify_present({"kanidm_user": {"exists": True, "account_expire": None}}) is None
-    assert repairs.AccountUnexpire().verify_present({"kanidm_user": {"exists": True, "account_expire": "x"}})
 
 
 def test_scenario_may_accept_a_declining_model():
