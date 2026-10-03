@@ -4,7 +4,7 @@ from engine.case import Case
 from engine.findings import Finding
 from engine.form import render
 
-CONVERTED = {"NSS_ORDER_WRONG"}          # grows until it is all 18; then the completeness test covers every runbook
+CONVERTED = {p.stem for p in runbooks.DIR.glob("*.md")}         # all of them
 
 
 def test_converted_runbooks_have_every_field():
@@ -15,9 +15,22 @@ def test_converted_runbooks_have_every_field():
         assert rb.complete
 
 
-def test_unconverted_runbooks_still_load():
-    rb = runbooks.load("SERVICE_DOWN")
-    assert rb.default_repair is None and rb.excerpt and not rb.complete
+def test_all_eighteen_are_in_the_shape():
+    assert len(CONVERTED) == 18
+
+
+def test_every_repair_has_a_complete_runbook_that_fills_its_form():
+    from engine.repairs import REGISTRY
+    for rid, r in REGISTRY.items():
+        rb = runbooks.for_repair(rid, r.verify_absent)
+        assert rb is not None and rb.complete, f"{rid} has no complete runbook"
+
+
+def test_old_two_line_header_still_loads(tmp_path, monkeypatch):
+    (tmp_path / "OLD.md").write_text("default_repair: none\n---\nShort text.\n")
+    monkeypatch.setattr(runbooks, "DIR", tmp_path)
+    rb = runbooks.load("OLD")
+    assert rb.default_repair is None and rb.excerpt == "Short text." and not rb.complete
 
 
 def test_form_is_built_from_the_runbook_and_the_hosts_evidence():

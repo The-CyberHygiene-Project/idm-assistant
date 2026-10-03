@@ -52,9 +52,11 @@ def for_findings(findings):
 
 
 def for_repair(repair_id, finding_ids):
-    """The runbook whose finding this repair clears (and that names it as its repair), if any."""
+    """The runbook whose finding this repair clears (and that names it as its repair), if any. A repair that declares no
+    finding (selinux-restorecon checks labels itself) is matched by the one runbook that names it."""
     for fid in sorted(finding_ids):
         rb = load(fid)
         if rb and rb.default_repair == repair_id:
             return rb
-    return None
+    named = [rb for rb in (load(p.stem) for p in sorted(DIR.glob("*.md"))) if rb and rb.default_repair == repair_id]
+    return named[0] if len(named) == 1 else None
