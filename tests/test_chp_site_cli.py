@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.4.0"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.5.1"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
@@ -94,10 +94,15 @@ def test_client_token_help():
 
 def test_authselect_patch_subcommand(tmp_path):
     d = tmp_path / "p"; d.mkdir()
-    (d / "system-auth").write_text("auth        required      pam_env.so\nauth        sufficient    pam_unix.so\n")
+    (d / "system-auth").write_text("auth        required      pam_env.so\nauth        required      pam_faillock.so preauth silent\n"
+                                   "auth        sufficient    pam_unix.so\n")
     (d / "password-auth").write_text("auth        sufficient    pam_unix.so\n")
     (d / "nsswitch.conf").write_text("passwd:     files systemd\ngroup:      files\ninitgroups: files\n")
     r = cli("authselect-patch", str(d))
     assert r.returncode == 0, r.stderr
     assert "pam_kanidm.so" in (d / "system-auth").read_text()
     assert (d / "nsswitch.conf").read_text().splitlines()[2].split()[:2] == ["initgroups:", "kanidm"]
+    from chp_site.authselect_ga import GA_LINES
+    sa = (d / "system-auth").read_text()
+    assert sa.count(GA_LINES[1]) == 1 and sa.index(GA_LINES[1]) < sa.index("pam_kanidm.so")
+    assert GA_LINES[1] in (d / "password-auth").read_text()

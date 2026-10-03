@@ -6,7 +6,8 @@
 #   reboot    TPM unlock
 #   export    export-client: secrets AND the two client tokens to the stick
 #   client1 / client2   install each client from the stick; wait for its first boot; check the enrolment
-#   ops       onboard / SSH cert+password logins / group + account revoke with fan-out / unexpire / admins sudo / diag / chpcache
+#   ga        ISO Plan 4b: the second factor (bootstrap, enrol, logins, scratch codes, row 36, break-glass, refusals)
+#   ops       (Plan 4a, password-only; superseded by `ga` once GA is on) onboard / SSH cert+password logins / group + account revoke with fan-out / unexpire / admins sudo / diag / chpcache
 #   negtrust  Review Focus 1 on iso4-cli2: a wrong CA_ROOT_SHA256 pin is refused, the right one restores the anchor
 #   cleanup   remove the three VMs, the stick, helpers and lab secrets on aero; shred the Mac render dir
 # Every check prints PASS/FAIL; the stage exits 1 on any FAIL. Secrets move over pipes only (stick image -> expect).
@@ -15,7 +16,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso4-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso4_diag_ecdsa; UKEY=$S/iso4_ops_ecdsa
 STICK=/data/libvirt/images/iso4-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso4.lab.test
 SRV=iso4-srv; SIP=192.168.100.40; C1=iso4-cli1; C1IP=192.168.100.41; C2=iso4-cli2; C2IP=192.168.100.42; fails=0
-export CHP_REPO=0.4.1
+export CHP_REPO=0.5.1
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -69,7 +70,7 @@ case ${1:-} in
       scp -q "$R/../iso4-$r.ks" "aero:/tmp/iso2/$r.ks"; rm -f "$R/../iso4-$r.ks"
     done
     scp -q "$PYZ" "$iso2/stick.sh" "$iso2/install.sh" "$iso2/unlock.sh" "$iso2/luks-send.exp" "$iso3/rootrun.exp" "$iso3/rs.sh" \
-      "$here/rsx.sh" "$here/ssh-ki.exp" "$KEY" aero:/tmp/iso2/
+      "$here/rsx.sh" "$here/ssh-ki.exp" "$top/lab/srv1/totp.py" "$top/lab/host/console-login.exp" "$KEY" aero:/tmp/iso2/
     scp -q "$UKEY" aero:/tmp/iso2/ops_key; A 'chmod 600 /tmp/iso2/ops_key /tmp/iso2/iso2_chpadmin'
     # the lab users' POSIX password: made on aero, root-only, never printed
     A "sudo sh -c 'umask 077; python3 -c \"import secrets; print(secrets.token_urlsafe(24))\" > /tmp/iso2/ops.pw'"
@@ -185,6 +186,121 @@ case ${1:-} in
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
       check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
     done ;;
+  ga)
+    # ISO Plan 4b. GA is on everywhere from install (0.5.0). The lab stand-in for each user's phone is the token's secret,
+    # copied as root to aero (/tmp/iso2/<vm>-<user>.ga, 0600); real users scan the QR code instead.
+    U=u$(date +%H%M); AD=a$(date +%H%M)
+    fresh_window() { sleep $(( 31 - $(date +%s) % 30 )); }
+    Rhx() { local b; b=$(printf '%s' "$3" | base64 | tr -d '\n'); A "sudo bash /tmp/iso2/rsx.sh $STICK $1 $2 /tmp/iso2/ops.pw $b" | tr -d '\r' | sed '/^RC=/d' | sed '/^[[:space:]]*$/d'; }
+    gasecret() { Rh "$1" "$2" "head -1 /var/lib/google-authenticator/$3" | A "sudo sh -c 'umask 077; cat > /tmp/iso2/$1-$3.ga'"; }
+    # gal IP VM USER [id|sudo|enrol] [SECRET_FILE]: login with key + cert + code + password -> "PROMPTS=… LOGIN_…"
+    gal() { A "sudo sh -c 'ENROL_USER=${ENROL_USER:-} expect /tmp/iso2/ssh-ki.exp $1 $3 /tmp/iso2/ops_key /tmp/iso2/$3-cert.pub ${4:-id} ${5:-/tmp/iso2/$2-$3.ga} < /tmp/iso2/ops.pw'" | tr -d '\r' | grep -E '^(LOGIN_|PROMPTS=)' | tr '\n' ' '; }
+    console() { A "sudo sh -c 'bash /tmp/iso2/stick.sh escrow $STICK $1.txt | sed -n s/^ROOT_CONSOLE_PASSWORD=//p | { cat; echo; } | expect /tmp/iso2/console-login.exp $1 root'" | tr -d '\r' | grep -E '^(PROMPT|RESULT)' | tr '\n' ' '; }
+    for h in "$SIP" "$C1IP" "$C2IP"; do Vh "$h" 'umask 077; mkdir -p ~/m; cat > ~/m/totp.py' < "$top/lab/srv1/totp.py"; done
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $v; Rh "$1" "$2" 'install -d -m 0700 /root/chp-lab && cp /home/chpadmin/m/totp.py /root/chp-lab/ && rm -rf /home/chpadmin/m' >/dev/null; done
+    V2() { Vh "$SIP" "$@"; }
+    V2 'umask 077; mkdir -p ~/chp-lab; cat > ~/chp-lab/user.pub' < "$UKEY.pub"
+    sed 's#/tmp/srv1/#/root/chp-lab/#g' "$top/lab/srv1/enrol-user.exp" | V2 'cat > ~/chp-lab/enrol-user.exp'
+    Rv 'cp /home/chpadmin/chp-lab/* /root/chp-lab/ && chmod 600 /root/chp-lab/* && rm -rf /home/chpadmin/chp-lab' >/dev/null
+    for _ in 1 2 3; do li=$(Rs 'printf "%s\n" "$CHP_SECRET" | expect /usr/libexec/chp/kanidm-login.exp idm_admin >/dev/null && echo LOGGEDIN' idm_admin); [[ $li == LOGGEDIN ]] && break; sleep 10; done
+    check "idm_admin login" "$li" "LOGGEDIN"
+    for x in "$U" "$AD"; do
+      extra=""; [[ $x == "$AD" ]] && extra="--group chp_admins"
+      Rv "chp-site onboard $x --display 'Ops $x' --ssh-key /root/chp-lab/user.pub $extra" >/dev/null
+      out=$(Rx "cd /root/chp-lab && tok=\$(sed -n 's/.*use-reset-token \([A-Za-z0-9-]*\).*/\1/p' /root/chp-onboard/$x.reset-token.txt | head -1) && pw=\$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))') && printf '%s\n%s\n%s\ntotp\n' \"\$tok\" \"\$pw\" \"\$CHP_SECRET\" | expect enrol-user.exp > $x.totp && echo ENROLLED")
+      check "onboard + Kanidm enrolment: $x" "$out" "ENROLLED"
+      Rv "cat /root/chp-onboard/$x-cert.pub" | A "sudo tee /tmp/iso2/$x-cert.pub >/dev/null"
+    done
+    # 1. bootstrap (Review Focus 5): root enrols the first admin on the server
+    check "root bootstraps $AD on the server (ga-enrol)" "$(Rv "chp-site ga-enrol $AD --no-confirm >/dev/null 2>&1; echo rc=\$?")" "rc=0"
+    gasecret "$SRV" "$SIP" "$AD"; fresh_window
+    check "$AD on the server: cert + code + password" "$(gal $SIP $SRV $AD)" "PROMPTS=Verification code|Password LOGIN_OK $AD "
+    fresh_window
+    out=$(gal $SIP $SRV $AD sudo); [[ $out == *"LOGIN_OK SUDO_OK"* && $out == *"Verification code|Password|Verification code|Password"* ]] && pass "$AD sudo on the server asks code + password" || fail "admin sudo" "$out"
+    # 2. an enrolled admin enrols a user over SSH with sudo (after root bootstraps the admin on that host)
+    check "root bootstraps $AD on $C1" "$(Rh $C1 $C1IP "chp-site ga-enrol $AD --no-confirm >/dev/null 2>&1; echo rc=\$?")" "rc=0"
+    gasecret "$C1" "$C1IP" "$AD"; fresh_window
+    out=$(ENROL_USER=$U gal $C1IP $C1 $AD enrol); [[ $out == *"LOGIN_OK ENROLLED"* ]] && pass "$AD enrols $U on $C1 with sudo (code + password asked)" || fail "admin enrol" "$out"
+    check "audit on $C1: ga-enrol of $U by $AD (request + done)" "$(Rh $C1 $C1IP "ausearch --input-logs -m USER </dev/null 2>/dev/null | grep 'chp-site ga-enrol[.a-z]* user=\"$U\"' | grep -c 'operator=\"$AD\"'")" "2"
+    gasecret "$C1" "$C1IP" "$U"
+    # 3. logins, replay, wrong code
+    fresh_window
+    check "$U on $C1: cert + code + password" "$(gal $C1IP $C1 $U)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    # replay = the IDENTICAL code twice (window timing can't be aligned: codes are computed on aero's clock)
+    fresh_window; A "sudo sh -c 'umask 077; echo CODE:\$(python3 /tmp/iso2/totp.py - sha1 < /tmp/iso2/$C1-$U.ga) > /tmp/iso2/replay.ga'"
+    check "a fresh code: accepted" "$(gal $C1IP $C1 $U id /tmp/iso2/replay.ga)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    out=$(gal $C1IP $C1 $U id /tmp/iso2/replay.ga); [[ $out == *LOGIN_REFUSED* ]] && pass "the same code again: refused (no reuse)" || fail "replay" "$out"
+    # a 4th attempt inside 30 s is refused by GA's rate limit (-r 3 -R 30) WITHOUT a code prompt: test that, then wait it out
+    out=$(gal $C1IP $C1 $U id /tmp/iso2/replay.ga); [[ $out == *LOGIN_REFUSED* && $out != *Verification* ]] && pass "rate limit: a 4th attempt within 30 s is refused without a code prompt" || fail "rate limit" "$out"
+    A "sudo sh -c 'umask 077; echo AAAAAAAAAAAAAAAAAAAAAAAAAA > /tmp/iso2/wrong.ga'"; sleep 31
+    out=$(gal $C1IP $C1 $U id /tmp/iso2/wrong.ga); [[ $out == *"Verification code|Password"* && $out == *LOGIN_REFUSED* ]] && pass "wrong code: refused, password still asked (no early signal)" || fail "wrong code" "$out"
+    # the CUI lockout counts the three refusals above (replay, rate limit, wrong code): U is now locked; an admin clears it
+    check "faillock counted the 3 GA failures (account locked)" "$(Rh $C1 $C1IP "faillock --user $U | grep -cE '^[0-9]{4}-'")" "3"
+    out=$(gal $C1IP $C1 $U); [[ $out == *LOGIN_REFUSED* ]] && pass "while locked even a correct code + password is refused" || fail "lockout" "$out"
+    Rh $C1 $C1IP "faillock --user $U --reset" >/dev/null
+    # 4. host-local: no token on cli2 until enrolled there
+    fresh_window
+    out=$(gal $C2IP $C2 $U id /tmp/iso2/$C1-$U.ga); [[ $out == *LOGIN_REFUSED* ]] && pass "$U has no token on $C2: refused (Review Focus 1)" || fail "no token" "$out"
+    check "root enrols $U on $C2" "$(Rh $C2 $C2IP "chp-site ga-enrol $U --no-confirm >/dev/null 2>&1; echo rc=\$?")" "rc=0"
+    gasecret "$C2" "$C2IP" "$U"; fresh_window
+    check "$U on $C2 with its own token" "$(gal $C2IP $C2 $U)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    # 5. scratch code: works once
+    sc=$(Rh $C1 $C1IP "grep -E '^[0-9]{8}\$' /var/lib/google-authenticator/$U | head -1")
+    A "sudo sh -c 'umask 077; echo CODE:$sc > /tmp/iso2/scratch.ga'"; fresh_window
+    check "scratch code #1: accepted" "$(gal $C1IP $C1 $U id /tmp/iso2/scratch.ga)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    fresh_window
+    out=$(gal $C1IP $C1 $U id /tmp/iso2/scratch.ga); [[ $out == *LOGIN_REFUSED* ]] && pass "scratch code #1 again: refused (one use)" || fail "scratch reuse" "$out"
+    check "scratch codes left on $C1: 4" "$(Rh $C1 $C1IP "grep -cE '^[0-9]{8}\$' /var/lib/google-authenticator/$U")" "4"
+    # 6. row 36: the gdm-password / login / sudo stacks, and the token afterwards
+    for spec in "gdm-password $U" "login $U" "sudo $AD"; do set -- $spec; fresh_window
+      out=$(Rhx $C1 $C1IP "code=\$(python3 /root/chp-lab/totp.py - sha1 < /var/lib/google-authenticator/$2); printf '%s\n%s\n' \"\$CHP_SECRET\" \"\$code\" | chp-site pam-test $1 $2")
+      [[ $out == "PAM_OK prompts=Verification code:|Password:" ]] && pass "pam-test $1 $2 on $C1: PAM_OK (code, then password)" || fail "pam-test $1" "$out"
+    done
+    check "$U token after logins: 400 root root var_auth_t" "$(Rh $C1 $C1IP "stat -c '%a %U %G' /var/lib/google-authenticator/$U; ls -Z /var/lib/google-authenticator/$U | cut -d: -f3" | tr '\n' ' ')" "400 root root var_auth_t "
+    # 7. local accounts exempt; 7b break-glass explicitly (user review)
+    out=$(Rhx $C1 $C1IP "printf '%s\n' \"\$CHP_SECRET\" | chp-site pam-test login $U")
+    [[ $out == "PAM_FAIL"*"Verification code"* ]] && pass "no bypass: $U without a code fails, code asked" || fail "bypass" "$out"
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $v
+      check "break-glass $1: chpadmin SSH key-only" "$(Vh "$2" 'echo ok')" "ok"
+      check "break-glass $1: chpadmin + su - (Password only)" "$(Rh "$1" "$2" 'id -u')" "0"
+      out=$(console "$1"); [[ $out == "PROMPT: Password RESULT: logged in as root " ]] && pass "break-glass $1: root console, password only" || fail "root console $1" "$out"
+    done
+    Rh $C2 $C2IP 'systemctl stop kanidm-unixd-tasks kanidm-unixd' >/dev/null
+    check "Kanidm down on $C2: unixd stopped" "$(Rh $C2 $C2IP 'systemctl is-active kanidm-unixd')" "inactive"
+    check "Kanidm down: chpadmin SSH key-only" "$(Vh "$C2IP" 'echo ok')" "ok"
+    check "Kanidm down: chpadmin + su -" "$(Rh $C2 $C2IP 'id -u')" "0"
+    out=$(console "$C2"); [[ $out == "PROMPT: Password RESULT: logged in as root " ]] && pass "Kanidm down: root console, password only" || fail "root console, Kanidm down" "$out"
+    check "unixd back online" "$(Rh $C2 $C2IP 'systemctl start kanidm-unixd kanidm-unixd-tasks; for i in $(seq 15); do kanidm-unix status 2>/dev/null | grep -q "Kanidm: online" && break; sleep 2; done; kanidm-unix status | grep -c "Kanidm: online"')" "1"
+    DI="-i $DKEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -J aero"
+    # shellcheck disable=SC2086
+    out=$(ssh $DI "diag@$C1IP" 'sudo -n /usr/sbin/idm-collect' 2>/dev/null | tail -1)
+    [[ $out == *'"schema":"idm-report/1"'* ]] && pass "diag (local, forced command): report from $C1" || fail "diag" "$(head -c 160 <<<"$out")"
+    # 8. ga-enrol refusals and --reset
+    check "ga-enrol chpadmin refused (local)" "$(Rh $C1 $C1IP 'chp-site ga-enrol chpadmin --no-confirm 2>&1 | grep -c "local account"')" "1"
+    check "ga-enrol of an unknown user refused" "$(Rh $C1 $C1IP 'chp-site ga-enrol nosuch99 --no-confirm 2>&1 | grep -c "does not resolve"')" "1"
+    check "ga-enrol $U again without --reset refused" "$(Rh $C1 $C1IP "chp-site ga-enrol $U --no-confirm 2>&1 | grep -c -- '--reset'")" "1"
+    A "sudo cp -p /tmp/iso2/$C1-$U.ga /tmp/iso2/$C1-$U.old.ga"
+    check "ga-enrol $U --reset" "$(Rh $C1 $C1IP "chp-site ga-enrol $U --reset --no-confirm >/dev/null 2>&1; echo rc=\$?")" "rc=0"
+    fresh_window
+    out=$(gal $C1IP $C1 $U id /tmp/iso2/$C1-$U.old.ga); [[ $out == *LOGIN_REFUSED* ]] && pass "after --reset the old secret no longer works" || fail "reset old" "$out"
+    gasecret "$C1" "$C1IP" "$U"; fresh_window
+    check "after --reset the new secret works" "$(gal $C1IP $C1 $U)" "PROMPTS=Verification code|Password LOGIN_OK $U "
+    # I1 (final review): a Kanidm person + group with LOCAL names, created directly (bypassing chp-site's guard) —
+    # with short names on the hosts, the LOCAL account/group must still win (GA exemption and sudo rules go by name)
+    Rv "for c in 'person create chpcache Collision' 'person posix set chpcache' 'group add-members chp_users chpcache' 'group create wheel' 'group posix set wheel' 'group add-members wheel $U'; do kanidm \$c -D idm_admin >/dev/null 2>&1; done; echo ok" >/dev/null
+    for v in "$C1 $C1IP" "$C2 $C2IP"; do set -- $v; Rh "$1" "$2" 'kanidm-unix cache-invalidate >/dev/null 2>&1; true' >/dev/null; done
+    check "collision: Kanidm 'chpcache' exists" "$(Rv "kanidm person get chpcache -D idm_admin | grep -c '^name: chpcache'")" "1"
+    check "collision: on $C1 'chpcache' still resolves to the LOCAL account" "$(Rh $C1 $C1IP "getent passwd chpcache | cut -d: -f3"):$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd")" "$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd"):$(Rh $C1 $C1IP "awk -F: '\$1==\"chpcache\"{print \$3}' /etc/passwd")"
+    check "collision: Kanidm group 'wheel' does not give $U the local wheel group on $C1" "$(Rh $C1 $C1IP "id -G $U | tr ' ' '\n' | grep -cx \$(getent group wheel | cut -d: -f3)")" "0"
+    check "collision: chp-site onboard refuses the local name" "$(Rv 'chp-site onboard diag 2>&1 | grep -c "local account"')" "1"
+    # 9. revoke fan-out still reaches both clients; then monitors and denials
+    out=$(Rv "chp-site revoke $U; echo rc=\$?"); [[ $out == *"ok   $C1"* && $out == *"ok   $C2"* && $out == *rc=0* ]] && pass "revoke $U: fan-out reached both clients (chpcache, local)" || fail "revoke" "$out"
+    Rv 'kanidm logout -D idm_admin' >/dev/null
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $v
+      check "$1: monitors quiet" "$(Rh "$1" "$2" '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0"
+      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
+    done
+    A "sudo rm -f /tmp/iso2/*.ga" ;;
   negtrust)
     out=$(Rh "$C2" "$C2IP" 'A=/etc/pki/ca-trust/source/anchors/chp-root.crt; cp -p /etc/chp/client.conf /root/cc.bak; mv $A /root/anchor.bak
       sed -i "s/^CA_ROOT_SHA256=.*/CA_ROOT_SHA256=$(printf "0%.0s" $(seq 64))/" /etc/chp/client.conf

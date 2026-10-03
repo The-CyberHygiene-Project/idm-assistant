@@ -133,3 +133,33 @@ def test_enrolment_failure_is_alerted_and_retried():               # final revie
     assert "49-client-enrolled.sh" in text("chp-identity-client.spec")
     u = text("chp-client-firstboot.service")
     assert "Restart=on-failure" in u and "RestartSec=5min" in u
+
+
+def test_client_rpm_carries_the_second_factor():
+    s = text("chp-identity-client.spec")
+    assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
+    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.1", s, re.M)
+    assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
+    assert "53-ga.sh" in s and "Version:        0.2.1" in s
+    assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
+
+
+def test_ga_monitor():
+    m = text("monitor.d/53-ga.sh")
+    assert m.startswith("#!/bin/bash\n# CyberHygiene") and "ALERT " in m and "OK " in m
+    assert "pam_google_authenticator.so" in m and "/etc/pam.d/system-auth" in m and "/etc/pam.d/password-auth" in m
+    assert "stat -c" in m and "root root" in m and "700 root root" in m
+    assert "400|600" in m                                  # owner-only: 0400 as the module writes it (Task 4)
+    assert "restorecon -nRv /var/lib/google-authenticator" in m
+    assert subprocess.run(["bash", "-n", str(C / "monitor.d/53-ga.sh")]).returncode == 0
+
+
+def test_unixd_reports_short_names():         # 4b proof: sudo's PAM_USER was the SPN (uid_attr_map default "spn"),
+    u = text("unixd.toml.in")                  # so GA looked for /var/lib/google-authenticator/<user>@idm.<domain>
+    assert 'uid_attr_map = "name"' in u and 'gid_attr_map = "name"' in u
+    assert u.index("uid_attr_map") < u.index("[kanidm]")                # top-level options in config version 2
+
+
+def test_monitor_alerts_on_local_account_override():          # final review I1: local accounts must keep winning
+    m = text("monitor.d/53-ga.sh")
+    assert "allow_local_account_override" in m

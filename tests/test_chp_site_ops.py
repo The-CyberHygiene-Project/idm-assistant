@@ -254,3 +254,18 @@ def test_client_token_refuses_unknown_or_server_hosts(tmp_path):
         ops.client_token(FakeSA(), hosts, "srv", pending=tmp_path, rec=Rec())
     with pytest.raises(SiteError, match="not a client in the hosts table"):
         ops.client_token(FakeSA(), hosts, "nope", pending=tmp_path, rec=Rec())
+
+
+def test_onboard_refuses_names_that_collide_with_local_accounts(ca, tmp_path):   # final review I1
+    pw = tmp_path / "passwd"; pw.write_text("root:x:0:0::/root:/bin/bash\nsvcx:x:990:990::/:/sbin/nologin\n")
+    gr = tmp_path / "group"; gr.write_text("wheel:x:10:\nlocalgrp:x:991:\n")
+    for name in ("diag", "chpcache", "chpadmin", "root", "svcx"):
+        k = FakeK()
+        with pytest.raises(SiteError, match="local account"):
+            ops.onboard(k, ca, name, "x.test", out=tmp_path / "o", rec=Rec(), passwd=pw, group=gr)
+        assert k.log == []
+    for g in ("wheel", "adm", "localgrp", "sudo"):
+        k = FakeK()
+        with pytest.raises(SiteError, match="local group"):
+            ops.onboard(k, ca, "lab09", "x.test", groups=(g,), out=tmp_path / "o", rec=Rec(), passwd=pw, group=gr)
+        assert k.log == []

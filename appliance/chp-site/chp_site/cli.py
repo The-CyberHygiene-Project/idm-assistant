@@ -156,8 +156,37 @@ def _client_token(a):
 
 def _authselect_patch(a):
     from .authselect import main as patch
+    from .authselect_ga import main as patch_ga
     patch(a.dir)
-    print(f"patched {a.dir}: pam_kanidm placed jump-safe; kanidm first on passwd, group, initgroups")
+    patch_ga(a.dir)
+    print(f"patched {a.dir}: pam_kanidm placed jump-safe; Google Authenticator before it for Kanidm users (local "
+          "accounts skip it); kanidm first on passwd, group, initgroups")
+
+
+def _pam_test(a):
+    import re as _re
+    from . import pamtest
+    from .kanidm import valid_name
+    if not _re.fullmatch(r"[a-z0-9-]{1,32}", a.service):
+        raise SiteError(f"{a.service!r} is not a valid PAM service name")
+    if not valid_name(a.user):
+        raise SiteError(f"{a.user!r} is not a valid user name")
+    lines = sys.stdin.read().splitlines()
+    pw, code = (lines + ["", ""])[0], (lines[1] if len(lines) > 1 and lines[1] else None)
+    ok, why, prompts = pamtest.authenticate(a.service, a.user, pw, code)
+    print(("PAM_OK" if ok else f"PAM_FAIL {why}") + " prompts=" + "|".join(p.strip() for p in prompts))
+    return 0 if ok else 1
+
+
+def _ga_enrol(a):
+    import socket
+    from .ga import enrol
+    if os.geteuid() != 0:
+        raise SiteError("run as root: sudo chp-site ga-enrol USER")
+    site = parse_site(read_file(Path(a.site) / "site.conf", "site.conf"))
+    p = enrol(a.user, socket.getfqdn(), site["DOMAIN"], reset=a.reset, no_confirm=a.no_confirm)
+    print(f"\nGoogle Authenticator token for {a.user} on {socket.getfqdn()} saved ({p}). The user scans the QR code above "
+          "and keeps the 5 emergency scratch codes somewhere safe; each works once.")
 
 
 def main(argv=None):
@@ -192,13 +221,22 @@ def main(argv=None):
     t.add_argument("host"); t.add_argument("--as", dest="as_", default="idm_admin"); t.add_argument("--site", default="/etc/chp")
     ap_ = sub.add_parser("authselect-patch", help="add Kanidm to an authselect profile dir (client enrolment)")
     ap_.add_argument("dir")
+    pt = sub.add_parser("pam-test", help="authenticate USER through PAM service SERVICE (secrets on stdin; root)")
+    pt.add_argument("service"); pt.add_argument("user")
+    ge = sub.add_parser("ga-enrol", help="host-local Google Authenticator token for a Kanidm user (root; audited)")
+    ge.add_argument("user"); ge.add_argument("--reset", action="store_true")
+    ge.add_argument("--no-confirm", action="store_true", help="skip the app-code confirmation (scripted use only)"); ge.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
-        {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
+        rc = {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
          "onboard": _onboard, "revoke": _revoke,
          "unexpire": _unexpire,
          "client-token": _client_token,
-         "authselect-patch": _authselect_patch}[a.cmd](a)
+         "authselect-patch": _authselect_patch,
+         "pam-test": _pam_test,
+         "ga-enrol": _ga_enrol}[a.cmd](a)
+        if isinstance(rc, int):
+            return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
         print(f"chp-site: {err}", file=sys.stderr)
         return 2
