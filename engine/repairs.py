@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from engine.findings import LOCKOUT_CAUSES, evaluate
+from engine.findings import FAP_PATH, LOCKOUT_CAUSES, PINNED_SIGNERS, evaluate
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = "idm-lab/srv1"                      # relative to the admin user's home on srv1, mode 0700
@@ -440,7 +440,9 @@ REGISTRY[FaillockReset.id] = FaillockReset()
 
 
 class FapolicydTrustRefresh(Repair):
-    """ISSO row 46: refresh fapolicyd's trust from the package database; never trusts an unpackaged program."""
+    """ISSO row 46: refresh fapolicyd's trust from the package database; never trusts an unpackaged program.
+    fapolicyd-cli --update reloads the WHOLE package database and the trust files, so the precheck refuses unless
+    everything it would newly trust is a package signed by a pinned key (final review C1)."""
     id = "fapolicyd-trust-refresh"
     host_role = "client"
     verify_absent = {"FAPOLICYD_TRUST_STALE"}
@@ -448,17 +450,46 @@ class FapolicydTrustRefresh(Repair):
     def describe(self, ctx):
         return "refresh fapolicyd's trust list from the package database (fapolicyd-cli --update) and log who approved it"
 
+    @staticmethod
+    def _stale_paths(report):
+        fk = report.get("fapolicyd") or {}
+        return [d["path"] for d in fk.get("denials") or []
+                if isinstance(d.get("path"), str) and FAP_PATH.fullmatch(d["path"]) and d.get("exists") is True
+                and d.get("in_trust") is not True and d.get("package") and d.get("signer") in PINNED_SIGNERS]
+
     def precheck(self, ctx):
-        ids = {f.id for f in evaluate(ctx.collect())}
+        rep = ctx.collect()
+        ids = {f.id for f in evaluate(rep)}
         if "FAPOLICYD_PERMISSIVE" in ids:
             return "refusing: fapolicyd is not enforcing; a refresh proves nothing (row 46: that is the ISSO's)"
+        if "FAPOLICYD_DENIED_UNPACKAGED" in ids:
+            return "refusing: an unpackaged program is also being denied on this host (row 46: the ISSO decides first)"
         if "FAPOLICYD_TRUST_STALE" not in ids:
             return "nothing stale: no denied program from a signed package is waiting"
+        fk = rep.get("fapolicyd") or {}
+        pend = fk.get("pending")
+        if not isinstance(pend, dict) or pend.get("truncated") or not isinstance(pend.get("packages"), list):
+            return "refusing: cannot tell what a refresh would newly trust (row 46)"
+        unvetted = sorted(str(x.get("name")) for x in pend["packages"] if x.get("signer") not in PINNED_SIGNERS)
+        if unvetted:
+            return (f"refusing: a refresh would also trust {', '.join(unvetted[:5])} (unsigned or not a pinned key); "
+                    "the ISSO decides (row 46)")
+        if fk.get("file_trust_pending") != 0:
+            return "refusing: file-trust entries are waiting to be loaded; the ISSO decides (row 46)"
         return None
 
     def apply(self, ctx):
+        paths = self._stale_paths(ctx.collect())
         note = f"fapolicyd trust refresh approved by {ctx.approver or 'unknown'}, case {ctx.case.dir.name}"
         _sh(ctx, f"fapolicyd-cli --update && logger -p authpriv.notice -t idm-assistant {shlex.quote(note)}")
+        # positive proof, not an aged-out denial (final review I3): every stale path is in the trust list now
+        for _ in range(10):
+            trusted = {ln.split()[1] for ln in _sh(ctx, "fapolicyd-cli -D").splitlines() if len(ln.split()) > 1}
+            missing = [p for p in paths if p not in trusted]
+            if not missing:
+                return
+            time.sleep(1)
+        raise RuntimeError(f"refresh ran but {missing} is still not in fapolicyd's trust list")
 
 
 REGISTRY[FapolicydTrustRefresh.id] = FapolicydTrustRefresh()

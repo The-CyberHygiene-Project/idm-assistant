@@ -235,7 +235,8 @@ fi
 # Denials come from the audit log (rule 90 is deny_audit); --input-logs because over ssh/sudo ausearch would read stdin.
 # Per denied path: still there?, the owning package and the key that signed it (rpm -qf prints its "not owned" text on
 # stdout with exit 1, so rpm's own status decides), and whether fapolicyd trusts it now (field 2 of fapolicyd-cli -D).
-if [ "$(id -u)" -eq 0 ]; then FAPCONF=/etc/fapolicyd/fapolicyd.conf; else FAPCONF="${IDM_FAPOLICYD_CONF:-/etc/fapolicyd/fapolicyd.conf}"; fi
+if [ "$(id -u)" -eq 0 ]; then FAPCONF=/etc/fapolicyd/fapolicyd.conf; FAPDIR=/etc/fapolicyd
+else FAPCONF="${IDM_FAPOLICYD_CONF:-/etc/fapolicyd/fapolicyd.conf}"; FAPDIR="${IDM_FAPOLICYD_DIR:-/etc/fapolicyd}"; fi
 fap=null
 if command -v fapolicyd-cli >/dev/null 2>&1; then
   fact=$(systemctl is-active fapolicyd 2>/dev/null) || fact=${fact:-unknown}
@@ -245,8 +246,8 @@ if command -v fapolicyd-cli >/dev/null 2>&1; then
   fgrp=$(ausearch --input-logs -m FANOTIFY -ts recent 2>/dev/null </dev/null | awk '
       function flush() { if (fan && sc && p != "") printf "%s|%s|%s\n", t, u, p; fan = sc = 0; p = u = t = "" }
       /^----/ { flush(); next }
-      /type=FANOTIFY/ { fan = 1 }
-      /type=SYSCALL/ && / syscall=59 / { sc = 1; if (match($0, / uid=[0-9]+/)) u = substr($0, RSTART + 5, RLENGTH - 5) }
+      /type=FANOTIFY/ && / resp=2/ { fan = 1 }                   # resp=2 is a denial; allow_audit logs resp=1
+      /type=SYSCALL/ && / syscall=59 / && / success=no / { sc = 1; if (match($0, / uid=[0-9]+/)) u = substr($0, RSTART + 5, RLENGTH - 5) }
       /type=PATH/ && /name="/ { if (match($0, /name="[^"]*"/)) p = substr($0, RSTART + 6, RLENGTH - 7) }
       /msg=audit\(/ { if (match($0, /audit\([0-9]+/)) t = substr($0, RSTART + 6, RLENGTH - 6) }
       END { flush() }' | awk -F'|' '$3 ~ /^\/[A-Za-z0-9._\/+-]+$/ { c[$3]++; if ($1 + 0 >= t[$3] + 0) { t[$3] = $1; u[$3] = $2 } }
@@ -271,7 +272,25 @@ if command -v fapolicyd-cli >/dev/null 2>&1; then
   done <<EOF
 $fgrp
 EOF
-  fap="{\"active\":$(json_str "$fact"),\"permissive\":$fpj,\"denials\":[${fl%,}]}"
+  # What a refresh (fapolicyd-cli --update, which reloads the WHOLE package database and the trust files) would newly
+  # trust: packages with a regular file but none of them in the trust list (never loaded), with their signers; and
+  # trust-file entries not loaded yet. fapolicyd leaves most data files out, so "never loaded" is per package.
+  fpend=null; fpt=null
+  if [ "$fdok" -eq 1 ]; then
+    awk '{print $2}' "$W/fapolicyd.dump" > "$W/fap.trusted"
+    rpm -qa --qf '[%{=NAME}|%{FILENAMES}|%{FILEMODES:perms}\n]' > "$W/fap.files" 2>/dev/null || : > "$W/fap.files"
+    rpm -qa --qf '%{NAME}|%{RSAHEADER:pgpsig}|%{DSAHEADER:pgpsig}|%{SIGPGP:pgpsig}\n' > "$W/fap.sigs" 2>/dev/null || : > "$W/fap.sigs"
+    fpl=$(awk -F'|' 'NR == FNR {d[$1] = 1; next} $3 ~ /^-/ {if (!($1 in h)) h[$1] = 0; if ($2 in d) h[$1] = 1}
+                     END {for (p in h) if (!h[p]) print p}' "$W/fap.trusted" "$W/fap.files" | sort) || fpl=""
+    fn=$(printf '%s\n' "$fpl" | awk 'NF {n++} END {print n + 0}')
+    pj=$(printf '%s\n' "$fpl" | head -n 100 | awk -F'|' 'NR == FNR {k = ""; if (match($0, /Key ID [0-9a-f]+/)) k = substr($0, RSTART + 7, RLENGTH - 7); s[$1] = k; next}
+            /^[A-Za-z0-9._+-]+$/ {printf "{\"name\":\"%s\",\"signer\":%s},", $0, (s[$0] != "" ? "\"" s[$0] "\"" : "null")}' "$W/fap.sigs" -) || pj=""
+    ftr=false; [ "$fn" -gt 100 ] && ftr=true
+    fpend="{\"packages\":[${pj%,}],\"truncated\":$ftr}"
+    fpt=$(cat "$FAPDIR/fapolicyd.trust" "$FAPDIR"/trust.d/* 2>/dev/null | sed 's/#.*//' \
+          | awk 'NR == FNR {d[$1] = 1; next} NF && !($1 in d) {n++} END {print n + 0}' "$W/fap.trusted" -) || fpt=null
+  fi
+  fap="{\"active\":$(json_str "$fact"),\"permissive\":$fpj,\"denials\":[${fl%,}],\"pending\":$fpend,\"file_trust_pending\":$fpt}"
 fi
 # <<< fapolicyd
 

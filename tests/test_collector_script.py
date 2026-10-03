@@ -466,14 +466,28 @@ node=client2 type=FANOTIFY msg=audit(1791062312.000:43203): resp=2 obj_trust=0
 """
 
 
+FILES_QA = ("google-authenticator|/usr/bin/google-authenticator|-rwxr-xr-x\n"
+            "kanidm-unixd|/usr/sbin/kanidm_unixd|-rwxr-xr-x\n"
+            "evil-unsigned|/usr/bin/evil|-rwxr-xr-x\n"
+            "tzdata|/usr/share/zoneinfo/UTC|-rw-r--r--\n"
+            "filesystem|/usr|drwxr-xr-x\n")
+SIGS_QA = ("google-authenticator|RSA/SHA256, Mon, Key ID 8a3872bf3228467c||\n"
+           "kanidm-unixd|(none)|(none)|(none)\n"
+           "evil-unsigned|(none)|(none)|(none)\n"
+           "tzdata|RSA/SHA256, Mon, Key ID 702d426d350d275d||\n")
+
+
 def _fap(tmp, ausearch=AUSEARCH, conf="permissive = 0\n", active="active", has_cli=True, dump_ok=True,
-         exists=("/usr/local/bin/chp-helper", "/usr/bin/google-authenticator")):
+         exists=("/usr/local/bin/chp-helper", "/usr/bin/google-authenticator"), files_qa=FILES_QA, sigs_qa=SIGS_QA,
+         trust="", dump="rpmdb /usr/bin/true 27936 aa\nrpmdb /usr/bin/ls 1 bb\nrpmdb /usr/sbin/kanidm_unixd 1 cc\n"):
     import json as _j
     lines = SCRIPT.read_text().splitlines()
     i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
     k, m = lines.index("# >>> fapolicyd"), lines.index("# <<< fapolicyd")
     (tmp / "fap.conf").write_text(conf); (tmp / "aus.out").write_text(ausearch)
-    (tmp / "dump.out").write_text("rpmdb /usr/bin/true 27936 aa\nrpmdb /usr/bin/ls 1 bb\n")
+    (tmp / "dump.out").write_text(dump)
+    (tmp / "files.qa").write_text(files_qa); (tmp / "sigs.qa").write_text(sigs_qa)
+    (tmp / "fapdir" / "trust.d").mkdir(parents=True, exist_ok=True); (tmp / "fapdir" / "fapolicyd.trust").write_text(trust)
     ex = " ".join(f'"{e}"' for e in exists)
     # a stub PROGRAM, not a function: POSIX sh (macOS) rejects a function named with a hyphen
     (tmp / "bin").mkdir(exist_ok=True)
@@ -486,7 +500,10 @@ def _fap(tmp, ausearch=AUSEARCH, conf="permissive = 0\n", active="active", has_c
         f'ausearch() {{ cat "{tmp / "aus.out"}"; }}\n'
         f'systemctl() {{ echo {active}; }}\n'
         + f'PATH="{tmp / "bin"}:$PATH"\n'
+        + f'IDM_FAPOLICYD_DIR={tmp / "fapdir"}\n'
         + 'rpm() { case "$*" in\n'
+          f'  *-qa*FILENAMES*) cat "{tmp / "files.qa"}" ;;\n'
+          f'  *-qa*pgpsig*) cat "{tmp / "sigs.qa"}" ;;\n'
           '  *"%{NAME}"*/usr/bin/google-authenticator*) echo google-authenticator ;;\n'
           '  *pgpsig*/usr/bin/google-authenticator*) echo "RSA/SHA256, Mon, Key ID 8a3872bf3228467c||" ;;\n'
           '  *) echo "file $3 is not owned by any package"; return 1 ;; esac; }\n'
@@ -536,3 +553,30 @@ def test_fapolicyd_not_installed_is_null(tmp_path):
 
 def test_report_emits_fapolicyd():
     assert '"fapolicyd":%s,' in SCRIPT.read_text()
+
+
+# --- final review (C1, I2): what a refresh would newly trust; only real denials ------------------------------------
+def test_never_loaded_packages_and_their_signers(tmp_path):
+    f = _fap(tmp_path)
+    # kanidm-unixd is unsigned but already loaded (its file is trusted); tzdata/filesystem have no regular trusted file
+    assert f["pending"] == {"packages": [{"name": "evil-unsigned", "signer": None},
+                                         {"name": "google-authenticator", "signer": "8a3872bf3228467c"},
+                                         {"name": "tzdata", "signer": "702d426d350d275d"}], "truncated": False}
+    assert f["file_trust_pending"] == 0
+
+
+def test_waiting_file_trust_entries_are_counted(tmp_path):
+    f = _fap(tmp_path, trust="# comment\n/opt/tool 10 ab\n/usr/bin/true 27936 aa\n")
+    assert f["file_trust_pending"] == 1
+
+
+def test_pending_unknown_when_the_dump_fails(tmp_path):
+    f = _fap(tmp_path, dump_ok=False)
+    assert f["pending"] is None and f["file_trust_pending"] is None
+
+
+def test_allowed_but_audited_executions_are_not_denials(tmp_path):
+    allowed = AUSEARCH.replace('/usr/bin/google-authenticator" nametype', '/usr/bin/ok-tool" nametype') \
+        .replace("syscall=59 success=no exit=-1 uid=0\nnode=client2 type=FANOTIFY msg=audit(1791062310.000:43201): resp=2",
+                 "syscall=59 success=yes exit=0 uid=0\nnode=client2 type=FANOTIFY msg=audit(1791062310.000:43201): resp=1")
+    assert "/usr/bin/ok-tool" not in {x["path"] for x in _fap(tmp_path, ausearch=allowed)["denials"]}

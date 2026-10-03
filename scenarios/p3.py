@@ -29,4 +29,5 @@ def restore(log):
 def final_probe(log):
     out = remote.run("client2", ["sudo", "sh", "-c", f"grep -x 'permissive = 0' {CONF} && systemctl is-active fapolicyd"],
                      check=False).stdout
-    return "permissive = 0" in out and "active" in out
+    lines = out.split()
+    return "permissive = 0" in out and lines[-1:] == ["active"]       # "inactive" contains "active"

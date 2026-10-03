@@ -10,9 +10,14 @@ HELPER = {"path": "/usr/local/bin/chp-helper", "when": "2026-10-03T22:38:29Z", "
           "package": None, "signer": None, "in_trust": False}
 
 
-def rep(*denials, permissive=False, active="active"):
+PENDING_OK = {"packages": [{"name": "google-authenticator", "signer": "8a3872bf3228467c"},
+                          {"name": "tzdata", "signer": "702d426d350d275d"}], "truncated": False}
+
+
+def rep(*denials, permissive=False, active="active", pending=PENDING_OK, file_pending=0):
     r = copy.deepcopy(BASE)
-    r["fapolicyd"] = {"active": active, "permissive": permissive, "denials": [copy.deepcopy(d) for d in denials]}
+    r["fapolicyd"] = {"active": active, "permissive": permissive, "denials": [copy.deepcopy(d) for d in denials],
+                      "pending": copy.deepcopy(pending), "file_trust_pending": file_pending}
     return r
 
 
@@ -88,19 +93,28 @@ def ctx(tmp_path, report):
     return c
 
 
+class Dump(Rec):
+    def __init__(self, dump):
+        super().__init__(); self.dump = dump
+
+    def run(self, host, argv, stdin=None, **kw):
+        self.calls.append(list(argv))
+        return SimpleNamespace(stdout=self.dump if "fapolicyd-cli -D" in argv[-1] else "")
+
+
 def test_refresh_registered():
     assert R and R.host_role == "client" and R.verify_absent == {"FAPOLICYD_TRUST_STALE"}
 
 
 def test_refresh_refuses_when_permissive_or_nothing_stale(tmp_path):
     assert "refusing" in R.precheck(ctx(tmp_path, rep(GA, permissive=True)))
-    assert "nothing" in R.precheck(ctx(tmp_path, rep(HELPER)))
+    assert "nothing" in R.precheck(ctx(tmp_path, rep()))
     assert R.precheck(ctx(tmp_path, rep(GA))) is None
 
 
 def test_refresh_runs_exactly_the_update_and_logs(tmp_path):
-    c = ctx(tmp_path, rep(GA)); R.apply(c)
-    s = c.remote.calls[-1][-1]
+    c = ctx(tmp_path, rep(GA)); c.remote = Dump("rpmdb /usr/bin/google-authenticator 1 aa\n"); R.apply(c)
+    s = c.remote.calls[0][-1]
     assert s.startswith("fapolicyd-cli --update && logger -p authpriv.notice -t idm-assistant ")
     assert "approved by operator1" in s
 
@@ -152,3 +166,40 @@ def test_p3_probe_reads_the_root_only_config_with_sudo(monkeypatch):
                         subprocess.CompletedProcess(argv, 0, "permissive = 0\nactive\n", ""))
     assert p3.final_probe(print) is True
     assert seen[0][0] == "sudo"
+
+
+
+# --- final review fixes -------------------------------------------------------------------------------------------
+def test_c1_refresh_refused_if_it_would_also_trust_an_unvetted_package(tmp_path):
+    p = {"packages": PENDING_OK["packages"] + [{"name": "evil-unsigned", "signer": None}], "truncated": False}
+    why = R.precheck(ctx(tmp_path, rep(GA, pending=p)))
+    assert why and "evil-unsigned" in why and "would also trust" in why
+
+
+def test_c1_refresh_refused_when_trust_entries_wait_or_it_cannot_tell(tmp_path):
+    assert "file-trust" in R.precheck(ctx(tmp_path, rep(GA, file_pending=2)))
+    assert "cannot tell" in R.precheck(ctx(tmp_path, rep(GA, pending=None)))
+    assert "cannot tell" in R.precheck(ctx(tmp_path, rep(GA, pending=dict(PENDING_OK, truncated=True))))
+
+
+def test_i2b_refresh_refused_with_an_unpackaged_denial_present(tmp_path):
+    assert "refusing" in R.precheck(ctx(tmp_path, rep(GA, HELPER)))
+
+
+def test_i3_apply_fails_unless_the_denied_path_is_now_trusted(tmp_path, monkeypatch):
+    import pytest
+    from engine import repairs
+    monkeypatch.setattr(repairs.time, "sleep", lambda s: None)
+    c = ctx(tmp_path, rep(GA)); c.remote = Dump("rpmdb /usr/bin/true 1 aa\n")
+    with pytest.raises(RuntimeError):
+        R.apply(c)
+    c = ctx(tmp_path, rep(GA)); c.remote = Dump("rpmdb /usr/bin/google-authenticator 1 aa\n")
+    R.apply(c)
+
+
+def test_m4_p3_probe_fails_when_fapolicyd_is_inactive(monkeypatch):
+    import subprocess
+    p3 = importlib.import_module("scenarios.p3")
+    monkeypatch.setattr(p3.remote, "run", lambda host, argv, **kw:
+                        subprocess.CompletedProcess(argv, 0, "permissive = 0\ninactive\n", ""))
+    assert p3.final_probe(print) is False
