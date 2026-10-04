@@ -580,3 +580,27 @@ def test_allowed_but_audited_executions_are_not_denials(tmp_path):
         .replace("syscall=59 success=no exit=-1 uid=0\nnode=client2 type=FANOTIFY msg=audit(1791062310.000:43201): resp=2",
                  "syscall=59 success=yes exit=0 uid=0\nnode=client2 type=FANOTIFY msg=audit(1791062310.000:43201): resp=1")
     assert "/usr/bin/ok-tool" not in {x["path"] for x in _fap(tmp_path, ausearch=allowed)["denials"]}
+
+
+def _uptime(tmp, text):
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
+    k, m = lines.index("# >>> uptime"), lines.index("# <<< uptime")
+    f = tmp / "uptime"
+    if text is not None:
+        f.write_text(text)
+    sh = ("set -euf\n" + f'REDACT={SCRIPT.parent / "redact.sed"}\nid() {{ echo 1000; }}\nIDM_UPTIME_FILE={f}\n'
+          + "\n".join(lines[i + 1:j]) + "\n" + "\n".join(lines[k + 1:m]) + '\njson_num "$upt"')
+    return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout
+
+
+def test_uptime_seconds_since_boot(tmp_path):
+    assert _uptime(tmp_path, "42.57 160.11\n") == "42"
+
+
+def test_uptime_unknown_is_null(tmp_path):
+    assert _uptime(tmp_path, None) == "null"
+
+
+def test_report_emits_uptime():
+    assert '"uptime_s":%s,' in SCRIPT.read_text()

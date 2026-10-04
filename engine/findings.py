@@ -321,6 +321,20 @@ def fapolicyd_findings(r):
     return out
 
 
+# After a power outage (spike 2026-10-04: every state cleared by itself within ~40 s of the server answering), these
+# findings often clear by themselves on a host that has just started. Information for the person deciding; nothing
+# is blocked.
+JUST_BOOTED_S = 180
+TRANSIENT_AFTER_BOOT = ("KANIDM_UNREACHABLE", "UNIXD_OFFLINE", "TIME_UNVERIFIED", "TOTP_TIME_SKEW", "DNS_LOOKUP_FAILED",
+                        "SERVICE_DOWN")
+_BOOT_NOTE = "started {} s ago: this often clears by itself within a minute or two; check again before repairing"
+
+
+def _just_started(r):
+    up = r.get("uptime_s") if isinstance(r, dict) else None
+    return int(up) if isinstance(up, (int, float)) and not isinstance(up, bool) and 0 <= up < JUST_BOOTED_S else None
+
+
 RULES = (collect_conf_invalid, time_unverified, time_skew, dns_lookup_failed, tls_expired, tls_untrusted, kanidm_unreachable, renewal_stopped, unixd_offline,
          posix_pw_missing, ca_root_missing, nss_order_wrong, account_expired, account_not_yet_valid, ssh_cert_expired,
          ssh_ca_not_trusted)
@@ -342,4 +356,12 @@ def evaluate(report, peer=None):
                              f.severity) if f.id == "DNS_LOOKUP_FAILED" else f for f in found]
     if any(f.id.startswith("DNS_") for f in found):
         found = [f for f in found if f.id != "KANIDM_UNREACHABLE"]   # the name is the fault, not the path
+    notes = []
+    if (up := _just_started(report)) is not None:
+        notes.append("this host " + _BOOT_NOTE.format(up))
+    if peer and (pup := _just_started(peer)) is not None:
+        notes.append(f"the identity server ({peer.get('host')}) " + _BOOT_NOTE.format(pup))
+    if notes:
+        found = [Finding(f.id, f.component, f.evidence + tuple(notes), f.severity)
+                 if f.id.split("(")[0] in TRANSIENT_AFTER_BOOT else f for f in found]
     return sorted(found, key=lambda f: f.id)

@@ -105,6 +105,11 @@ isoj() { _i=$(iso "$1"); if [ -n "$_i" ]; then json_str "$_i"; else printf null;
 host=$(hostname -s)
 if systemctl cat kanidmd.service >/dev/null 2>&1; then role=server; else role=client; fi
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# >>> uptime
+# Seconds since boot, so findings right after a power-on can say they often clear by themselves (power-loss spike).
+if [ "$(id -u)" -eq 0 ]; then UPTIME_FILE=/proc/uptime; else UPTIME_FILE="${IDM_UPTIME_FILE:-/proc/uptime}"; fi
+upt=$(cut -d. -f1 "$UPTIME_FILE" 2>/dev/null) || upt=""
+# <<< uptime
 
 # --- time ---------------------------------------------------------------------------------------------------------
 off=""; synced=false; src=""
@@ -404,5 +409,6 @@ printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
 printf '"faillock":%s,' "$flk"
 printf '"name":%s,"own_addresses":%s,' "$nm" "$own"
 printf '"fapolicyd":%s,' "$fap"
+printf '"uptime_s":%s,' "$(json_num "$upt")"
 printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s,"relabel":%s},"errors":[%s]}\n' \
   "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "$relab" "${errs%,}"
