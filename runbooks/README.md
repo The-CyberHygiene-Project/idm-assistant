@@ -57,3 +57,5 @@ Step-by-step guides for situations that are not a single finding live in `proced
 
 - [After a power outage](procedures/after-power-outage.md): start the identity server first, what is normal in the
   first minute, and what is not.
+- [After restoring from a snapshot or image](procedures/after-restore.md): restart chronyd first (row 18), then the
+  certificate, then logins.

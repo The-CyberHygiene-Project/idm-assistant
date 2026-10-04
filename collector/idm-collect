@@ -123,9 +123,16 @@ else err "time: chronyc tracking failed"; fi
 # Last measurement of the first source, e.g. "^* 192.168.100.1 10 6 377 12 -52us[  -58us] +/- 242us" -> -0.000058
 # (chrony pads inside the brackets; units ns/us/ms/s).
 # chrony shows the jump here ~2 min before tracking does (measured), so skew is visible at once.
-soff=$(chronyc -n sources 2>/dev/null | awk '/^\^/ { if (match($0, /\[[^]]*\]/)) { v = substr($0, RSTART + 1, RLENGTH - 2); gsub(/[[:space:]]/, "", v);
+# The source chrony uses ('^*') when there is one, else the first: with several servers the selected one is often not
+# listed first (final review I1). Offset and state come from that same line.
+srcl=$(chronyc -n sources 2>/dev/null | awk '/^\^\*/ { s = $0 } /^\^/ && f == "" { f = $0 } END { print (s != "" ? s : f) }') || srcl=""
+soff=$(printf '%s\n' "$srcl" | awk '/^\^/ { if (match($0, /\[[^]]*\]/)) { v = substr($0, RSTART + 1, RLENGTH - 2); gsub(/[[:space:]]/, "", v);
   u = v; gsub(/[-+0-9.]/, "", u); n = v; gsub(/[a-z]/, "", n);
   m = (u == "ns") ? 1e-9 : (u == "us") ? 1e-6 : (u == "ms") ? 1e-3 : 1; printf "%.6f\n", n * m; exit } }')
+# The first source's state (chronyc -n sources, the character after '^'): '*' in use, '~' too variable (what a
+# restored snapshot shows: chrony keeps saying synchronized while its source is hours away), '?' unusable.
+sst=$(printf '%s\n' "$srcl" | awk '/^\^/ { print substr($0, 2, 1); exit }') || sst=""
+case "$sst" in '*'|'+'|'-'|'~'|'?'|'x') ;; *) sst="" ;; esac
 # <<< source-offset
 
 # --- services -----------------------------------------------------------------------------------------------------
@@ -401,8 +408,8 @@ errs=""
 while IFS= read -r l; do errs="$errs$(json_str "$l"),"; done < "$ERRS"
 printf '{"schema":"idm-report/1","host":%s,"role":%s,"collected_at":%s,"user":%s,' \
   "$(json_str "$host")" "$(json_str "$role")" "$(json_str "$now")" "$( [ -n "$user" ] && json_str "$user" || printf null)"
-printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s},' "$(json_num "$off")" \
-  "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")"
+printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s,"source_state":%s},' "$(json_num "$off")" \
+  "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")" "$( [ -n "$sst" ] && json_str "$sst" || printf null)"
 printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
 printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"

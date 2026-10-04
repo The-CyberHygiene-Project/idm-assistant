@@ -19,10 +19,20 @@ def _t(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+def _restored(r):
+    """Requirement row 18: after a restore chrony keeps 'synchronized' from the snapshot while it rejects its source as
+    too variable ('~', hours away; spike 2026-10-04). A stale sample after a real step shows '*', not '~'."""
+    t = r.get("time") or {}
+    src = t.get("source_offset_s")
+    return t.get("source_state") == "~" and src is not None and abs(src) > SKEW_S
+
+
 def _skewed(r):
     """chrony's tracking offset is authoritative once synchronised. The last source sample only counts while chrony
     is NOT synchronised (right after a jump, tracking says 0.0 for ~2 min); once synced it can be a stale pre-step
     sample for a whole poll interval (measured 2026-09-28)."""
+    if _restored(r):
+        return True
     t = r.get("time") or {}
     off, src = t.get("offset_s"), t.get("source_offset_s")
     if off is not None and abs(off) > SKEW_S:
@@ -46,9 +56,12 @@ def time_unverified(r):
 def time_skew(r):
     if _skewed(r):
         t = r["time"]
-        return Finding("TOTP_TIME_SKEW", "time", (f"offset {t.get('offset_s')} s, last source sample "
-                                                   f"{t.get('source_offset_s')} s vs {t.get('source')}",
-                                                   f"threshold {SKEW_S} s"))
+        ev = (f"offset {t.get('offset_s')} s, last source sample {t.get('source_offset_s')} s vs {t.get('source')}",
+              f"threshold {SKEW_S} s")
+        if _restored(r):
+            ev += (f"chrony rejects its time source as too variable ({t.get('source_offset_s')} s off): typical after "
+                   "restoring a snapshot or image (requirement row 18)",)
+        return Finding("TOTP_TIME_SKEW", "time", ev)
 
 
 def tls_expired(r):
@@ -362,6 +375,8 @@ def evaluate(report, peer=None):
     if peer and (pup := _just_started(peer)) is not None:
         notes.append(f"the identity server ({peer.get('host')}) " + _BOOT_NOTE.format(pup))
     if notes:
+        restored = _restored(report)            # '~' after a restore never clears by itself (row 18)
         found = [Finding(f.id, f.component, f.evidence + tuple(notes), f.severity)
-                 if f.id.split("(")[0] in TRANSIENT_AFTER_BOOT else f for f in found]
+                 if f.id.split("(")[0] in TRANSIENT_AFTER_BOOT and not (restored and f.id == "TOTP_TIME_SKEW") else f
+                 for f in found]
     return sorted(found, key=lambda f: f.id)
