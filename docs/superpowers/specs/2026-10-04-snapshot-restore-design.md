@@ -55,7 +55,8 @@ minute, hence the wait.)
 Regression: R1 3/3; L4 3/3 (the 10-minute jump must still be found and fixed); full 11/11; D1, D2, F1, F2, P1–P3 1/1.
 
 **Procedure `runbooks/procedures/after-restore.md`** (linked from the README):
-1. Restart chronyd before anything else (row 18); check: no clock finding.
+1. Restart chronyd before anything else (row 18), on the server too: `time-resync` runs on workstations only, so on
+   the server this step is by hand (its TOTP_TIME_SKEW now shows the restore case). Check: no clock finding.
 2. Check the certificate: an old image can carry an expired Kanidm certificate (TLS_CERT_EXPIRED → existing repair).
 3. Authenticator hosts: wait out the code window and do not retry failed logins (row 19); retries feed faillock
    (ACCOUNT_LOCKED).
