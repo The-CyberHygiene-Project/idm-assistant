@@ -33,3 +33,34 @@ def test_small_offset_with_tilde_is_not_skew():
 def test_old_reports_without_the_field_behave_as_before():
     r = copy.deepcopy(BASE); del r["time"]["source_state"]
     assert "TOTP_TIME_SKEW" not in {f.id for f in evaluate(r)}
+
+
+from types import SimpleNamespace
+
+from engine import runbooks
+from engine.case import Case
+from engine.repairs import REGISTRY, Ctx
+
+R = REGISTRY["time-resync"]
+
+
+def test_apply_restarts_chronyd_before_stepping(tmp_path):
+    calls = []
+    remote = SimpleNamespace(run=lambda host, argv, **kw: calls.append(argv[-1]) or SimpleNamespace(stdout=""))
+    R.apply(Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: BASE, remote=remote))
+    s = calls[-1]
+    assert s.index("systemctl restart chronyd") < s.index("chronyc makestep")
+
+
+def test_verify_refuses_a_stale_synchronized():
+    t = dict(BASE["time"]); assert R.verify_present({"time": t})                               # '~', far off
+    assert R.verify_present({"time": dict(t, source_state="*", source_offset_s=0.2, offset_s=0.0)}) is None
+    assert R.verify_present({"time": dict(t, source_state="*", source_offset_s=40.0, offset_s=0.0)})
+
+
+def test_verify_unchanged_for_reports_without_the_field():
+    assert R.verify_present({"time": {"offset_s": 0.1, "synced": True}}) is None
+
+
+def test_runbook_wording_restarts_the_time_service():
+    assert runbooks.load("TOTP_TIME_SKEW").repair.startswith("Restart the time service and set this workstation's clock")

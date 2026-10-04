@@ -501,8 +501,8 @@ class TimeResync(Repair):
     verify_absent = {"TOTP_TIME_SKEW", "TIME_UNVERIFIED"}
 
     def describe(self, ctx):
-        return ("step the clock to the lab time source now (chronyc makestep). Not reversible, and not meant to be: "
-                "the old time was wrong")
+        return ("restart the time service and step the clock to the time source (chronyc makestep). Not reversible, "
+                "and not meant to be: the old time was wrong")
 
     def precheck(self, ctx):
         src = _sh(ctx, "systemctl is-active chronyd >/dev/null && chronyc -n sources 2>/dev/null || true")
@@ -510,13 +510,19 @@ class TimeResync(Repair):
         return None if live else "no reachable time source (chronyd down or reach 0): a step would use nothing"
 
     def apply(self, ctx):
-        # burst = fresh samples at once, so the evidence is not a pre-step sample; waitsync bounded to ~60 s
-        _sh(ctx, "chronyc makestep >/dev/null && chronyc burst 4/4 >/dev/null; chronyc waitsync 6 1.0 >/dev/null 2>&1 || true")
+        # Row 18: restarting chronyd clears the restored sample history (the CUI 'makestep 1.0 3' then steps on the
+        # first updates); makestep alone does nothing while the source is rejected as too variable (spike 2026-10-04).
+        _sh(ctx, "systemctl restart chronyd; chronyc waitsync 30 0.5 >/dev/null 2>&1; chronyc makestep >/dev/null; "
+                 "chronyc burst 4/4 >/dev/null; chronyc waitsync 6 1.0 >/dev/null 2>&1 || true")
 
     def verify_present(self, report):
         t = report.get("time") or {}
         if not t.get("synced") or t.get("offset_s") is None or abs(t["offset_s"]) >= 1:
             return f"clock not synced within 1 s: {t}"
+        if "source_state" in t:          # a stale 'synchronized' is what made the old check pass after a restore
+            src = t.get("source_offset_s")
+            if t.get("source_state") != "*" or src is None or abs(src) >= 1:
+                return f"time source not in use or still off: state {t.get('source_state')!r}, sample {src} s"
         return None
 
 
