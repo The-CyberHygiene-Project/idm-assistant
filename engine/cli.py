@@ -28,6 +28,9 @@ def approver():
         return test_approve
 
     def ask(prompt):
+        if not sys.stdin.isatty():                               # a piped "yes" is a script, not a person
+            print(f"{prompt}: refused: approval must be typed at a keyboard.")
+            return False
         try:
             return input(f"{prompt}: ").strip().lower() == "yes"
         except EOFError:                                         # no answer is not approval
