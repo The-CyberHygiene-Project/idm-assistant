@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        8.chp%{?dist}
+Release:        9.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -31,6 +31,9 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sun Oct 04 2026 The CyberHygiene Project - 0.1.0-9.chp
+- chrony: read the source in use ('^*') when there is one, else the first (multi-server sites).
+
 * Sun Oct 04 2026 The CyberHygiene Project - 0.1.0-8.chp
 - chrony source state (a restored snapshot shows '~' while chrony still says synchronized); uptime_s.
 

@@ -2,13 +2,13 @@
  "schema": "idm-report/1",
  "host": "srv1",
  "role": "server",
- "collected_at": "2026-10-04T13:57:15Z",
+ "collected_at": "2026-10-04T15:11:35Z",
  "user": "lab04",
  "time": {
-  "offset_s": -5e-09,
+  "offset_s": 2.8e-08,
   "synced": true,
   "source": "192.168.100.1",
-  "source_offset_s": 2.7e-05,
+  "source_offset_s": -2.8e-05,
   "source_state": "*"
  },
  "nss": null,
@@ -22,8 +22,8 @@
  },
  "tls": {
   "kanidm": {
-   "not_before": "2026-10-04T13:56:03Z",
-   "not_after": "2026-10-05T13:57:03Z",
+   "not_before": "2026-10-04T15:10:24Z",
+   "not_after": "2026-10-05T15:11:24Z",
    "verify": "ok"
   }
  },
@@ -246,7 +246,7 @@
   },
   "file_trust_pending": 0
  },
- "uptime_s": 21299,
+ "uptime_s": 21361,
  "trust": {
   "kanidm_root_in_store": true
  },
