@@ -78,3 +78,12 @@ def test_r1_and_procedure():
                  "ACCOUNT_LOCKED", "on the server too"):
         assert must in text, must
     assert "procedures/after-restore.md" in (root / "runbooks" / "README.md").read_text()
+
+
+def test_captured_healthy_pair_has_no_findings():
+    from pathlib import Path
+    from engine.report import load_report
+    fx = Path(__file__).parent / "fixtures" / "reports"
+    s, c = load_report(fx / "healthy-srv1-restore.json"), load_report(fx / "healthy-client2-restore.json")
+    assert c["time"]["source_state"] == "*" and isinstance(c["uptime_s"], int)
+    assert evaluate(s) == [] and evaluate(c, s) == []

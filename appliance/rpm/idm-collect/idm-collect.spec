@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        7.chp%{?dist}
+Release:        8.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -31,6 +31,9 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sun Oct 04 2026 The CyberHygiene Project - 0.1.0-8.chp
+- chrony source state (a restored snapshot shows '~' while chrony still says synchronized); uptime_s.
+
 * Sat Oct 03 2026 The CyberHygiene Project - 0.1.0-7.chp
 - fapolicyd: packages fapolicyd never loaded (with signers) and waiting trust-file entries; only resp=2 /
   success=no events count as denials.
