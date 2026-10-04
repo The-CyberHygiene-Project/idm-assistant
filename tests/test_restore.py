@@ -64,3 +64,17 @@ def test_verify_unchanged_for_reports_without_the_field():
 
 def test_runbook_wording_restarts_the_time_service():
     assert runbooks.load("TOTP_TIME_SKEW").repair.startswith("Restart the time service and set this workstation's clock")
+
+
+def test_r1_and_procedure():
+    import importlib
+    from pathlib import Path
+    r1 = importlib.import_module("scenarios.r1")
+    assert r1.EXPECT == {"client2": {"TOTP_TIME_SKEW"}} and r1.REPAIRS == [("client2", "time-resync")]
+    assert r1.HOSTS == ["client2"] and r1.USER == "lab04"
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "runbooks" / "procedures" / "after-restore.md").read_text()
+    for must in ("Restart chronyd before anything else", "requirement row 18", "TLS_CERT_EXPIRED", "row 19",
+                 "ACCOUNT_LOCKED", "on the server too"):
+        assert must in text, must
+    assert "procedures/after-restore.md" in (root / "runbooks" / "README.md").read_text()
