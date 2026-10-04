@@ -15,8 +15,8 @@ def test_converted_runbooks_have_every_field():
         assert rb.complete
 
 
-def test_all_twenty_one_are_in_the_shape():
-    assert len(CONVERTED) == 21
+def test_all_twenty_four_are_in_the_shape():
+    assert len(CONVERTED) == 24
 
 
 def test_every_repair_has_a_complete_runbook_that_fills_its_form():

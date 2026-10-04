@@ -1,0 +1,259 @@
+{
+ "schema": "idm-report/1",
+ "host": "client2",
+ "role": "client",
+ "collected_at": "2026-10-03T23:23:30Z",
+ "user": "lab04",
+ "time": {
+  "offset_s": 1.4e-08,
+  "synced": true,
+  "source": "192.168.100.1",
+  "source_offset_s": -1.3e-05
+ },
+ "nss": {
+  "passwd": "kanidm files systemd",
+  "group": "kanidm files [SUCCESS=merge] systemd",
+  "initgroups": "kanidm files"
+ },
+ "authselect": {
+  "profile": "custom/kanidm",
+  "valid": true
+ },
+ "user_nss": {
+  "name": "lab04",
+  "found": true,
+  "gecos": "Lab User 4",
+  "groups": [
+   "lab04@idm.kanidm.lab.test",
+   "lab_users@idm.kanidm.lab.test"
+  ]
+ },
+ "services": {
+  "kanidm-unixd": "active",
+  "kanidm-unixd-tasks": "active",
+  "sshd": "active"
+ },
+ "tls": {
+  "kanidm": {
+   "not_before": "2026-10-03T23:22:17Z",
+   "not_after": "2026-10-04T23:23:17Z",
+   "verify": "ok"
+  }
+ },
+ "unixd": {
+  "status": "online"
+ },
+ "kanidm_user": null,
+ "ssh_ca": null,
+ "sshd": {
+  "trusted_ca_path": "/etc/ssh/trusted_user_ca_keys",
+  "trusted_ca_fingerprints": [
+   "SHA256:fnyFGHP/iyOJEEzyd52gwSdf9GJuJZAEnS5z2hxGgmE"
+  ]
+ },
+ "faillock": {
+  "deny": 3,
+  "unlock_time_s": 0,
+  "failures": []
+ },
+ "name": {
+  "host": "idm.kanidm.lab.test",
+  "addresses": [
+   "192.168.100.10"
+  ],
+  "source": "dns",
+  "resolvers": [
+   "192.168.100.10"
+  ],
+  "resolver_state": "answers"
+ },
+ "own_addresses": null,
+ "fapolicyd": {
+  "active": "active",
+  "permissive": false,
+  "denials": [],
+  "pending": {
+   "packages": [
+    {
+     "name": "coreutils-common",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "cracklib-dicts",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "dejavu-sans-fonts",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "dnf-data",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "dnf-plugins-core",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "elfutils-default-yama-scope",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "fapolicyd-selinux",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "filesystem",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "gawk-all-langpacks",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "grub2-pc",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "hwdata",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl1000-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl100-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl105-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl135-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl2000-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl2030-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl3160-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl5000-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl5150-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl6000g2a-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl6050-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "iwl7260-firmware",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "kernel-modules",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "langpacks-core-en",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "langpacks-core-font-en",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "langpacks-en",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "libssh-config",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "linux-firmware-whence",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "ncurses-base",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "pcre2-syntax",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "publicsuffix-list-dafsa",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "python3-pip-wheel",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "python3-setuptools-wheel",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "rocky-repos",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "rootfiles",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "rsyslog-logrotate",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "scap-security-guide",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "tzdata",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "usbguard-selinux",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "xml-common",
+     "signer": "702d426d350d275d"
+    },
+    {
+     "name": "yum",
+     "signer": "702d426d350d275d"
+    }
+   ],
+   "truncated": false
+  },
+  "file_trust_pending": 0
+ },
+ "trust": {
+  "kanidm_root_in_store": true
+ },
+ "selinux": {
+  "mode": "Enforcing",
+  "avc_recent": 2,
+  "relabel": []
+ },
+ "errors": []
+}

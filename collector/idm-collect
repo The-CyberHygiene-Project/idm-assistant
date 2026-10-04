@@ -230,6 +230,69 @@ if [ "$role" = server ]; then
   own="[${oa%,}]"
 fi
 # <<< name
+# --- fapolicyd: state and recent execute denials ------------------------------------------------------------------
+# >>> fapolicyd
+# Denials come from the audit log (rule 90 is deny_audit); --input-logs because over ssh/sudo ausearch would read stdin.
+# Per denied path: still there?, the owning package and the key that signed it (rpm -qf prints its "not owned" text on
+# stdout with exit 1, so rpm's own status decides), and whether fapolicyd trusts it now (field 2 of fapolicyd-cli -D).
+if [ "$(id -u)" -eq 0 ]; then FAPCONF=/etc/fapolicyd/fapolicyd.conf; FAPDIR=/etc/fapolicyd
+else FAPCONF="${IDM_FAPOLICYD_CONF:-/etc/fapolicyd/fapolicyd.conf}"; FAPDIR="${IDM_FAPOLICYD_DIR:-/etc/fapolicyd}"; fi
+fap=null
+if command -v fapolicyd-cli >/dev/null 2>&1; then
+  fact=$(systemctl is-active fapolicyd 2>/dev/null) || fact=${fact:-unknown}
+  fpm=$(sed -n 's/^[[:space:]]*permissive[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$FAPCONF" 2>/dev/null | tail -n 1)
+  case "$fpm" in 1) fpj=true ;; 0) fpj=false ;; *) fpj=null ;; esac
+  fdok=1; fapolicyd-cli -D > "$W/fapolicyd.dump" 2>/dev/null || fdok=0
+  fgrp=$(ausearch --input-logs -m FANOTIFY -ts recent 2>/dev/null </dev/null | awk '
+      function flush() { if (fan && sc && p != "") printf "%s|%s|%s\n", t, u, p; fan = sc = 0; p = u = t = "" }
+      /^----/ { flush(); next }
+      /type=FANOTIFY/ && / resp=2/ { fan = 1 }                   # resp=2 is a denial; allow_audit logs resp=1
+      /type=SYSCALL/ && / syscall=59 / && / success=no / { sc = 1; if (match($0, / uid=[0-9]+/)) u = substr($0, RSTART + 5, RLENGTH - 5) }
+      /type=PATH/ && /name="/ { if (match($0, /name="[^"]*"/)) p = substr($0, RSTART + 6, RLENGTH - 7) }
+      /msg=audit\(/ { if (match($0, /audit\([0-9]+/)) t = substr($0, RSTART + 6, RLENGTH - 6) }
+      END { flush() }' | awk -F'|' '$3 ~ /^\/[A-Za-z0-9._\/+-]+$/ { c[$3]++; if ($1 + 0 >= t[$3] + 0) { t[$3] = $1; u[$3] = $2 } }
+      END { for (p in c) printf "%s|%s|%s|%s\n", t[p], u[p], c[p], p }' | sort -t'|' -k1,1nr | head -n 5) || fgrp=""
+  fl=""
+  while IFS='|' read -r ft fu fc fp; do
+    [ -n "$fp" ] || continue
+    fe=false; [ -e "$fp" ] && fe=true
+    fpk=null; fsg=null
+    if pk=$(rpm -qf --qf '%{NAME}\n' "$fp" 2>/dev/null); then
+      pk=$(printf '%s\n' "$pk" | head -n 1)
+      case "$pk" in ''|*[!A-Za-z0-9._+-]*) ;; *) fpk=$(json_str "$pk")
+        sg=$(rpm -qf --qf '%{RSAHEADER:pgpsig}|%{DSAHEADER:pgpsig}|%{SIGPGP:pgpsig}\n' "$fp" 2>/dev/null \
+             | grep -o 'Key ID [0-9a-f]*' | head -n 1 | cut -d' ' -f3) || sg=""
+        [ -n "$sg" ] && fsg=$(json_str "$sg") ;; esac
+    fi
+    if [ "$fdok" -eq 0 ]; then fit=null
+    elif awk -v p="$fp" '$2 == p {f = 1} END {exit !f}' "$W/fapolicyd.dump"; then fit=true; else fit=false; fi
+    fw=$(date -u -d "@$ft" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || fw=""
+    fwj=null; [ -n "$fw" ] && fwj=$(json_str "$fw")
+    fl="$fl{\"path\":$(json_str "$fp"),\"when\":$fwj,\"uid\":$(json_num "$fu"),\"count\":$(json_num "$fc"),\"exists\":$fe,\"package\":$fpk,\"signer\":$fsg,\"in_trust\":$fit},"
+  done <<EOF
+$fgrp
+EOF
+  # What a refresh (fapolicyd-cli --update, which reloads the WHOLE package database and the trust files) would newly
+  # trust: packages with a regular file but none of them in the trust list (never loaded), with their signers; and
+  # trust-file entries not loaded yet. fapolicyd leaves most data files out, so "never loaded" is per package.
+  fpend=null; fpt=null
+  if [ "$fdok" -eq 1 ]; then
+    awk '{print $2}' "$W/fapolicyd.dump" > "$W/fap.trusted"
+    rpm -qa --qf '[%{=NAME}|%{FILENAMES}|%{FILEMODES:perms}\n]' > "$W/fap.files" 2>/dev/null || : > "$W/fap.files"
+    rpm -qa --qf '%{NAME}|%{RSAHEADER:pgpsig}|%{DSAHEADER:pgpsig}|%{SIGPGP:pgpsig}\n' > "$W/fap.sigs" 2>/dev/null || : > "$W/fap.sigs"
+    fpl=$(awk -F'|' 'NR == FNR {d[$1] = 1; next} $3 ~ /^-/ {if (!($1 in h)) h[$1] = 0; if ($2 in d) h[$1] = 1}
+                     END {for (p in h) if (!h[p]) print p}' "$W/fap.trusted" "$W/fap.files" | sort) || fpl=""
+    fn=$(printf '%s\n' "$fpl" | awk 'NF {n++} END {print n + 0}')
+    pj=$(printf '%s\n' "$fpl" | head -n 100 | awk -F'|' 'NR == FNR {k = ""; if (match($0, /Key ID [0-9a-f]+/)) k = substr($0, RSTART + 7, RLENGTH - 7); s[$1] = k; next}
+            /^[A-Za-z0-9._+-]+$/ {printf "{\"name\":\"%s\",\"signer\":%s},", $0, (s[$0] != "" ? "\"" s[$0] "\"" : "null")}' "$W/fap.sigs" -) || pj=""
+    ftr=false; [ "$fn" -gt 100 ] && ftr=true
+    fpend="{\"packages\":[${pj%,}],\"truncated\":$ftr}"
+    fpt=$(cat "$FAPDIR/fapolicyd.trust" "$FAPDIR"/trust.d/* 2>/dev/null | sed 's/#.*//' \
+          | awk 'NR == FNR {d[$1] = 1; next} NF && !($1 in d) {n++} END {print n + 0}' "$W/fap.trusted" -) || fpt=null
+  fi
+  fap="{\"active\":$(json_str "$fact"),\"permissive\":$fpj,\"denials\":[${fl%,}],\"pending\":$fpend,\"file_trust_pending\":$fpt}"
+fi
+# <<< fapolicyd
 
 # --- NSS order + authselect (clients) -----------------------------------------------------------------------------
 nss=null; asel=null
@@ -340,5 +403,6 @@ printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "
 printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
 printf '"faillock":%s,' "$flk"
 printf '"name":%s,"own_addresses":%s,' "$nm" "$own"
+printf '"fapolicyd":%s,' "$fap"
 printf '"trust":{"kanidm_root_in_store":%s},"selinux":{"mode":%s,"avc_recent":%s,"relabel":%s},"errors":[%s]}\n' \
   "$(json_bool $tr_ok)" "$(json_str "$se")" "$(json_num "$avc")" "$relab" "${errs%,}"
