@@ -626,3 +626,22 @@ def test_source_state_character(line, want):
 
 def test_report_emits_source_state():
     assert '"source_offset_s":%s,"source_state":%s}' in SCRIPT.read_text()
+
+
+def _source_pair(lines):
+    src = SCRIPT.read_text().splitlines()
+    i, j = src.index("# >>> source-offset"), src.index("# <<< source-offset")
+    body = "printf '%s\\n' 'MS Name/IP address Stratum Poll Reach LastRx Last sample' " + " ".join(f"'{l}'" for l in lines)
+    sh = f"chronyc() {{ {body}; }}\n" + "\n".join(src[i + 1:j]) + '\necho "$sst|$soff"'
+    return subprocess.run(["sh", "-c", sh], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_source_in_use_is_read_even_when_not_listed_first():
+    # final review I1: with several servers the selected one ('*') is often not the first line
+    got = _source_pair(["^+ 10.0.0.2   2   6   377   12   +900us[ +900us] +/-  1ms",
+                        "^* 10.0.0.1   2   6   377   10    -52us[  -58us] +/-  1ms"])
+    assert got == "*|-0.000058"
+
+
+def test_first_source_when_none_is_selected():
+    assert _source_pair(["^~ 10.0.0.1  10  6  37  15  -50085s[-50085s] +/- 317us"]).startswith("~|-50085")

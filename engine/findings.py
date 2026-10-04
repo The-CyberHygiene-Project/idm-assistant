@@ -375,6 +375,8 @@ def evaluate(report, peer=None):
     if peer and (pup := _just_started(peer)) is not None:
         notes.append(f"the identity server ({peer.get('host')}) " + _BOOT_NOTE.format(pup))
     if notes:
+        restored = _restored(report)            # '~' after a restore never clears by itself (row 18)
         found = [Finding(f.id, f.component, f.evidence + tuple(notes), f.severity)
-                 if f.id.split("(")[0] in TRANSIENT_AFTER_BOOT else f for f in found]
+                 if f.id.split("(")[0] in TRANSIENT_AFTER_BOOT and not (restored and f.id == "TOTP_TIME_SKEW") else f
+                 for f in found]
     return sorted(found, key=lambda f: f.id)

@@ -87,3 +87,37 @@ def test_captured_healthy_pair_has_no_findings():
     s, c = load_report(fx / "healthy-srv1-restore.json"), load_report(fx / "healthy-client2-restore.json")
     assert c["time"]["source_state"] == "*" and isinstance(c["uptime_s"], int)
     assert evaluate(s) == [] and evaluate(c, s) == []
+
+
+# --- final review fixes -------------------------------------------------------------------------------------------
+def test_verify_ignores_an_unknown_source_state():
+    # I1: refclock/peer-only hosts have no '^' line, so source_state is null; the old check decides
+    assert R.verify_present({"time": {"offset_s": 0.1, "synced": True, "source_state": None,
+                                      "source_offset_s": None}}) is None
+
+
+def _pre(tmp_path, out):
+    remote = SimpleNamespace(run=lambda host, argv, **kw: SimpleNamespace(stdout=out))
+    return R.precheck(Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: BASE, remote=remote))
+
+
+def test_precheck_refuses_a_config_that_will_not_parse(tmp_path):
+    # I2: a restart with a broken chrony.conf would leave the host with no time service
+    assert "configuration" in _pre(tmp_path, "BAD-CONFIG\n")
+    assert _pre(tmp_path, "MS Name\n^~ 192.168.100.1 10 6 37 15 -50085s[-50085s] +/- 317us\n") is None
+
+
+def test_apply_fails_loudly_and_waits_a_bounded_time(tmp_path):
+    calls = []
+    remote = SimpleNamespace(run=lambda host, argv, **kw: calls.append(argv[-1]) or SimpleNamespace(stdout=""))
+    R.apply(Ctx(host="client2", role="client", case=Case(tmp_path, "r", "s"), collect=lambda: BASE, remote=remote))
+    s = calls[-1]
+    assert "systemctl restart chronyd || { systemctl start chronyd; exit 1; }" in s    # I2: a failed restart is a failure
+    assert "chronyc waitsync 15 0.5 0 2" in s and "waitsync 30 0.5 " not in s              # M3: ~30 s, not ~5 min
+
+
+def test_restored_clock_gets_no_just_started_note():
+    # M4 (re-graded): '~' never clears by itself; telling the operator it often does is wrong advice
+    r = copy.deepcopy(BASE); r["uptime_s"] = 60
+    f = {x.id: x for x in evaluate(r)}["TOTP_TIME_SKEW"]
+    assert not any("started" in e for e in f.evidence)

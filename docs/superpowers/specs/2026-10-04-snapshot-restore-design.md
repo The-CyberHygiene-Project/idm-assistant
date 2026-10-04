@@ -70,6 +70,16 @@ procedure present and linked.
 **Release:** idm-collect 0.1.0-8 (this change plus the `uptime_s` field from the power-outage work) in signed repo
 0.5.7; lab install; golden re-taken.
 
+## Final review corrections (2026-10-04)
+
+- The collector reads the source chrony **uses** (`^*`) when there is one, else the first `^` line, for both state
+  and offset: with several servers the selected one is often not listed first (otherwise verify could never pass on a
+  healthy multi-server site). Verify skips the source check when `source_state` is null (refclock/peer-only hosts).
+- The precheck refuses when `chronyd -p` cannot parse the configuration (a restart would leave no time service);
+  apply starts chronyd again and fails the step if the restart fails.
+- The first `waitsync` is bounded explicitly: `chronyc waitsync 15 0.5 0 2` (~30 s, not ~5 minutes).
+- A restored clock (`~`) gets no "just started" note: it never clears by itself.
+
 ## Out of scope
 
 Kanidm database backup/restore (`kanidmd database backup/restore`): never tested in the lab; a later item.
