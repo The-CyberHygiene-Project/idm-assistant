@@ -126,6 +126,10 @@ else err "time: chronyc tracking failed"; fi
 soff=$(chronyc -n sources 2>/dev/null | awk '/^\^/ { if (match($0, /\[[^]]*\]/)) { v = substr($0, RSTART + 1, RLENGTH - 2); gsub(/[[:space:]]/, "", v);
   u = v; gsub(/[-+0-9.]/, "", u); n = v; gsub(/[a-z]/, "", n);
   m = (u == "ns") ? 1e-9 : (u == "us") ? 1e-6 : (u == "ms") ? 1e-3 : 1; printf "%.6f\n", n * m; exit } }')
+# The first source's state (chronyc -n sources, the character after '^'): '*' in use, '~' too variable (what a
+# restored snapshot shows: chrony keeps saying synchronized while its source is hours away), '?' unusable.
+sst=$(chronyc -n sources 2>/dev/null | awk '/^\^/ { print substr($0, 2, 1); exit }') || sst=""
+case "$sst" in '*'|'+'|'-'|'~'|'?'|'x') ;; *) sst="" ;; esac
 # <<< source-offset
 
 # --- services -----------------------------------------------------------------------------------------------------
@@ -401,8 +405,8 @@ errs=""
 while IFS= read -r l; do errs="$errs$(json_str "$l"),"; done < "$ERRS"
 printf '{"schema":"idm-report/1","host":%s,"role":%s,"collected_at":%s,"user":%s,' \
   "$(json_str "$host")" "$(json_str "$role")" "$(json_str "$now")" "$( [ -n "$user" ] && json_str "$user" || printf null)"
-printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s},' "$(json_num "$off")" \
-  "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")"
+printf '"time":{"offset_s":%s,"synced":%s,"source":%s,"source_offset_s":%s,"source_state":%s},' "$(json_num "$off")" \
+  "$(json_bool $synced)" "$(json_str "$src")" "$(json_num "$soff")" "$( [ -n "$sst" ] && json_str "$sst" || printf null)"
 printf '"nss":%s,"authselect":%s,"user_nss":%s,' "$nss" "$asel" "$un"
 printf '"services":%s,"tls":%s,"unixd":{"status":%s},"kanidm_user":%s,' "$svc" "$tls" "$(json_str "$ux")" "$ku"
 printf '"ssh_ca":%s,"sshd":%s,' "$sca" "$ssd"
