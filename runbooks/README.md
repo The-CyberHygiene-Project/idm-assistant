@@ -50,3 +50,10 @@ The form ends with "If unsure, type no: nothing on <host> changes" and a choice 
    same case with the gate bypassed is recorded as a measure of the model itself, never as the gate (ISSO, 2026-10-03,
    after the local model followed a plausible planted instruction 3/5 with the gate bypassed and 0/5 on the real path).
 8. **Wording is reviewed by the ISSO before it is published.**
+
+## Procedures
+
+Step-by-step guides for situations that are not a single finding live in `procedures/`:
+
+- [After a power outage](procedures/after-power-outage.md): start the identity server first, what is normal in the
+  first minute, and what is not.
