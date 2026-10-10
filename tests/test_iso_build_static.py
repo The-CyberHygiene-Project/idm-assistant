@@ -13,10 +13,17 @@ def test_scripts_carry_the_header_and_strict_mode():
 
 def test_build_keeps_the_boot_chain_and_pins_inputs():
     t = (ISO / "build-iso.sh").read_text()
-    assert "-boot_image any replay" in t and "discard" not in t
+    # NOT xorriso's "-boot_image any replay": with /images/efiboot.img replaced, replay re-used the DVD's ORIGINAL EFI
+    # image as an appended partition (Rocky menu, wrong label; found by check-iso.sh on ISO 0.1.0-rc1). Build from the
+    # DVD's tree with the DVD's own mkisofs boot options, so El Torito EFI and the GPT entry point at OUR efiboot.img.
+    code = "\n".join(ln for ln in t.splitlines() if not ln.lstrip().startswith("#"))
+    assert "replay" not in code and "-as mkisofs" in code
+    for opt in ("-R -J -joliet-long", "-b isolinux/isolinux.bin", "-e images/efiboot.img", "-isohybrid-gpt-basdat",
+                "-isohybrid-mbr --interval:local_fs:0s-15s:zero_mbrpt,zero_gpt:"):
+        assert opt in code, opt
     assert "d2bcbb64c2d67511adf80d40cd9543391a33aea5860a355b1d26d7f55236d01f" in t
     assert "verify-repo.sh" in t and "refusing:" in t
-    assert "VOLID=CHP-LAB-EL9" in t and '-volid "$VOLID"' in t
+    assert "VOLID=CHP-LAB-EL9" in t and '-V "$VOLID"' in t
     for p in ("/EFI/BOOT/grub.cfg", "/isolinux/isolinux.cfg", "/images/efiboot.img", "/chp", "/NOTICE.txt"):
         assert p in t
 
