@@ -1,0 +1,4 @@
+# iso5 lab test site (ISO Plan 5a: install from nothing, from the ISO).
+52:54:00:c4:05:50  iso5-srv   192.168.100.50  server
+52:54:00:c4:05:51  iso5-cli1  192.168.100.51  client
+52:54:00:c4:05:52  iso5-cli2  192.168.100.52  client

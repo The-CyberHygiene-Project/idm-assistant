@@ -8,7 +8,7 @@
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 name=$1 mac=$2 role=$3 stick=$4 ndisks=$5 expect_stop=${6:-}
-[[ $name == iso[234]-* ]] || { echo "refusing: only iso2-*/iso3-*/iso4-* lab VMs are managed here"; exit 1; }
+[[ $name == iso[2345]-* ]] || { echo "refusing: only iso2-*...iso5-* lab VMs are managed here"; exit 1; }
 repo=${CHP_REPO:-0.2.0}
 iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso; log=/var/log/libvirt/qemu/$name-install.log
 # Remove a previous VM of this name and ONLY its own disks: --remove-all-storage would also delete the attached stick.
