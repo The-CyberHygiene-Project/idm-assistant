@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.5.1
+Version:        0.6.0
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sat Oct 10 2026 The CyberHygiene Project - 0.6.0-1.chp
+- verify-repo: the installer checks the repo signature before installing (row 37).
+
 * Thu Oct 01 2026 The CyberHygiene Project - 0.5.1-1.chp
 - onboard refuses a person or group named like a local account/group (short names on the hosts; final review I1).
 
