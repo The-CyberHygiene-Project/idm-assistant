@@ -11,6 +11,7 @@
 #   ga        ISO Plan 4b: the second factor (bootstrap, enrol, logins, scratch codes, row 36, break-glass, refusals)
 #   (Plan 4a's `ops` stage is not copied: `ga` superseded it in Plan 4b)
 #   negtrust  Review Focus 1 on iso5-cli2: a wrong CA_ROOT_SHA256 pin is refused, the right one restores the anchor
+#   scan      Plan 5a gate 3: OpenSCAP CUI (dc2 tailoring) on the three PRISTINE hosts -> lab/iso5/scan-results/
 #   cleanup   remove the three VMs, the stick, helpers and lab secrets on aero; shred the Mac render dir
 # Every check prints PASS/FAIL; the stage exits 1 on any FAIL. Secrets move over pipes only (stick image -> expect).
 set -uo pipefail
@@ -271,6 +272,18 @@ case ${1:-} in
     [[ $rc != rc=0 && $a == NOANCHOR && $n -ge 1 ]] && pass "wrong pin: enrolment refused, no anchor installed, journal says why" || fail "wrong pin" "$out"
     [[ $rc2 == rc2=0 && -n $got && $got == "$want" ]] && pass "right pin: anchor restored and matches" || fail "restore" "$out"
     check "$C2: unixd online again" "$(Rh "$C2" "$C2IP" 'systemctl restart kanidm-unixd; for i in $(seq 15); do kanidm-unix status 2>/dev/null | grep -q "Kanidm: online" && break; sleep 2; done; kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"')" "1" ;;
+  scan)
+    out=$here/scan-results; mkdir -p "$out"
+    DS=/usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml; PROF=xccdf_net.cyberinabox_profile_cui_dc2
+    tb=$(base64 < "$top/lab/kickstart/dc2-reference/dc2-cui-tailoring.xml" | tr -d '\n')
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do
+      read -r vm ip <<<"$v"
+      rc=$(Rh "$vm" "$ip" "install -d -m 0700 /root/chp-scan && echo $tb | base64 -d > /root/chp-scan/tailoring.xml && oscap xccdf eval --tailoring-file /root/chp-scan/tailoring.xml --profile $PROF --results /root/chp-scan/$vm.xml $DS >/dev/null 2>&1; echo oscap-rc=\$?; install -m 0644 -o chpadmin /root/chp-scan/$vm.xml /home/chpadmin/$vm.xml")
+      check "$vm: oscap evaluated (rc 2 = some rules fail)" "$rc" "oscap-rc=2"
+      Vh "$ip" "cat ~/$vm.xml && rm -f ~/$vm.xml" > "$out/$vm.xml"
+      echo "$vm: $(grep -c '<result>fail</result>' "$out/$vm.xml") failing, $(grep -c '<result>pass</result>' "$out/$vm.xml") passing"
+    done
+    check "scan results hold no secrets" "$(grep -lE 'LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|PRIVATE KEY' "$out"/*.xml | wc -l | tr -d ' ')" "0" ;;
   cleanup)
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"
