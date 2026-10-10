@@ -1,0 +1,37 @@
+# CyberHygiene Project Lab Installer — UEFI boot menu (rendered by render-boot.sh; @VOLID@ = the ISO volume ID).
+# Rocky Linux's signed shim, grub and kernel are used unchanged; only this menu differs. Nothing installs on a timeout.
+set default="0"
+set timeout=-1
+function load_video {
+  insmod efi_gop
+  insmod efi_uga
+  insmod video_bochs
+  insmod video_cirrus
+  insmod all_video
+}
+load_video
+set gfxpayload=keep
+insmod gzio
+insmod part_gpt
+insmod ext2
+search --no-floppy --set=root -l '@VOLID@'
+@BANNER_ECHO@
+menuentry 'Install identity server  (erases the disk of this machine)' --class os {
+	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=@VOLID@ inst.ks=hd:LABEL=@VOLID@:/chp/ks/server.ks fips=1
+	initrdefi /images/pxeboot/initrd.img
+}
+menuentry 'Install client workstation  (erases the disk of this machine)' --class os {
+	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=@VOLID@ inst.ks=hd:LABEL=@VOLID@:/chp/ks/client.ks fips=1
+	initrdefi /images/pxeboot/initrd.img
+}
+menuentry 'Install identity server, serial console ttyS0' --class os {
+	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=@VOLID@ inst.ks=hd:LABEL=@VOLID@:/chp/ks/server.ks fips=1 console=ttyS0,115200
+	initrdefi /images/pxeboot/initrd.img
+}
+menuentry 'Install client workstation, serial console ttyS0' --class os {
+	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=@VOLID@ inst.ks=hd:LABEL=@VOLID@:/chp/ks/client.ks fips=1 console=ttyS0,115200
+	initrdefi /images/pxeboot/initrd.img
+}
+menuentry 'Boot from the local disk' --class os {
+	exit
+}
