@@ -106,3 +106,20 @@ def test_client_token_installed_0600_and_shredded():
     c = (KS / "client.ks").read_text()
     assert "install -D -m 0600 /tmp/chp/unixd.token /mnt/sysimage/etc/kanidm/token" in c
     assert "shred -u /tmp/chp/unixd.token" in c
+
+
+BANNER = (Path(__file__).resolve().parents[1] / "appliance" / "branding" / "boot-banner.txt").read_text()
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_pre_verifies_the_repo_before_the_site_gate(role):
+    pre = (KS / f"{role}.ks").read_text().split("\n%pre ", 1)[1].split("\n%end", 1)[0]
+    assert 'verify-repo --url "$repo"' in pre
+    assert pre.index("verify-repo") < pre.index(f"pre --role {role}")     # before any escrow is written
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_pre_shows_the_banner(role):
+    pre = (KS / f"{role}.ks").read_text().split("\n%pre ", 1)[1].split("\n%end", 1)[0]
+    for line in (ln for ln in BANNER.splitlines() if ln.strip()):
+        assert line in pre

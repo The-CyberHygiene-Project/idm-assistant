@@ -54,6 +54,15 @@ chp-identity-client
 %pre --interpreter=/usr/bin/bash --erroronfail --log=/tmp/chp-pre.log
 # Validate the site stick BEFORE any disk is touched. Messages go to the console so the person installing sees them.
 set -uo pipefail
+cat > /dev/console <<'CHP_BANNER'
+
+CyberHygiene Project Lab Installer
+Internal test image — not an official Rocky Linux product
+
+Built for use with Rocky Linux 9
+Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+
+CHP_BANNER
 mkdir -p /mnt/oemdrv /tmp/chp
 if ! mount -o rw LABEL=OEMDRV /mnt/oemdrv; then
   echo "CHP: no site stick found (a USB volume labelled OEMDRV). Nothing was changed." | tee /dev/console
@@ -65,6 +74,12 @@ for a in $(cat /proc/cmdline); do case $a in chp.repo=*) repo=${a#chp.repo=} ;; 
 pyz=/run/install/repo/chp/chp-site.pyz
 if [ -f /tmp/chp-site.pyz ]; then pyz=/tmp/chp-site.pyz; fi
 if [ ! -f "$pyz" ]; then echo "CHP: chp-site not found ($pyz). Nothing was changed." | tee /dev/console; exit 1; fi
+# Row 37: Anaconda installs with gpgcheck=0. Verify the repo actually used (the ISO's, or a chp.repo= lab override)
+# against the pinned project key BEFORE the site gate writes any escrow and before any disk is touched.
+python3 "$pyz" verify-repo --url "$repo" 2>&1 | tee /dev/console
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+  echo "CHP: install stopped before any disk was touched." | tee /dev/console; exit 1
+fi
 python3 "$pyz" pre --role server --stick /mnt/oemdrv --out /tmp/chp --repo-url "$repo" 2>&1 | tee /dev/console
 rc=${PIPESTATUS[0]}
 if [ "$rc" -ne 0 ]; then echo "CHP: install stopped before any disk was touched." | tee /dev/console; fi
