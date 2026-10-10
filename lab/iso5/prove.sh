@@ -81,9 +81,14 @@ case ${1:-} in
     [[ $out == *"./site.conf"* ]] && pass "stick image made" || fail "stick" "$out" ;;
   negrepo)
     A 'sudo rm -rf /data/lab-inputs/chp/0.6.0-tampered && sudo cp -a /data/lab-inputs/chp/0.6.0 /data/lab-inputs/chp/0.6.0-tampered && echo "<!-- tampered -->" | sudo tee -a /data/lab-inputs/chp/0.6.0-tampered/repodata/repomd.xml >/dev/null'
+    # (a) no network in %pre (the normal case for a chp.repo=http:// override): the repo cannot be read -> fail closed
     out=$(A "sudo CHP_REPO=0.6.0-tampered bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
+    [[ $out == *"STOPPED: chp-site: cannot read the repository metadata"* ]] && pass "row 37: unreadable http repo in %pre -> install stops (fail closed)" || fail "row 37 fail-closed" "$out"
+    [[ $out == *"disk 1 zero-check-failures=0"* ]] && pass "row 37 (a): disk untouched" || fail "row 37 (a) disk" "$out"
+    # (b) early network (ip=): %pre reads the tampered repo and must refuse its signature
+    out=$(A "sudo CHP_REPO=0.6.0-tampered CHP_EXTRA_ARGS='ip=192.168.100.50::192.168.100.1:255.255.255.0:iso5-neg::none' bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
     [[ $out == *"STOPPED: chp-site: the install repository's signature is NOT valid"* ]] && pass "row 37: tampered repo refused in %pre" || fail "row 37 stop" "$out"
-    [[ $out == *"disk 1 zero-check-failures=0"* ]] && pass "row 37: disk untouched" || fail "row 37 disk" "$out"
+    [[ $out == *"disk 1 zero-check-failures=0"* ]] && pass "row 37 (b): disk untouched" || fail "row 37 (b) disk" "$out"
     check "row 37: no escrow written for the refused install" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK escrow/iso5-srv.txt && echo yes || echo no")" "no"
     A 'sudo rm -rf /data/lab-inputs/chp/0.6.0-tampered' ;;
   server)
