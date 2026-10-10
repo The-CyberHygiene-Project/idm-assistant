@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from chp_site.hosts import parse_hosts
-from chp_site.render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
+from chp_site.render import boot_ks, disk_ks, misc_ks, net_ks, repo_ks, users_ks
 from chp_site.sitefile import parse_site
 from tests.test_chp_site_hosts import HOSTS
 from tests.test_chp_site_sitefile import GOOD
@@ -30,9 +30,10 @@ def test_kickstart_rules(role):
     t = (KS / f"{role}.ks").read_text()
     assert t.startswith(HEADER)
     assert "--erroronfail" in t and "%pre" in t and f"pre --role {role}" in t
-    for inc in ("misc", "net", "users", "disk", "repo"):
+    for inc in ("misc", "net", "users", "boot", "disk", "repo"):
         assert f"%include /tmp/chp/{inc}.ks" in t
-    assert "fips=1" in t and "selinux --enforcing" in t and "content_profile_cui" in t
+    assert not re.search(r"^bootloader ", t, re.M)          # only via boot.ks (hashed boot-loader password)
+    assert "selinux --enforcing" in t and "content_profile_cui" in t   # fips=1: via boot.ks (test_chp_site_render)
     assert "--passphrase" not in t and "rootpw --plaintext" not in t     # secrets only ever come from /tmp/chp
     assert not re.search(r"cp .*escrow|escrow.*/mnt/sysimage", t)      # the escrow never reaches the host
 
@@ -42,7 +43,8 @@ def test_kickstart_rules(role):
 def test_kickstart_with_snippets_validates(tmp_path, role, host):
     site = parse_site(GOOD); hs = parse_hosts(HOSTS, site)
     snip = {"misc": misc_ks(site), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
-            "disk": disk_ks("vda", "test-only"), "repo": repo_ks("file:///run/install/repo/chp")}
+            "disk": disk_ks("vda", "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
+            "boot": boot_ks("grub.pbkdf2.sha512.10000.AA.BB")}
     t = (KS / f"{role}.ks").read_text()
     for k, v in snip.items():
         t = t.replace(f"%include /tmp/chp/{k}.ks", v.rstrip("\n"))
@@ -123,3 +125,9 @@ def test_pre_shows_the_banner(role):
     pre = (KS / f"{role}.ks").read_text().split("\n%pre ", 1)[1].split("\n%end", 1)[0]
     for line in (ln for ln in BANNER.splitlines() if ln.strip()):
         assert line in pre
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_post_imports_the_rocky_release_key(role):          # ISSO 2026-10-10 (CUI rule ensure_redhat_gpgkey_installed)
+    post = (KS / f"{role}.ks").read_text().split("\n%post --log=/root/chp-post.log", 1)[1].split("\n%end", 1)[0]
+    assert "rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9" in post

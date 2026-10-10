@@ -54,6 +54,9 @@ enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled h
   check "$3: chp_kanidm loaded, socket dir labelled" "$(Rh "$1" "$2" 'semodule -l | grep -c "^chp_kanidm"; ls -Zd /run/kanidm-unixd | grep -c kanidm_unixd_var_run_t' | tr '\n' ' ')" "1 1 "
   check "$3: fapolicyd no denials" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
   check "$3: SELinux no AVC since boot" "$(Rh "$1" "$2" 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0"
+  # ISSO 2026-10-10 scan fixes: boot-loader password (hashed) and Rocky's release key in the rpm database
+  check "$3: boot-loader password set" "$(Rh "$1" "$2" 'grep -c "^GRUB2_PASSWORD=grub.pbkdf2.sha512.10000." /boot/grub2/user.cfg')" "1"
+  check "$3: Rocky release key imported" "$(Rh "$1" "$2" 'rpm -q gpg-pubkey --qf "%{SUMMARY}\n" | grep -c "Rocky Enterprise Software Foundation - Release key 2022"')" "1"
 }
 
 case ${1:-} in
@@ -283,7 +286,7 @@ case ${1:-} in
       Vh "$ip" "cat ~/$vm.xml && rm -f ~/$vm.xml" > "$out/$vm.xml"
       echo "$vm: $(grep -c '<result>fail</result>' "$out/$vm.xml") failing, $(grep -c '<result>pass</result>' "$out/$vm.xml") passing"
     done
-    check "scan results hold no secrets" "$(grep -lE 'LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|PRIVATE KEY' "$out"/*.xml | wc -l | tr -d ' ')" "0" ;;
+    check "scan results hold no secrets" "$(grep -lE 'LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|GRUB_PASSWORD|PRIVATE KEY' "$out"/*.xml | wc -l | tr -d ' ')" "0" ;;
   cleanup)
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"

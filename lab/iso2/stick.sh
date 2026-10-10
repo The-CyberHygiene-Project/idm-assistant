@@ -21,8 +21,8 @@ case $cmd in
     mount -o loop,ro "$img" "$m"
     (cd "$m" && find . -type f | sort)
     for f in "$m"/escrow/*; do [[ -f $f ]] || continue
-      echo "--- ${f#"$m"/} (masked)"; sed -E 's/^(LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD)=(.*)$/\1=<\2>/; s/<([^>]*)>/<\1>/' "$f" \
-        | awk -F= '/^(LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD)=/{v=$2; gsub(/[<>]/,"",v); print $1"=<"length(v)" chars>"; next} {print}'
+      echo "--- ${f#"$m"/} (masked)"; sed -E 's/^(LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|GRUB_PASSWORD)=(.*)$/\1=<\2>/; s/<([^>]*)>/<\1>/' "$f" \
+        | awk -F= '/^(LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|GRUB_PASSWORD)=/{v=$2; gsub(/[<>]/,"",v); print $1"=<"length(v)" chars>"; next} {print}'
     done ;;
   escrow)
     mount -o loop,ro "$img" "$m"; cat "$m/escrow/$1" ;;

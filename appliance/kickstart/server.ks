@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # CHP Lab Installer, server kickstart. Site values come from the OEMDRV stick through `chp-site pre` (%pre below);
-# the secrets (LUKS passphrase, root console password) exist only in /tmp/chp (installer RAM) and on the stick.
+# the secrets (LUKS passphrase, root console and boot-loader passwords) exist only in /tmp/chp (installer RAM) and on the stick.
 text
 cdrom
 poweroff
@@ -13,7 +13,7 @@ keyboard --vckeymap=us --xlayouts='us'
 firewall --enabled --service=ssh
 selinux --enforcing
 %include /tmp/chp/users.ks
-bootloader --append="fips=1"
+%include /tmp/chp/boot.ks
 zerombr
 %include /tmp/chp/disk.ks
 %include /tmp/chp/repo.ks
@@ -114,6 +114,9 @@ echo "CHP: install finished. Remove the site stick and keep it OFFLINE: it holds
 %post --log=/root/chp-post.log
 # Trust our signing key (the chp-site RPM ships it) and keep vendor online repos off (offline appliance).
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+# ISSO 2026-10-10 (CUI ensure_redhat_gpgkey_installed): trust the OS vendor's key too (the CUI remediation imports
+# Red Hat's, not Rocky's); also lets the collector verify Rocky signers (row 46 backlog).
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
 systemctl enable chp-firstboot-common.service chp-monitor.timer chp-server-firstboot.service
 dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
 # dc2 tailoring: dc2 UNSELECTS sysctl_user_max_user_namespaces; the CUI files are also inside the initramfs.
