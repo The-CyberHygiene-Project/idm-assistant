@@ -13,6 +13,9 @@
 #   (Plan 4a's `ops` stage is not copied: `ga` superseded it in Plan 4b)
 #   negtrust  Review Focus 1 on iso5-cli2: a wrong CA_ROOT_SHA256 pin is refused, the right one restores the anchor
 #   scan      Plan 5a gate 3: OpenSCAP CUI (dc2 tailoring) on the three PRISTINE hosts -> lab/iso5/scan-results/
+#   adapter   Plan 5b: LAB ADAPTER after this install's scan (sudo rule, pins, idm_admin secret)
+#   nvram / snapspike / golden   Plan 5b: qcow2 NVRAM, vTPM snapshot spike, golden snapshots + reset check
+#   row36     Plan 5b gate 2: gdm-password PAM test x3
 #   cleanup   remove the three VMs, the stick, helpers and lab secrets on aero; shred the Mac render dir
 # Every check prints PASS/FAIL; the stage exits 1 on any FAIL. Secrets move over pipes only (stick image -> expect).
 set -uo pipefail
@@ -299,11 +302,72 @@ case ${1:-} in
       echo "$vm: $(grep -c '<result>fail</result>' "$out/$vm.xml") failing, $(grep -c '<result>pass</result>' "$out/$vm.xml") passing"
     done
     check "scan results hold no secrets" "$(grep -lE 'LUKS_PASSPHRASE|ROOT_CONSOLE_PASSWORD|GRUB_PASSWORD|PRIVATE KEY' "$out"/*.xml | wc -l | tr -d ' ')" "0" ;;
+  adapter)
+    # Plan 5b: the LAB ADAPTER (lab/iso5/LAB-ADAPTER.md). Refused unless THIS install's CUI scan is already done: the scan
+    # results must be newer than the server's "INSTALL COMPLETED" stamp on the stick (only that line leaves aero).
+    st=$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK $SRV.txt | sed -n 's/^INSTALL COMPLETED //p' | tail -1")
+    inst=$(date -j -u -f %Y%m%dT%H%M%SZ "$st" +%s 2>/dev/null || echo 0)
+    for v in $SRV $C2; do
+      f="$here/scan-results/$v.xml"
+      if [[ -f $f && $(stat -f %m "$f") -gt $inst && $inst -gt 0 ]]; then pass "$v: CUI scan of this install exists (before the adapter)"
+      else fail "$v: no CUI scan of this install yet" "run 'prove.sh scan' first"; exit 1; fi
+    done
+    for v in "$SRV $SIP" "$C2 $C2IP"; do
+      read -r vm ip <<<"$v"
+      check "$vm: lab adapter sudo rule" "$(Rh "$vm" "$ip" "printf 'chpadmin ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/.99-lab-adapter && chmod 0440 /etc/sudoers.d/.99-lab-adapter && visudo -cqf /etc/sudoers.d/.99-lab-adapter && mv /etc/sudoers.d/.99-lab-adapter /etc/sudoers.d/99-lab-adapter && echo installed")" "installed"
+    done
+    # pins (not secret) and the idm_admin password (secret: decoded on aero, only that field crosses, written 0600)
+    A "sudo bash /tmp/iso2/stick.sh escrow $STICK ../client.conf" | python3 -c 'import json,os,sys
+d=dict(l.split("=",1) for l in sys.stdin.read().splitlines() if "=" in l and not l.startswith("#"))
+p=os.path.expanduser("~/idm-lab-secrets/iso5-pins.json"); fd=os.open(p, os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0o600)
+os.write(fd, json.dumps({k: d[k].strip() for k in ("CA_ROOT_SHA256","SSH_CA_FPR")}).encode()); os.close(fd)'
+    A "sudo bash /tmp/iso2/stick.sh escrow $STICK $SRV-server.txt | sed -n 's/^KANIDM_ADMINS_JSON=//p' | python3 -c 'import base64,json,sys; print(json.loads(base64.b64decode(sys.stdin.read()))[\"idm_admin\"])'" \
+      | python3 -c 'import json,os,sys
+pw=sys.stdin.read().strip(); assert pw, "no idm_admin password"
+p=os.path.expanduser("~/idm-lab-secrets/iso5-idm_admin.json"); fd=os.open(p, os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0o600)
+os.write(fd, json.dumps({"password": pw}).encode()); os.close(fd)'
+    check "pins file (0600, two keys)" "$(stat -f %Lp ~/idm-lab-secrets/iso5-pins.json) $(python3 -c 'import json,os; print(len(json.load(open(os.path.expanduser("~/idm-lab-secrets/iso5-pins.json")))))')" "600 2"
+    check "idm_admin secret file (0600)" "$(stat -f %Lp ~/idm-lab-secrets/iso5-idm_admin.json)" "600"
+    for a in srv1 client2; do
+      check "$a: harness sudo works (ssh_config + adapter)" "$(ssh -F "$here/ssh_config" -n $a 'sudo -n true && echo ok' 2>/dev/null)" "ok"
+    done ;;
+  nvram)
+    # Plan 5b: libvirt needs a qcow2 NVRAM for internal snapshots of UEFI VMs (shut down, convert, start; TPM unlocks)
+    A 'mkdir -p /tmp/lab-host'; scp -q "$top/lab/host/nvram-qcow2.sh" "$top/lab/host/lib.sh" aero:/tmp/lab-host/
+    A "sudo bash /tmp/lab-host/nvram-qcow2.sh $SRV >/dev/null 2>&1; sudo bash /tmp/lab-host/nvram-qcow2.sh $C2 >/dev/null 2>&1; true"
+    for v in $SRV $C2; do check "$v: NVRAM is qcow2" "$(A "sudo virsh dumpxml --inactive $v | grep -c \"format='qcow2'>/var/lib/libvirt/qemu/nvram\"")" "1"; done
+    for v in "$SRV $SIP" "$C2 $C2IP"; do read -r vm ip <<<"$v"
+      ok=no; for _ in $(seq 40); do if Vh "$ip" true; then ok=yes; break; fi; sleep 10; done; check "$vm: back up (TPM unlock)" "$ok" "yes"; done ;;
+  snapspike)
+    # Plan 5b Task 6 Step 3: is an internal snapshot of a vTPM VM possible here? (stop and ask the user if not)
+    out=$(A "sudo virsh snapshot-create-as $C2 spike --atomic 2>&1 && echo CREATED")
+    [[ $out == *CREATED* ]] && pass "$C2: internal snapshot with vTPM created" || { fail "$C2: snapshot refused" "$out"; exit 1; }
+    out=$(A "sudo virsh snapshot-revert $C2 spike --running 2>&1 && echo REVERTED; sudo virsh snapshot-delete $C2 spike >/dev/null 2>&1; true")
+    [[ $out == *REVERTED* ]] && pass "$C2: revert to the snapshot" || fail "$C2: revert" "$out"
+    ok=no; for _ in $(seq 30); do if Vh "$C2IP" true; then ok=yes; break; fi; sleep 5; done; check "$C2: answers after revert" "$ok" "yes"
+    check "$C2: unixd online after revert" "$(ssh -F "$here/ssh_config" -n client2 'sudo systemctl restart chronyd; for i in $(seq 15); do kanidm-unix status 2>/dev/null | grep -q "Kanidm: online" && break; sleep 2; done; kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"' 2>/dev/null)" "1" ;;
+  golden)
+    for v in $SRV $C2; do
+      out=$(A "sudo virsh snapshot-delete $v golden >/dev/null 2>&1; sudo virsh snapshot-create-as $v golden --atomic 2>&1 && echo CREATED")
+      [[ $out == *CREATED* ]] && pass "$v: golden snapshot" || { fail "$v: golden" "$out"; exit 1; }
+    done
+    out=$("$here/reset.sh" 2>&1); [[ $out == *"reset: golden"* ]] && pass "reset.sh from golden" || fail "reset.sh" "$(tail -3 <<<"$out")"
+    for a in srv1 client2; do check "engine findings on $a at golden" "$(cd "$top" && IDM_PROFILE=appliance .venv/bin/python -m engine findings $a 2>&1 | tr -d ' \n')" "[]"; done ;;
+  row36)
+    # Gate 2 + row 36: the gdm-password PAM stack (Kanidm password + GA code), 3 times, each in a fresh GA window.
+    for n in 1 2 3; do
+      sleep $(( 31 - $(date +%s) % 30 ))
+      sec=$(cd "$top" && IDM_PROFILE=appliance .venv/bin/python -c 'from engine import labsecrets; import json; print(json.loads(labsecrets.path("lab01.json").read_text())["posix_password"])')
+      code=$(python3 "$top/lab/tools/totp.py" - sha1 < ~/idm-lab-secrets/iso5-lab01.ga)
+      rc=$(printf '%s\n%s\n' "$sec" "$code" | ssh -F "$here/ssh_config" client2 'sudo chp-site pam-test gdm-password lab01 >/dev/null 2>&1; echo $?' 2>/dev/null)
+      check "row 36 run $n: gdm-password accepts lab01 (password + GA code)" "$rc" "0"
+    done
+    check "row 36: GA token label after the logins" "$(ssh -F "$here/ssh_config" -n client2 'sudo stat -c %C /var/lib/google-authenticator/lab01 | cut -d: -f3' 2>/dev/null)" "var_auth_t" ;;
   cleanup)
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"
     rm -P "$R"/* 2>/dev/null; rm -rf "$R"; pass "cleanup" ;;
-  *) echo "usage: prove.sh prep|negrepo|server|firstboot|reboot|export|client1|client2|baseline|ga|negtrust|scan|cleanup"; exit 2 ;;
+  *) echo "usage: prove.sh prep|negrepo|server|firstboot|reboot|export|client1|client2|baseline|ga|negtrust|scan|adapter|nvram|snapspike|golden|row36|cleanup"; exit 2 ;;
 esac
 echo "stage $1: $( ((fails)) && echo FAIL || echo ALL PASS )"
 exit "$fails"
