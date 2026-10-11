@@ -8,7 +8,7 @@ set -Eeuo pipefail
 name=$1 mac=$2 entry=$3 stick=$4 ndisks=$5 iso=$6 expect_stop=${7:-}
 [[ $name == iso5-* ]] || { echo "refusing: only iso5-* lab VMs are managed here"; exit 1; }
 log=/var/log/libvirt/qemu/$name-install.log
-rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
+rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram --snapshots-metadata >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
 if virsh dominfo "$name" >/dev/null 2>&1; then rm_vm "$name"; fi
 rm -f "$log"
 disks=(); for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=120,format=qcow2"); done

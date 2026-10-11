@@ -13,7 +13,7 @@ name=$1 mac=$2 role=$3 stick=$4 ndisks=$5 expect_stop=${6:-}
 repo=${CHP_REPO:-0.2.0}
 iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso; log=/var/log/libvirt/qemu/$name-install.log
 # Remove a previous VM of this name and ONLY its own disks: --remove-all-storage would also delete the attached stick.
-rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
+rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram --snapshots-metadata >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
 if virsh dominfo "$name" >/dev/null 2>&1; then rm_vm "$name"; fi
 rm -f "$log"
 disks=()

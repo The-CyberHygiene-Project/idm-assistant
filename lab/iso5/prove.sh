@@ -23,7 +23,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.6.2; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc4/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=0.6.3; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc5/cyberhygiene-lab-installer-el9.iso
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -364,9 +364,10 @@ os.write(fd, json.dumps({"password": pw}).encode()); os.close(fd)'
     done
     check "row 36: GA token label after the logins" "$(ssh -F "$here/ssh_config" -n client2 'sudo stat -c %C /var/lib/google-authenticator/lab01 | cut -d: -f3' 2>/dev/null)" "var_auth_t" ;;
   cleanup)
-    for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
+    for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram --snapshots-metadata >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"
-    rm -P "$R"/* 2>/dev/null; rm -rf "$R"; pass "cleanup" ;;
+    rm -P "$R"/* 2>/dev/null; rm -rf "$R"
+    check "cleanup: no iso5 VM left on aero" "$(A "sudo virsh list --all --name | grep -c '^iso5-'")" "0" ;;
   *) echo "usage: prove.sh prep|negrepo|server|firstboot|reboot|export|client1|client2|baseline|ga|negtrust|scan|adapter|nvram|snapspike|golden|row36|cleanup"; exit 2 ;;
 esac
 echo "stage $1: $( ((fails)) && echo FAIL || echo ALL PASS )"
