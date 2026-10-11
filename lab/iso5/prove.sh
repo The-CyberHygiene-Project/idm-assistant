@@ -8,6 +8,7 @@
 #   reboot    TPM unlock
 #   export    export-client: secrets AND the two client tokens to the stick
 #   client1 / client2   install each client FROM THE ISO + the stick; wait for its first boot; check the enrolment
+#   baseline  Plan 5b: zero findings from the diagnostic engine on all three healthy hosts
 #   ga        ISO Plan 4b: the second factor (bootstrap, enrol, logins, scratch codes, row 36, break-glass, refusals)
 #   (Plan 4a's `ops` stage is not copied: `ga` superseded it in Plan 4b)
 #   negtrust  Review Focus 1 on iso5-cli2: a wrong CA_ROOT_SHA256 pin is refused, the right one restores the anchor
@@ -19,7 +20,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.6.1; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc3/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=0.6.2; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc4/cyberhygiene-lab-installer-el9.iso
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -149,6 +150,16 @@ case ${1:-} in
     A "sudo virsh reboot $VM >/dev/null"; sleep 20
     ok=no; for _ in $(seq 30); do if Vh "$IP" true; then ok=yes; break; fi; sleep 10; done
     check "$VM: TPM unlock after reboot" "$ok" "yes" ;;
+  baseline)
+    # Plan 5b: the diagnostic engine on healthy installed hosts finds NOTHING (proves P1: clients have collect.conf).
+    for a in srv1 client2; do
+      check "engine findings on $a (appliance profile)" "$(cd "$top" && IDM_PROFILE=appliance .venv/bin/python -m engine findings $a 2>&1 | tr -d ' \n')" "[]"
+    done
+    rep=$(ssh -o BatchMode=yes -J aero -i "$DKEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "diag@$C1IP" "sudo -n /usr/sbin/idm-collect" 2>/dev/null | tail -1)
+    srv=$(ssh -o BatchMode=yes -J aero -i "$DKEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "diag@$SIP" "sudo -n /usr/sbin/idm-collect" 2>/dev/null | tail -1)
+    check "engine findings on $C1" "$(cd "$top" && printf '%s\n%s\n' "$rep" "$srv" | .venv/bin/python -c 'import json,sys; from engine.findings import evaluate; c,s=[json.loads(l) for l in sys.stdin.read().splitlines()]; print([f.id for f in evaluate(c, s)])')" "[]" ;;
   ga)
     # ISO Plan 4b. GA is on everywhere from install (0.5.0). The lab stand-in for each user's phone is the token's secret,
     # copied as root to aero (/tmp/iso2/<vm>-<user>.ga, 0600); real users scan the QR code instead.
@@ -292,7 +303,7 @@ case ${1:-} in
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"
     rm -P "$R"/* 2>/dev/null; rm -rf "$R"; pass "cleanup" ;;
-  *) echo "usage: prove.sh prep|negrepo|server|firstboot|reboot|export|client1|client2|ga|negtrust|scan|cleanup"; exit 2 ;;
+  *) echo "usage: prove.sh prep|negrepo|server|firstboot|reboot|export|client1|client2|baseline|ga|negtrust|scan|cleanup"; exit 2 ;;
 esac
 echo "stage $1: $( ((fails)) && echo FAIL || echo ALL PASS )"
 exit "$fails"
