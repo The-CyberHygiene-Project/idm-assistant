@@ -26,7 +26,7 @@ ssh aero "tar -C /data/chp-release/$REPO_V -czf - repo" > "$P/chp-repo-$REPO_V.t
 cp "$here/RPM-GPG-KEY-cyberhygiene" "$top/appliance/branding/NOTICE.txt" "$P/"
 sed -e "s/@VERSION@/$V/g" -e "s/@REPO@/$REPO_V/g" "$here/VERIFY.md.in" > "$P/VERIFY.md"
 (cd "$P" && shasum -a 256 "$ISO" "chp-repo-$REPO_V.tar.gz" RPM-GPG-KEY-cyberhygiene NOTICE.txt VERIFY.md > SHA256SUMS)
-echo "== signing SHA256SUMS (PIN dialog, then touch the key)"
+echo "== signing SHA256SUMS (PIN dialog, then touch the key)"; say "Release signing now. Watch for the PIN dialog." 2>/dev/null || true
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
 echo "== checks"
 gpg --verify "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
