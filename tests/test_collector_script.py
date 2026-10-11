@@ -645,3 +645,9 @@ def test_source_in_use_is_read_even_when_not_listed_first():
 
 def test_first_source_when_none_is_selected():
     assert _source_pair(["^~ 10.0.0.1  10  6  37  15  -50085s[-50085s] +/- 317us"]).startswith("~|-50085")
+
+
+def test_relabel_check_covers_the_appliance_ssh_ca_key():   # Plan 5b P2 (row 33)
+    t = SCRIPT.read_text()
+    loop = t[t.index("for pth in /run/kanidm-unixd"):t.index("relab=\"[]\"")]
+    assert "/etc/ssh/chp_user_ca.pub" in loop and "/etc/ssh/trusted_user_ca_keys" in loop

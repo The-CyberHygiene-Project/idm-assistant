@@ -100,9 +100,17 @@ do_sshd() {
 
 do_accounts() { /usr/libexec/chp/client-accounts --role "$ROLE"; }
 
+do_collect() {        # Plan 5b P1: the collector's site data (the server writes the same at its first boot)
+  install -d -m 0755 /etc/idm-collect
+  chp-site render collect-conf > /etc/idm-collect/collect.conf.new
+  install -m 0644 /etc/idm-collect/collect.conf.new /etc/idm-collect/collect.conf; rm -f /etc/idm-collect/collect.conf.new
+  restorecon -R /etc/idm-collect
+}
+
 step trust do_trust
 step unixd do_unixd
 step authselect do_authselect
 step sshd do_sshd
 step accounts do_accounts
+step collect do_collect
 if [ -z "$ONLY" ]; then current=done; touch "$M/client.done"; log "CHP: client enrolment complete ($ROLE; logins: $LOGIN_GROUP)"; fi

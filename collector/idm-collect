@@ -395,7 +395,7 @@ avc=$(ausearch --input-logs -m AVC -ts recent 2>/dev/null </dev/null | grep -c '
 # Labels that differ from policy on a FIXED list of identity paths (restorecon -n = dry run, changes nothing).
 # A wrong label here can fail logins with no AVC at all (dontaudit), so this is the evidence, not the AVC count.
 rl=""
-for pth in /run/kanidm-unixd /var/cache/kanidm-unixd /var/lib/kanidm-unixd /etc/kanidm /etc/ssh/trusted_user_ca_keys \
+for pth in /run/kanidm-unixd /var/cache/kanidm-unixd /var/lib/kanidm-unixd /etc/kanidm /etc/ssh/trusted_user_ca_keys /etc/ssh/chp_user_ca.pub \
            /etc/pki/ca-trust/source/anchors; do
   [ -e "$pth" ] && rl="$rl $pth"
 done
