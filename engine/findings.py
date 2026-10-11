@@ -180,14 +180,20 @@ def nss_order_wrong(r):
 
 def cache_stale(server, client):
     """Cross-host: groups the client still grants from cache that the server no longer lists (revocation lag).
-    Only Kanidm groups (name@realm) count; the user's private group (the user's own SPN) is skipped."""
+    Only Kanidm groups count: those the collector marks as resolved by Kanidm (kanidm_groups), or, from an older
+    collector, SPN-named ones (name@realm). The user's private group is skipped."""
     su, cu = server.get("kanidm_user") or {}, client.get("user_nss") or {}
     if not (su.get("exists") and cu.get("found") and isinstance(su.get("memberof"), list)):
         return None                        # unknown server membership is no evidence of anything
     if su.get("name") != cu.get("name"):
         return None
     have = set(su["memberof"])
-    extra = sorted(g for g in cu.get("groups", []) if "@" in g and g.split("@")[0] != su["name"] and g not in have)
+    kg = cu.get("kanidm_groups")
+    if isinstance(kg, list):      # the collector marked Kanidm's groups (short names, row 9): compare by short name
+        short = {m.split("@")[0] for m in have}
+        extra = sorted(g for g in kg if g.split("@")[0] != su["name"] and g.split("@")[0] not in short)
+    else:                         # older collector: only SPN-named groups can be judged
+        extra = sorted(g for g in cu.get("groups", []) if "@" in g and g.split("@")[0] != su["name"] and g not in have)
     if extra:
         return Finding("UNIXD_CACHE_STALE", "unixd", (f"{cu['name']} on {client.get('host')} still has {extra}",
                                                       "the server no longer lists them (change not yet visible)"))

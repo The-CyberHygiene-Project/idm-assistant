@@ -8,6 +8,9 @@ from pathlib import Path
 from engine import labsecrets, profile, remote
 
 ROOT = Path(__file__).resolve().parents[1]
+# Lab stand-in certificates (the user's own, held in ~/idm-lab-secrets): valid for the whole test period, because the CA
+# records each one and an expired record is a real SSH_USER_CERT_EXPIRED finding (c3 injects that on purpose).
+LAB_CERT_VALIDITY = "+30d"
 
 
 def fresh_window(now=time.time, sleep=time.sleep):
@@ -23,7 +26,7 @@ def appliance_argv(user):
 def _appliance(user, password, log, fresh_cert):
     from engine.repairs import sign_user_cert
     if fresh_cert:          # password probes test the PASSWORD path: give them a valid certificate
-        labsecrets.write(f"{user}_ecdsa-cert.pub", sign_user_cert(remote, "srv1", user, "+10m"))
+        labsecrets.write(f"{user}_ecdsa-cert.pub", sign_user_cert(remote, "srv1", user, LAB_CERT_VALIDITY))
     fresh_window()
     r = subprocess.run(appliance_argv(user), input=f"{password}\n", capture_output=True, text=True)
     return "OK" if "LOGIN_OK" in r.stdout else "DENIED" if "LOGIN_REFUSED" in r.stdout else "ERROR"
@@ -69,10 +72,10 @@ def prepare_user(user, posix=True, log=print):
                        check=True, stdin=subprocess.DEVNULL)
     pub = (k.parent / (k.name + ".pub")).read_text()
     remote.run("srv1", ["sudo", "install", "-m", "0644", "/dev/stdin", f"/var/lib/ssh-ca/keys/{user}.pub"], stdin=pub)
-    labsecrets.write(f"{user}_ecdsa-cert.pub", sign_user_cert(remote, "srv1", user, "+1h"))
+    labsecrets.write(f"{user}_ecdsa-cert.pub", sign_user_cert(remote, "srv1", user, LAB_CERT_VALIDITY))
     remote.run("client2", ["sudo", "kanidm-unix", "cache-invalidate"])
     remote.run("client2", ["sudo", "sh", "-c", f"chp-site ga-enrol {user} --reset --no-confirm >/dev/null 2>&1 || "
                            f"chp-site ga-enrol {user} --no-confirm >/dev/null"])
     sec = remote.run("client2", ["sudo", "head", "-1", f"/var/lib/google-authenticator/{user}"]).stdout.strip()
     labsecrets.write(f"{user}.ga", sec + "\n")
-    log(f"prepared {user}: key registered, certificate +1h, GA token on client2 (posix={posix})")
+    log(f"prepared {user}: key registered, certificate {LAB_CERT_VALIDITY}, GA token on client2 (posix={posix})")

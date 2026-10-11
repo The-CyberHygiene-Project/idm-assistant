@@ -161,13 +161,21 @@ else err "tls: could not fetch the Kanidm certificate (unreachable or handshake 
 
 # --- user lookup (clients, --user) --------------------------------------------------------------------------------
 # Before the unixd section on purpose: `kanidm-unix status` is only fresh after a lookup needed the server (measured).
+# >>> user-lookup
 un=null
 if [ -n "$user" ] && [ "$role" = client ]; then
   if p=$(timeout 15 getent passwd "$user" 2>/dev/null); then
-    gl=""; for g in $(timeout 15 id -Gn "$user" 2>/dev/null); do gl="$gl$(json_str "$g"),"; done
-    un="{\"name\":$(json_str "$user"),\"found\":true,\"gecos\":$(json_str "$(printf '%s' "$p" | cut -d: -f5)"),\"groups\":[${gl%,}]}"
+    # kanidm_groups: the groups that resolve through Kanidm's NSS module. With short names (row 9) a group name alone
+    # cannot tell a Kanidm group from a local one, so the stale-cache rule needs this (Plan 5b, scenario l3).
+    gl=""; kg=""
+    for g in $(timeout 15 id -Gn "$user" 2>/dev/null); do
+      gl="$gl$(json_str "$g"),"
+      if timeout 5 getent -s kanidm group "$g" >/dev/null 2>&1; then kg="$kg$(json_str "$g"),"; fi
+    done
+    un="{\"name\":$(json_str "$user"),\"found\":true,\"gecos\":$(json_str "$(printf '%s' "$p" | cut -d: -f5)"),\"groups\":[${gl%,}],\"kanidm_groups\":[${kg%,}]}"
   else un="{\"name\":$(json_str "$user"),\"found\":false}"; fi
 fi
+# <<< user-lookup
 
 # --- failed-login lockout (faillock) for --user ------------------------------------------------------------------
 # >>> faillock

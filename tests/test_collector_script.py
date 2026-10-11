@@ -651,3 +651,20 @@ def test_relabel_check_covers_the_appliance_ssh_ca_key():   # Plan 5b P2 (row 33
     t = SCRIPT.read_text()
     loop = t[t.index("for pth in /run/kanidm-unixd"):t.index("relab=\"[]\"")]
     assert "/etc/ssh/chp_user_ca.pub" in loop and "/etc/ssh/trusted_user_ca_keys" in loop
+
+
+def _user_lookup(groups, kanidm):
+    import json
+    lines = SCRIPT.read_text().splitlines()
+    i, j = lines.index("# >>> user-lookup"), lines.index("# <<< user-lookup")
+    fake = (f'getent() {{ if [ "$1" = -s ]; then case " {" ".join(kanidm)} " in *" $4 "*) return 0;; esac; return 2; fi; '
+            f'echo "lab01:x:1:1:Lab User 1:/home/lab01:/bin/bash"; }}\n'
+            f'id() {{ echo "{" ".join(groups)}"; }}\ntimeout() {{ shift; "$@"; }}\n'
+            'json_str() { printf \'"%s"\' "$1"; }\nuser=lab01; role=client\n')
+    sh = fake + "\n".join(lines[i + 1:j]) + '\necho "$un"'
+    return json.loads(subprocess.run(["bash", "-c", sh], capture_output=True, text=True, check=True).stdout)
+
+
+def test_user_lookup_marks_the_groups_that_come_from_kanidm():     # Plan 5b l3 (short names, row 9)
+    un = _user_lookup(["lab01", "lab_admins", "wheel"], ["lab01", "lab_admins"])
+    assert un["groups"] == ["lab01", "lab_admins", "wheel"] and un["kanidm_groups"] == ["lab01", "lab_admins"]

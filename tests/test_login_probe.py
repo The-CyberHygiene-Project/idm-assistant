@@ -30,3 +30,11 @@ def test_enrol_finds_totp_next_to_itself():     # Plan 5b: /tmp/srv1 existed onl
     from pathlib import Path
     t = (Path(_login.__file__).resolve().parents[1] / "lab/srv1/enrol-user.exp").read_text()
     assert "/tmp/srv1/totp.py" not in t and "[file dirname [info script]]/totp.py" in t
+
+
+def test_probe_certificates_outlive_a_regression():
+    # Plan 5b l2: the CA records every certificate it signs; a +10m/+1h probe certificate showed up later as
+    # SSH_USER_CERT_EXPIRED, a finding no scenario injected. Lab stand-in certificates last the whole test period.
+    import inspect
+    src = inspect.getsource(_login)
+    assert _login.LAB_CERT_VALIDITY == "+30d" and '"+10m"' not in src and '"+1h"' not in src
