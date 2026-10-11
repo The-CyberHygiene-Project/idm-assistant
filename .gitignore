@@ -13,3 +13,4 @@ idm-lab-secrets/
 *.token
 *.key
 appliance/chp-site/dist/
+lab/iso5/scan-results/*.xml

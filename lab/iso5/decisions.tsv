@@ -1,0 +1,3 @@
+# rule_id<TAB>decision<TAB>decided_by<TAB>reason
+xccdf_org.ssgproject.content_rule_ensure_redhat_gpgkey_installed	fix	D. Shannon (ISSO)	Import the Rocky 9 release key in %post (2026-10-10); also closes the row-46 backlog item
+xccdf_org.ssgproject.content_rule_grub2_password	fix	D. Shannon (ISSO)	Per-host random boot-loader password escrowed on the site stick (2026-10-10): TPM PCR 7 unlock does not cover boot-option edits

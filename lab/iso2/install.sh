@@ -3,12 +3,13 @@
 #   install.sh NAME MAC ROLE STICK_IMG NDISKS [--expect-stop]
 # Files expected in /tmp/iso2: server.ks, client.ks, chp-site.pyz. Firmware as client1: q35, UEFI Secure Boot with
 # enrolled keys, vTPM. The stick is a USB disk (removable). After a good install the stick is detached ("removed").
+# CHP_EXTRA_ARGS: more kernel arguments (e.g. ip=… so %pre has network: row 37 verifies an http repo in %pre).
 # --expect-stop: the install must STOP in %pre; waits up to 10 min for the CHP stop message, then reports whether every
 # disk is still empty (qemu-img actual size < 2 MB) and removes the VM.
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 name=$1 mac=$2 role=$3 stick=$4 ndisks=$5 expect_stop=${6:-}
-[[ $name == iso[234]-* ]] || { echo "refusing: only iso2-*/iso3-*/iso4-* lab VMs are managed here"; exit 1; }
+[[ $name == iso[2345]-* ]] || { echo "refusing: only iso2-*...iso5-* lab VMs are managed here"; exit 1; }
 repo=${CHP_REPO:-0.2.0}
 iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso; log=/var/log/libvirt/qemu/$name-install.log
 # Remove a previous VM of this name and ONLY its own disks: --remove-all-storage would also delete the attached stick.
@@ -26,7 +27,7 @@ virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osi
   "${disks[@]}" --disk "path=$stick,format=raw,bus=usb,removable=on" \
   --location "$iso" --network "bridge=br-lab,mac=$mac" \
   --initrd-inject "/tmp/iso2/$role.ks" --initrd-inject /tmp/iso2/chp-site.pyz \
-  --extra-args "inst.ks=file:/$role.ks chp.repo=http://192.168.100.1:8080/chp/$repo fips=1 console=ttyS0,115200 inst.text" \
+  --extra-args "inst.ks=file:/$role.ks chp.repo=http://192.168.100.1:8080/chp/$repo fips=1 console=ttyS0,115200 inst.text ${CHP_EXTRA_ARGS:-}" \
   --graphics none --serial "pty,log.file=$log" --noautoconsole --noreboot "${wait_args[@]}" >"/tmp/iso2/$name-virt-install.out" 2>&1 \
   || { echo "virt-install exited non-zero (checking the VM):"; tail -5 "/tmp/iso2/$name-virt-install.out"; }
 if [[ $expect_stop == --expect-stop ]]; then

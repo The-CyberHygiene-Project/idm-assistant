@@ -1,0 +1,7 @@
+# CyberHygiene Project Lab Installer — legacy BIOS boot: refuse, with a message (row 17: UEFI + Secure Boot only).
+@BANNER_SAY@
+say
+say This installer starts only in UEFI mode with Secure Boot on.
+say Restart, open the firmware boot menu, and choose the UEFI entry for this DVD or USB stick.
+prompt 1
+timeout 0

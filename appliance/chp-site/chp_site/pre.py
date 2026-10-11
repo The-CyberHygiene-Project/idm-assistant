@@ -13,7 +13,7 @@ from .clientconf import parse_client_conf
 from .disks import choose_disk
 from .facts import Facts  # noqa: F401  (re-exported for callers and tests)
 from .hosts import lookup, parse_hosts
-from .render import disk_ks, misc_ks, net_ks, repo_ks, users_ks
+from .render import boot_ks, disk_ks, grub_pbkdf2, misc_ks, net_ks, repo_ks, users_ks
 from .sitefile import SiteError, parse_site, read_file
 
 TOKEN_RE = r"[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"   # a Kanidm API token (JWS)
@@ -49,7 +49,7 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
             raise SiteError(f"tokens/{host.hostname}.token is not a Kanidm API token")
     disk = choose_disk(facts.disks, host.disk)
     # --- everything is valid: now the secrets, escrow first ---
-    luks, rootpw = secret(32), secret(18)
+    luks, rootpw, grubpw = secret(32), secret(18), secret(18)
     esc_dir, esc = stick / "escrow", stick / "escrow" / f"{host.hostname}.txt"
     try:
         esc_dir.mkdir(exist_ok=True)
@@ -60,13 +60,13 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
                        "# last step). Without it the install stopped early: the disk still has the secrets in the newest\n"
                        "# *.old file that does say INSTALL COMPLETED.\n"
                        "# KEEP THIS STICK OFFLINE: it now holds this host's recovery secrets.\n"
-                       f"LUKS_PASSPHRASE={luks}\nROOT_CONSOLE_PASSWORD={rootpw}\n")
+                       f"LUKS_PASSPHRASE={luks}\nROOT_CONSOLE_PASSWORD={rootpw}\nGRUB_PASSWORD={grubpw}\n")
         os.sync()
     except OSError as e:
         raise SiteError(f"cannot write the escrow file to the site stick ({e.strerror}); is the stick read-only "
                         "or full? The install stops: it never proceeds without its recovery secrets") from None
     out.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for name, text in (("misc", misc_ks(site)), ("net", net_ks(site, host, hosts)), ("users", users_ks(site, hasher(rootpw))),
+    for name, text in (("misc", misc_ks(site)), ("net", net_ks(site, host, hosts)), ("users", users_ks(site, hasher(rootpw))), ("boot", boot_ks(grub_pbkdf2(grubpw))),
                        ("disk", disk_ks(disk, luks)), ("repo", repo_ks(repo_url))):
         p = out / f"{name}.ks"
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

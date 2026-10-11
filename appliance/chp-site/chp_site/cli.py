@@ -1,7 +1,7 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-"""chp-site command line: validate | pre | get | render | export-client | onboard | revoke | unexpire."""
+"""chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire."""
 import argparse
 import os
 import sys
@@ -67,6 +67,12 @@ def _pre(a):
     h = run_pre(a.role, Path(a.stick), Path(a.out), a.repo_url, live(), stick_id=stick_identity())
     print(f"CHP: installing {h.hostname} ({h.role}, {h.ip}). Recovery secrets were written to the site stick: "
           "keep it offline from now on.")
+
+
+def _verify_repo(a):
+    from . import reposig
+    fpr = reposig.verify(a.url, reposig.bundled_key())
+    print(f"REPO SIGNATURE OK: {a.url} (signed by {fpr})")
 
 
 def _export(a):
@@ -198,6 +204,8 @@ def main(argv=None):
     p = sub.add_parser("pre"); p.add_argument("--role", required=True, choices=("server", "client"))
     p.add_argument("--stick", required=True); p.add_argument("--out", required=True)
     p.add_argument("--repo-url", default="file:///run/install/repo/chp")
+    vr = sub.add_parser("verify-repo", help="row 37: the repo's repomd.xml must be signed by a pinned project key")
+    vr.add_argument("--url", required=True)
     g = sub.add_parser("get"); g.add_argument("key"); g.add_argument("--site", default="/etc/chp")
     r = sub.add_parser("render"); r.add_argument("what"); r.add_argument("--site", default="/etc/chp")
     e = sub.add_parser("export-client"); e.add_argument("--stick")
@@ -228,7 +236,7 @@ def main(argv=None):
     ge.add_argument("--no-confirm", action="store_true", help="skip the app-code confirmation (scripted use only)"); ge.add_argument("--site", default="/etc/chp")
     a = ap.parse_args(argv)
     try:
-        rc = {"validate": _validate, "pre": _pre, "export-client": _export, "get": _get, "render": _render_cmd,
+        rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
          "onboard": _onboard, "revoke": _revoke,
          "unexpire": _unexpire,
          "client-token": _client_token,

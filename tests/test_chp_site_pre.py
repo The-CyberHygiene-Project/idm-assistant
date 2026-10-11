@@ -50,6 +50,17 @@ def test_server_install_writes_snippets_and_escrow(tmp_path):
     assert "S" * 32 not in (out / "users.ks").read_text()     # only the hash goes to users.ks
 
 
+def test_server_install_escrows_a_boot_loader_password_and_writes_only_its_hash(tmp_path):
+    h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
+    esc = (s / "escrow" / "iso2-srv.txt").read_text()
+    assert "GRUB_PASSWORD=" + "S" * 18 in esc
+    p = out / "boot.ks"
+    assert p.exists() and stat.S_IMODE(p.stat().st_mode) == 0o600
+    b = p.read_text()
+    assert b.startswith('bootloader --append="fips=1" --iscrypted --password=grub.pbkdf2.sha512.10000.')
+    assert "S" * 18 not in b
+
+
 def test_role_must_match_the_boot_entry(tmp_path):
     with pytest.raises(SiteError, match="booted the client installer.*server"):
         run(tmp_path, "client", ["52:54:00:c4:02:30"])

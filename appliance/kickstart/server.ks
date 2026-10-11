@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # CHP Lab Installer, server kickstart. Site values come from the OEMDRV stick through `chp-site pre` (%pre below);
-# the secrets (LUKS passphrase, root console password) exist only in /tmp/chp (installer RAM) and on the stick.
+# the secrets (LUKS passphrase, root console and boot-loader passwords) exist only in /tmp/chp (installer RAM) and on the stick.
 text
 cdrom
 poweroff
@@ -13,7 +13,7 @@ keyboard --vckeymap=us --xlayouts='us'
 firewall --enabled --service=ssh
 selinux --enforcing
 %include /tmp/chp/users.ks
-bootloader --append="fips=1"
+%include /tmp/chp/boot.ks
 zerombr
 %include /tmp/chp/disk.ks
 %include /tmp/chp/repo.ks
@@ -54,6 +54,15 @@ chp-identity-client
 %pre --interpreter=/usr/bin/bash --erroronfail --log=/tmp/chp-pre.log
 # Validate the site stick BEFORE any disk is touched. Messages go to the console so the person installing sees them.
 set -uo pipefail
+cat > /dev/console <<'CHP_BANNER'
+
+CyberHygiene Project Lab Installer
+Internal test image — not an official Rocky Linux product
+
+Built for use with Rocky Linux 9
+Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+
+CHP_BANNER
 mkdir -p /mnt/oemdrv /tmp/chp
 if ! mount -o rw LABEL=OEMDRV /mnt/oemdrv; then
   echo "CHP: no site stick found (a USB volume labelled OEMDRV). Nothing was changed." | tee /dev/console
@@ -65,6 +74,12 @@ for a in $(cat /proc/cmdline); do case $a in chp.repo=*) repo=${a#chp.repo=} ;; 
 pyz=/run/install/repo/chp/chp-site.pyz
 if [ -f /tmp/chp-site.pyz ]; then pyz=/tmp/chp-site.pyz; fi
 if [ ! -f "$pyz" ]; then echo "CHP: chp-site not found ($pyz). Nothing was changed." | tee /dev/console; exit 1; fi
+# Row 37: Anaconda installs with gpgcheck=0. Verify the repo actually used (the ISO's, or a chp.repo= lab override)
+# against the pinned project key BEFORE the site gate writes any escrow and before any disk is touched.
+python3 "$pyz" verify-repo --url "$repo" 2>&1 | tee /dev/console
+if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+  echo "CHP: install stopped before any disk was touched." | tee /dev/console; exit 1
+fi
 python3 "$pyz" pre --role server --stick /mnt/oemdrv --out /tmp/chp --repo-url "$repo" 2>&1 | tee /dev/console
 rc=${PIPESTATUS[0]}
 if [ "$rc" -ne 0 ]; then echo "CHP: install stopped before any disk was touched." | tee /dev/console; fi
@@ -99,6 +114,9 @@ echo "CHP: install finished. Remove the site stick and keep it OFFLINE: it holds
 %post --log=/root/chp-post.log
 # Trust our signing key (the chp-site RPM ships it) and keep vendor online repos off (offline appliance).
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+# ISSO 2026-10-10 (CUI ensure_redhat_gpgkey_installed): trust the OS vendor's key too (the CUI remediation imports
+# Red Hat's, not Rocky's); also lets the collector verify Rocky signers (row 46 backlog).
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
 systemctl enable chp-firstboot-common.service chp-monitor.timer chp-server-firstboot.service
 dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
 # dc2 tailoring: dc2 UNSELECTS sysctl_user_max_user_namespaces; the CUI files are also inside the initramfs.

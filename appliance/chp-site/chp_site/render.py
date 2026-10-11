@@ -2,6 +2,9 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """Kickstart snippets written by %pre and %include'd by server.ks/client.ks."""
+import hashlib
+import os
+
 from .hosts import server_of
 from .sitevars import ANCHOR, values
 
@@ -22,6 +25,19 @@ def users_ks(site, root_hash):
     return (f"rootpw --iscrypted {root_hash}\n"
             "user --name=chpadmin --groups=wheel --gecos=\"CHP break-glass admin (SSH key only)\"\n"
             f"sshkey --username=chpadmin \"{site['ADMIN_SSH_PUBKEY']}\"\n")
+
+
+def grub_pbkdf2(password, salt=None, iterations=10000):
+    """The grub2-mkpasswd-pbkdf2 format (PBKDF2-HMAC-SHA512, 64-byte salt and key, upper-case hex)."""
+    salt = os.urandom(64) if salt is None else salt
+    dk = hashlib.pbkdf2_hmac("sha512", password.encode(), salt, iterations, 64)
+    return f"grub.pbkdf2.sha512.{iterations}.{salt.hex().upper()}.{dk.hex().upper()}"
+
+
+def boot_ks(grub_hash):
+    # ISSO 2026-10-10 (CUI grub2_password): the TPM (PCR 7) unlocks the disk whatever the boot options say, so editing
+    # an entry at the console must need a password. Normal boots need none (Anaconda writes GRUB2_PASSWORD to user.cfg).
+    return f'bootloader --append="fips=1" --iscrypted --password={grub_hash}\n'
 
 
 def disk_ks(disk, passphrase):
