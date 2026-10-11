@@ -56,7 +56,7 @@ if {$mode eq "totp" || $mode eq "totp-no-posix"} {
     -re {TOTP: $} {}
     timeout { fail "no TOTP code prompt" }
   }
-  set code [exec python3 /tmp/srv1/totp.py - sha256 << $sec]
+  set code [exec python3 [file dirname [info script]]/totp.py - sha256 << $sec]
   send -- "$code\r"
   expect {
     -re {(?i)(error|incorrect|invalid|fail)[^\n]*} { fail $expect_out(0,string) }

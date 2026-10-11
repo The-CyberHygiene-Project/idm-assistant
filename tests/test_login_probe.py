@@ -24,3 +24,9 @@ def test_scenarios_carry_no_lab_literals():
         t = f.read_text()
         for lit in ("kanidm.lab.test", "192.168.100.1", "kanidm-lab-root.crt", "10-kanidm.conf", "lab_users@"):
             assert lit not in t, (f.name, lit)
+
+
+def test_enrol_finds_totp_next_to_itself():     # Plan 5b: /tmp/srv1 existed only on the old lab server
+    from pathlib import Path
+    t = (Path(_login.__file__).resolve().parents[1] / "lab/srv1/enrol-user.exp").read_text()
+    assert "/tmp/srv1/totp.py" not in t and "[file dirname [info script]]/totp.py" in t
