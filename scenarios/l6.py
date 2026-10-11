@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from engine import remote
+from scenarios import _login
 
 ID = "l6"
 USER = "lab01"
@@ -20,8 +21,4 @@ def inject(log):
 
 
 def final_probe(log):
-    r = subprocess.run(["/usr/bin/expect", str(ROOT / "lab/client/ssh-login.exp"), USER, "posix", "192.168.100.13"],
-                       stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    ok = "RESULT: uid=" in r.stdout
-    log(f"probe: {USER} password login on client2 {'OK' if ok else 'FAILED'}")
-    return ok
+    return _login.probe(USER, "posix", log) == "OK"
