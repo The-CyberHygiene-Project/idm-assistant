@@ -135,7 +135,8 @@ def kanidm_unreachable(r):
         elif n.get("resolver_state") == "unreachable":
             ev = f"the DNS server {res} cannot be reached either: check the route or firewall"
         else:
-            ev = "TLS handshake with idm.kanidm.lab.test failed from this host"
+            from engine import profile
+            ev = f"TLS handshake with {profile.current().fqdn()} failed from this host"
         return Finding("KANIDM_UNREACHABLE", "network", (ev,))
 
 

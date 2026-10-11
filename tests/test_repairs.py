@@ -529,3 +529,26 @@ def test_ca_trust_backup_tolerates_a_missing_keys_file_and_undo_removes_what_was
     repairs.SshCaTrustRestore().undo(c, saved)
     undo = rr.calls[-1][1][-1]
     assert "rm -f /etc/ssh/trusted_user_ca_keys" in undo and "cp -p" in undo and undo.index("sshd -t") < undo.index("reload")
+
+
+def test_appliance_profile_paths(monkeypatch, tmp_path):
+    from engine import labsecrets, repairs
+    monkeypatch.setenv("IDM_PROFILE", "appliance"); monkeypatch.setattr(labsecrets, "DIR", tmp_path)
+    assert repairs.ClientCaTrust().ANCHOR == "/etc/pki/ca-trust/source/anchors/chp-root.crt"
+    assert repairs.ClientCaTrust().ROOT_PATH == "/etc/step-ca/certs/root_ca.crt"
+    r = repairs.SshCaTrustRestore()
+    assert r.DROPIN == "/etc/ssh/sshd_config.d/10-chp.conf" and r.KEYS == "/etc/ssh/chp_user_ca.pub"
+    assert "/etc/ssh/chp_user_ca.pub" in repairs.SelinuxRestorecon().paths()
+    assert "/etc/ssh/trusted_user_ca_keys" not in repairs.SelinuxRestorecon().paths()
+
+
+def test_appliance_trust_repairs_refuse_without_pins(monkeypatch, tmp_path):     # Review Focus 4
+    from engine import labsecrets, repairs
+    monkeypatch.setenv("IDM_PROFILE", "appliance"); monkeypatch.setattr(labsecrets, "DIR", tmp_path)
+
+    class R:                      # the CA host answers with SOME certificate; without a pin it must not be trusted
+        @staticmethod
+        def run(host, argv, **kw):
+            return type("P", (), {"stdout": FIXROOT})()
+    ctx = type("C", (), {"remote": R, "host": "client2"})()
+    assert repairs.ClientCaTrust().precheck(ctx).startswith("pin missing")
