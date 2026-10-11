@@ -72,6 +72,8 @@ boot (Plan 3a design). `unlock.sh` types it over the serial console. Every later
 console typing beyond choosing the boot entry", so this is an exception for the ISSO to accept or to turn into a design
 change.
 
+**ISSO decision (D. Shannon, 2026-10-11): ACCEPTED.** Answering the escrowed LUKS passphrase from the site stick once, on the first start, is acceptable. Also accepted: the ISO size (~15 GB; it is transferred from the Synology share), the executor's rulings for Plan 5a, and deferring the seven minor review findings.
+
 ## Not proven here
 
 - Real hardware: physical UEFI/TPM PCR values, a real USB stick, a DVD drive.
