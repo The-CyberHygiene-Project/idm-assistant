@@ -30,3 +30,21 @@ def test_regress_accepts_a_relative_output_path(tmp_path, monkeypatch):
     monkeypatch.setattr(regress, "run", lambda ids, runs: [dict(ROWS[0], case="c")])
     assert cli.regress_cmd(["l2"], 1, "out/report.md") == 0
     assert "Overall: 1 of 1" in (tmp_path / "out" / "report.md").read_text()
+
+
+def test_failed_reset_is_reported_with_its_reason_and_nothing_runs(tmp_path, monkeypatch):    # final review I-1
+    import subprocess
+    import types
+    from engine import cli
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+
+    def boom(*a, **kw):
+        raise subprocess.CalledProcessError(1, a[0], output="", stderr="reset: client2 not reachable after the revert\n")
+    monkeypatch.setattr(cli.subprocess, "run", boom)
+    injected = []
+    sc = types.SimpleNamespace(ID="zz", SYMPTOM="s", EXPECT={"client2": set()}, USER=None,
+                               inject=lambda log: injected.append(1))
+    case, st = cli.run_scenario(sc, 1)
+    assert st == "RESET-FAILED" and not injected                     # never runs on a host that is not at golden
+    assert "client2 not reachable after the revert" in (case.dir / "repair.log").read_text()
+    assert (case.dir / "status.txt").read_text().strip() == "RESET-FAILED"

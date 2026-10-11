@@ -88,8 +88,17 @@ def run_scenario(sc, run_no):
         case.write("test-mode.txt", "approvals in this case were given by the regression runner (IDM_TEST_APPROVE=1)\n")
     hosts = getattr(sc, "HOSTS", list(sc.EXPECT))
     with case.step("reset"):
-        subprocess.run([str(ROOT / profile.current().reset), "srv1", "client2"], check=True, capture_output=True,
-                       stdin=subprocess.DEVNULL)
+        try:
+            subprocess.run([str(ROOT / profile.current().reset), "srv1", "client2"], check=True, capture_output=True,
+                           text=True, stdin=subprocess.DEVNULL)
+        except subprocess.CalledProcessError as e:
+            # Never run a scenario on hosts that are not at golden; say WHY (reset output holds no secrets) and let a
+            # regression continue to record the rest instead of losing every row so far.
+            why = ((e.stderr or "") + (e.stdout or "")).strip().splitlines()[-5:]
+            case.log("RESET FAILED (exit %s): %s" % (e.returncode, " | ".join(why) or "no output"))
+            case.write("status.txt", "RESET-FAILED\n")
+            print(f"{sc.ID} run {run_no}: reset failed: {' | '.join(why)}", file=sys.stderr, flush=True)
+            return case, "RESET-FAILED"
     with case.step("inject"):
         sc.inject(case.log)
     t_injected = time.monotonic()
