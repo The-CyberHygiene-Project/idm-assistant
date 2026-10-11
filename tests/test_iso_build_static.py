@@ -33,3 +33,10 @@ def test_check_compares_the_secure_boot_chain_with_the_dvd():
     for f in ("BOOTX64.EFI", "grubx64.efi", "mmx64.efi", "images/pxeboot/vmlinuz", "images/pxeboot/initrd.img"):
         assert f in t
     assert "efiboot" in t and "isohybrid-gpt-basdat" in t                # Review Focus 5: USB boot path
+
+
+def test_check_compares_the_usb_boot_partition_bytes_with_efiboot():   # final review I-1 (the rc1 regression)
+    t = (ISO / "check-iso.sh").read_text()
+    assert "-report_system_area plain" in t and "GPT start and size" in t
+    assert "append_partition" in t                                        # an appended EFI partition = BAD
+    assert "dd if=" in t and "cmp" in t
