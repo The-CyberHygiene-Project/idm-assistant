@@ -1,0 +1,45 @@
+# Verifying the CyberHygiene Project Lab Installer @VERSION@
+
+Internal test image for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## 1. Check the signature on the checksums
+
+The project's release key is `RPM-GPG-KEY-cyberhygiene`. Its fingerprint must be exactly:
+
+    2DE0D71BF37D8F5E4201A590521276F43C908F8E
+
+```
+gpg --import RPM-GPG-KEY-cyberhygiene
+gpg --fingerprint 2DE0D71BF37D8F5E4201A590521276F43C908F8E
+gpg --verify SHA256SUMS.asc SHA256SUMS        # must say "Good signature" from that key
+```
+
+Compare the fingerprint with one you got from the project by another route (not from this folder).
+
+## 2. Check the files
+
+```
+sha256sum -c SHA256SUMS                         # Linux
+shasum -a 256 -c SHA256SUMS                     # macOS
+```
+
+Every line must say `OK`.
+
+## 3. Write the ISO to a USB stick (or boot it in a VM)
+
+```
+sudo dd if=cyberhygiene-lab-installer-el9.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Replace `/dev/sdX` with the stick, **not** a system disk. Boot in **UEFI mode with Secure Boot on**; legacy BIOS only shows
+a message. Nothing installs on a timeout: choose *Install identity server* or *Install client workstation*.
+
+## 4. The site stick is a secret
+
+The separate `OEMDRV` site stick (`site.conf`, the hosts table, and after installs the recovery escrow) holds every
+host's LUKS, root-console and boot-loader passwords once an install has run. Keep it offline. **Never** copy it to a
+network share, including this one.
+
+## 5. Updates without reinstalling
+
+`chp-repo-@REPO@.tar.gz` is the signed package repository (`repodata/repomd.xml.asc`, every RPM signed by the key above).

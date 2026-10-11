@@ -228,3 +228,23 @@ def test_live_cui_faillock_settings_are_reported():
     # captured 2026-10-03 from client2 (idm-collect 0.1.0-3): the CUI profile's limit, and a lock that never expires
     fk = load_report(FIX / "healthy-client2-lab04.json")["faillock"]
     assert fk == {"deny": 3, "unlock_time_s": 0, "failures": []}
+
+
+def _short_pair():                 # the appliance (row 9): unixd shows short names; the collector marks Kanidm's groups
+    s, c = pair()
+    c["user_nss"]["groups"] = ["lab01", "lab_admins", "chp_users", "wheel"]
+    c["user_nss"]["kanidm_groups"] = ["lab01", "lab_admins", "chp_users"]
+    s["kanidm_user"]["memberof"] = ["lab_admins@idm.kanidm.lab.test", "chp_users@idm.kanidm.lab.test"]
+    return s, c
+
+
+def test_short_names_healthy_pair_is_not_stale():
+    s, c = _short_pair()
+    assert "UNIXD_CACHE_STALE" not in cids(c, s)          # private group + current groups + a local group (wheel)
+
+
+def test_short_names_group_removed_on_server_is_stale():      # Plan 5b l3: was blind on the appliance
+    s, c = _short_pair()
+    s["kanidm_user"]["memberof"].remove("lab_admins@idm.kanidm.lab.test")
+    f = [x for x in evaluate(c, s) if x.id == "UNIXD_CACHE_STALE"]
+    assert f and "lab_admins" in f[0].evidence[0] and "wheel" not in f[0].evidence[0]

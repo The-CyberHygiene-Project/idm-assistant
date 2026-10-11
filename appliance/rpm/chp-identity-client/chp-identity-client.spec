@@ -1,5 +1,5 @@
 Name:           chp-identity-client
-Version:        0.2.1
+Version:        0.2.2
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
@@ -86,6 +86,9 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Sun Oct 11 2026 The CyberHygiene Project - 0.2.2-1.chp
+- client-enrol step collect: write /etc/idm-collect/collect.conf on clients (Plan 5b P1).
+
 * Thu Oct 01 2026 The CyberHygiene Project - 0.2.1-1.chp
 - unixd reports SHORT names (uid_attr_map/gid_attr_map = name): sudo's PAM user and GA token paths match the login name (Plan 4b proof); 53-ga alerts if allow_local_account_override is set (final review I1).
 

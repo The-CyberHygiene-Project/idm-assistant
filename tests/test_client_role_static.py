@@ -140,7 +140,7 @@ def test_client_rpm_carries_the_second_factor():
     assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
     assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.1", s, re.M)
     assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
-    assert "53-ga.sh" in s and "Version:        0.2.1" in s
+    assert "53-ga.sh" in s and "Version:        0.2.2" in s
     assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
 
 
@@ -163,3 +163,10 @@ def test_unixd_reports_short_names():         # 4b proof: sudo's PAM_USER was th
 def test_monitor_alerts_on_local_account_override():          # final review I1: local accounts must keep winning
     m = text("monitor.d/53-ga.sh")
     assert "allow_local_account_override" in m
+
+
+def test_enrol_writes_the_collector_conf():          # Plan 5b P1: clients had no collect.conf (COLLECT_CONF_INVALID)
+    t = text("client-enrol.sh")
+    assert "chp-site render collect-conf > /etc/idm-collect/collect.conf.new" in t
+    assert "install -m 0644 /etc/idm-collect/collect.conf.new /etc/idm-collect/collect.conf" in t
+    assert t.index("step collect do_collect") > t.index("step trust do_trust")

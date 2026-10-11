@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from engine import remote
+from scenarios import _login
 from engine.repairs import admin_login, stage
 
 ID = "l5"
@@ -22,11 +23,7 @@ class _S:
 
 
 def probe(log):
-    r = subprocess.run(["/usr/bin/expect", str(ROOT / "lab/client/ssh-login.exp"), USER, "posix", "192.168.100.13"],
-                       stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    res = "OK" if "RESULT: uid=" in r.stdout else "DENIED" if "RESULT: DENIED" in r.stdout else "ERROR"
-    log(f"login probe {USER}@client2 with its posix password: {res}")
-    return res
+    return _login.probe(USER, "posix", log)
 
 
 def inject(log):

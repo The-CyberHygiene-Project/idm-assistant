@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from engine import profile
 from engine.findings import FAP_PATH, LOCKOUT_CAUSES, PINNED_SIGNERS, evaluate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,8 +42,10 @@ class Ctx:
 
 def target_role(report, host):
     """The role a repair may assume on HOST, taken from HOST's own report. A report from another host is refused."""
-    if report.get("host") != host:
-        raise ValueError(f"report is from {report.get('host')!r}, not {host!r}")
+    from engine import profile
+    want = profile.current().hostnames.get(host, host)      # logical alias -> the hostname that host reports
+    if report.get("host") != want:
+        raise ValueError(f"report is from {report.get('host')!r}, not {want!r} ({host})")
     return report["role"]
 
 
@@ -204,7 +207,7 @@ class KanidmCertRenew(Repair):
     def apply(self, ctx):
         _sh(ctx, "set -e; export STEPPATH=/root/.step; firewall-cmd -q --add-service=http; "
                  "trap 'firewall-cmd -q --remove-service=http' EXIT; "
-                 f"step-cli ca certificate idm.kanidm.lab.test {CERT_DIR}/chain.pem {CERT_DIR}/key.pem "
+                 f"step-cli ca certificate {profile.current().fqdn()} {CERT_DIR}/chain.pem {CERT_DIR}/key.pem "
                  "--provisioner acme --kty EC --crv P-384 --force >/dev/null 2>&1; "
                  f"chmod 600 {CERT_DIR}/*.pem; systemctl try-restart kanidmd")
 
@@ -560,11 +563,21 @@ class ClientCaTrust(Repair):
     host_role = "client"
     verify_absent = {"CLIENT_MISSING_CA_ROOT", "TLS_CERT_UNTRUSTED(kanidm)"}
     CA_HOST = "srv1"                                   # where the step-ca root lives (NOT the target host)
-    ROOT_PATH = "/root/.step/certs/root_ca.crt"
-    ANCHOR = "/etc/pki/ca-trust/source/anchors/kanidm-lab-root.crt"
+
+    @property
+    def ROOT_PATH(self):                               # noqa: N802  (was a class constant; now per profile)
+        return profile.current().ca_root_path
+
+    @property
+    def ANCHOR(self):                                  # noqa: N802
+        return profile.current().anchor
 
     def describe(self, ctx):
-        return (f"install the step-ca root (SHA-256 {PINNED_ROOT[:23]}..., pinned) as {self.ANCHOR}, update the trust "
+        try:
+            pin = profile.current().pinned_root()
+        except FileNotFoundError:
+            pin = "(pin missing)"
+        return (f"install the step-ca root (SHA-256 {pin[:23]}..., pinned) as {self.ANCHOR}, update the trust "
                 "store, restart kanidm-unixd")
 
     def _root(self, ctx):
@@ -574,7 +587,11 @@ class ClientCaTrust(Repair):
             fp = fingerprint(pem)
         except (ValueError, _binascii.Error):
             return None, "the CA host returned no readable certificate"
-        return (pem, None) if fp == PINNED_ROOT else (None, f"root fingerprint {fp} does not match the pinned value")
+        try:
+            pin = profile.current().pinned_root()
+        except FileNotFoundError as e:
+            return None, f"pin missing: {e}"
+        return (pem, None) if fp == pin else (None, f"root fingerprint {fp} does not match the pinned value")
 
     def precheck(self, ctx):
         return self._root(ctx)[1]
@@ -596,7 +613,7 @@ class ClientCaTrust(Repair):
 
     def undo(self, ctx, backup):
         if backup.get("anchor") == "present":
-            _sh(ctx, f"cp -p {backup['dir']}/kanidm-lab-root.crt {self.ANCHOR}")
+            _sh(ctx, f"cp -p {backup['dir']}/{self.ANCHOR.rsplit('/', 1)[1]} {self.ANCHOR}")
         else:
             _sh(ctx, f"rm -f {self.ANCHOR}")
         _sh(ctx, "update-ca-trust extract && systemctl restart kanidm-unixd")
@@ -619,6 +636,11 @@ class SelinuxRestorecon(Repair):
     PATHS = ("/run/kanidm-unixd", "/var/cache/kanidm-unixd", "/var/lib/kanidm-unixd", "/etc/kanidm",
              "/etc/ssh/trusted_user_ca_keys", "/etc/pki/ca-trust/source/anchors")
 
+    def paths(self):
+        """The fixed list for this profile: the appliance keeps the SSH CA key at /etc/ssh/chp_user_ca.pub."""
+        k = profile.current().trusted_ca_keys
+        return tuple(k if x == "/etc/ssh/trusted_user_ca_keys" else x for x in self.PATHS)
+
     def describe(self, ctx):
         return "restore the SELinux labels the policy defines (restorecon) on the identity paths that differ"
 
@@ -627,7 +649,7 @@ class SelinuxRestorecon(Repair):
 
     def _allowed(self, p):
         return (isinstance(p, str) and _re.fullmatch(r"/[A-Za-z0-9_./-]+", p) and "/../" not in p + "/"
-                and any(p == a or p.startswith(a + "/") for a in self.PATHS))
+                and any(p == a or p.startswith(a + "/") for a in self.paths()))
 
     def precheck(self, ctx):
         t = self._targets(ctx.collect())
@@ -671,7 +693,7 @@ def sign_user_cert(remote, host, user, validity):
     if not valid_user(user) or not _re.fullmatch(r"[-+0-9a-zA-Z:]+", validity):
         raise ValueError("invalid user name or validity")
     script = (f"set -e; T=$(mktemp -d); trap 'rm -rf \"$T\"' EXIT; cp /var/lib/ssh-ca/keys/{user}.pub \"$T/k.pub\"; "
-              f"ssh-keygen -q -s /etc/ssh-ca/user_ca -I {user}-cert -n {user},{user}@{SSH_REALM} -V {validity} "
+              f"ssh-keygen -q -s /etc/ssh-ca/user_ca -I {user}-cert -n {user},{user}@{profile.current().fqdn()} -V {validity} "
               f"\"$T/k.pub\"; install -m 0644 \"$T/k-cert.pub\" /var/lib/ssh-ca/issued/{user}-cert.pub; "
               f"cat \"$T/k-cert.pub\"")
     return remote.run(host, ["sudo", "sh", "-c", script]).stdout
@@ -744,11 +766,24 @@ class SshCaTrustRestore(Repair):
     verify_absent = {"SSH_CA_NOT_TRUSTED"}
     CA_HOST = "srv1"                                    # where the SSH user CA lives (NOT the target host)
     CA_PUB = "/etc/ssh-ca/user_ca.pub"
-    DROPIN = "/etc/ssh/sshd_config.d/10-kanidm.conf"
-    KEYS = "/etc/ssh/trusted_user_ca_keys"
+
+    @property
+    def DROPIN(self):                                  # noqa: N802  (per profile)
+        return profile.current().sshd_dropin
+
+    @property
+    def KEYS(self):                                    # noqa: N802
+        return profile.current().trusted_ca_keys
+
+    @staticmethod
+    def _pin():
+        try:
+            return profile.current().pinned_ssh_ca(), None
+        except FileNotFoundError as e:
+            return None, f"pin missing: {e}"
 
     def describe(self, ctx):
-        return (f"trust the lab SSH user CA again ({PINNED_SSH_CA[:19]}..., pinned): write {self.KEYS}, restore "
+        return (f"trust the SSH user CA again ({(self._pin()[0] or '(pin missing)')[:19]}..., pinned): write {self.KEYS}, restore "
                 f"TrustedUserCAKeys in {self.DROPIN}, check sshd -t, reload sshd")
 
     def _ca(self, ctx):
@@ -757,7 +792,10 @@ class SshCaTrustRestore(Repair):
             fp = ssh_fingerprint(line[-1])
         except (IndexError, ValueError, _binascii.Error):
             return None, "the CA host returned no readable public key"
-        return (line[-1] + "\n", None) if fp == PINNED_SSH_CA else (None, f"CA fingerprint {fp} does not match the pin")
+        pin, why = self._pin()
+        if why:
+            return None, why
+        return (line[-1] + "\n", None) if fp == pin else (None, f"CA fingerprint {fp} does not match the pin")
 
     def precheck(self, ctx):
         return self._ca(ctx)[1]
@@ -788,7 +826,10 @@ class SshCaTrustRestore(Repair):
 
     def verify_present(self, report):
         d = report.get("sshd") or {}
-        return None if PINNED_SSH_CA in (d.get("trusted_ca_fingerprints") or []) else f"pinned CA not trusted: {d}"
+        pin, why = self._pin()
+        if why:
+            return why
+        return None if pin in (d.get("trusted_ca_fingerprints") or []) else f"pinned CA not trusted: {d}"
 
 
 REGISTRY[SshCaTrustRestore.id] = SshCaTrustRestore()

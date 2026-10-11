@@ -8,7 +8,8 @@ DIR = Path(os.path.expanduser("~/idm-lab-secrets"))
 
 
 def path(name):
-    return DIR / name
+    from engine import profile                  # appliance profile: iso5-<name>, so the two labs never share a file
+    return DIR / (profile.current().secrets_prefix + name)
 
 
 def write(name, text):

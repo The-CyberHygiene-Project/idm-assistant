@@ -1,6 +1,6 @@
 Name:           idm-collect
 Version:        0.1.0
-Release:        9.chp%{?dist}
+Release:        11.chp%{?dist}
 Summary:        Read-only identity diagnostics collector (The CyberHygiene Project)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -31,6 +31,13 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sysconfdir}/idm-collect
 
 %changelog
+* Sun Oct 11 2026 The CyberHygiene Project - 0.1.0-11.chp
+- user_nss.kanidm_groups: the user's groups that resolve through Kanidm; with short names (row 9) the stale-cache
+  rule needs it to tell a Kanidm group from a local one (Plan 5b, scenario l3).
+
+* Sun Oct 11 2026 The CyberHygiene Project - 0.1.0-10.chp
+- restorecon check also covers /etc/ssh/chp_user_ca.pub, the appliance SSH CA key (Plan 5b P2).
+
 * Sun Oct 04 2026 The CyberHygiene Project - 0.1.0-9.chp
 - chrony: read the source in use ('^*') when there is one, else the first (multi-server sites).
 

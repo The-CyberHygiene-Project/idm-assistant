@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from engine import labsecrets, remote
+from scenarios import _login
 from engine.repairs import sign_user_cert
 
 ID = "c3"
@@ -17,10 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def cert_probe(log):
-    out = subprocess.run([str(ROOT / "lab/client/ssh-cert-login.sh"), USER], stdin=subprocess.DEVNULL,
-                         capture_output=True, text=True).stdout.strip()
-    log(f"certificate login probe {USER}@client2: {out}")
-    return out
+    return _login.cert_probe(USER, log)
 
 
 def inject(log):

@@ -1,0 +1,29 @@
+# IDM_PROFILE=appliance: logical names -> the hosts installed from the ISO (lab/iso5). Admin = chpadmin + the LAB ADAPTER
+# sudo rule (lab/iso5/LAB-ADAPTER.md); collector = the diag forced-command key (ISSO #22).
+Host aero
+    HostName 192.168.100.1
+    User itadmin
+    IdentityFile ~/.ssh/aero_ecdsa
+    IdentitiesOnly yes
+Host srv1 client2 srv1-diag client2-diag
+    ProxyJump aero
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+Host srv1
+    HostName 192.168.100.50
+    User chpadmin
+    IdentityFile ~/idm-lab-secrets/iso2_chpadmin
+Host client2
+    HostName 192.168.100.52
+    User chpadmin
+    IdentityFile ~/idm-lab-secrets/iso2_chpadmin
+Host srv1-diag
+    HostName 192.168.100.50
+    User diag
+    IdentityFile ~/idm-lab-secrets/iso5_diag_ecdsa
+Host client2-diag
+    HostName 192.168.100.52
+    User diag
+    IdentityFile ~/idm-lab-secrets/iso5_diag_ecdsa

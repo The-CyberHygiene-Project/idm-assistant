@@ -1,7 +1,7 @@
 """C1: the Kanidm TLS certificate expires because its renewal timer stopped (spec §6)."""
 import time
 
-from engine import remote
+from engine import profile, remote
 
 ID = "c1"
 SYMPTOM = "Users on client2 cannot log in; the Kanidm web UI shows a certificate error."
@@ -14,7 +14,7 @@ def inject(log):
     out = remote.run("srv1", ["sudo", "bash", "-c",
         "set -e; export STEPPATH=/root/.step; systemctl disable --now cert-renew-kanidm.timer; "
         "firewall-cmd -q --add-service=http; trap 'firewall-cmd -q --remove-service=http' EXIT; "
-        "step-cli ca certificate idm.kanidm.lab.test /etc/pki/kanidm/chain.pem /etc/pki/kanidm/key.pem "
+        f"step-cli ca certificate {profile.current().fqdn()} /etc/pki/kanidm/chain.pem /etc/pki/kanidm/key.pem "
         "--provisioner acme --kty EC --crv P-384 --not-after 5m --force >/dev/null 2>&1; "
         "chmod 600 /etc/pki/kanidm/*.pem; systemctl try-restart kanidmd; "
         "openssl x509 -in /etc/pki/kanidm/chain.pem -noout -enddate"]).stdout

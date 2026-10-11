@@ -1,0 +1,33 @@
+#!/usr/bin/expect -f
+# login.exp IP USER KEY CERT GA_SECRET_FILE (RUNS ON THE MAC, through aero; ISO Plan 5b, IDM_PROFILE=appliance): one SSH
+# login as a Kanidm user with key + CA certificate (sshd: publickey,keyboard-interactive:pam, row 10). The "Verification
+# code" prompt gets the current TOTP from GA_SECRET_FILE (~/idm-lab-secrets, the lab stand-in for the user's phone;
+# lab/tools/totp.py, SHA1); the password prompt gets STDIN line 1 (never argv, never logged). Prints PROMPTS=a|b (never
+# answers), then "LOGIN_OK <user>" or "LOGIN_REFUSED". Copied from lab/iso4/ssh-ki.exp (mode fixed to id).
+# NOTE: every expect block is multi-line on purpose - a one-line `expect { ... }` is read as ONE literal pattern.
+set timeout 75
+lassign $argv ip user key cert sf
+set mode id
+set prompts {}
+gets stdin pw
+log_user 0
+# sudo shows PAM's own prompts (no -p: a custom prompt would replace the GA code prompt too).
+# sudo/enrol wait for a FRESH 30-s window first: the login just used this window's code, and GA refuses reuse (-d).
+if {$mode eq "sudo"} { set cmd {sleep $(( 31 - $(date +%s) % 30 )); sudo true && echo RES""ULT=SUDO_OK}
+} elseif {$mode eq "enrol"} { set cmd "sleep \$(( 31 - \$(date +%s) % 30 )); sudo chp-site ga-enrol $env(ENROL_USER) --no-confirm > /dev/null && echo RES\"\"ULT=ENROLLED"
+} else { set cmd {echo RES""ULT=$(id -un)} }
+proc code {} { global sf; if {$sf eq ""} { return "000000" }
+  set f [open $sf]; set s [string trim [read $f]]; close $f
+  if {[regexp {^CODE:([0-9]+)$} $s -> lit]} { return $lit }      ;# a literal code (e.g. a scratch code)
+  return [string trim [exec python3 [file dirname [info script]]/../tools/totp.py - sha1 < $sf]] }
+spawn ssh -tt -J aero -i $key -o CertificateFile=$cert -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -o ConnectTimeout=10 -o PreferredAuthentications=publickey,keyboard-interactive $user@$ip $cmd
+set n 0
+expect {
+  -re {SUDOPW:} { lappend prompts "sudo-password"; send -- "$pw\r"; exp_continue }
+  -re {[Vv]erification code[^\r\n]*: ?} { lappend prompts "Verification code"; send -- "[code]\r"; exp_continue }
+  -re {[Pp]assword[^\r\n]*: ?} { lappend prompts "Password"; incr n; if {$n > 2} { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }; send -- "$pw\r"; exp_continue }
+  -re {RESULT=([A-Za-z0-9_]+)} { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_OK $expect_out(1,string)"; exit 0 }
+  timeout { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }
+  eof { puts "PROMPTS=[join $prompts |]"; puts "LOGIN_REFUSED"; exit 0 }
+}
