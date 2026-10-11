@@ -41,8 +41,10 @@ class Ctx:
 
 def target_role(report, host):
     """The role a repair may assume on HOST, taken from HOST's own report. A report from another host is refused."""
-    if report.get("host") != host:
-        raise ValueError(f"report is from {report.get('host')!r}, not {host!r}")
+    from engine import profile
+    want = profile.current().hostnames.get(host, host)      # logical alias -> the hostname that host reports
+    if report.get("host") != want:
+        raise ValueError(f"report is from {report.get('host')!r}, not {want!r} ({host})")
     return report["role"]
 
 

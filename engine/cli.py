@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from engine import interpret, regress, remote
+from engine import interpret, profile, regress, remote
 from engine.case import Case
 from engine.findings import LOCKOUT_CAUSES, ROW46_DIAGNOSE_ONLY, evaluate
 from engine.repairs import REGISTRY, Ctx, run_repair, target_role
@@ -88,7 +88,7 @@ def run_scenario(sc, run_no):
         case.write("test-mode.txt", "approvals in this case were given by the regression runner (IDM_TEST_APPROVE=1)\n")
     hosts = getattr(sc, "HOSTS", list(sc.EXPECT))
     with case.step("reset"):
-        subprocess.run([str(ROOT / "lab" / "reset.sh"), "srv1", "client2"], check=True, capture_output=True,
+        subprocess.run([str(ROOT / profile.current().reset), "srv1", "client2"], check=True, capture_output=True,
                        stdin=subprocess.DEVNULL)
     with case.step("inject"):
         sc.inject(case.log)
@@ -155,7 +155,8 @@ def regress_cmd(ids, runs, out):
                           text=True, stdin=subprocess.DEVNULL).stdout.strip()
     model = "IDM_NO_MODEL" if os.environ.get("IDM_NO_MODEL") == "1" else interpret.MODEL
     lines = [f"# Regression report {day}", "",
-             f"- commit `{head}`; model `{model}`; hosts srv1, client2 (reset to `golden` before every run)",
+             f"- commit `{head}`; model `{model}`; profile `{profile.current().name}`: hosts "
+             f"{profile.current().hostnames['srv1']}, {profile.current().hostnames['client2']} (reset to `golden` before every run)",
              f"- {runs} run(s) per scenario; approvals by the regression runner (`IDM_TEST_APPROVE=1`)", "",
              regress.summarize(rows), "## Runs", ""]
     lines += [f"- {r['id']} run {r['run']}: {r['status']} — cases/{r['case']}" for r in rows]
