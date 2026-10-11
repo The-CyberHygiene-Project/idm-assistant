@@ -1,9 +1,11 @@
 # ISO Plan 5a proof record: install from nothing, from the ISO (gate 1)
 
-**Date:** 2026-10-10 · **ISO:** `cyberhygiene-lab-installer-el9.iso` 0.1.0-rc2
-(sha256 `b2a24baacaadb29554da560d157fecac7ef68ffb428f986aeb286fa87c78725e`) · **Repo:** 0.6.0 (on the ISO)
-**Script:** `lab/iso5/prove.sh` (from `lab/iso4/prove.sh`; the install steps now boot the ISO) · **Log:** `~/idm-lab-secrets/iso5-proof-run1.log`
-(secrets-scanned: no escrow values, no private keys)
+**Date:** 2026-10-10 · **Proof of record: run 2** on ISO `cyberhygiene-lab-installer-el9.iso` **0.1.0-rc3**
+(sha256 `144ec3459b8da5048ac15ef36bc6c21f145d364650db87a3d807774bae822c6b`), repo **0.6.1** (on the ISO).
+This is the ISO built after the ISSO's gate-3 fixes: boot-loader password and Rocky key (`DEVIATIONS.md`).
+Run 1 (rc2, repo 0.6.0) is kept below as history.
+**Script:** `lab/iso5/prove.sh` (from `lab/iso4/prove.sh`; the install steps now boot the ISO) · **Logs:**
+`~/idm-lab-secrets/iso5-proof-run{1,2}.log` (secrets-scanned: no escrow values, no private keys)
 
 ## Hosts
 
@@ -19,7 +21,21 @@ the ISO as a CD-ROM; the site stick is a removable USB disk image labelled `OEMD
 The entry is chosen like a person would: wait for our menu (serial console), then press Down ×N and Enter (`virsh send-key`).
 Nothing else is typed during the install.
 
-## Results (run 1): 132 PASS, 0 FAIL
+## Results (run 2, rc3): 138 PASS, 0 FAIL
+
+Every host is installed fresh, all three VMs, from rc3. Each stage's counts are the same as run 1's, plus:
+- `firstboot` +2, `client1` +2, `client2` +2: each host has its boot-loader password set (`GRUB2_PASSWORD=grub.pbkdf2…` in
+  `/boot/grub2/user.cfg`) and Rocky's release key in the rpm database.
+- `scan` 4/4: every host passes every selected rule (`oscap` exit code 0).
+
+Two notes on run 2:
+- The `scan` check first expected exit code 2 ("some fail") and so marked the clean result as FAIL. The check now accepts
+  0 or 2 and rejects 1 (an evaluation error); the stage was re-run and passed.
+- The first launch of run 2 was stopped by hand during `prep`/`negrepo` (it had been started under a 2-hour limit) and
+  relaunched detached. The leftover test VM and tampered repo were removed, `cleanup` was run, and the run started again
+  from `prep`.
+
+## Results (run 1, rc2, history): 132 PASS, 0 FAIL
 
 | Stage | PASS | What it proves |
 |---|---|---|
@@ -33,7 +49,7 @@ Nothing else is typed during the install.
 | client2 | 17/17 | same |
 | ga | 59/59 | second factor (rows 11, 36, 42, 43): the same count as Plan 4b |
 | negtrust | 3/3 | a wrong CA pin is refused; the right one restores the anchor |
-| scan | 4/4 | CUI scan evaluated on all three pristine hosts; no secrets in the results (gate 3: `DEVIATIONS.md`) |
+| scan | 4/4 | CUI scan on all three pristine hosts: 2 high-severity failures, both decided **fix** by the ISSO and fixed in rc3 (`DEVIATIONS.md`) |
 
 **Run notes (both recorded in the ledger):**
 - The first `negrepo` attempt expected the signature refusal but got the fail-closed stop: `%pre` has no network. The

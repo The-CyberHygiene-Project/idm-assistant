@@ -19,7 +19,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.6.0; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc2/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=0.6.1; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc3/cyberhygiene-lab-installer-el9.iso
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -84,17 +84,18 @@ case ${1:-} in
     out=$(A "sudo bash /tmp/iso2/stick.sh make /tmp/iso2/site $STICK && sudo bash /tmp/iso2/stick.sh list $STICK")
     [[ $out == *"./site.conf"* ]] && pass "stick image made" || fail "stick" "$out" ;;
   negrepo)
-    A 'sudo rm -rf /data/lab-inputs/chp/0.6.0-tampered && sudo cp -a /data/lab-inputs/chp/0.6.0 /data/lab-inputs/chp/0.6.0-tampered && echo "<!-- tampered -->" | sudo tee -a /data/lab-inputs/chp/0.6.0-tampered/repodata/repomd.xml >/dev/null'
+    TR=/data/lab-inputs/chp/$CHP_REPO-tampered
+    A "sudo rm -rf $TR && sudo cp -a /data/lab-inputs/chp/$CHP_REPO $TR && echo '<!-- tampered -->' | sudo tee -a $TR/repodata/repomd.xml >/dev/null"
     # (a) no network in %pre (the normal case for a chp.repo=http:// override): the repo cannot be read -> fail closed
-    out=$(A "sudo CHP_REPO=0.6.0-tampered bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
+    out=$(A "sudo CHP_REPO=$CHP_REPO-tampered bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
     [[ $out == *"STOPPED: chp-site: cannot read the repository metadata"* ]] && pass "row 37: unreadable http repo in %pre -> install stops (fail closed)" || fail "row 37 fail-closed" "$out"
     [[ $out == *"disk 1 zero-check-failures=0"* ]] && pass "row 37 (a): disk untouched" || fail "row 37 (a) disk" "$out"
     # (b) early network (ip=): %pre reads the tampered repo and must refuse its signature
-    out=$(A "sudo CHP_REPO=0.6.0-tampered CHP_EXTRA_ARGS='ip=192.168.100.50::192.168.100.1:255.255.255.0:iso5-neg::none' bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
+    out=$(A "sudo CHP_REPO=$CHP_REPO-tampered CHP_EXTRA_ARGS='ip=192.168.100.50::192.168.100.1:255.255.255.0:iso5-neg::none' bash /tmp/iso2/install.sh iso5-neg 52:54:00:c4:05:50 server $STICK 1 --expect-stop")
     [[ $out == *"STOPPED: chp-site: the install repository's signature is NOT valid"* ]] && pass "row 37: tampered repo refused in %pre" || fail "row 37 stop" "$out"
     [[ $out == *"disk 1 zero-check-failures=0"* ]] && pass "row 37 (b): disk untouched" || fail "row 37 (b) disk" "$out"
     check "row 37: no escrow written for the refused install" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK escrow/iso5-srv.txt && echo yes || echo no")" "no"
-    A 'sudo rm -rf /data/lab-inputs/chp/0.6.0-tampered' ;;
+    A "sudo rm -rf $TR" ;;
   server)
     out=$(A "sudo bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/server.ks"* && $out == *"INSTALLED and started $SRV"* ]] \
@@ -282,7 +283,7 @@ case ${1:-} in
     for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do
       read -r vm ip <<<"$v"
       rc=$(Rh "$vm" "$ip" "install -d -m 0700 /root/chp-scan && echo $tb | base64 -d > /root/chp-scan/tailoring.xml && oscap xccdf eval --tailoring-file /root/chp-scan/tailoring.xml --profile $PROF --results /root/chp-scan/$vm.xml $DS >/dev/null 2>&1; echo oscap-rc=\$?; install -m 0644 -o chpadmin /root/chp-scan/$vm.xml /home/chpadmin/$vm.xml")
-      check "$vm: oscap evaluated (rc 2 = some rules fail)" "$rc" "oscap-rc=2"
+      [[ $rc == oscap-rc=0 || $rc == oscap-rc=2 ]] && pass "$vm: oscap evaluated ($rc: 0 = all selected rules pass, 2 = some fail)" || fail "$vm: oscap" "$rc (1 = evaluation error)"
       Vh "$ip" "cat ~/$vm.xml && rm -f ~/$vm.xml" > "$out/$vm.xml"
       echo "$vm: $(grep -c '<result>fail</result>' "$out/$vm.xml") failing, $(grep -c '<result>pass</result>' "$out/$vm.xml") passing"
     done

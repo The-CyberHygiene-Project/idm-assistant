@@ -61,4 +61,4 @@ ISO Plan 4a (2026-10-01) proved rows 5, 6, 7, 8, 9, 10, 12, 21, 22, 25, 27, 29, 
 
 ISO Plan 4b (2026-10-01) proved rows 9 (short names), 11, 19, 36, 42 and 43 on an installed identity server + two clients from signed repo 0.5.1 (`lab/iso4/PROOF-RECORD.md`, run 2: 123/123).
 
-ISO Plan 5a (2026-10-10) proved row 37 and re-proved rows 1, 15, 16, 17, 31 and 35–43 on an identity server and two clients **installed from the ISO** (`cyberhygiene-lab-installer-el9.iso` 0.1.0-rc2, repo 0.6.0; Secure Boot + vTPM; `lab/iso5/PROOF-RECORD.md`, 132/132).
+ISO Plan 5a (2026-10-10) proved row 37 and re-proved rows 1, 15, 16, 17, 31 and 35–43 on an identity server and two clients **installed from the ISO** (`cyberhygiene-lab-installer-el9.iso` 0.1.0-rc3, repo 0.6.1; Secure Boot + vTPM; `lab/iso5/PROOF-RECORD.md`, run 2: 138/138); the CUI scan passes every selected rule on all three hosts (`lab/iso5/DEVIATIONS.md`).
