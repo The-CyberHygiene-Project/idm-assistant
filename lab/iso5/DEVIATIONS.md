@@ -1,6 +1,6 @@
 # Gate 3: CUI scan and deviation table (ISO Plan 5a)
 
-**ISO:** `cyberhygiene-lab-installer-el9.iso` 0.1.0-rc3 (repo 0.6.1) · **Scanned:** 2026-10-10, on the three hosts
+**ISO:** `cyberhygiene-lab-installer-el9.iso` 0.1.0-rc4 (repo 0.6.2) · **Scanned:** 2026-10-11 (run 3; rc3 on 2026-10-10 gave the same result), on the three hosts
 installed from that ISO (`iso5-srv`, `iso5-cli1`, `iso5-cli2`). The hosts were **pristine**: nothing had been changed
 after the install, and the Plan 5b lab adapter had not been added.
 **Profile:** `xccdf_net.cyberinabox_profile_cui_dc2`. This is the CUI profile plus the dc2 tailoring
@@ -20,7 +20,7 @@ after the install, and the Plan 5b lab adapter had not been added.
 
 Run 1's results are in git history (commit cb7c425). The decisions are in `decisions.tsv`.
 
-## Generated table (run 2)
+## Generated table (run 3, rc4)
 
 ### CUI scan deviations (iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test)
 

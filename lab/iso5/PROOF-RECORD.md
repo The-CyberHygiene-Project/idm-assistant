@@ -1,6 +1,9 @@
 # ISO Plan 5a proof record: install from nothing, from the ISO (gate 1)
 
-**Date:** 2026-10-10 · **Proof of record: run 2** on ISO `cyberhygiene-lab-installer-el9.iso` **0.1.0-rc3**
+**Update 2026-10-11 (ISO Plan 5b): the proof of record is now run 3, on ISO 0.1.0-rc4** (sha256
+`53ab4f6ffe9dc130804d5270e9441ccca6cdf46be637ad725446e847e7626eec`, repo 0.6.2; see below). Runs 1 and 2 are history.
+
+**Date:** 2026-10-10 · **Run 2** was on ISO `cyberhygiene-lab-installer-el9.iso` **0.1.0-rc3**
 (sha256 `144ec3459b8da5048ac15ef36bc6c21f145d364650db87a3d807774bae822c6b`), repo **0.6.1** (on the ISO).
 This is the ISO built after the ISSO's gate-3 fixes: boot-loader password and Rocky key (`DEVIATIONS.md`).
 Run 1 (rc2, repo 0.6.0) is kept below as history.
@@ -20,6 +23,17 @@ the ISO as a CD-ROM; the site stick is a removable USB disk image labelled `OEMD
 
 The entry is chosen like a person would: wait for our menu (serial console), then press Down ×N and Enter (`virsh send-key`).
 Nothing else is typed during the install.
+
+## Results (run 3, rc4, ISO Plan 5b): 141 PASS, 0 FAIL (the record of proof)
+
+Every host was installed fresh from rc4, which carries Plan 5b's two collector fixes (P1, P2; `RELEASE-RECORD-0.6.2.md`).
+The stages and counts are the same as run 2, plus one new stage:
+
+| Stage | PASS | What it proves |
+|---|---|---|
+| baseline | 3/3 | the diagnostic engine finds **nothing** on all three healthy hosts. Before P1, both clients reported `COLLECT_CONF_INVALID` |
+
+The `scan` stage again shows 102 pass and 0 fail on every host (`DEVIATIONS.md`, rc4).
 
 ## Results (run 2, rc3): 138 PASS, 0 FAIL
 
