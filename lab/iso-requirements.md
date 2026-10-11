@@ -62,3 +62,5 @@ ISO Plan 4a (2026-10-01) proved rows 5, 6, 7, 8, 9, 10, 12, 21, 22, 25, 27, 29, 
 ISO Plan 4b (2026-10-01) proved rows 9 (short names), 11, 19, 36, 42 and 43 on an installed identity server + two clients from signed repo 0.5.1 (`lab/iso4/PROOF-RECORD.md`, run 2: 123/123).
 
 ISO Plan 5a (2026-10-10) proved row 37 and re-proved rows 1, 15, 16, 17, 31 and 35–43 on an identity server and two clients **installed from the ISO** (`cyberhygiene-lab-installer-el9.iso` 0.1.0-rc3, repo 0.6.1; Secure Boot + vTPM; `lab/iso5/PROOF-RECORD.md`, run 2: 138/138); the CUI scan passes every selected rule on all three hosts (`lab/iso5/DEVIATIONS.md`).
+
+ISO Plan 5b (2026-10-11) met the spec's gate 2 on hosts **installed from the ISO** (0.1.0-rc5, repo 0.6.3). The 11 scenarios L1–L6, L3n and C1–C4 were GREEN ×3 (33/33) with `IDM_PROFILE=appliance`, and row 36 passed ×3 (`lab/iso5/PROOF-RECORD.md`, `lab/iso5/regression-2026-10-11.md`). It re-proved rows 6–11, 18, 19 and 24–36 on the appliance. Two collector gaps found there are fixed: clients now write `collect.conf`, and the stale-cache check (row 28) works with short names (row 9).

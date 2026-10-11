@@ -1,7 +1,25 @@
 # ISO Plan 5a proof record: install from nothing, from the ISO (gate 1)
 
-**Update 2026-10-11 (ISO Plan 5b): the proof of record is now run 3, on ISO 0.1.0-rc4** (sha256
-`53ab4f6ffe9dc130804d5270e9441ccca6cdf46be637ad725446e847e7626eec`, repo 0.6.2; see below). Runs 1 and 2 are history.
+**Update 2026-10-11 (ISO Plan 5b): the proof of record is run 4, on ISO 0.1.0-rc5** (sha256
+`efcba98a4268ec35ccef0b66b78122b3c78246424f76186cfa45a1ba80ff81b2`, repo 0.6.3), together with **gate 2** below.
+Runs 1–3 are history.
+
+## Gate 2: regression on the installed hosts (ISO Plan 5b, 2026-10-11): MET
+
+- **Run 4 on rc5:** install from nothing and the CUI scan, 141/141, the same stages as run 3.
+  - Then the lab adapter: 8/8 (`LAB-ADAPTER.md`; added after the scan).
+  - Then qcow2 NVRAM 4/4, the scenario users (`fixtures.py`: FIXTURES OK) and the golden snapshots 5/5
+    (reset + 0 findings).
+- **The regression:** `IDM_PROFILE=appliance`, 3 runs of each scenario, `lab/iso5/regression-2026-10-11.md`.
+  **11 of 11 scenarios green in every run (33/33).**
+  - Model `mistralai/devstral-small-2-2512`: 33/33 valid explanations, 32/33 agreeing with the expected repair (l4: 2/3).
+    Each repair is code-driven, so all were GREEN.
+- **Row 36 ×3** (`prove.sh row36`): `chp-site pam-test gdm-password lab01` (Kanidm password + GA code) passed 3 of 3,
+  each in a fresh GA window. The token label afterwards was `var_auth_t`.
+- **The shakedown before gate 2 found two engine/harness issues**, both fixed with tests:
+  - l3: the stale-cache rule was blind to short names. A collector field was added (ISSO option a → repo 0.6.3, rc5).
+  - l2: the lab's probe certificates expired inside the CA record. Lab certificates now last 30 days.
+- **Snapshots with a vTPM:** proven (`snapspike`), then used for every reset.
 
 **Date:** 2026-10-10 · **Run 2** was on ISO `cyberhygiene-lab-installer-el9.iso` **0.1.0-rc3**
 (sha256 `144ec3459b8da5048ac15ef36bc6c21f145d364650db87a3d807774bae822c6b`), repo **0.6.1** (on the ISO).
@@ -24,7 +42,7 @@ the ISO as a CD-ROM; the site stick is a removable USB disk image labelled `OEMD
 The entry is chosen like a person would: wait for our menu (serial console), then press Down ×N and Enter (`virsh send-key`).
 Nothing else is typed during the install.
 
-## Results (run 3, rc4, ISO Plan 5b): 141 PASS, 0 FAIL (the record of proof)
+## Results (run 3, rc4, ISO Plan 5b, history): 141 PASS, 0 FAIL
 
 Every host was installed fresh from rc4, which carries Plan 5b's two collector fixes (P1, P2; `RELEASE-RECORD-0.6.2.md`).
 The stages and counts are the same as run 2, plus one new stage:
