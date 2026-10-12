@@ -46,5 +46,15 @@
     </xccdf-1.2:description>
     <!-- CCE-83956-3: user.max_user_namespaces held at 15000, not 0; see description above -->
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_sysctl_user_max_user_namespaces" selected="false"/>
+    <!-- core 0.2.0 (spec 2026-10-12): AIDE in the core; all 8 SSG AIDE rules selected. Two are deviations "met by
+         equivalent means" (systemd timer + CHP monitor instead of cron + mail): spec §8. -->
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_package_aide_installed" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_build_database" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_scan_notification" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_use_fips_hashes" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_check_audit_tools" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_verify_acls" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_verify_ext_attributes" selected="true"/>
   </xccdf-1.2:Profile>
 </xccdf-1.2:Tailoring>
