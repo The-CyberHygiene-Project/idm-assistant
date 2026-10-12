@@ -6,6 +6,7 @@ approved, audited baseline change (aide-accept). The daily check itself is a she
 import hashlib
 import os
 import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -58,6 +59,51 @@ def baseline_record(db, built_by, now):
         raise ValueError(f"BUILT_BY {built_by!r}")
     return {"DB_SHA512": sha512_file(db), "BUILT_AT": stamp(now), "BUILT_EPOCH": str(int(now)), "BUILT_BY": built_by}
 
+
+PINNED_SIGNERS = {"521276f43c908f8e": "CyberHygiene", "8a3872bf3228467c": "EPEL 9", "702d426d350d275d": "Rocky 9"}
+_SIGQF = "%{INSTALLTIME} %|DSAHEADER?{%{DSAHEADER:pgpsig}}:{%|RSAHEADER?{%{RSAHEADER:pgpsig}}:{(none)}|}|\n"
+
+
+class Rpm:
+    """Read-only questions to the rpm database (cached per package)."""
+    def __init__(self, run=subprocess.run):
+        self.run, self._info, self._mod = run, {}, {}
+
+    def owner(self, path):
+        r = self.run(["rpm", "-qf", "--qf", "%{NAME}\n", path], capture_output=True, text=True)
+        return r.stdout.splitlines()[0].strip() if r.returncode == 0 and r.stdout.strip() else None
+
+    def info(self, name):
+        if name not in self._info:
+            r = self.run(["rpm", "-q", "--qf", _SIGQF, name], capture_output=True, text=True)
+            line = r.stdout.splitlines()[0] if r.returncode == 0 and r.stdout else ""
+            t, _, sig = line.partition(" ")
+            m = re.search(r"Key ID ([0-9a-f]{16})", sig)
+            self._info[name] = (int(t) if t.isdigit() else 0, m.group(1) if m else None)
+        return self._info[name]
+
+    def modified(self, name):
+        if name not in self._mod:
+            r = self.run(["rpm", "-V", name], capture_output=True, text=True)
+            self._mod[name] = {line.split()[-1] for line in r.stdout.splitlines() if line.strip()}
+        return self._mod[name]
+
+
+def group(changes, rpm, built_epoch):
+    """Split AIDE's paths into (explained, unexplained). Explained = added/changed path owned by a package installed or
+    updated after the baseline, that rpm -V reports unmodified, signed by a pinned key. A reading aid only: nothing is
+    accepted automatically. A removed path is always unexplained (no owner left to ask)."""
+    explained, unexplained = {}, []
+    for kind in ("added", "removed", "changed"):
+        for p in changes.get(kind, []):
+            name = rpm.owner(p) if kind != "removed" else None
+            if name:
+                t, key = rpm.info(name)
+                if t > built_epoch and key in PINNED_SIGNERS and p not in rpm.modified(name):
+                    explained.setdefault(name, []).append(p)
+                    continue
+            unexplained.append((kind, p))
+    return explained, unexplained
 
 def write_pin(stick, host, base, now):
     """aide/<host>.txt on the site stick; an existing record is first renamed aide/<host>.<its PINNED_AT>[-n].txt

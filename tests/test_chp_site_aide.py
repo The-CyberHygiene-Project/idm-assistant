@@ -112,3 +112,54 @@ def test_verify_pin(tmp_path):
     assert aide.verify_pin(tmp_path, "h", "b" * 128) == (False, "a" * 128)
     with pytest.raises(SiteError, match="no AIDE pin for other"):
         aide.verify_pin(tmp_path, "other", "a" * 128)
+
+
+class FakeRpm:
+    def __init__(self, owners, info, modified=None):
+        self.owners, self._info, self._mod = owners, info, modified or {}
+
+    def owner(self, p):
+        return self.owners.get(p)
+
+    def info(self, n):
+        return self._info[n]
+
+    def modified(self, n):
+        return self._mod.get(n, set())
+
+
+def test_group_explains_only_updated_unmodified_pinned_packages():
+    changes = {"added": ["/usr/lib/new.so"], "removed": ["/usr/bin/gone"],
+               "changed": ["/usr/bin/ls", "/usr/bin/vi", "/usr/bin/x", "/etc/kanidm/config", "/usr/bin/old"]}
+    rpm = FakeRpm(owners={"/usr/lib/new.so": "glibc", "/usr/bin/ls": "coreutils", "/usr/bin/vi": "vim-minimal",
+                          "/usr/bin/x": "thirdparty", "/usr/bin/old": "oldpkg", "/etc/kanidm/config": "kanidm-unixd"},
+                  info={"glibc": (2000, "702d426d350d275d"), "coreutils": (2000, "702d426d350d275d"),
+                        "vim-minimal": (2000, "702d426d350d275d"), "thirdparty": (2000, "deadbeefdeadbeef"),
+                        "oldpkg": (500, "702d426d350d275d"), "kanidm-unixd": (2000, "521276f43c908f8e")},
+                  modified={"vim-minimal": {"/usr/bin/vi"}, "kanidm-unixd": {"/etc/kanidm/config"}})
+    explained, unexplained = aide.group(changes, rpm, built_epoch=1000)
+    assert explained == {"glibc": ["/usr/lib/new.so"], "coreutils": ["/usr/bin/ls"]}
+    assert unexplained == [("removed", "/usr/bin/gone"), ("changed", "/usr/bin/vi"), ("changed", "/usr/bin/x"),
+                           ("changed", "/etc/kanidm/config"), ("changed", "/usr/bin/old")]
+
+
+def test_rpm_helper_parses_rpm_output():
+    import types
+
+    def run(argv, **kw):
+        if argv[:2] == ["rpm", "-qf"]:
+            return types.SimpleNamespace(returncode=0, stdout="coreutils\n")
+        if argv[:2] == ["rpm", "-q"]:
+            return types.SimpleNamespace(returncode=0, stdout="1760000000 RSA/SHA256, Mon 12 Oct 2026, Key ID 702d426d350d275d\n")
+        return types.SimpleNamespace(returncode=1, stdout="S.5....T.  c /etc/x\nmissing     /usr/bin/y\n")
+    r = aide.Rpm(run=run)
+    assert r.owner("/usr/bin/ls") == "coreutils"
+    assert r.info("coreutils") == (1760000000, "702d426d350d275d")
+    assert r.modified("coreutils") == {"/etc/x", "/usr/bin/y"}
+
+
+def test_rpm_helper_unowned_and_unsigned():
+    import types
+    r = aide.Rpm(run=lambda argv, **kw: types.SimpleNamespace(returncode=1, stdout="file /x is not owned by any package\n")
+                 if argv[1] == "-qf" else types.SimpleNamespace(returncode=0, stdout="1760000000 (none)\n"))
+    assert r.owner("/x") is None and r.info("p") == (1760000000, None)
