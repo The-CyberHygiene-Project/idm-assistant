@@ -26,7 +26,7 @@ NTP_UPSTREAM=
 # Time zone name. Example: America/Chicago  (or UTC)
 TIMEZONE=
 
-# The ISSO's name (1-64 characters, no '=' or ','). Approves account un-expiry. Example: J. Shannon
+# The ISSO's name (1-64 characters, no '=' or ','). Approves account un-expiry. Example: A. Example
 ISSO_NAME=
 
 # Other people allowed to approve un-expiry, comma separated. May be left empty.
