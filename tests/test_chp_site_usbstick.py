@@ -90,3 +90,44 @@ def test_export_blocks_the_stick_again_when_mount_fails(tmp_path, monkeypatch): 
                        "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"), "--pending", str(tmp_path / "none")])
     assert "mount" in seen                                    # the failure really came from mount
     assert rc == 2 and blocked == ["7"]
+
+
+def test_site_stick_with_a_directory_just_yields_it(tmp_path):
+    from chp_site.usbstick import site_stick
+    with site_stick(str(tmp_path)) as s:
+        assert s == tmp_path
+
+
+def test_site_stick_mounts_and_always_blocks_again(monkeypatch, tmp_path):
+    import types
+    import pytest
+    from chp_site import usbstick
+    calls = []
+    monkeypatch.setattr(usbstick, "allow_stick", lambda label: calls.append(("allow", str(label))) or "7")
+    monkeypatch.setattr(usbstick, "block_stick", lambda dev: calls.append(("block", dev)))
+    monkeypatch.setattr(usbstick.tempfile, "mkdtemp", lambda **kw: str(tmp_path / "m"))
+    (tmp_path / "m").mkdir()
+    run = lambda argv, **kw: calls.append(tuple(argv[:1])) or types.SimpleNamespace(returncode=0)
+    with pytest.raises(RuntimeError):
+        with usbstick.site_stick(run=run) as s:
+            assert s == tmp_path / "m"
+            raise RuntimeError("boom")
+    names = [c[0] for c in calls]
+    assert names == ["allow", "mount", "sync", "umount", "block"] and calls[-1] == ("block", "7")
+
+
+def test_site_stick_mount_failure_still_blocks(monkeypatch, tmp_path):
+    import types
+    import pytest
+    from chp_site import usbstick
+    from chp_site.sitefile import SiteError
+    blocked = []
+    monkeypatch.setattr(usbstick, "allow_stick", lambda label: "9")
+    monkeypatch.setattr(usbstick, "block_stick", lambda dev: blocked.append(dev))
+    monkeypatch.setattr(usbstick.tempfile, "mkdtemp", lambda **kw: str(tmp_path / "m"))
+    (tmp_path / "m").mkdir()
+    run = lambda argv, **kw: types.SimpleNamespace(returncode=32 if argv[0] == "mount" else 0)
+    with pytest.raises(SiteError, match="could not mount the site stick"):
+        with usbstick.site_stick(run=run):
+            pass
+    assert blocked == ["9"] and not (tmp_path / "m").exists()

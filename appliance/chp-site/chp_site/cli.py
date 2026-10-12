@@ -76,36 +76,13 @@ def _verify_repo(a):
 
 
 def _export(a):
-    import subprocess
-    import tempfile
-    from .usbstick import allow_stick, block_stick
     site = parse_site(read_file(Path(a.site), "site.conf"))
     hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub, Path(a.cache_key).read_text())
-    if a.stick:
-        _export_to(a, site, hosts, text, pem, pub, Path(a.stick))
-        return
-    dev = Path("/dev/disk/by-label/OEMDRV")
-    usb = allow_stick(dev)                              # USBGuard: authorize ONLY the pinned stick, temporarily
-    try:
-        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run" if os.path.isdir("/run") else None)
-        try:
-            if subprocess.run(["mount", str(dev), mnt]).returncode != 0:
-                raise SiteError("could not mount the site stick")
-            try:
-                _export_to(a, site, hosts, text, pem, pub, Path(mnt))
-            finally:
-                subprocess.run(["sync"])
-                if subprocess.run(["umount", mnt]).returncode != 0:
-                    raise SiteError(f"could not unmount the site stick ({mnt}); do not unplug it yet")
-        finally:
-            try:
-                os.rmdir(mnt)
-            except OSError:
-                pass
-    finally:
-        block_stick(usb)                                # always, whatever happened above
+    from .usbstick import site_stick
+    with site_stick(a.stick) as s:                      # USBGuard: ONLY the pinned stick, temporarily; always re-blocked
+        _export_to(a, site, hosts, text, pem, pub, s)
 
 
 def _export_to(a, site, hosts, text, pem, pub, stick):

@@ -3,9 +3,12 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """USBGuard (CUI) blocks USB storage on installed hosts. export-client authorizes ONLY the site stick, temporarily
 (`usbguard allow-device ID` without -p: nothing is written to the policy), and blocks it again afterwards."""
+import os
 import re
 import subprocess
+import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .sitefile import SiteError
@@ -83,7 +86,7 @@ def allow_stick(label_path, wait=20, pin_file=PIN_FILE, hash_file=HASH_FILE):
     hp = Path(hash_file)
     dev, dev_hash = pick_pinned(out, _read_pin(pin_file), hp.read_text().strip() if hp.exists() else None)
     subprocess.run(["usbguard", "allow-device", dev], check=True)          # temporary: no -p, the policy is unchanged
-    subprocess.run(["logger", "-t", "chp-site", f"USBGuard: temporarily allowed device {dev} (site stick) for export-client"])
+    subprocess.run(["logger", "-t", "chp-site", f"USBGuard: temporarily allowed device {dev} (site stick) for chp-site"])
     for _ in range(wait * 2):
         if Path(label_path).exists():
             if not hp.exists():                                             # first use: pin the full device hash, only
@@ -102,3 +105,33 @@ def block_stick(dev):
         subprocess.run(["logger", "-t", "chp-site", "-p", "auth.warning" if r.returncode else "auth.info", msg])
         if r.returncode:
             raise SiteError(msg)
+
+
+@contextmanager
+def site_stick(stick=None, label="/dev/disk/by-label/OEMDRV", run=None):
+    """Yield the site stick's directory. With `stick` (tests, lab) that directory. Otherwise authorize ONLY the pinned
+    stick through USBGuard (temporarily), mount it, yield, then sync, unmount and block it again, whatever happened."""
+    if stick:
+        yield Path(stick)
+        return
+    run = run or subprocess.run                         # looked up at call time (tests patch subprocess.run)
+    dev = Path(label)
+    usb = allow_stick(dev)
+    try:
+        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run" if os.path.isdir("/run") else None)
+        try:
+            if run(["mount", str(dev), mnt]).returncode != 0:
+                raise SiteError("could not mount the site stick")
+            try:
+                yield Path(mnt)
+            finally:
+                run(["sync"])
+                if run(["umount", mnt]).returncode != 0:
+                    raise SiteError(f"could not unmount the site stick ({mnt}); do not unplug it yet")
+        finally:
+            try:
+                os.rmdir(mnt)
+            except OSError:
+                pass
+    finally:
+        block_stick(usb)
