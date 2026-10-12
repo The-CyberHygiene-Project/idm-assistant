@@ -6,10 +6,12 @@ approved, audited baseline change (aide-accept). The daily check itself is a she
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
 
+from . import audit
 from .sitefile import SiteError
 
 DB = Path("/var/lib/aide/aide.db.gz")
@@ -157,3 +159,77 @@ def parse_report(text):
         if e:
             out[cur].append(e.group(1))
     return out
+
+
+def run_aide(*args):
+    import subprocess as sp
+    r = sp.run(["aide", *args], capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def _summary(changes, explained, unexplained):
+    lines = [f"AIDE changes since the baseline: {len(changes['added'])} added, {len(changes['removed'])} removed, "
+             f"{len(changes['changed'])} changed", ""]
+    n_exp = sum(len(v) for v in explained.values())
+    lines.append(f"Explained by signed package updates: {n_exp} paths in {len(explained)} packages")
+    for pkg in sorted(explained):
+        lines.append(f"  {pkg}: {len(explained[pkg])} paths")
+    lines += ["", f"NOT explained: {len(unexplained)} paths (review every one)"]
+    lines += [f"  {kind:8} {p}" for kind, p in unexplained]
+    return "\n".join(lines)
+
+
+def accept(site, approver, reason, *, host, aide, rpm, confirm, say=print, rec=audit.record,
+           investigated_mismatch=False, db=DB, new_db=NEW_DB, state=STATE, logdir=LOGDIR, now=time.time):
+    """spec §6.1: approve (ISSO or BASELINE_DELEGATES), fresh check, grouped summary, confirm, audit, new baseline.
+    Returns the new baseline record, or None when there is nothing to accept."""
+    from .ops import approved_by, checked_reason
+    approver = approved_by(site, approver, "BASELINE_DELEGATES")
+    reason = checked_reason(reason, "why these changes are legitimate")
+    state, logdir, db, new_db = Path(state), Path(logdir), Path(db), Path(new_db)
+    base = read_record(state / "baseline")
+    if not base.get("DB_SHA512") or not db.exists():
+        raise SiteError("no AIDE baseline on this host (nothing to accept against): see the 60-aide-result alert")
+    mismatch = sha512_file(db) != base["DB_SHA512"]
+    if mismatch and not investigated_mismatch:
+        raise SiteError("the AIDE database is NOT the recorded baseline (replaced outside aide-accept?): investigate "
+                        "first; only then re-run with --database-mismatch-investigated")
+    rc, text = aide("--check")
+    if rc < 0 or rc >= 14:
+        raise SiteError(f"the fresh AIDE check failed (exit {rc}); nothing was changed")
+    if rc == 0 and not mismatch:
+        say("AIDE: no changes since the baseline; nothing to accept")
+        return None
+    t = now()
+    logdir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    rep = logdir / f"accept-{stamp(t)}.log"
+    rep.write_text(text)
+    rep.chmod(0o600)
+    changes = parse_report(text)
+    explained, unexplained = group(changes, rpm, int(base.get("BUILT_EPOCH", "0") or 0))
+    say(_summary(changes, explained, unexplained))
+    if not confirm():
+        raise SiteError("not accepted; nothing was changed")
+    fields = {"host": host, "approver": approver, "reason": reason, "operator": audit.operator(),
+              "explained": sum(len(v) for v in explained.values()), "unexplained": len(unexplained),
+              "db_mismatch": "investigated" if mismatch else "no", "old_sha512": base["DB_SHA512"], "report": str(rep)}
+    rec("aide-accept", fields)
+    if new_db.exists():
+        new_db.unlink()
+    rc2, _out = aide("--init")
+    if rc2 != 0 or not new_db.exists():
+        raise SiteError(f"aide --init failed (exit {rc2}); the old baseline is unchanged")
+    os.replace(new_db, db)
+    os.chmod(db, 0o600)
+    t2 = now()
+    nb = baseline_record(db, f"accepted:{approver}", t2)
+    write_record(state / "baseline", nb, 0o600)
+    acc = logdir / "accepted"
+    acc.mkdir(mode=0o700, exist_ok=True)
+    shutil.copy2(rep, acc / rep.name)
+    write_record(state / "last-result", {"TIME": stamp(t2), "EPOCH": str(int(t2)), "EXIT": "0", "ADDED": "0",
+                                         "REMOVED": "0", "CHANGED": "0", "DB_MATCH": "yes",
+                                         "REPORT": str(acc / rep.name)}, 0o644)
+    rec("aide-accept.done", {**fields, "new_sha512": nb["DB_SHA512"]}, after=True)
+    say(f"accepted by {approver}: new baseline {nb['DB_SHA512'][:16]}… (recorded in the audit log)")
+    return nb

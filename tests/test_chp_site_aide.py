@@ -163,3 +163,100 @@ def test_rpm_helper_unowned_and_unsigned():
     r = aide.Rpm(run=lambda argv, **kw: types.SimpleNamespace(returncode=1, stdout="file /x is not owned by any package\n")
                  if argv[1] == "-qf" else types.SimpleNamespace(returncode=0, stdout="1760000000 (none)\n"))
     assert r.owner("/x") is None and r.info("p") == (1760000000, None)
+
+
+SITE = {"ISSO_NAME": "D. Shannon", "BASELINE_DELEGATES": ["Deputy ISSO"]}
+
+
+class Rec:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, action, fields, after=False):
+        self.calls.append((action, dict(fields), after))
+
+
+def env(tmp_path, check_rc=4, check_text=REPORT, init_rc=0):
+    db, new, st, lg = tmp_path / "aide.db.gz", tmp_path / "aide.db.new.gz", tmp_path / "state", tmp_path / "log"
+    db.write_bytes(b"old-db")
+    aide.write_record(st / "baseline", aide.baseline_record(db, "first-boot", 1000), 0o600)
+    calls = []
+
+    def fake_aide(*args):
+        calls.append(args)
+        if args == ("--check",):
+            return check_rc, check_text
+        new.write_bytes(b"new-db")
+        return init_rc, "init done"
+    kw = dict(host="iso5-srv", aide=fake_aide, rpm=FakeRpm({}, {}), say=lambda *a: None, db=db, new_db=new,
+              state=st, logdir=lg, now=lambda: 1760000000)
+    return kw, calls, db, st, lg
+
+
+def test_accept_by_delegate_builds_records_and_audits(tmp_path):
+    kw, calls, db, st, lg = env(tmp_path)
+    rec = Rec()
+    nb = aide.accept(SITE, "Deputy ISSO", "monthly patch window CR-12", confirm=lambda: True, rec=rec, **kw)
+    assert calls == [("--check",), ("--init",)] and db.read_bytes() == b"new-db"
+    assert nb["BUILT_BY"] == "accepted:Deputy ISSO" and aide.read_record(st / "baseline") == nb
+    assert oct((st / "baseline").stat().st_mode & 0o777) == "0o600"
+    last = aide.read_record(st / "last-result")
+    assert last["EXIT"] == "0" and last["DB_MATCH"] == "yes" and last["CHANGED"] == "0"
+    assert [c[0] for c in rec.calls] == ["aide-accept", "aide-accept.done"] and rec.calls[1][2] is True
+    f = rec.calls[0][1]
+    assert f["approver"] == "Deputy ISSO" and f["unexplained"] == 4 and f["explained"] == 0 and f["db_mismatch"] == "no"
+    assert rec.calls[1][1]["new_sha512"] == nb["DB_SHA512"] and f["old_sha512"] != nb["DB_SHA512"]
+    assert len(list((lg / "accepted").iterdir())) == 1
+
+
+def test_accept_refuses_unlisted_approver_and_short_reason_without_touching_anything(tmp_path):
+    kw, calls, db, st, _ = env(tmp_path)
+    before = (st / "baseline").read_text()
+    for who, why in (("Somebody", "a perfectly long reason"), ("D. Shannon", "short")):
+        with pytest.raises(SiteError):
+            aide.accept(SITE, who, why, confirm=lambda: True, rec=Rec(), **kw)
+    assert calls == [] and db.read_bytes() == b"old-db" and (st / "baseline").read_text() == before
+
+
+def test_accept_refuses_a_replaced_database_unless_investigated(tmp_path):     # Review Focus 1
+    kw, calls, db, st, _ = env(tmp_path)
+    db.write_bytes(b"swapped-by-someone")
+    with pytest.raises(SiteError, match="investigate first"):
+        aide.accept(SITE, "D. Shannon", "after the incident review", confirm=lambda: True, rec=Rec(), **kw)
+    assert calls == [] and db.read_bytes() == b"swapped-by-someone"
+    rec = Rec()
+    aide.accept(SITE, "D. Shannon", "after the incident review", confirm=lambda: True, rec=rec,
+                investigated_mismatch=True, **kw)
+    assert rec.calls[0][1]["db_mismatch"] == "investigated" and db.read_bytes() == b"new-db"
+
+
+def test_accept_refuses_when_the_fresh_check_fails(tmp_path):     # Review Focus 2
+    kw, calls, db, st, _ = env(tmp_path, check_rc=17, check_text="config error")
+    rec = Rec()
+    with pytest.raises(SiteError, match="fresh AIDE check failed \\(exit 17\\)"):
+        aide.accept(SITE, "D. Shannon", "routine acceptance here", confirm=lambda: True, rec=rec, **kw)
+    assert calls == [("--check",)] and rec.calls == [] and db.read_bytes() == b"old-db"
+
+
+def test_accept_nothing_to_accept(tmp_path):
+    kw, calls, db, _, _ = env(tmp_path, check_rc=0, check_text="AIDE found NO differences")
+    assert aide.accept(SITE, "D. Shannon", "routine acceptance here", confirm=lambda: True, rec=Rec(), **kw) is None
+    assert calls == [("--check",)] and db.read_bytes() == b"old-db"
+
+
+def test_accept_not_confirmed_changes_nothing(tmp_path):
+    kw, calls, db, _, _ = env(tmp_path)
+    rec = Rec()
+    with pytest.raises(SiteError, match="not accepted"):
+        aide.accept(SITE, "D. Shannon", "routine acceptance here", confirm=lambda: False, rec=rec, **kw)
+    assert calls == [("--check",)] and rec.calls == [] and db.read_bytes() == b"old-db"
+
+
+def test_accept_init_failure_keeps_the_old_baseline(tmp_path):
+    kw, calls, db, st, _ = env(tmp_path, init_rc=17)
+    before = (st / "baseline").read_text()
+    rec = Rec()
+    with pytest.raises(SiteError, match="aide --init failed"):
+        aide.accept(SITE, "D. Shannon", "routine acceptance here", confirm=lambda: True, rec=rec, **kw)
+    assert db.read_bytes() == b"old-db" and (st / "baseline").read_text() == before
+    assert [c[0] for c in rec.calls] == ["aide-accept"]       # the request is on record; no .done
