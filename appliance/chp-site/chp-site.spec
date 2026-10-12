@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.6.1
+Version:        0.7.0
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Mon Oct 12 2026 The CyberHygiene Project - 0.7.0-1.chp
+- aide-accept (ISSO or BASELINE_DELEGATES; audited; explained/unexplained summary), aide-pin, aide-verify-pin;
+  export-client pins the server's AIDE baseline; BASELINE_DELEGATES in site.conf (core 0.2.0, spec 2026-10-12).
+
 * Sat Oct 10 2026 The CyberHygiene Project - 0.6.1-1.chp
 - pre: per-host random boot-loader password, escrowed on the site stick; kickstart gets only its PBKDF2 hash
   (ISSO 2026-10-10, CUI rule grub2_password).

@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.6.1"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.7.0"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
@@ -106,3 +106,81 @@ def test_authselect_patch_subcommand(tmp_path):
     sa = (d / "system-auth").read_text()
     assert sa.count(GA_LINES[1]) == 1 and sa.index(GA_LINES[1]) < sa.index("pam_kanidm.so")
     assert GA_LINES[1] in (d / "password-auth").read_text()
+
+
+def test_aide_pin_and_verify_with_a_stick_dir(tmp_path, monkeypatch, capsys):
+    from chp_site import aide, cli as cli_mod
+    st = tmp_path / "state"; db = tmp_path / "aide.db.gz"; db.write_bytes(b"db")
+    aide.write_record(st / "baseline", aide.baseline_record(db, "first-boot", 1000), 0o600)
+    monkeypatch.setattr(aide, "STATE", st); monkeypatch.setattr(aide, "DB", db)
+    monkeypatch.setattr(cli_mod, "_host", lambda: "iso5-srv")
+    stick = tmp_path / "stick"; stick.mkdir()
+    assert cli_mod.main(["aide-pin", "--stick", str(stick)]) == 0
+    assert (stick / "aide" / "iso5-srv.txt").exists()
+    assert aide.read_record(st / "pinned")["DB_SHA512"] == aide.sha512_file(db)
+    assert cli_mod.main(["aide-verify-pin", "--stick", str(stick)]) == 0 and "MATCH" in capsys.readouterr().out
+    db.write_bytes(b"tampered")
+    assert cli_mod.main(["aide-verify-pin", "--stick", str(stick)]) == 1 and "MISMATCH" in capsys.readouterr().out
+
+
+def test_aide_pin_without_baseline_is_a_readable_error(tmp_path, monkeypatch, capsys):
+    from chp_site import aide, cli as cli_mod
+    monkeypatch.setattr(aide, "STATE", tmp_path / "none")
+    stick = tmp_path / "stick"; stick.mkdir()
+    assert cli_mod.main(["aide-pin", "--stick", str(stick)]) == 2
+    assert "no AIDE baseline" in capsys.readouterr().err
+
+
+def test_aide_accept_wires_through_and_pins(tmp_path, monkeypatch, capsys):
+    from chp_site import aide, cli as cli_mod
+    seen = {}
+
+    def fake_accept(site, approver, reason, **kw):
+        seen.update(approver=approver, reason=reason, mismatch=kw["investigated_mismatch"], yes=kw["confirm"]())
+        return {"DB_SHA512": "x"}
+    monkeypatch.setattr(aide, "accept", fake_accept)
+    monkeypatch.setattr(cli_mod, "_aide_pin", lambda a: print("PINNED"))
+    rc = cli_mod.main(["aide-accept", "--approver", "D. Shannon", "--reason", "patch window CR-12", "--yes",
+                   "--site", str(site(tmp_path))])
+    assert rc == 0 and seen == {"approver": "D. Shannon", "reason": "patch window CR-12", "mismatch": False, "yes": True}
+    assert "PINNED" in capsys.readouterr().out
+
+
+def test_aide_accept_without_a_stick_still_succeeds(tmp_path, monkeypatch, capsys):
+    from chp_site import aide, cli as cli_mod
+    from chp_site.sitefile import SiteError
+    monkeypatch.setattr(aide, "accept", lambda *a, **k: {"DB_SHA512": "x"})
+
+    def no_stick(a):
+        raise SiteError("no site stick found: plug in the USB stick labelled OEMDRV")
+    monkeypatch.setattr(cli_mod, "_aide_pin", no_stick)
+    rc = cli_mod.main(["aide-accept", "--approver", "D. Shannon", "--reason", "patch window CR-12", "--yes",
+                   "--site", str(site(tmp_path))])
+    assert rc == 0 and "NOT pinned yet" in capsys.readouterr().out
+
+
+def test_version_is_0_7_0(capsys):
+    import pytest
+    from chp_site import cli as cli_mod
+    with pytest.raises(SystemExit):
+        cli_mod.main(["--version"])
+    assert "chp-site 0.7.0" in capsys.readouterr().out
+
+
+def test_export_client_pins_the_aide_baseline_when_there_is_one(tmp_path, monkeypatch, capsys):
+    from chp_site import aide, cli as cli_mod
+    args = lambda stick: ["export-client", "--stick", str(stick), "--site", str(d / "site.conf"),
+                          "--pending", str(tmp_path / "pending"), "--root", str(FX / "root_ca.crt"),
+                          "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub")]
+    d = site(tmp_path); st = tmp_path / "state"
+    monkeypatch.setattr(aide, "STATE", st)
+    s1 = tmp_path / "s1"; s1.mkdir()
+    assert cli_mod.main(args(s1)) == 0 and "no AIDE baseline yet" in capsys.readouterr().out
+    assert not (s1 / "aide").exists()
+    db = tmp_path / "aide.db.gz"; db.write_bytes(b"db")
+    aide.write_record(st / "baseline", aide.baseline_record(db, "first-boot", 1000), 0o600)
+    s2 = tmp_path / "s2"; s2.mkdir()
+    assert cli_mod.main(args(s2)) == 0 and "AIDE baseline pinned: aide/" in capsys.readouterr().out
+    recs = list((s2 / "aide").glob("*.txt"))
+    assert len(recs) == 1 and aide.read_record(recs[0])["DB_SHA512"] == aide.sha512_file(db)
+    assert aide.read_record(st / "pinned")["DB_SHA512"] == aide.sha512_file(db)
