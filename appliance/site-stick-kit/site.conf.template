@@ -32,6 +32,10 @@ ISSO_NAME=
 # Other people allowed to approve un-expiry, comma separated. May be left empty.
 UNEXPIRE_DELEGATES=
 
+# Other people allowed to accept a new AIDE baseline (file-integrity changes), comma separated. May be left empty.
+# Separate from UNEXPIRE_DELEGATES on purpose: blessing file changes is a different trust decision.
+BASELINE_DELEGATES=
+
 # The admin workstation's PUBLIC SSH key for the break-glass account chpadmin (the whole line of the .pub file).
 # Must be ECDSA or RSA of at least 3072 bits; ed25519 is REFUSED (FIPS). Make one:  ssh-keygen -t ecdsa -b 384
 ADMIN_SSH_PUBKEY=

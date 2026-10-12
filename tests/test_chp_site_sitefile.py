@@ -144,3 +144,17 @@ def test_collector_key_needs_collector_ip():
     text = "\n".join(l for l in GOOD.splitlines() if not l.startswith("COLLECTOR_IP=")) + "\n"
     with pytest.raises(SiteError, match="COLLECTOR_SSH_PUBKEY needs COLLECTOR_IP"):
         parse_site(text + f"COLLECTOR_SSH_PUBKEY={COLL}\n")
+
+
+def test_baseline_delegates_optional_and_parsed():
+    from chp_site.sitefile import parse_site
+    assert parse_site(GOOD)["BASELINE_DELEGATES"] == []
+    s = parse_site(GOOD + "BASELINE_DELEGATES=A. Example, Deputy ISSO\n")
+    assert s["BASELINE_DELEGATES"] == ["A. Example", "Deputy ISSO"]
+
+
+def test_baseline_delegates_bad_name_refused():
+    import pytest
+    from chp_site.sitefile import parse_site, SiteError
+    with pytest.raises(SiteError, match="BASELINE_DELEGATES: bad name"):
+        parse_site(GOOD + "BASELINE_DELEGATES=ok, " + "x" * 65 + "\n")

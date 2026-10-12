@@ -138,16 +138,28 @@ def revoke(k, ca, hosts, user, group=None, rec=audit.record, fan=fanout.invalida
                         "~2 min (fix and re-run, or wait)")
 
 
+def approved_by(site, approver, delegates_key):
+    """The ISSO, or a delegate listed under delegates_key in site.conf (ISSO #32; core 0.2.0 baseline acceptance).
+    The name is attested, not authenticated: the audit record says who was at the keyboard."""
+    names = [site["ISSO_NAME"], *site.get(delegates_key, [])]
+    approver = (approver or "").strip()
+    if not approver or approver.casefold() not in {n.strip().casefold() for n in names}:
+        raise SiteError(f"refusing: {approver!r} is not the ISSO ({site['ISSO_NAME']}) or a delegate in {delegates_key}")
+    return approver
+
+
+def checked_reason(reason, why):
+    reason = (reason or "").strip()
+    if not 10 <= len(reason) <= 300 or any(ord(c) < 32 for c in reason):
+        raise SiteError(f"--reason: 10 to 300 characters on one line, saying {why}")
+    return reason
+
+
 def unexpire(k, ca, site, hosts, user, approver, reason, rec=audit.record, fan=fanout.invalidate_all, say=print):
     """ISSO #32: only the ISSO or a delegate named in site.conf approves; approver + reason are audited; never automatic."""
     _user(user)
-    names = [site["ISSO_NAME"], *site.get("UNEXPIRE_DELEGATES", [])]
-    approver = (approver or "").strip()
-    if approver.casefold() not in {n.strip().casefold() for n in names}:
-        raise SiteError(f"refusing: {approver!r} is not the ISSO ({site['ISSO_NAME']}) or a delegate in UNEXPIRE_DELEGATES")
-    reason = (reason or "").strip()
-    if not 10 <= len(reason) <= 300 or any(ord(c) < 32 for c in reason):
-        raise SiteError("--reason: 10 to 300 characters on one line, saying why the expiry was a mistake")
+    approver = approved_by(site, approver, "UNEXPIRE_DELEGATES")
+    reason = checked_reason(reason, "why the expiry was a mistake")
     e = k.person(user)
     if e is None:
         raise SiteError(f"no Kanidm person {user}")

@@ -126,7 +126,7 @@ def parse_site(text):
         _plain(k, v, where[k])
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
              "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY",
-             "COLLECTOR_SSH_PUBKEY"}
+             "COLLECTOR_SSH_PUBKEY", "BASELINE_DELEGATES"}
     for k in raw:
         if k not in known:
             raise SiteError(f"site.conf: unknown key {k}")
@@ -163,6 +163,11 @@ def parse_site(text):
         if not re.fullmatch(_NAME, d):
             raise SiteError(f"UNEXPIRE_DELEGATES: bad name {d!r}")
     s["UNEXPIRE_DELEGATES"] = dels
+    bdels = [x.strip() for x in raw.get("BASELINE_DELEGATES", "").split(",") if x.strip()]
+    for d in bdels:
+        if not re.fullmatch(_NAME, d):
+            raise SiteError(f"BASELINE_DELEGATES: bad name {d!r}")
+    s["BASELINE_DELEGATES"] = bdels
     c = raw.get("COLLECTOR_IP", "")
     if c and _ip("COLLECTOR_IP", c) not in s["SUBNET"]:
         raise SiteError(f"COLLECTOR_IP: {c} is outside SUBNET {s['SUBNET']}")
