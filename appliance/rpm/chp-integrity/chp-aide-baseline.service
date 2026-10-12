@@ -1,0 +1,16 @@
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+[Unit]
+Description=CHP first AIDE baseline, after this host's role first boot has finished (core 0.2.0)
+After=chp-firstboot-common.service chp-server-firstboot.service chp-client-firstboot.service
+ConditionPathExists=!/var/lib/aide/aide.db.gz
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/chp/aide-baseline
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

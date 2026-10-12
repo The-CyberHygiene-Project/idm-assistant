@@ -47,3 +47,24 @@ def test_no_exclusions_yet_or_each_one_justified():
              "!/boot/grub2/grubenv"}
     for e in ex:
         assert e in stock or e in justified, f"{e}: exclusions need a '# EXCLUDE <path>: reason' line (spec §4.4)"
+
+
+SPEC = (TOP / "appliance/rpm/chp-integrity/chp-integrity.spec").read_text()
+
+
+def test_spec_ships_every_file_and_requires_new_chp_site():
+    for f in ("aide-check", "aide-baseline", "chp-aide-check.service", "chp-aide-check.timer",
+              "chp-aide-baseline.service", "60-aide-result.sh", "61-aide-stale.sh", "62-aide-pin.sh"):
+        assert f in SPEC, f
+    assert "chp-site >= 0.7.0" in SPEC and "%triggerin -- aide" in SPEC and "installed-on-existing-host" in SPEC
+
+
+def test_baseline_unit_does_not_hold_the_boot_target():
+    u = (TOP / "appliance/rpm/chp-integrity/chp-aide-baseline.service").read_text()
+    assert "Type=simple" in u and "ConditionPathExists=!/var/lib/aide/aide.db.gz" in u and "Restart=on-failure" in u
+
+
+def test_repo_lists_and_pins_rocky_aide():
+    pk = (TOP / "appliance/release/PACKAGES.txt").read_text()
+    assert "\naide rocky\n" in pk and "\nchp-integrity ours" in pk
+    assert "rocky9 RPM-GPG-KEY-Rocky-9" in (TOP / "appliance/release/trusted-keys.txt").read_text()
