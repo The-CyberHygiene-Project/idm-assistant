@@ -1,0 +1,22 @@
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+#
+# hosts — one line per machine the installer may build. Fields separated by spaces:
+#
+#   MAC                hostname   IP              role     [disk]
+#
+# MAC       the network card the machine will use on SUBNET (aa:bb:cc:dd:ee:ff). The installer finds "itself" by MAC;
+#           a machine whose MAC is not listed stops before touching any disk.
+# hostname  one lower-case DNS label (no dots). The full name becomes hostname.DOMAIN.
+# IP        a fixed address inside SUBNET; not the GATEWAY, not the network or broadcast address.
+# role      server or client. Exactly ONE server.
+# disk      ONLY needed when the machine has more than one internal disk: the disk to ERASE and install on,
+#           as sda, nvme0n1, or /dev/disk/by-id/... (by-id is safest). With two or more disks and no name, it stops.
+#
+# List every client now, before the server is installed: the server's first boot makes each listed client's
+# enrolment token. (A client added later needs `chp-site client-token NAME` on the server; see SITE-STICK.md.)
+#
+# Example:
+# 3c:ec:ef:12:34:56  dc2        192.168.10.10  server   nvme0n1
+# 3c:ec:ef:12:34:57  ws1        192.168.10.21  client

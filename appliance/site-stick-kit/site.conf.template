@@ -1,0 +1,48 @@
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+#
+# site.conf — the site's settings, read by the installer from the OEMDRV stick.
+# Rules: one KEY=value per line; comments on their OWN line (never after a value); no quotes; save as plain UTF-8.
+# Check it before you boot anything:  python3 chp-site.pyz validate --site /Volumes/OEMDRV
+# This file holds NO secrets. (The stick as a whole does, after the first install: see SITE-STICK.md.)
+
+# DNS domain of the site, lower case, at least two labels. Example: cyberappliance.tech
+# ONE-WAY DOOR: it cannot be changed after the server is installed. Kanidm's own name becomes idm.<DOMAIN>.
+DOMAIN=
+
+# The site's network in CIDR form (host bits zero). Example: 192.168.10.0/24
+SUBNET=
+
+# The router's address; must be inside SUBNET. Example: 192.168.10.1
+GATEWAY=
+
+# Upstream DNS servers the server forwards to (IPv4, comma separated). May be left empty. Example: 1.1.1.1, 9.9.9.9
+DNS_FORWARDERS=
+
+# Time source(s): IPv4 addresses or host names, comma separated. Example: 192.168.10.1
+NTP_UPSTREAM=
+
+# Time zone name. Example: America/Chicago  (or UTC)
+TIMEZONE=
+
+# The ISSO's name (1-64 characters, no '=' or ','). Approves account un-expiry. Example: J. Shannon
+ISSO_NAME=
+
+# Other people allowed to approve un-expiry, comma separated. May be left empty.
+UNEXPIRE_DELEGATES=
+
+# The admin workstation's PUBLIC SSH key for the break-glass account chpadmin (the whole line of the .pub file).
+# Must be ECDSA or RSA of at least 3072 bits; ed25519 is REFUSED (FIPS). Make one:  ssh-keygen -t ecdsa -b 384
+ADMIN_SSH_PUBKEY=
+
+# Optional: the diagnostic collector's address and PUBLIC key (idm-assistant). Leave both empty if not used.
+# The key is pinned to this address. COLLECTOR_SSH_PUBKEY needs COLLECTOR_IP.
+COLLECTOR_IP=
+COLLECTOR_SSH_PUBKEY=
+
+# Screen zoom and large text pre-configured on the desktops: on or off.
+ACCESSIBILITY=off
+
+# Optional: absolute path of a script on the hosts that receives each monitor alert. Empty = alerts go to the log only.
+ALERT_HOOK=
