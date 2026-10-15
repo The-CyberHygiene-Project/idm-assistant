@@ -1,0 +1,136 @@
+Start timestamp: 2026-10-13 03:38:56 -0600 (AIDE 0.19.2)
+AIDE found differences between database and filesystem!!
+
+Summary:
+  Total number of entries:	136844
+  Added entries:		2
+  Removed entries:		0
+  Changed entries:		14
+
+---------------------------------------------------
+Added entries:
+---------------------------------------------------
+
+f+++++++++++++++++: /usr/local/sbin/chp-test-hook
+f+++++++++++++++++: /var/log/audit/audit.log.2
+
+---------------------------------------------------
+Changed entries:
+---------------------------------------------------
+
+d = ... mc.. ...  : /etc/chp
+f > ... mci.H...  : /etc/chp/site.conf
+d > ...   .. .... : /usr/local/sbin
+f   ...    .H...  : /var/log/aide/init-20261013T024548Z.log
+f   ...     H...  : /var/log/audit/audit.log
+f   ...    .H...  : /var/log/boot.log
+f   ...    .H...  : /var/log/cron
+f   ...    .H...  : /var/log/dnf.librepo.log
+f   ...    .H...  : /var/log/dnf.log
+f   ...    .H...  : /var/log/dnf.rpm.log
+f   ...    .H...  : /var/log/messages
+f   ...    .H...  : /var/log/rhsm/rhsm.log
+f   ...    .H...  : /var/log/rhsm/rhsmcertd.log
+f   ...    .H...  : /var/log/secure
+
+---------------------------------------------------
+Detailed information about changes:
+---------------------------------------------------
+
+Directory: /etc/chp
+ Mtime     : 2026-10-11 11:26:48 -0600        | 2026-10-12 21:08:00 -0600
+ Ctime     : 2026-10-11 11:26:48 -0600        | 2026-10-12 21:08:00 -0600
+
+File: /etc/chp/site.conf
+ Size      : 714                              | 743
+ Mtime     : 2026-10-11 11:15:14 -0600        | 2026-10-12 21:08:00 -0600
+ Ctime     : 2026-10-11 11:15:14 -0600        | 2026-10-12 21:08:00 -0600
+ Inode     : 68780491                         | 68227523
+ SHA512    : dMaOYEpgej3MuW9/QtYrLB1WUGqv8rar | UvW1YISYQ2OJ92rS3ZeKNZaNqhuvzG6m
+             OqbY3pUvPqqCdZnomMbNeSzdBSWbDGAL | TpfUMxDKw6YKZGY3c71MVlp3QvSbfbhy
+             mhH3UKWwKLal8KDQEnlN3A==         | BbJDdJVRCppP9bI9C796Rw==
+
+Directory: /usr/local/sbin
+ Size      : 6                                | 27
+
+File: /var/log/aide/init-20261013T024548Z.log
+ SHA512    : z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc | Fak1yTPVTkAxH3qvwS+vomN+6BIPrPYQ
+             g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv | PNBH8GRtwDAhsvwDnyXu0zqs3z0hlmLH
+             Y7kxvUdBeoGlODJ6+SfaPg==         | HJ/7EdIH9XUpodZXdJVWLQ==
+
+File: /var/log/audit/audit.log
+ SHA512    : 5YTCBpO1VvzzkXeaDQxSqy3tIn0h/3Q6 | E6CnkZEOc2HysEgOwi4hC4XK1dklgCcL
+             BoQdio8I6jfLHZlfWhE+kcSWNK61qzSj | o6RLVTIE2YhkeMdyp/SsDcw0ZEMvvipE
+             32R7LZMwmPGRFVLLZqTKfg==         | 5PFuwYOUZc8lqCRJwSvifw==
+
+File: /var/log/boot.log
+ SHA512    : /Pq6bLZP6zIMzvq3hzKEkTxpqzQZVOxx | z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc
+             sjHTEaWVy3nA/IQAj9/0d9g51iM9KGl3 | g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv
+             rw8q6wzkN+g4tkRgTz/R8Q==         | Y7kxvUdBeoGlODJ6+SfaPg==
+
+File: /var/log/cron
+ SHA512    : DTNUa4DjwfftmnBMEQpFxt+WXZJ0WP7z | NSrQLj206Bk1BHqIqVmChVO/ODef/wEC
+             wSYA3Eqxnf4cmIrkGReJnV9Usihv4tIi | BI5DiKXe1qeie60l0G/rmAbIUBs2a+OY
+             jPGQ8alCaBQkXmAsRabf4Q==         | wbaR1p2MN16vKGqUN9itXg==
+
+File: /var/log/dnf.librepo.log
+ SHA512    : TBBvW2v/qty2LVi25g6TXYiebWBtbcOs | /f2fI9/7K5bqUKm8lAD/Ns2wqmj6IhgW
+             Ky7O9cOxLkQyhxltSjigg1h6jmaWwUdi | 8Q8VXj0Lz43KT+b6C4SrmV3SL3lJrH4t
+             hHtbvSJE4oY/u76IB558Cg==         | E25nNra10pCLEsHto3qxLQ==
+
+File: /var/log/dnf.log
+ SHA512    : KdmVh/u7C2gm7ap1Ho7Q9ffNhYFBFlOC | 01/6cxjvV86bpi2rTR7sdts8davAlVM+
+             z+v3NrAwTy0wNsXUt7CxffM+GZBSIuYo | BmB0esz6wT7/EHOz40nIvVNg6NHAaUM2
+             gswB92XQq7BZCXji4EewEw==         | +iYvgi2I2fUZwbnKxn22jw==
+
+File: /var/log/dnf.rpm.log
+ SHA512    : h3yMOr7Bw53nLd5d690zo7CMaQ+1qHjQ | gHidwwwdbO044ZNTb7B6OfLdYM7fcw+/
+             8e59vHhxaV5YAG3MQcZIZVjqo//kFd9X | WVam9OQHedrKmPJ8w/ZZPXtedkUU/uth
+             qFkKsST5GJwjUBFmbS5b8Q==         | LvsAoWsx/dyNyHSO1rebLA==
+
+File: /var/log/messages
+ SHA512    : WTNQ4wI4JvEqHveHOIwqFs9m5DteRzw3 | YneUAVFhzGvuL7i0zY9wXyqnbDtyVPNh
+             +7Mk+xnUsFX4Jf1bPwG+yZKc00Nk9YcX | F/EaVDOfSSLMxXIJAMSCtNKWUvlGrpnk
+             s35mrSIBNxIdx089SI3Czw==         | btTQsRmq0mwI43i4A7cQ2A==
+
+File: /var/log/rhsm/rhsm.log
+ SHA512    : z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc | At6PcXAngqjVuZZ1l3QVHfTmfI2KGjB5
+             g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv | 1hS9/tQ0i04CMcPRLmqW3fBzmPKSFmYj
+             Y7kxvUdBeoGlODJ6+SfaPg==         | HaepUyF9joK/btzGtrENgg==
+
+File: /var/log/rhsm/rhsmcertd.log
+ SHA512    : WX/OwlyB6thn3KKd6ofAZjlsDShoDfdQ | pi62Ns7FWSSBRSdpjCfQXvhFyV69/RJj
+             1TK9A6bdC1HddXFkncyDHd2c7wfE6pHQ | 8wu7sIKaBZw4tTdEqH3ZMpmu7dA2ZVsM
+             KLYOrWr9hlooZSVuubEMmA==         | 6FlJy1/+pCai4wWbZ5PpPw==
+
+File: /var/log/secure
+ SHA512    : 2+oY8MDv/gOSZY7qKznu6zlyf80aDU2D | SfmMcaV1MsTNXsqzgjzJWlcywqCPH77I
+             SICIAyFTLwDfpiE8OBm3aWP7+pUz0FtJ | 94fbthhi+UX4zcQXS4VWvl1U9mhrKqK+
+             1VYM5L3Zo5PC6B1ndBwQXA==         | pSDtUbPmmhYXMJ/dC+FVeQ==
+
+
+---------------------------------------------------
+The attributes of the (uncompressed) database(s):
+---------------------------------------------------
+
+/var/lib/aide/aide.db.gz
+ SHA256    : CjZaZ64YrrklwXg3qFGknIyP3aWfNtfi
+             6clOIuOGdm4=
+ SHA512    : yfhcPKMGqi+TDFE2dqUU4YmYbMyw/gWA
+             j9iBq5kmo+/CwT3Cu0m7anvmFDnvAWC9
+             wwLyzSpEMHnCpFyxQVyzlw==
+ STRIBOG256: ZdIqNw+fM+FjO0p9gkZffg8OFh+pRhcu
+             UQbNUlYlDAI=
+ STRIBOG512: D+/FNE1r9NBcz2wWPkLf9jeTMpRvWOUQ
+             Q4CdSxOmBEmYCkn5h+cs639WycCGTBRU
+             nNOP0d0qf4S94iiRnhcuPA==
+ SHA512/256: 15t/8ggWVL5jWHAbRLzfbWbnGES4n8ar
+             NydaSS7Plz4=
+ SHA3-256  : O6X9qQnr2iKe7xbPbXZUUZHp3hAMEnQn
+             NNAGuJRfanY=
+ SHA3-512  : 3m9Q6khftjMKAdIA73AhJGkyjnmfUp3R
+             xf3/u3qyVqneB9196Vl2gZXUaQr6WKLt
+             4qdVw+KYpmRAfWPO51GgNA==
+
+
+End timestamp: 2026-10-13 04:01:00 -0600 (run time: 22m 4s)

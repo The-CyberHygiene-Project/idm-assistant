@@ -46,7 +46,7 @@ def test_no_exclusions_yet_or_each_one_justified():
              "!/etc/NetworkManager/system-connections", "!/var/log/sa", "!/var/log/aide.log", "!/var/log/httpd",
              "!/boot/grub2/grubenv"}
     for e in ex:
-        assert e in stock or e in justified, f"{e}: exclusions need a '# EXCLUDE <path>: reason' line (spec §4.4)"
+        assert e in stock or e[1:] in justified, f"{e}: exclusions need a '# EXCLUDE <path>: reason' line (spec §4.4)"
 
 
 SPEC = (TOP / "appliance/rpm/chp-integrity/chp-integrity.spec").read_text()
@@ -68,3 +68,21 @@ def test_repo_lists_and_pins_rocky_aide():
     pk = (TOP / "appliance/release/PACKAGES.txt").read_text()
     assert "\naide rocky\n" in pk and "\nchp-integrity ours" in pk
     assert "rocky9 RPM-GPG-KEY-Rocky-9" in (TOP / "appliance/release/trusted-keys.txt").read_text()
+
+
+def test_growing_logs_have_no_content_hash():
+    # measured 2026-10-14 (lab/aide/MEASUREMENT.md): sha512 from the FIPS-hash rule made every log line a change;
+    # AIDE takes the FIRST rule for an identical path, so the stock lines themselves carry -sha512
+    rules = {l[0]: l[1] for l in lines() if l[0].startswith("/var/log") and len(l) > 1}
+    assert rules["/var/log"] == "LOG-sha512"
+    assert rules["/var/log/journal"] == "LOG-xattrs-n-sha512"
+    assert rules["/var/log/audit"] == "PERMS-sha512"
+
+
+def test_measured_exclusions_are_present_and_justified():
+    ex = [l[0] for l in lines() if l[0].startswith("!")]
+    for p in ("/etc/pki/kanidm", "/etc/step-ca/db", "/var/log/aide"):
+        assert "!" + p in ex, p
+        assert re.search(rf"^# EXCLUDE {re.escape(p)}: .*covered by", CONF, re.M), p
+    # the CA's configuration and keys stay fully content-checked
+    assert ["/etc/step-ca", "CHPCONTENT"] in lines()

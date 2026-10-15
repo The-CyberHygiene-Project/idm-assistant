@@ -1,0 +1,31 @@
+Start timestamp: 2026-10-12 20:45:48 -0600 (AIDE 0.19.2)
+AIDE successfully initialized database.
+New AIDE database written to /var/lib/aide/aide.db.new.gz
+
+Number of entries:	136839
+
+---------------------------------------------------
+The attributes of the (uncompressed) database(s):
+---------------------------------------------------
+
+/var/lib/aide/aide.db.new.gz
+ SHA256    : CjZaZ64YrrklwXg3qFGknIyP3aWfNtfi
+             6clOIuOGdm4=
+ SHA512    : yfhcPKMGqi+TDFE2dqUU4YmYbMyw/gWA
+             j9iBq5kmo+/CwT3Cu0m7anvmFDnvAWC9
+             wwLyzSpEMHnCpFyxQVyzlw==
+ STRIBOG256: ZdIqNw+fM+FjO0p9gkZffg8OFh+pRhcu
+             UQbNUlYlDAI=
+ STRIBOG512: D+/FNE1r9NBcz2wWPkLf9jeTMpRvWOUQ
+             Q4CdSxOmBEmYCkn5h+cs639WycCGTBRU
+             nNOP0d0qf4S94iiRnhcuPA==
+ SHA512/256: 15t/8ggWVL5jWHAbRLzfbWbnGES4n8ar
+             NydaSS7Plz4=
+ SHA3-256  : O6X9qQnr2iKe7xbPbXZUUZHp3hAMEnQn
+             NNAGuJRfanY=
+ SHA3-512  : 3m9Q6khftjMKAdIA73AhJGkyjnmfUp3R
+             xf3/u3qyVqneB9196Vl2gZXUaQr6WKLt
+             4qdVw+KYpmRAfWPO51GgNA==
+
+
+End timestamp: 2026-10-12 21:07:52 -0600 (run time: 22m 4s)
