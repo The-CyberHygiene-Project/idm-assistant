@@ -18,6 +18,10 @@ if [ ! -e "$FB/$role.done" ]; then
 by=first-boot; [ -e "$S/installed-on-existing-host" ] && by=package-install
 mkdir -p "$S" "$L" && chmod 0755 "$S" && chmod 0700 "$L" || exit 1
 t=$(date -u +%Y%m%dT%H%M%SZ); e=$(date -u +%s)
+# Pin the site stick's USBGuard hash first (only if it is plugged in; read-only, never allows it): otherwise its first
+# use after the baseline adds /etc/chp/site-stick.hash and the first daily check alerts (quiet check 2026-10-16).
+if command -v chp-site >/dev/null 2>&1 && ! chp-site stick-pin-hash >/dev/null 2>&1; then
+  logger -p authpriv.warning -t chp-aide "baseline: chp-site stick-pin-hash failed; building the baseline anyway"; fi
 rm -f "$NEW"
 if ! "$AIDE" --init > "$L/init-$t.log" 2>&1 || [ ! -f "$NEW" ]; then
   logger -p authpriv.warning -t chp-aide "baseline: aide --init failed (see $L/init-$t.log)"; exit 1; fi

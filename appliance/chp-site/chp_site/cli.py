@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
-aide-accept | aide-pin | aide-verify-pin."""
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash."""
 import argparse
 import os
 import sys
@@ -197,6 +197,17 @@ def _aide_pin(a):
     print(f"pinned: aide/{p.name} on the site stick (SHA-512 {base['DB_SHA512'][:16]}…)")
 
 
+def _stick_pin_hash(_a):
+    import subprocess
+    from . import usbstick
+    try:
+        out = subprocess.run(["usbguard", "list-devices"], capture_output=True, text=True, check=True).stdout
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        raise SiteError("USBGuard is not available to list devices; site-stick hash not pinned") from None
+    h = usbstick.pin_stick_hash(out, usbstick.PIN_FILE, usbstick.HASH_FILE)
+    print(f"site-stick hash pinned: {h}" if h else "site-stick hash: nothing to pin (already pinned, no pin, or no stick)")
+
+
 def _aide_verify_pin(a):
     from . import aide
     from .usbstick import site_stick
@@ -274,6 +285,7 @@ def main(argv=None):
     aa.add_argument("--stick"); aa.add_argument("--site", default="/etc/chp")
     apn = sub.add_parser("aide-pin", help="write this host's AIDE baseline hash to the site stick (aide/<host>.txt)")
     apn.add_argument("--stick")
+    sub.add_parser("stick-pin-hash", help="pin the plugged-in (still blocked) site stick's USBGuard hash; never allows it")
     avp = sub.add_parser("aide-verify-pin", help="compare the live AIDE database with the site stick's pin (MATCH/MISMATCH)")
     avp.add_argument("--stick")
     a = ap.parse_args(argv)
@@ -285,7 +297,8 @@ def main(argv=None):
          "authselect-patch": _authselect_patch,
          "pam-test": _pam_test,
          "ga-enrol": _ga_enrol,
-         "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin}[a.cmd](a)
+         "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
+         "stick-pin-hash": _stick_pin_hash}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

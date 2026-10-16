@@ -4,7 +4,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # prove-aide.sh STAGE (RUNS ON THE MAC): core 0.2.0 Plan A proofs on the iso5 golden hosts (srv1 = iso5-srv,
 # client2 = iso5-cli2; chpadmin with the LAB ADAPTER's sudo). Spec §9: AIDE must CATCH planted changes.
-#   upgrade   revert to golden; unpack repo 0.7.0; dnf upgrade chp-site + install chp-integrity; baseline package-install
+#   upgrade   revert to golden; unpack repo $REPO (default 0.7.2); NOHOOK=1 skips the test ALERT_HOOK; dnf upgrade chp-site + install chp-integrity; baseline package-install with the stick plugged in (its hash pinned BEFORE the baseline)
 #   pin       62 alerts before; aide-pin with the iso5 stick attached; 62 quiet; stick has aide/<host>.txt
 #   catch     plant 3 changes on srv1; run the check; 60 alerts; ALERT_HOOK received it
 #   accept    unlisted name refused; delegate accepts (BASELINE_DELEGATES added to /etc/chp/site.conf); audit; quiet
@@ -15,7 +15,7 @@
 #   revert    both hosts back to golden
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; F="$top/lab/iso5/ssh_config"
-STICK=/data/libvirt/images/iso5-stick.img; REPO=0.7.0; fails=0
+STICK=/data/libvirt/images/iso5-stick.img; REPO=${REPO:-0.7.2}; fails=0
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -33,14 +33,18 @@ case ${1:-} in
     for h in srv1 client2; do
       H $h 'sudo rm -rf /var/lib/chp/repo/*'
       A "tar -C /data/lab-inputs/chp/$REPO -cf - ." | ssh -F "$F" "$h" 'sudo tar -x -C /var/lib/chp/repo -f -'     # the signed repo, as a site would unpack the tarball
+      attach $h     # the stick is in during the install, as on a site: aide-baseline pins its hash first (quiet check 2026-10-16)
       out=$(H $h "sudo dnf -y -q --enablerepo=chp upgrade chp-site && sudo dnf -y -q --enablerepo=chp install chp-integrity && echo INSTALLED")
-      [[ $out == *INSTALLED* ]] && pass "$h: chp-site 0.7.0 + chp-integrity from the signed repo" || fail "$h install" "$out"
+      [[ $out == *INSTALLED* ]] && pass "$h: chp-site + chp-integrity from the signed repo $REPO" || fail "$h install" "$out"
       check "$h: aide.conf is ours" "$(H $h 'sudo cmp -s /etc/aide.conf /usr/share/chp-integrity/aide.conf && echo same')" "same"
       s=""; for _ in $(seq 180); do s=$(H $h 'sudo sed -n s/^BUILT_BY=//p /var/lib/chp/aide/baseline 2>/dev/null'); [[ -n $s ]] && break; sleep 15; done
+      detach $h
       check "$h: baseline built at package install" "$s" "package-install"
+      check "$h: stick hash pinned before the baseline" "$(H $h 'sudo bash -c "[ -s /etc/chp/site-stick.hash ] && [ /etc/chp/site-stick.hash -ot /var/lib/aide/aide.db.gz ] && echo yes"')" "yes"
       check "$h: baseline built with our aide.conf (conf older than init log)" "$(H $h 'sudo bash -c "[ /etc/aide.conf -ot \$(ls -t /var/log/aide/init-*.log | head -1) ] && echo yes"')" "yes"
       check "$h: daily timer active" "$(H $h 'systemctl is-active chp-aide-check.timer')" "active"
       check "$h: database 0600" "$(H $h 'sudo stat -c %a /var/lib/aide/aide.db.gz')" "600"
+      [[ -n ${NOHOOK:-} ]] && continue     # quiet run (Task 13): no harness change after the baseline
       H $h "sudo sed -i 's#^ALERT_HOOK=.*#ALERT_HOOK=/usr/local/sbin/chp-test-hook#' /etc/chp/site.conf"     # replace: a 2nd ALERT_HOOK line is a parse error
       scp -q -F "$F" "$here/hook.sh" $h:/tmp/hook.sh && H $h 'sudo install -m 0755 /tmp/hook.sh /usr/local/sbin/chp-test-hook'
     done ;;

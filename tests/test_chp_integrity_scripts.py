@@ -90,3 +90,25 @@ def test_baseline_init_failure_builds_nothing(tmp_path):
     env["CHP_ROLE"] = "client"; (tmp_path / "fb").mkdir(); (tmp_path / "fb" / "client.done").touch()
     assert run("aide-baseline.sh", env).returncode == 1
     assert not (tmp_path / "aide.db.gz").exists() and not (tmp_path / "state" / "baseline").exists()
+
+
+def _fake_chp_site(tmp_path, body):
+    p = tmp_path / "bin" / "chp-site"
+    p.write_text(f'#!/bin/bash\necho "chp-site $*" >> {tmp_path}/calls\n{body}\n'); p.chmod(0o755)
+
+
+def test_baseline_pins_the_stick_hash_before_aide_init(tmp_path):   # quiet check 2026-10-16
+    env = setup(tmp_path, f'echo "aide $*" >> "{tmp_path}/calls"; echo new > "{tmp_path}/aide.db.new.gz"')
+    _fake_chp_site(tmp_path, "exit 0")
+    env["CHP_ROLE"] = "client"; (tmp_path / "fb").mkdir(); (tmp_path / "fb" / "client.done").touch()
+    assert run("aide-baseline.sh", env).returncode == 0
+    calls = [l for l in (tmp_path / "calls").read_text().splitlines() if l.startswith(("chp-site", "aide"))]
+    assert calls == ["chp-site stick-pin-hash", "aide --init"]
+
+
+def test_baseline_is_built_even_when_the_stick_hash_step_fails(tmp_path):
+    env = setup(tmp_path, f'echo new > "{tmp_path}/aide.db.new.gz"')
+    _fake_chp_site(tmp_path, "exit 3")
+    env["CHP_ROLE"] = "client"; (tmp_path / "fb").mkdir(); (tmp_path / "fb" / "client.done").touch()
+    assert run("aide-baseline.sh", env).returncode == 0 and (tmp_path / "aide.db.gz").exists()
+    assert "stick-pin-hash failed" in (tmp_path / "calls").read_text()

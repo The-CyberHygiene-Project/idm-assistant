@@ -1,5 +1,5 @@
 Name:           chp-integrity
-Version:        0.1.1
+Version:        0.1.2
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene file integrity: AIDE baseline, daily check, monitor alerts
 License:        Apache-2.0
@@ -16,7 +16,7 @@ Source6:        60-aide-result.sh
 Source7:        61-aide-stale.sh
 Source8:        62-aide-pin.sh
 Source9:        LICENSE
-Requires:       aide, chp-base, chp-site >= 0.7.0, coreutils, util-linux, rpm
+Requires:       aide, chp-base, chp-site >= 0.7.1, coreutils, util-linux, rpm
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -77,6 +77,10 @@ fi
 %dir %attr(0700,root,root) %{_localstatedir}/log/aide
 
 %changelog
+* Fri Oct 16 2026 The CyberHygiene Project - 0.1.2-1.chp
+- Quiet check 2026-10-16: aide-baseline pins the site stick's hash (chp-site stick-pin-hash) before aide --init;
+  !/var/log/audit/audit\.log\.[0-9]+$ (rotated audit logs; the live audit.log and the directory stay checked).
+
 * Wed Oct 14 2026 The CyberHygiene Project - 0.1.1-1.chp
 - Exclusions settled by measurement (lab/aide/MEASUREMENT.md): !/etc/pki/kanidm, !/etc/step-ca/db, !/var/log/aide;
   /var/log, /var/log/journal, /var/log/audit back to stock checks without a content hash (no daily log churn).

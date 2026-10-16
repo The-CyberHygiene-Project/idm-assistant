@@ -56,7 +56,7 @@ def test_spec_ships_every_file_and_requires_new_chp_site():
     for f in ("aide-check", "aide-baseline", "chp-aide-check.service", "chp-aide-check.timer",
               "chp-aide-baseline.service", "60-aide-result.sh", "61-aide-stale.sh", "62-aide-pin.sh"):
         assert f in SPEC, f
-    assert "chp-site >= 0.7.0" in SPEC and "%triggerin -- aide" in SPEC and "installed-on-existing-host" in SPEC
+    assert "chp-site >= 0.7.1" in SPEC and "%triggerin -- aide" in SPEC and "installed-on-existing-host" in SPEC
 
 
 def test_baseline_unit_does_not_hold_the_boot_target():
@@ -86,3 +86,12 @@ def test_measured_exclusions_are_present_and_justified():
         assert re.search(rf"^# EXCLUDE {re.escape(p)}: .*covered by", CONF, re.M), p
     # the CA's configuration and keys stay fully content-checked
     assert ["/etc/step-ca", "CHPCONTENT"] in lines()
+
+
+def test_rotated_audit_logs_are_excluded_but_the_live_log_stays_watched():
+    # quiet check 2026-10-16: rotation added /var/log/audit/audit.log.2 on client2 -> an alert per rotation (owner: exclude)
+    ex = [l[0] for l in lines() if l[0].startswith("!")]
+    assert r"!/var/log/audit/audit\.log\.[0-9]+$" in ex
+    assert {l[0]: l[1] for l in lines() if len(l) > 1}["/var/log/audit"] == "PERMS-sha512"
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert r"!/var/log/audit/audit\.log\.[0-9]+$" in add          # the source block and the shipped file agree

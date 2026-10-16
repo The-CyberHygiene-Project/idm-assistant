@@ -72,6 +72,21 @@ def _read_pin(path):
         return None
 
 
+def pin_stick_hash(list_output, pin_file=PIN_FILE, hash_file=HASH_FILE):
+    """Pin the USBGuard hash of the plugged-in, still BLOCKED site stick (never allows it); the hash it pinned, or None
+    (already pinned, no pin, or no stick). aide-baseline runs this before `aide --init` so the first stick use after
+    the baseline does not add site-stick.hash (quiet check 2026-10-16). A wrong device raises, as in allow_stick."""
+    hp = Path(hash_file)
+    pin = _read_pin(pin_file)
+    if hp.exists() or not pin:
+        return None
+    if not any(d["status"] == "block" and d["storage"] for d in _devices(list_output)):
+        return None
+    _dev, dev_hash = pick_pinned(list_output, pin, None)
+    hp.write_text(dev_hash + "\n"); hp.chmod(0o644)
+    return dev_hash
+
+
 def allow_stick(label_path, wait=20, pin_file=PIN_FILE, hash_file=HASH_FILE):
     """Authorize ONLY the pinned site stick, temporarily; returns its USBGuard id (to block again), or None if a
     stick is already visible (e.g. no USBGuard). The first successful use pins the USBGuard device hash."""

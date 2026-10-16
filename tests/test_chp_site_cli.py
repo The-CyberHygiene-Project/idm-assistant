@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.7.0"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.7.1"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
@@ -159,12 +159,12 @@ def test_aide_accept_without_a_stick_still_succeeds(tmp_path, monkeypatch, capsy
     assert rc == 0 and "NOT pinned yet" in capsys.readouterr().out
 
 
-def test_version_is_0_7_0(capsys):
+def test_version_is_0_7_1(capsys):
     import pytest
     from chp_site import cli as cli_mod
     with pytest.raises(SystemExit):
         cli_mod.main(["--version"])
-    assert "chp-site 0.7.0" in capsys.readouterr().out
+    assert "chp-site 0.7.1" in capsys.readouterr().out
 
 
 def test_export_client_pins_the_aide_baseline_when_there_is_one(tmp_path, monkeypatch, capsys):
@@ -184,3 +184,19 @@ def test_export_client_pins_the_aide_baseline_when_there_is_one(tmp_path, monkey
     recs = list((s2 / "aide").glob("*.txt"))
     assert len(recs) == 1 and aide.read_record(recs[0])["DB_SHA512"] == aide.sha512_file(db)
     assert aide.read_record(st / "pinned")["DB_SHA512"] == aide.sha512_file(db)
+
+
+def test_stick_pin_hash_only_lists_devices_never_allows(tmp_path, monkeypatch, capsys):   # quiet check 2026-10-16
+    import subprocess as sp
+    from chp_site import cli as cli_mod, usbstick
+    (tmp_path / "id").write_text("ID=46f4:0001\nSERIAL=s1\n")
+    monkeypatch.setattr(usbstick, "PIN_FILE", str(tmp_path / "id")); monkeypatch.setattr(usbstick, "HASH_FILE", str(tmp_path / "hash"))
+    calls = []
+    def fake(cmd, **kw):
+        calls.append(cmd)
+        return sp.CompletedProcess(cmd, 0, stdout='7: block id 46f4:0001 serial "s1" name "X" hash "h1=" '
+                                   'parent-hash "p=" via-port "2-1" with-interface 08:06:50 with-connect-type ""\n', stderr="")
+    monkeypatch.setattr(sp, "run", fake)
+    assert cli_mod.main(["stick-pin-hash"]) == 0
+    assert calls == [["usbguard", "list-devices"]] and (tmp_path / "hash").read_text() == "h1=\n"
+    assert "pinned" in capsys.readouterr().out
