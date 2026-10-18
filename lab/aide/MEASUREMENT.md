@@ -40,7 +40,7 @@ path that changed again after check 1: churn by itself.
 - **Revoke** produced no file change beyond the onboard's (the Kanidm database is not watched).
 - **Rule order:** AIDE uses the **first** rule for an identical path (checked with `aide --path-check` on srv1), so the
   log change is made on the stock lines (`-sha512`), not as later override lines.
-- **Audit-log rotation (open):** stock `/var/log/audit PERMS` has no `ANF`/`ARF`, so a rotation reports the new
+- **Audit-log rotation (resolved 2026-10-16 — see Quiet check below; rotated files now excluded):** stock `/var/log/audit PERMS` has no `ANF`/`ARF`, so a rotation reports the new
   `audit.log.N` as *added*. This is kept as stock Rocky intends (a vanished or new audit file is worth seeing); the
   re-proof's quiet check shows whether it fires within a day.
 
