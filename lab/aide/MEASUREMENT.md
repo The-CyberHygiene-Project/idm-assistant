@@ -43,3 +43,33 @@ path that changed again after check 1: churn by itself.
 - **Audit-log rotation (open):** stock `/var/log/audit PERMS` has no `ANF`/`ARF`, so a rotation reports the new
   `audit.log.N` as *added*. This is kept as stock Rocky intends (a vanished or new audit file is worth seeing); the
   re-proof's quiet check shows whether it fires within a day.
+
+## Quiet check (Task 13 re-proof)
+
+A clean upgrade with no test hook (`NOHOOK=1`), then the pin; nothing touched the hosts afterwards. The verdict comes from
+the second daily timer run (24 h or more, including the 20:01 certificate renewal and log rotation).
+
+**Repo 0.7.1 (baseline 2026-10-15 ~01:40 MDT):** srv1 clean in both checks. client2 alerted in both checks:
+- added `/etc/chp/site-stick.hash` (and `/etc/chp` changed): the first stick use (`aide-pin`) wrote the USBGuard hash
+  35 s **after** the baseline (database 01:39:22, hash 01:39:57). This is a product bug: every new host would alert
+  on its first check.
+- added `/var/log/audit/audit.log.2`: auditd rotation (the cost predicted for the stock `/var/log/audit` rule).
+
+**Owner decisions 2026-10-16 (gate form):**
+- Pin the stick hash before the baseline, and keep the file watched. Fixed in `chp-site 0.7.1` with `stick-pin-hash`:
+  the hash is read from `usbguard list-devices` while the stick is still blocked; the stick is never allowed. On
+  client2 the blocked listing showed the same hash that was pinned later. `chp-integrity 0.1.2` runs this in
+  `aide-baseline` before `aide --init`.
+- Exclude `/var/log/audit/audit\.log\.[0-9]+$`; the live `audit.log` and the directory stay checked. In
+  `aide --path-check` on client2, `.1` and `.12` hit the negative rule, while `audit.log` and the directory keep `PERMS`.
+
+**Repo 0.7.2 (baseline 2026-10-16: srv1 12:41; client2 hash 12:42, database 13:04 MDT):** the full proof gave 46
+PASS and 0 FAIL, including the new check "stick hash pinned before the baseline" on both hosts. The quiet check passed
+on both hosts in both timer runs, with **added=0 removed=0 changed=0 and db_match=yes**:
+- srv1: Oct 17 04:34 and Oct 18 04:47.
+- client2: Oct 17 04:06 and Oct 18 03:58.
+
+The monitor checks 60, 61 and 62 were all OK.
+
+**Gap:** no audit rotation happened inside the window. client2's last rotation was at 12:55, before its baseline. The
+audit exclusion therefore rests on `--path-check`, not on a live rotation. Hosts reverted to golden on 2026-10-18.
