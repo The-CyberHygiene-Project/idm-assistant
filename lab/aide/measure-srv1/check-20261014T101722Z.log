@@ -1,0 +1,185 @@
+Start timestamp: 2026-10-14 04:17:22 -0600 (AIDE 0.19.2)
+AIDE found differences between database and filesystem!!
+
+Summary:
+  Total number of entries:	137175
+  Added entries:		2
+  Removed entries:		0
+  Changed entries:		23
+
+---------------------------------------------------
+Added entries:
+---------------------------------------------------
+
+f+++++++++++++++++: /root/chp-onboard/lab09.reset-token.txt
+f+++++++++++++++++: /usr/local/sbin/chp-test-hook
+
+---------------------------------------------------
+Changed entries:
+---------------------------------------------------
+
+d = ... mc.. ...  : /etc/chp
+f > ... mci.H...  : /etc/chp/site.conf
+f = ...   ..H.... : /etc/pki/kanidm/chain.pem
+f = ...   i...... : /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+f > ... mc..H...  : /etc/step-ca/db/000000.vlog
+f   ...     H...  : /root/.cache/kanidm_tokens
+d > ...   .. .... : /root/chp-onboard
+f = ...   i...... : /usr/bin/chp-site
+d > ...   .. .... : /usr/local/sbin
+f = ...   i...... : /usr/share/chp-site/chp-site.pyz
+f = ...   i...... : /usr/share/licenses/chp-site/LICENSE
+f   ...    .H...  : /var/log/aide/init-20261013T022344Z.log
+f   ...     H...  : /var/log/audit/audit.log
+f   ...    .H...  : /var/log/boot.log
+f   ...    .H...  : /var/log/cron
+f   ...    .H...  : /var/log/dnf.librepo.log
+f   ...    .H...  : /var/log/dnf.log
+f   ...    .H...  : /var/log/dnf.rpm.log
+f   ...    .H...  : /var/log/hawkey.log
+f   ...    .H...  : /var/log/messages
+f   ...    .H...  : /var/log/rhsm/rhsm.log
+f   ...    .H...  : /var/log/rhsm/rhsmcertd.log
+f   ...    .H...  : /var/log/secure
+
+---------------------------------------------------
+Detailed information about changes:
+---------------------------------------------------
+
+Directory: /etc/chp
+ Mtime     : 2026-10-11 10:54:41 -0600        | 2026-10-12 20:45:41 -0600
+ Ctime     : 2026-10-11 10:54:41 -0600        | 2026-10-12 20:45:41 -0600
+
+File: /etc/chp/site.conf
+ Size      : 714                              | 743
+ Mtime     : 2026-10-11 10:50:33 -0600        | 2026-10-12 20:45:41 -0600
+ Ctime     : 2026-10-11 10:50:33 -0600        | 2026-10-12 20:45:41 -0600
+ Inode     : 103116370                        | 103116412
+ SHA512    : dMaOYEpgej3MuW9/QtYrLB1WUGqv8rar | UvW1YISYQ2OJ92rS3ZeKNZaNqhuvzG6m
+             OqbY3pUvPqqCdZnomMbNeSzdBSWbDGAL | TpfUMxDKw6YKZGY3c71MVlp3QvSbfbhy
+             mhH3UKWwKLal8KDQEnlN3A==         | BbJDdJVRCppP9bI9C796Rw==
+
+File: /etc/pki/kanidm/chain.pem
+ SHA512    : CvhiQFb/gxvqi6wpl2gpb3na73ZkFxly | z305I+0uDBRoxs6cxxC4NLXUM/CDgF4F
+             XgIht8fTzoZ9Ssa9uDGcDFnGonRJ/srE | 0ua4ZDH2QnnH0gvHcvrx/38oHjKdJaJA
+             0ZE64B+Eohyvib/o9go6Kw==         | 2B+5D6k/9U0wuvgvHf82zg==
+ SHA3-256  : nK7P5NUFm/9X+8P4SnmjC1/WySUYR9PE | VXrW4H3+GBvJKDbOmtpfeMfDEhf5ZLD2
+             7yIHyFqNkXY=                     | MfApxGd2aWc=
+
+File: /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+ Inode     : 69035398                         | 69130697
+
+File: /etc/step-ca/db/000000.vlog
+ Size      : 31043                            | 32644
+ Mtime     : 2026-10-12 20:23:06 -0600        | 2026-10-14 04:01:22 -0600
+ Ctime     : 2026-10-12 20:23:06 -0600        | 2026-10-14 04:01:22 -0600
+ SHA512    : qH3bJKh8H9ASA7EbkFnSmurH7G3PuRyv | KL84EKKXWhonViwIuP4O6tmhYKlDSlrE
+             Lt7xyA3NGUmnoWra+hoagc7EORt2LVez | n2jRKcMFU1A9yzvWQ0iPjgsUmzYh15qp
+             zId3rLpS1d6Y0MyPXVjx9g==         | a1IS4rGARXaejOwtXLzWtQ==
+
+File: /root/.cache/kanidm_tokens
+ SHA512    : edmeni6ja3yaUtulp286s0HpnOzihcWc | M+OYLah9mSQyGmavEKz9Mx7Sn0DniSZa
+             GD3xrwWIG1ClrpRhJvQyfv4IHCEvcAfn | LzaBWQ2CHSHuHPOUS3/zcILm/TGKx5N1
+             KPzVEsJZTAvs5LVOWSHCgw==         | CrhmDAKdR5r2j0kvwCNgDw==
+
+Directory: /root/chp-onboard
+ Size      : 108                              | 137
+
+File: /usr/bin/chp-site
+ Inode     : 69130688                         | 69130698
+
+Directory: /usr/local/sbin
+ Size      : 6                                | 27
+
+File: /usr/share/chp-site/chp-site.pyz
+ Inode     : 103116404                        | 103116413
+
+File: /usr/share/licenses/chp-site/LICENSE
+ Inode     : 677602                           | 679639
+
+File: /var/log/aide/init-20261013T022344Z.log
+ SHA512    : z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc | wRZofJG7EFMAPyYpRv9nkR+1Y7uNL9BT
+             g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv | Ay0EdW8Y3pNShzG9MMXEbEnecrZzZFHP
+             Y7kxvUdBeoGlODJ6+SfaPg==         | 7QOMYwCYk3kKAoKUXq9BXg==
+
+File: /var/log/audit/audit.log
+ SHA512    : C4JU9gUnfkwPqLIDvpi8xIXRST8Yg5cl | 5ReZUE5OQ1uFVGfPlswRhXGb2Yt62xzV
+             CWDNDZUX+xuJDu6LU/Ra1Gu2OqJWBCby | rmZBiBRsOP+/oNQF3ANN8cj0iBjQurUv
+             yNq5SNNq49j6sEfuE5RZvA==         | f2Qx03g04jUZljABnWHY1A==
+
+File: /var/log/boot.log
+ SHA512    : YShkJ94TMIO0dQe6tVvnW79BXqiLQ0BM | z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc
+             wvYSXmZKWCQi0WExDk5zij515Vp1o7XH | g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv
+             KKJxHJBkevHdZncrHHm9kw==         | Y7kxvUdBeoGlODJ6+SfaPg==
+
+File: /var/log/cron
+ SHA512    : fPiArF5oFMb8T6IAAl8oF7Hw6+y8drkB | dueLn/WAlJSisOwE4GdUzw0F9VTKBt91
+             ms/yRf7VZEPQCr3yHvyRGYB1lTYh7NLk | 6tRz0LR7GTMO1xf/ymYBxB9n6i5S4qTL
+             A5i7PDqG0CtNE4+vv1kmuw==         | 8O5m8zZU7C7MPkf8ZE7Waw==
+
+File: /var/log/dnf.librepo.log
+ SHA512    : 6ziZut0H046N8BQLYOmVIhZUdJoqXdMU | JzlH6bhRwJn/H9HKB3/c8ZAqgMDF681e
+             LnaX5z8zJ2HNoAe2U0kjlnZIas29bZYL | oOyHL5UMZM/fv+k/r5XXvSEmTvuCWu0F
+             fZVLHh+oMZSznxs60V5gjg==         | 6ueB497H32/MJTTZTvPu5g==
+
+File: /var/log/dnf.log
+ SHA512    : hRWBhWmIDbZ16SgP17pmJkYPcAZBqO77 | +/MZuJ6s+RgQ35hsYlY6PGQtx5OMuK5C
+             r8pPGAnqGrXCo9y6Z7IMGFMBbWiEB27y | /umCWrwmbvHcuEmWi8yn0g0FaZpcVE2a
+             CfG43/PCod2SgxQPDaPsBQ==         | 9UY3ffvoOuC235xSkjgZnw==
+
+File: /var/log/dnf.rpm.log
+ SHA512    : cBRgjf3hGtbMX5FlM8fMfETHT6AiGWg2 | wtrmNAjrKSW5bu1xHrJ/wnPR4biKQh88
+             usR9gJSVM2O07Opnlod+rH3/8KkzTyPK | oSZgTxzoRcNnWvBfyNBr9824wuE6SgSL
+             Fb/qghWFQGi1MLsab5P1AQ==         | g+VP+0qLItg8Zyt+2Crgag==
+
+File: /var/log/hawkey.log
+ SHA512    : m0ofVCtBeviDC95L8Lg+pg7TOSAe5GCP | KL3YSIrHYEU4FAUpREvQ5WZZjUlU6V1v
+             0/qYE6M1Sh/b8eOoTWB0LfD6grHiBxzD | Q5Ov8EUCb30+lPshbVotuSAbQRC6yVr5
+             9DmN/+rr3iBATW7ti1gBYA==         | 1mevf6+Do6PIB38tKf9eYA==
+
+File: /var/log/messages
+ SHA512    : 7sH+9/fbuKctMFar5af9loB12Vd026qm | 3mR+1TeOHiER3LsaMVVCTSlfkY0hQ6p2
+             rDQsYfwQ1TtOLnLXbWY1kpW4RfZTk8LK | mnIC/PQyXrgL1xTSqs9e+++kDtip/fZO
+             8WuBLy1v9504n8+9An0t8Q==         | J5pMW+JTtn9Ly/wbIZ4Pgw==
+
+File: /var/log/rhsm/rhsm.log
+ SHA512    : z4PhNX7vuL3xVChQ1m2AB9Yg5AULVxXc | 7melh9YCDJAAULOJ1gHTtG2WMnONnna3
+             g/SpIdNs6c5H0NE8XYXysP+DGNKHfuwv | eP2C34UC8bjG1g12kiYmVjvfZZC7/GAG
+             Y7kxvUdBeoGlODJ6+SfaPg==         | FAvmg/8d+viatDoYJyVohA==
+
+File: /var/log/rhsm/rhsmcertd.log
+ SHA512    : DcSZnZb/zllJDlnzcNYdyklp9kaq/1ve | 9m4hn8hAlm+wZ+IOEx4watr//P2aeHpZ
+             tIZd1k6FHoWS8kZVPifM+J0FucMRiIqg | 7GRxJOHgxEaXwaw4qY54vcp6GW8uKFcF
+             4YXdUlQFydxk/22e3YOSHw==         | joLfIp6QbKvQrH6cSCdkbA==
+
+File: /var/log/secure
+ SHA512    : LkWGYihpYxv3hamLVRE6KMiKwp9T2BUg | pnS/bj9veYgV7nUlLK9B3PLtMsFSF4Cu
+             5RfG9AJpEcx7UVavaEO19Y8XyWFLhLFG | 9Xsjto6hA9g9rbW+2I7MxXNjtIjSgdIR
+             rO0owmBLvkUP0Ak3hiaPGQ==         | L8Q3CFa2gW9tTPSVYnT/uw==
+
+
+---------------------------------------------------
+The attributes of the (uncompressed) database(s):
+---------------------------------------------------
+
+/var/lib/aide/aide.db.gz
+ SHA256    : oQqDzd97Jq5/4p3Emtr/eKFRysDsn2lm
+             pkUCprDoBzQ=
+ SHA512    : uvJW0fi1rpNYJh62mckou7o8CKYRV/Nl
+             xqoXfzYssVFnzKFA2sHZXRiPxPW3GDDQ
+             63Xfi5dls7lyl77xniMHVw==
+ STRIBOG256: eoIl0Hy85mYmO7Z8bHtSHkPvvfxMSRYa
+             B+4hR2LDzJg=
+ STRIBOG512: TTAYRDbZ/DU5IoFTmuyyHRaXYUsWTkPB
+             n1xv6AlJyw4yJlSFj+awud+8huzK7q7f
+             Nb4XYsLVEEFE7A5eD012uA==
+ SHA512/256: zu5ALv65UGz6GomrY3i0GoH5ScXi1CrN
+             tv8CpDfPKT8=
+ SHA3-256  : v3HSiy0qDSvBuH+4LJPLMK9qYfyuOn7H
+             OvB0X7ef9Zc=
+ SHA3-512  : eBTy5BNfadt7Rmtzmekjgl5bcrQhXcPZ
+             pm4cXgN50TlFf3SAbIMUDPMC+NiPv6BQ
+             FHDLg+8J/xmSux+096tQZQ==
+
+
+End timestamp: 2026-10-14 04:38:56 -0600 (run time: 21m 34s)

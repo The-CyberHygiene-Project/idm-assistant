@@ -1,0 +1,13 @@
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+[Unit]
+Description=CHP daily AIDE file integrity check (core 0.2.0)
+ConditionPathExists=/var/lib/aide/aide.db.gz
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/aide-check
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=2h

@@ -1,0 +1,77 @@
+--- /tmp/aide.conf.stock	2026-10-11 11:31:19.381744704 -0600
++++ /etc/aide.conf	2026-10-11 11:32:21.982521607 -0600
+@@ -112,31 +112,31 @@
+ 
+ # You can create custom rules like this.
+ # Note: Removed deprecated/removed hashsums (tiger, haval, crc32, crc32b, whirlpool, md5, sha1, rmd160, gost)
+-ALLXTRAHASHES = sha256+sha512+sha512_256+sha3_256+sha3_512+stribog256+stribog512
++ALLXTRAHASHES = sha512+sha512_256+sha3_256+sha3_512+stribog256+stribog512
+ # Everything but access time (Ie. all changes) - updated with modern hashsums
+-EVERYTHING = R+ALLXTRAHASHES
++EVERYTHING = R+ALLXTRAHASHES+sha512+acl+xattrs
+ 
+ # Base + sha512 (strong)
+-NORMAL = R+sha512-m-c
++NORMAL = R+sha512-m-c+acl+xattrs
+ 
+ # Content only - added file type and strong hash
+-CONTENT = ftype+sha512
++CONTENT = ftype+sha512+acl+xattrs
+ 
+ # For directories, don't bother doing hashes - added file type and link name
+-DIR = ftype+p+i+l+n+u+g+acl+selinux+xattrs
++DIR = ftype+p+i+l+n+u+g+acl+selinux+xattrs+sha512
+ 
+ # Access control only - added file type and link name
+-PERMS = ftype+p+u+g+acl+selinux+xattrs
++PERMS = ftype+p+u+g+acl+selinux+xattrs+sha512
+ 
+ # Logfiles are special, in that they often change due to log rotation
+ # Track only: permissions, file type, user, group, number of links, SELinux context, extended attributes
+ # Allow new files (ANF) and allow removed files (ARF) due to log rotation techniques
+ # Don't track: size, inodes, timestamps, checksums and some special attributes (these change frequently with log rotation)
+-LOG = p+ftype+u+g+n+ANF+ARF+selinux+xattrs
++LOG = p+ftype+u+g+n+ANF+ARF+selinux+xattrs+sha512+acl
+ 
+ # Some files get updated automatically, so the inode/ctime/mtime change
+ # but we want to know when the data inside them changes - updated with modern hash
+-DATAONLY = ftype+p+l+n+u+g+s+acl+selinux+xattrs+sha256
++DATAONLY = ftype+p+l+n+u+g+s+acl+selinux+xattrs+sha512
+ 
+ # Next decide what directories/files you want in the database.
+ 
+@@ -351,6 +351,23 @@
+ /etc/usbguard NORMAL
+ 
+ # Now everything else
++# --- CyberHygiene additions (core 0.2.0, spec 2026-10-12 §4.3): full content checks on the appliance's own security
++# configuration, which the stock file checks only for permissions or not at all. sha512 only (FIPS-approved).
++CHPCONTENT = p+i+n+u+g+s+m+c+acl+selinux+xattrs+sha512
++/etc/chp CHPCONTENT
++/etc/kanidm CHPCONTENT
++/etc/step-ca CHPCONTENT
++/etc/ssh-ca CHPCONTENT
++/etc/ssh/sshd_config.d CHPCONTENT
++/etc/ssh/chp_user_ca.pub$ CHPCONTENT
++/etc/authselect CHPCONTENT
++/etc/nsswitch.conf$ CHPCONTENT
++/etc/fapolicyd CHPCONTENT
++/etc/selinux CHPCONTENT
++/etc/idm-collect CHPCONTENT
++/etc/systemd/system CHPCONTENT
++/var/lib/ssh-ca/keys CHPCONTENT
++# --- end of CyberHygiene additions. Exclusions are added below only from measurement (spec §4.4-4.5).
+ /etc    PERMS
+ 
+ # This gets new/removes-old filenames daily
+@@ -368,3 +385,10 @@
+ !/var/log/httpd
+ # /boot/grub2/grubenv's timestamp is getting modified continuously due to "boot_success" implementation
+ !/boot/grub2/grubenv
++/usr/sbin/auditctl p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/auditd p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/ausearch p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/aureport p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/autrace p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512
++/usr/sbin/rsyslogd p+i+n+u+g+s+b+acl+xattrs+sha512

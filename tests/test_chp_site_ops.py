@@ -269,3 +269,20 @@ def test_onboard_refuses_names_that_collide_with_local_accounts(ca, tmp_path):  
         with pytest.raises(SiteError, match="local group"):
             ops.onboard(k, ca, "lab09", "x.test", groups=(g,), out=tmp_path / "o", rec=Rec(), passwd=pw, group=gr)
         assert k.log == []
+
+
+def test_approved_by_isso_or_listed_delegate_casefolded():
+    site = {"ISSO_NAME": "D. Shannon", "BASELINE_DELEGATES": ["Deputy ISSO"], "UNEXPIRE_DELEGATES": ["Other"]}
+    assert ops.approved_by(site, "  d. shannon ", "BASELINE_DELEGATES") == "d. shannon"
+    assert ops.approved_by(site, "deputy isso", "BASELINE_DELEGATES") == "deputy isso"
+    with pytest.raises(SiteError, match="not the ISSO .* or a delegate in BASELINE_DELEGATES"):
+        ops.approved_by(site, "Other", "BASELINE_DELEGATES")     # an unexpire delegate is NOT a baseline delegate
+    with pytest.raises(SiteError):
+        ops.approved_by(site, "", "BASELINE_DELEGATES")
+
+
+def test_checked_reason_bounds():
+    assert ops.checked_reason("  patched sshd per CR-12  ", "why") == "patched sshd per CR-12"
+    for bad in ("short", "x" * 301, "two\nlines here ok"):
+        with pytest.raises(SiteError, match="--reason: 10 to 300 characters on one line, saying why"):
+            ops.checked_reason(bad, "why")

@@ -90,3 +90,86 @@ def test_export_blocks_the_stick_again_when_mount_fails(tmp_path, monkeypatch): 
                        "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"), "--pending", str(tmp_path / "none")])
     assert "mount" in seen                                    # the failure really came from mount
     assert rc == 2 and blocked == ["7"]
+
+
+def test_site_stick_with_a_directory_just_yields_it(tmp_path):
+    from chp_site.usbstick import site_stick
+    with site_stick(str(tmp_path)) as s:
+        assert s == tmp_path
+
+
+def test_site_stick_mounts_and_always_blocks_again(monkeypatch, tmp_path):
+    import types
+    import pytest
+    from chp_site import usbstick
+    calls = []
+    monkeypatch.setattr(usbstick, "allow_stick", lambda label: calls.append(("allow", str(label))) or "7")
+    monkeypatch.setattr(usbstick, "block_stick", lambda dev: calls.append(("block", dev)))
+    monkeypatch.setattr(usbstick.tempfile, "mkdtemp", lambda **kw: str(tmp_path / "m"))
+    (tmp_path / "m").mkdir()
+    run = lambda argv, **kw: calls.append(tuple(argv[:1])) or types.SimpleNamespace(returncode=0)
+    with pytest.raises(RuntimeError):
+        with usbstick.site_stick(run=run) as s:
+            assert s == tmp_path / "m"
+            raise RuntimeError("boom")
+    names = [c[0] for c in calls]
+    assert names == ["allow", "mount", "sync", "umount", "block"] and calls[-1] == ("block", "7")
+
+
+def test_site_stick_mount_failure_still_blocks(monkeypatch, tmp_path):
+    import types
+    import pytest
+    from chp_site import usbstick
+    from chp_site.sitefile import SiteError
+    blocked = []
+    monkeypatch.setattr(usbstick, "allow_stick", lambda label: "9")
+    monkeypatch.setattr(usbstick, "block_stick", lambda dev: blocked.append(dev))
+    monkeypatch.setattr(usbstick.tempfile, "mkdtemp", lambda **kw: str(tmp_path / "m"))
+    (tmp_path / "m").mkdir()
+    run = lambda argv, **kw: types.SimpleNamespace(returncode=32 if argv[0] == "mount" else 0)
+    with pytest.raises(SiteError, match="could not mount the site stick"):
+        with usbstick.site_stick(run=run):
+            pass
+    assert blocked == ["9"] and not (tmp_path / "m").exists()
+
+
+from chp_site.usbstick import pin_stick_hash
+
+
+def _pin(tmp_path, hash_text=None):
+    (tmp_path / "id").write_text("ID=46f4:0001\nSERIAL=1-0000:00:1d.7-1\nNAME=QEMU USB HARDDRIVE\n")
+    if hash_text is not None:
+        (tmp_path / "hash").write_text(hash_text)
+    return dict(pin_file=tmp_path / "id", hash_file=tmp_path / "hash")
+
+
+def test_blocked_site_stick_hash_is_pinned_without_allowing_it(tmp_path):   # quiet check 2026-10-16: pin BEFORE the baseline
+    assert pin_stick_hash("\n".join([KBD, STICK]), **_pin(tmp_path)) == "c="
+    assert (tmp_path / "hash").read_text() == "c=\n" and oct((tmp_path / "hash").stat().st_mode & 0o777) == "0o644"
+
+
+def test_an_existing_pinned_hash_is_never_rewritten(tmp_path):
+    assert pin_stick_hash(STICK.replace('hash "c="', 'hash "zz="'), **_pin(tmp_path, "c=\n")) is None
+    assert (tmp_path / "hash").read_text() == "c=\n"
+
+
+def test_no_stick_plugged_in_pins_nothing(tmp_path):
+    assert pin_stick_hash("\n".join([KBD, BLOCKED_MOUSE]), **_pin(tmp_path)) is None
+    assert not (tmp_path / "hash").exists()
+
+
+def test_a_different_stick_is_not_pinned(tmp_path):
+    with pytest.raises(SiteError, match="not the site stick"):
+        pin_stick_hash(STICK2, **_pin(tmp_path))
+    assert not (tmp_path / "hash").exists()
+
+
+def test_a_stick_with_a_keyboard_interface_is_not_pinned(tmp_path):
+    bad = STICK.replace("with-interface 08:06:50", "with-interface { 08:06:50 03:01:01 }")
+    with pytest.raises(SiteError, match="not only USB storage"):
+        pin_stick_hash(bad, **_pin(tmp_path))
+    assert not (tmp_path / "hash").exists()
+
+
+def test_a_host_installed_without_a_pin_pins_nothing(tmp_path):
+    assert pin_stick_hash(STICK, pin_file=tmp_path / "missing", hash_file=tmp_path / "hash") is None

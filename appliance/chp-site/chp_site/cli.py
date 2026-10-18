@@ -1,7 +1,8 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-"""chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire."""
+"""chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash."""
 import argparse
 import os
 import sys
@@ -76,36 +77,13 @@ def _verify_repo(a):
 
 
 def _export(a):
-    import subprocess
-    import tempfile
-    from .usbstick import allow_stick, block_stick
     site = parse_site(read_file(Path(a.site), "site.conf"))
     hosts = parse_hosts(read_file(Path(a.site).parent / "hosts", "hosts table"), site)
     pem, pub = Path(a.root).read_text(), Path(a.ssh_ca).read_text()
     text = make_client_conf(site["DOMAIN"], pem, pub, Path(a.cache_key).read_text())
-    if a.stick:
-        _export_to(a, site, hosts, text, pem, pub, Path(a.stick))
-        return
-    dev = Path("/dev/disk/by-label/OEMDRV")
-    usb = allow_stick(dev)                              # USBGuard: authorize ONLY the pinned stick, temporarily
-    try:
-        mnt = tempfile.mkdtemp(prefix="chp-stick-", dir="/run" if os.path.isdir("/run") else None)
-        try:
-            if subprocess.run(["mount", str(dev), mnt]).returncode != 0:
-                raise SiteError("could not mount the site stick")
-            try:
-                _export_to(a, site, hosts, text, pem, pub, Path(mnt))
-            finally:
-                subprocess.run(["sync"])
-                if subprocess.run(["umount", mnt]).returncode != 0:
-                    raise SiteError(f"could not unmount the site stick ({mnt}); do not unplug it yet")
-        finally:
-            try:
-                os.rmdir(mnt)
-            except OSError:
-                pass
-    finally:
-        block_stick(usb)                                # always, whatever happened above
+    from .usbstick import site_stick
+    with site_stick(a.stick) as s:                      # USBGuard: ONLY the pinned stick, temporarily; always re-blocked
+        _export_to(a, site, hosts, text, pem, pub, s)
 
 
 def _export_to(a, site, hosts, text, pem, pub, stick):
@@ -121,6 +99,14 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     toks = move_tokens(pending / "tokens", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
         if (pending / "tokens").is_dir() else []
     print("tokens moved to the stick: " + ", ".join(toks) if toks else "no client tokens pending")
+    from . import aide
+    base = aide.read_record(aide.STATE / "baseline")
+    if base.get("DB_SHA512"):
+        p = aide.write_pin(stick, values(site, hosts)["SERVER_HOSTNAME"], base, time.time())
+        aide.write_record(aide.STATE / "pinned", {"DB_SHA512": base["DB_SHA512"]}, 0o644)
+        print(f"AIDE baseline pinned: aide/{p.name}")
+    else:
+        print("no AIDE baseline yet (built just after first boot); pin it later: chp-site aide-pin")
 
 
 def _ops_env(a):
@@ -195,6 +181,64 @@ def _ga_enrol(a):
           "and keeps the 5 emergency scratch codes somewhere safe; each works once.")
 
 
+def _host():
+    import socket
+    return socket.gethostname().split(".")[0]
+
+
+def _aide_pin(a):
+    import time
+    from . import aide
+    from .usbstick import site_stick
+    base = aide.read_record(aide.STATE / "baseline")
+    with site_stick(getattr(a, "stick", None)) as s:
+        p = aide.write_pin(s, _host(), base, time.time())
+    aide.write_record(aide.STATE / "pinned", {"DB_SHA512": base["DB_SHA512"]}, 0o644)
+    print(f"pinned: aide/{p.name} on the site stick (SHA-512 {base['DB_SHA512'][:16]}…)")
+
+
+def _stick_pin_hash(_a):
+    import subprocess
+    from . import usbstick
+    try:
+        out = subprocess.run(["usbguard", "list-devices"], capture_output=True, text=True, check=True).stdout
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        raise SiteError("USBGuard is not available to list devices; site-stick hash not pinned") from None
+    h = usbstick.pin_stick_hash(out, usbstick.PIN_FILE, usbstick.HASH_FILE)
+    print(f"site-stick hash pinned: {h}" if h else "site-stick hash: nothing to pin (already pinned, no pin, or no stick)")
+
+
+def _aide_verify_pin(a):
+    from . import aide
+    from .usbstick import site_stick
+    live = aide.sha512_file(aide.DB)
+    with site_stick(a.stick) as s:
+        ok, pinned = aide.verify_pin(s, _host(), live)
+    print(f"{'MATCH' if ok else 'MISMATCH'}\n  live  {live}\n  stick {pinned}")
+    return 0 if ok else 1
+
+
+def _aide_accept(a):
+    from . import aide
+    site, _hosts = _load(a.site)
+    def ask():
+        try:
+            return input("Type ACCEPT to make this the new baseline: ").strip() == "ACCEPT"
+        except EOFError:                                    # no terminal (scripted, ssh -n): never a yes
+            return False
+    confirm = (lambda: True) if a.yes else ask
+    nb = aide.accept(site, a.approver, a.reason, host=_host(), aide=aide.run_aide, rpm=aide.Rpm(), confirm=confirm,
+                     investigated_mismatch=a.database_mismatch_investigated)
+    if nb is None:
+        return 0
+    print("Pinning the new baseline: plug in the site stick.")
+    try:
+        _aide_pin(a)
+    except SiteError as err:
+        print(f"NOT pinned yet ({err}); the monitor reminds you until: chp-site aide-pin")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -234,6 +278,16 @@ def main(argv=None):
     ge = sub.add_parser("ga-enrol", help="host-local Google Authenticator token for a Kanidm user (root; audited)")
     ge.add_argument("user"); ge.add_argument("--reset", action="store_true")
     ge.add_argument("--no-confirm", action="store_true", help="skip the app-code confirmation (scripted use only)"); ge.add_argument("--site", default="/etc/chp")
+    aa = sub.add_parser("aide-accept", help="accept the current files as the new AIDE baseline (ISSO or BASELINE_DELEGATES; audited)")
+    aa.add_argument("--approver", required=True); aa.add_argument("--reason", required=True)
+    aa.add_argument("--yes", action="store_true", help="skip the ACCEPT prompt (scripted lab use only)")
+    aa.add_argument("--database-mismatch-investigated", action="store_true")
+    aa.add_argument("--stick"); aa.add_argument("--site", default="/etc/chp")
+    apn = sub.add_parser("aide-pin", help="write this host's AIDE baseline hash to the site stick (aide/<host>.txt)")
+    apn.add_argument("--stick")
+    sub.add_parser("stick-pin-hash", help="pin the plugged-in (still blocked) site stick's USBGuard hash; never allows it")
+    avp = sub.add_parser("aide-verify-pin", help="compare the live AIDE database with the site stick's pin (MATCH/MISMATCH)")
+    avp.add_argument("--stick")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -242,7 +296,9 @@ def main(argv=None):
          "client-token": _client_token,
          "authselect-patch": _authselect_patch,
          "pam-test": _pam_test,
-         "ga-enrol": _ga_enrol}[a.cmd](a)
+         "ga-enrol": _ga_enrol,
+         "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
+         "stick-pin-hash": _stick_pin_hash}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

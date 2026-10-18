@@ -110,6 +110,19 @@ starting the next (one stick, one writer). To check the stick before a client in
 
     python3 chp-site.pyz validate --site /Volumes/OEMDRV --mac <client MAC> --role client
 
+### From 0.2.0 on: file integrity (AIDE)
+
+Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.1.0.
+
+- **Leave the site stick plugged in until first boot has finished** on each host. The host records the stick's
+  identity just before it takes its file-integrity baseline. If the stick is already out, the first later use of the
+  stick raises one alert, and the ISSO accepts it with `chp-site aide-accept`.
+- **Server:** `export-client` (§5) also pins the server's baseline to the stick (`aide/<server>.txt`).
+- **Each client:** after first boot has finished, plug in the site stick and run `sudo chp-site aide-pin`. It writes
+  `aide/<client>.txt` to the stick. The monitor keeps alerting "AIDE baseline not pinned" until you do.
+- **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
+  (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
+
 ## 7. Limits in 0.1.0
 
 - **Adding a client after the server is installed is not yet a supported procedure.** The server builds its DNS zone
