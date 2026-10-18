@@ -3,9 +3,11 @@
 # BOOTING THE ISO, the way a person would: wait for our menu on the serial console, choose ENTRY with the keyboard
 # (virsh send-key), and let the kickstart run. Firmware as in lab/iso2/install.sh: q35, UEFI Secure Boot with enrolled
 # keys, vTPM; the stick is a removable USB disk. Afterwards the stick and the ISO are detached ("removed").
+# --keep-stick (8th argument; 0.2.0): the stick stays in until prove.sh detaches it after the AIDE baseline, as
+# SITE-STICK.md "From 0.2.0 on" tells sites to do. Pass "" as the 7th argument with it.
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
-name=$1 mac=$2 entry=$3 stick=$4 ndisks=$5 iso=$6 expect_stop=${7:-}
+name=$1 mac=$2 entry=$3 stick=$4 ndisks=$5 iso=$6 expect_stop=${7:-} keep=${8:-}
 [[ $name == iso5-* ]] || { echo "refusing: only iso5-* lab VMs are managed here"; exit 1; }
 log=/var/log/libvirt/qemu/$name-install.log
 rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram --snapshots-metadata >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
@@ -42,8 +44,9 @@ fi
 for _ in $(seq 540); do [[ $(virsh domstate "$name" 2>/dev/null) == "shut off" ]] && break; sleep 10; done   # <= 90 min
 state=$(virsh domstate "$name" 2>/dev/null || echo missing)
 [[ $state == "shut off" ]] || { virsh destroy "$name" >/dev/null 2>&1 || true; echo "INSTALL DID NOT FINISH (state $state); see $log"; exit 1; }
-virt-xml "$name" --remove-device --disk "path=$stick" >/dev/null
+[[ $keep == --keep-stick ]] || virt-xml "$name" --remove-device --disk "path=$stick" >/dev/null
 virt-xml "$name" --remove-device --disk device=cdrom >/dev/null 2>&1 || true
 virsh dumpxml "$name" | grep -q "device='cdrom'" && { echo "cdrom still attached"; exit 1; }
 virsh start "$name" >/dev/null
-echo "INSTALLED and started $name (stick + ISO detached)"
+if [[ $keep == --keep-stick ]]; then echo "INSTALLED and started $name (stick kept for first boot; ISO detached)"
+else echo "INSTALLED and started $name (stick + ISO detached)"; fi

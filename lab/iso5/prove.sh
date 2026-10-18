@@ -16,6 +16,8 @@
 #   adapter   Plan 5b: LAB ADAPTER after this install's scan (sudo rule, pins, idm_admin secret)
 #   nvram / snapspike / golden   Plan 5b: qcow2 NVRAM, vTPM snapshot spike, golden snapshots + reset check
 #   row36     Plan 5b gate 2: gdm-password PAM test x3
+#   quiet     Plan B gate 1: T0 after the last pin; NOTHING touches the hosts until quietcheck
+#   quietcheck Plan B gate 1: the 2nd daily AIDE check after T0 is clean on all three hosts
 #   cleanup   remove the three VMs, the stick, helpers and lab secrets on aero; shred the Mac render dir
 # Every check prints PASS/FAIL; the stage exits 1 on any FAIL. Secrets move over pipes only (stick image -> expect).
 set -uo pipefail
@@ -23,7 +25,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.6.3; ISO=/var/lib/libvirt/images/chp-iso/0.1.0-rc5/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=0.7.3; ISO=/var/lib/libvirt/images/chp-iso/0.2.0-rc1/cyberhygiene-lab-installer-el9.iso
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -49,6 +51,20 @@ waitdone() {   # waitdone VM IP MARKER: wait for the first boot to finish (DONE)
     s=$(Rh "$1" "$2" "if [ -e /var/lib/chp/firstboot/$3 ]; then echo DONE; elif systemctl is-failed -q chp-server-firstboot chp-client-firstboot 2>/dev/null; then echo FAILED; else echo RUNNING; fi")
     [[ $s == DONE || $s == FAILED ]] && break; sleep 15
   done; echo "$s"; }
+waitbase() {   # waitbase VM IP: wait (<= 60 min) for the first AIDE baseline; prints BUILT_BY or NONE
+  local b=""; for _ in $(seq 120); do
+    b=$(Rh "$1" "$2" 'sed -n s/^BUILT_BY=//p /var/lib/chp/aide/baseline 2>/dev/null'); [[ -n $b ]] && break; sleep 30
+  done; echo "${b:-NONE}"; }
+detach_stick() {   # detach_stick VM: unplug the stick from the RUNNING VM and its config (--update = live + persistent)
+  A "sudo virt-xml $1 --remove-device --disk path=$STICK --update >/dev/null 2>&1"; sleep 3
+  check "$1: stick detached" "$(A "sudo virsh domblklist $1 --details" | grep -c "$STICK")" "0"; }
+aide_firstboot_checks() {   # aide_firstboot_checks VM IP LABEL MARKER: the 0.2.0 baseline at first boot, stick pinned first
+  check "$3: stick blocked during first boot" "$(Rh "$1" "$2" 'usbguard list-devices | grep -c "block id 46f4:0001"')" "1"
+  check "$3: AIDE baseline built at first boot" "$(waitbase "$1" "$2")" "first-boot"
+  check "$3: baseline after $4" "$(Rh "$1" "$2" "[ /var/lib/chp/firstboot/$4 -ot /var/lib/aide/aide.db.gz ] && echo yes")" "yes"
+  check "$3: stick hash pinned before the baseline" "$(Rh "$1" "$2" '[ -s /etc/chp/site-stick.hash ] && [ /etc/chp/site-stick.hash -ot /var/lib/aide/aide.db.gz ] && echo yes')" "yes"
+  check "$3: daily AIDE timer enabled" "$(Rh "$1" "$2" 'systemctl is-enabled chp-aide-check.timer')" "enabled"
+  check "$3: escrow folder not in AIDE" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pending/x 2>&1 | grep -c "negative rule"')" "1"; }
 enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled host (server or client) must pass
   check "$3: kanidm-unixd online" "$(Rh "$1" "$2" 'kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"')" "1"
   check "$3: authselect custom/kanidm + CUI features" "$(Rh "$1" "$2" 'authselect current -r | tr " " "\n" | sed "/^$/d" | tr "\n" " "')" "custom/kanidm with-faillock without-nullok "
@@ -101,7 +117,7 @@ case ${1:-} in
     check "row 37: no escrow written for the refused install" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK escrow/iso5-srv.txt && echo yes || echo no")" "no"
     A "sudo rm -rf $TR" ;;
   server)
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO")
+    out=$(A "sudo bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/server.ks"* && $out == *"INSTALLED and started $SRV"* ]] \
       && pass "$SRV: installed from the ISO (menu entry chosen, nothing typed)" || { fail "$SRV: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $SRV $STICK $SRV")
@@ -117,8 +133,11 @@ case ${1:-} in
     check "chp_admins sudo rule installed (0440)" "$(Rv 'stat -c %a /etc/sudoers.d/60-chp-admins; cat /etc/sudoers.d/60-chp-admins' | tr '\n' ' ')" "440 %chp_admins ALL=(ALL) ALL "
     check "diag account + forced command on the server" "$(Rv 'grep -c "command=\"/usr/libexec/chp/diag-collect\"" /home/diag/.ssh/authorized_keys')" "1"
     check "no chpcache account on the server" "$(Rv 'id chpcache >/dev/null 2>&1 && echo yes || echo no')" "no"
+    aide_firstboot_checks "$SRV" "$SIP" server server.done
+    detach_stick "$SRV"
     al=$(Rv 'for c in /usr/lib/chp/monitor.d/*; do "$c"; done | grep ^ALERT')
-    [[ $(grep -c . <<<"$al") == 1 && $al == *"recovery secrets still on the server"* ]] && pass "monitor alerts only: secrets still on the server" || fail "monitor alerts" "$al" ;;
+    [[ $(grep -c . <<<"$al") == 2 && $al == *"recovery secrets still on the server"* && $al == *"not pinned"* ]] \
+      && pass "monitor alerts only: secrets still on the server + AIDE baseline not pinned" || fail "monitor alerts" "$al" ;;
   reboot)
     A "sudo virsh reboot $SRV >/dev/null"; sleep 20
     ok=no; for _ in $(seq 30); do if Vh "$SIP" true; then ok=yes; break; fi; sleep 10; done
@@ -133,16 +152,21 @@ case ${1:-} in
     out=$(A "sudo bash /tmp/iso2/stick.sh list $STICK")
     [[ $out == *"./tokens/iso5-cli1.token"* && $out == *"./tokens/iso5-cli2.token"* && $out == *"./client.conf"* ]] && pass "stick holds client.conf + both tokens" || fail "stick contents" "$out"
     check "nothing pending on the server" "$(Rv 'ls -A /root/chp-escrow-pending | wc -l')" "0"
+    check "server AIDE baseline pinned by export-client" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK aide/$SRV.txt && echo yes")" "yes"
+    check "server: escrow emptied, AIDE baseline unchanged" "$(Rv 'sha512sum /var/lib/aide/aide.db.gz | cut -d" " -f1; sed -n s/^DB_SHA512=//p /var/lib/chp/aide/baseline' | uniq | wc -l | tr -d ' ')" "1"
     check "server monitor quiet" "$(Rv '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0" ;;
   client1|client2)
     if [[ $1 == client1 ]]; then VM=$C1; IP=$C1IP; MAC=52:54:00:c4:05:51; else VM=$C2; IP=$C2IP; MAC=52:54:00:c4:05:52; fi
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO")
+    out=$(A "sudo bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/client.ks"* && $out == *"INSTALLED and started $VM"* ]] \
       && pass "$VM: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)" || { fail "$VM: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $VM $STICK $VM")
     [[ $out == *"passphrase sent"* || $out == *"already unlocked"* ]] && pass "$VM: first boot unlocked" || fail "$VM: unlock" "$out"
     s=$(waitdone "$VM" "$IP" client.done); check "$VM: client first boot finished" "$s" "DONE"
     [[ $s == FAILED ]] && Rh "$VM" "$IP" 'journalctl -u chp-client-firstboot --no-pager | tail -25'
+    aide_firstboot_checks "$VM" "$IP" "$VM" client.done
+    out=$(Rh "$VM" "$IP" 'chp-site aide-pin'); [[ $out == pinned:* ]] && pass "$VM: aide-pin ($out)" || fail "$VM: aide-pin" "$out"
+    detach_stick "$VM"
     pin=$(A "sudo bash /tmp/iso2/stick.sh escrow $STICK ../client.conf" | sed -n 's/^CA_ROOT_SHA256=//p')
     check "$VM: anchor = pinned root" "$(Rh "$VM" "$IP" 'openssl x509 -in /etc/pki/ca-trust/source/anchors/chp-root.crt -outform DER | sha256sum | cut -d" " -f1')" "$pin"
     check "$VM: no staged token copy left" "$(Rh "$VM" "$IP" 'ls /tmp/chp 2>/dev/null | wc -l')" "0"
@@ -363,6 +387,16 @@ os.write(fd, json.dumps({"password": pw}).encode()); os.close(fd)'
       check "row 36 run $n: gdm-password accepts lab01 (password + GA code)" "$rc" "0"
     done
     check "row 36: GA token label after the logins" "$(ssh -F "$here/ssh_config" -n client2 'sudo stat -c %C /var/lib/google-authenticator/lab01 | cut -d: -f3' 2>/dev/null)" "var_auth_t" ;;
+  quiet)       # Plan B gate 1: T0 = now (after the last pin). From here NOTHING touches the hosts until quietcheck.
+    date -u +%s > "$here/.quiet-t0"; pass "quiet window started $(date -u +%Y-%m-%dT%H:%MZ); verdict = 2nd timer run after this" ;;
+  quietcheck)  # Plan B gate 1: the second daily check after T0 must be clean on all three hosts
+    t0=$(cat "$here/.quiet-t0") || { fail "no quiet T0"; exit 1; }
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do read -r vm ip <<<"$v"
+      n=$(Rh "$vm" "$ip" "journalctl -u chp-aide-check --since @$t0 --no-pager | grep -c 'check: exit'")
+      [[ $n -ge 2 ]] || { fail "$vm: only $n check(s) since T0; wait for the second"; continue; }
+      check "$vm: last check clean" "$(Rh "$vm" "$ip" 'sed -n "s/^\(ADDED\|REMOVED\|CHANGED\|DB_MATCH\)=//p" /var/lib/chp/aide/last-result | tr "\n" " "')" "0 0 0 yes "
+      check "$vm: AIDE monitors OK" "$(Rh "$vm" "$ip" 'for c in /usr/lib/chp/monitor.d/6*-aide-*.sh; do "$c"; done | grep -c ^ALERT')" "0"
+    done ;;
   cleanup)
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram --snapshots-metadata >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
     A "sudo rm -f $STICK; sudo shred -u /tmp/iso2/iso2_chpadmin /tmp/iso2/ops_key /tmp/iso2/ops.pw 2>/dev/null; sudo rm -rf /tmp/iso2"
