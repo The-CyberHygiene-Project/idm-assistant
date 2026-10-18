@@ -1,5 +1,5 @@
 Name:           chp-integrity
-Version:        0.1.2
+Version:        0.1.3
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene file integrity: AIDE baseline, daily check, monitor alerts
 License:        Apache-2.0
@@ -77,6 +77,10 @@ fi
 %dir %attr(0700,root,root) %{_localstatedir}/log/aide
 
 %changelog
+* Sun Oct 18 2026 The CyberHygiene Project - 0.1.3-1.chp
+- !/root/chp-escrow-pending (owner 2026-10-18): emptied by export-client after the first-boot baseline; keeps secret
+  hashes out of the AIDE database; covered by 40-escrow-pending.
+
 * Fri Oct 16 2026 The CyberHygiene Project - 0.1.2-1.chp
 - Quiet check 2026-10-16: aide-baseline pins the site stick's hash (chp-site stick-pin-hash) before aide --init;
   !/var/log/audit/audit\.log\.[0-9]+$ (rotated audit logs; the live audit.log and the directory stay checked).

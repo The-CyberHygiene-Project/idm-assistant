@@ -95,3 +95,12 @@ def test_rotated_audit_logs_are_excluded_but_the_live_log_stays_watched():
     assert {l[0]: l[1] for l in lines() if len(l) > 1}["/var/log/audit"] == "PERMS-sha512"
     add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
     assert r"!/var/log/audit/audit\.log\.[0-9]+$" in add          # the source block and the shipped file agree
+
+
+def test_escrow_staging_is_excluded_from_aide():
+    # Plan B (owner 2026-10-18): export-client empties this AFTER the first-boot baseline, and /root NORMAL would
+    # also keep SHA-512 hashes of the recovery secrets in the AIDE database. Covered by 40-escrow-pending.
+    ex = [l[0] for l in lines() if l[0].startswith("!")]
+    assert "!/root/chp-escrow-pending" in ex
+    assert "!/root/chp-escrow-pending" in (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert {l[0]: l[1] for l in lines() if len(l) > 1}["/root"] == "NORMAL"      # the rest of /root stays watched
