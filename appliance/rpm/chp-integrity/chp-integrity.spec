@@ -1,5 +1,5 @@
 Name:           chp-integrity
-Version:        0.1.3
+Version:        0.1.4
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene file integrity: AIDE baseline, daily check, monitor alerts
 License:        Apache-2.0
@@ -77,6 +77,11 @@ fi
 %dir %attr(0700,root,root) %{_localstatedir}/log/aide
 
 %changelog
+* Tue Oct 20 2026 The CyberHygiene Project - 0.1.4-1.chp
+- Reboot and login churn (Plan B gate 1 on rc1; owner 2026-10-20): /boot/efi NORMAL-i (vfat inodes change at every
+  mount); /etc/fapolicyd CHPCONTENT-c (fapolicyd resets ownership at start); random-seed, lastlog and
+  /root/.bash_history back to Rocky's permissions-only (the FIPS-hash rule had added sha512 to PERMS).
+
 * Sun Oct 18 2026 The CyberHygiene Project - 0.1.3-1.chp
 - !/root/chp-escrow-pending (owner 2026-10-18): emptied by export-client after the first-boot baseline; keeps secret
   hashes out of the AIDE database; covered by 40-escrow-pending.

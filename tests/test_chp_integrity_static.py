@@ -18,7 +18,8 @@ def test_chp_paths_get_content_checks_before_the_etc_catch_all():
     etc = next(i for i, l in enumerate(ls) if l == ["/etc", "PERMS"])
     for p in CHP:
         i = next(i for i, l in enumerate(ls) if l[0] == p)
-        assert i < etc and ls[i][1] == "CHPCONTENT", p
+        want = "CHPCONTENT-c" if p == "/etc/fapolicyd" else "CHPCONTENT"   # owner 2026-10-20: fapolicyd resets ownership (ctime) at start
+        assert i < etc and ls[i][1] == want, p
 
 
 def test_no_non_fips_hash_in_any_used_group():
@@ -104,3 +105,25 @@ def test_escrow_staging_is_excluded_from_aide():
     assert "!/root/chp-escrow-pending" in ex
     assert "!/root/chp-escrow-pending" in (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
     assert {l[0]: l[1] for l in lines() if len(l) > 1}["/root"] == "NORMAL"      # the rest of /root stays watched
+
+
+def test_reboot_and_login_churn_is_not_an_alert():
+    # Plan B gate 1 on rc1 (2026-10-20, reboot test on iso5-cli1): owner decisions 2026-10-20
+    rules = {l[0]: l[1] for l in lines() if len(l) > 1 and l[0].startswith("/")}
+    assert rules["/boot/efi"] == "NORMAL-i"                          # vfat: inode numbers regenerated at every mount
+    assert rules["/boot"] == "NORMAL"                                # the rest of /boot unchanged
+    assert rules["/var/lib/systemd/random-seed$"] == "PERMS-sha512"  # rewritten at every boot (stock: permissions only)
+    assert rules["/var/log/lastlog$"] == "PERMS-sha512"              # every login (stock: permissions only)
+    assert rules[r"/root/\.bash_history$"] == "PERMS-sha512"         # every root shell; other root dotfiles stay hashed
+    assert rules[r"/root/\..*"] == "PERMS"
+    assert rules["/etc/fapolicyd"] == "CHPCONTENT-c"                 # fapolicyd resets ownership at every start
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert "/etc/fapolicyd CHPCONTENT-c" in add
+
+
+def test_specific_rules_come_before_their_parents():
+    # AIDE takes the first matching rule for an identical path; keep the specific lines first so a later
+    # reordering cannot silently undo them (confirmed with aide --path-check in Plan B Task 5)
+    order = [l[0] for l in lines() if l[0].startswith("/")]
+    assert order.index("/boot/efi") < order.index("/boot")
+    assert order.index(r"/root/\.bash_history$") < order.index(r"/root/\..*")

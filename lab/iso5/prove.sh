@@ -17,7 +17,9 @@
 #   nvram / snapspike / golden   Plan 5b: qcow2 NVRAM, vTPM snapshot spike, golden snapshots + reset check
 #   row36     Plan 5b gate 2: gdm-password PAM test x3
 #   quiet     Plan B gate 1: T0 after the last pin; NOTHING touches the hosts until quietcheck
+#   quietpoke Plan B gate 1 (rc2+): right after quiet, reboot every host and open a root shell (proves the 0.1.4 rules)
 #   quietcheck Plan B gate 1: the 2nd daily AIDE check after T0 is clean on all three hosts
+#   aideinfo  Plan B: READ-ONLY AIDE diagnosis (timer runs, boots, report paths); output passes noleak
 #   cleanup   remove the three VMs, the stick, helpers and lab secrets on aero; shred the Mac render dir
 # Every check prints PASS/FAIL; the stage exits 1 on any FAIL. Secrets move over pipes only (stick image -> expect).
 set -uo pipefail
@@ -25,7 +27,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.7.3; ISO=/var/lib/libvirt/images/chp-iso/0.2.0-rc1/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=0.7.4; ISO=/var/lib/libvirt/images/chp-iso/0.2.0-rc2/cyberhygiene-lab-installer-el9.iso
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -65,6 +67,7 @@ aide_firstboot_checks() {   # aide_firstboot_checks VM IP LABEL MARKER: the 0.2.
   check "$3: stick hash pinned before the baseline" "$(Rh "$1" "$2" '[ -s /etc/chp/site-stick.hash ] && [ /etc/chp/site-stick.hash -ot /var/lib/aide/aide.db.gz ] && echo yes')" "yes"
   check "$3: daily AIDE timer enabled" "$(Rh "$1" "$2" 'systemctl is-enabled chp-aide-check.timer')" "enabled"
   check "$3: escrow folder not in AIDE" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pending/x 2>&1 | grep -c "negative rule"')" "1"; }
+noleak() { grep -v -E 'PRIVATE KEY|^[A-Za-z0-9+/=]{40,}$|PASSWORD|PASSPHRASE|SECRET'; }   # never print key/secret material
 enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled host (server or client) must pass
   check "$3: kanidm-unixd online" "$(Rh "$1" "$2" 'kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"')" "1"
   check "$3: authselect custom/kanidm + CUI features" "$(Rh "$1" "$2" 'authselect current -r | tr " " "\n" | sed "/^$/d" | tr "\n" " "')" "custom/kanidm with-faillock without-nullok "
@@ -389,13 +392,30 @@ os.write(fd, json.dumps({"password": pw}).encode()); os.close(fd)'
     check "row 36: GA token label after the logins" "$(ssh -F "$here/ssh_config" -n client2 'sudo stat -c %C /var/lib/google-authenticator/lab01 | cut -d: -f3' 2>/dev/null)" "var_auth_t" ;;
   quiet)       # Plan B gate 1: T0 = now (after the last pin). From here NOTHING touches the hosts until quietcheck.
     date -u +%s > "$here/.quiet-t0"; pass "quiet window started $(date -u +%Y-%m-%dT%H:%MZ); verdict = 2nd timer run after this" ;;
+  quietpoke)   # Plan B: after quiet. Every host: a root-console command (writes .bash_history + lastlog), then a reboot
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do read -r vm ip <<<"$v"
+      check "$vm: root shell" "$(Rh "$vm" "$ip" 'echo shell-ok')" "shell-ok"
+      A "sudo virsh reboot $vm >/dev/null"; sleep 20
+      ok=no; for _ in $(seq 30); do if Vh "$ip" true; then ok=yes; break; fi; sleep 10; done
+      check "$vm: back after reboot (TPM unlock)" "$ok" "yes"
+    done ;;
   quietcheck)  # Plan B gate 1: the second daily check after T0 must be clean on all three hosts
     t0=$(cat "$here/.quiet-t0") || { fail "no quiet T0"; exit 1; }
     for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do read -r vm ip <<<"$v"
-      n=$(Rh "$vm" "$ip" "journalctl -u chp-aide-check --since @$t0 --no-pager | grep -c 'check: exit'")
+      n=$(Rh "$vm" "$ip" "journalctl -u chp-aide-check --since @$t0 --no-pager | grep -c 'Finished CHP daily AIDE'")   # the logger line is not always attributed to the unit
       [[ $n -ge 2 ]] || { fail "$vm: only $n check(s) since T0; wait for the second"; continue; }
       check "$vm: last check clean" "$(Rh "$vm" "$ip" 'sed -n "s/^\(ADDED\|REMOVED\|CHANGED\|DB_MATCH\)=//p" /var/lib/chp/aide/last-result | tr "\n" " "')" "0 0 0 yes "
       check "$vm: AIDE monitors OK" "$(Rh "$vm" "$ip" 'for c in /usr/lib/chp/monitor.d/6*-aide-*.sh; do "$c"; done | grep -c ^ALERT')" "0"
+    done ;;
+  aideinfo)    # Plan B: read-only. Timer runs since T0, boots, and the PATHS (no hashes) in each host's latest AIDE report.
+    t0=$(cat "$here/.quiet-t0" 2>/dev/null || echo 0)
+    for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do read -r vm ip <<<"$v"; echo "=== $vm"
+      Rh "$vm" "$ip" "uptime -s; journalctl --list-boots --no-pager | tail -3; systemctl list-timers chp-aide-check.timer --no-pager | sed -n 2p; journalctl -u chp-aide-check -u chp-aide-check.timer --since @$t0 --no-pager | grep -E 'Start|check: exit|Finish|Fail|Kill|Timeout|Deactivat' | cut -c1-160; cat /var/lib/chp/aide/last-result | grep -v '^REPORT'; r=\$(sed -n 's/^REPORT=//p' /var/lib/chp/aide/last-result); grep -E '^(Added|Removed|Changed) entries|^[fdlbcps][^:]{0,20}: /' \"\$r\" | cut -c1-150" | noleak
+      [[ ${AIDEINFO_CMD:-} ]] && Rh "$vm" "$ip" "$AIDEINFO_CMD" | noleak   # extra read-only diagnosis (lab)
+      if [[ $# -gt 1 ]]; then   # details for the named paths: AIDE's "File:/Directory:" block, values filtered by noleak
+        Rh "$vm" "$ip" "P='${*:2}'"'; r=$(sed -n "s/^REPORT=//p" /var/lib/chp/aide/last-result)
+          grep -c "Detailed information" "$r"; for p in $P; do grep -n -F -A12 ": $p" "$r" | grep -v -E "^[0-9]+-(f|d)[^:]*: /" | head -14; done' | noleak
+      fi
     done ;;
   cleanup)
     for v in $SRV $C1 $C2 iso5-neg; do A "sudo virsh destroy $v >/dev/null 2>&1; sudo virsh undefine $v --nvram --snapshots-metadata >/dev/null 2>&1; sudo rm -f /data/libvirt/images/$v-[0-9].qcow2"; done
