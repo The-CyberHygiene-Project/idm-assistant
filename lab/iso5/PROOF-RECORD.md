@@ -28,6 +28,16 @@ rotated. Logs are in `~/idm-lab-secrets/iso5-0.2.0-rc2-run{1,2,3}.log`.
     - the catch-up AIDE checks were clean (0/0/0) on all three hosts, after the reboot, root shell and power loss.
 - **`baseline ga negtrust`:** ALL PASS. The diagnostic engine found 0 problems.
 
+**Gate 2 (2026-10-24):** `engine regress --runs 3`, with `IDM_PROFILE=appliance`, on the rc2 golden hosts.
+- **Result:** **11 of 11 scenarios green in every run (33/33)**, with model answers 3/3 valid and 3/3 agreeing on
+  every scenario (`regression-2026-10-24.md`). Row 36 ×3 also passed: `gdm-password` accepts lab01 with password +
+  GA code, and the token label is right.
+- **Timing:** the regression ran 10:41–12:01 and did not overlap a daily AIDE check (03:30–04:45).
+- **Before it could run:**
+  - The lab clock had to be corrected. aero's clock was 92 s slow after its battery ran flat, so every GA code was
+    rejected. It was set once from the Mac, and aero stays wired-only by the owner's design.
+  - The golden snapshots were retaken after the fixtures, in Plan 5b's order.
+
 **Gate 3:** **108 pass and 2 fail** on every host. The two failures are the AIDE deviations accepted in spec §8;
 `deviations.py` exit 0. See `DEVIATIONS.md`.
 
