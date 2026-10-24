@@ -66,7 +66,8 @@ aide_firstboot_checks() {   # aide_firstboot_checks VM IP LABEL MARKER: the 0.2.
   check "$3: baseline after $4" "$(Rh "$1" "$2" "[ /var/lib/chp/firstboot/$4 -ot /var/lib/aide/aide.db.gz ] && echo yes")" "yes"
   check "$3: stick hash pinned before the baseline" "$(Rh "$1" "$2" '[ -s /etc/chp/site-stick.hash ] && [ /etc/chp/site-stick.hash -ot /var/lib/aide/aide.db.gz ] && echo yes')" "yes"
   check "$3: daily AIDE timer enabled" "$(Rh "$1" "$2" 'systemctl is-enabled chp-aide-check.timer')" "enabled"
-  check "$3: escrow folder not in AIDE" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pending/x 2>&1 | grep -c "negative rule"')" "1"; }
+  check "$3: escrow folder not in AIDE" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pending/x 2>&1 | grep -c "negative rule"')" "1"
+  check "$3: escrow-lookalike sibling still checked" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pendingX/y 2>&1 | grep -c "selective rule"')" "1"; }
 noleak() { grep -v -E 'PRIVATE KEY|^[A-Za-z0-9+/=]{40,}$|PASSWORD|PASSPHRASE|SECRET'; }   # never print key/secret material
 enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled host (server or client) must pass
   check "$3: kanidm-unixd online" "$(Rh "$1" "$2" 'kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"')" "1"

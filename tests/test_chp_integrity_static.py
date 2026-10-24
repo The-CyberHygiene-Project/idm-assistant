@@ -83,8 +83,8 @@ def test_growing_logs_have_no_content_hash():
 def test_measured_exclusions_are_present_and_justified():
     ex = [l[0] for l in lines() if l[0].startswith("!")]
     for p in ("/etc/pki/kanidm", "/etc/step-ca/db", "/var/log/aide"):
-        assert "!" + p in ex, p
-        assert re.search(rf"^# EXCLUDE {re.escape(p)}: .*covered by", CONF, re.M), p
+        assert "!" + p + "(/|$)" in ex, p                                 # anchored (final review I2)
+        assert re.search(rf"^# EXCLUDE {re.escape(p + '(/|$)')}: .*covered by", CONF, re.M), p
     # the CA's configuration and keys stay fully content-checked
     assert ["/etc/step-ca", "CHPCONTENT"] in lines()
 
@@ -102,8 +102,8 @@ def test_escrow_staging_is_excluded_from_aide():
     # Plan B (owner 2026-10-18): export-client empties this AFTER the first-boot baseline, and /root NORMAL would
     # also keep SHA-512 hashes of the recovery secrets in the AIDE database. Covered by 40-escrow-pending.
     ex = [l[0] for l in lines() if l[0].startswith("!")]
-    assert "!/root/chp-escrow-pending" in ex
-    assert "!/root/chp-escrow-pending" in (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert "!/root/chp-escrow-pending(/|$)" in ex
+    assert "!/root/chp-escrow-pending(/|$)" in (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
     assert {l[0]: l[1] for l in lines() if len(l) > 1}["/root"] == "NORMAL"      # the rest of /root stays watched
 
 
@@ -134,3 +134,17 @@ def test_tailoring_also_selects_the_aide_groups():
     # selected rule only if its parent groups are selected, so the 8 AIDE rules came out "notselected" in a full scan.
     for g in ("software-integrity", "aide"):
         assert f'select idref="xccdf_org.ssgproject.content_group_{g}" selected="true"' in TAIL, g
+
+
+def test_chp_exclusions_are_anchored_at_the_end():
+    # Final review I2 (2026-10-24): AIDE anchors a rule only at the START, so "!/root/chp-escrow-pending" also hid
+    # /root/chp-escrow-pendingX/... Every CHP exclusion must end in "$" (one file) or "(/|$)" (the dir and below only).
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    ex = [l.split()[0] for l in add.splitlines() if l.startswith("!")]
+    assert ex, "no CHP exclusions found"
+    for e in ex:
+        assert e.endswith("$") or e.endswith("(/|$)"), f"{e}: unanchored exclusion also hides every sibling path with this prefix"
+    conf_ex = {l[0] for l in lines() if l[0].startswith("!")}
+    for e in ex:
+        assert e in conf_ex, f"{e}: missing from the shipped aide.conf"
+    assert "!/root/chp-escrow-pending(/|$)" in ex
