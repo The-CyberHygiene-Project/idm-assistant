@@ -68,7 +68,9 @@ aide_firstboot_checks() {   # aide_firstboot_checks VM IP LABEL MARKER: the 0.2.
   check "$3: daily AIDE timer enabled" "$(Rh "$1" "$2" 'systemctl is-enabled chp-aide-check.timer')" "enabled"
   check "$3: escrow folder not in AIDE" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pending/x 2>&1 | grep -c "negative rule"')" "1"
   check "$3: escrow-lookalike sibling still checked" "$(Rh "$1" "$2" 'aide --path-check f:/root/chp-escrow-pendingX/y 2>&1 | grep -c "selective rule"')" "1"; }
-noleak() { grep -v -E 'PRIVATE KEY|^[A-Za-z0-9+/=]{40,}$|PASSWORD|PASSPHRASE|SECRET'; }   # never print key/secret material
+# noleak: never print key or secret material (final review I1): case-insensitive; key/secret words, AIDE hash lines,
+# 20+ base64 characters in a row without '/' (PEM bodies, hash continuations; paths survive), JWS-shaped tokens, and long KEY=value pairs.
+noleak() { grep -viE 'private key|passw|passphrase|secret|token|cred|(sha[0-9]*|sha3-[0-9]+|sha512/256|stribog[0-9]*|rmd160|tiger|crc32|whirlpool|gost|md5) *:|[A-Za-z0-9+=]{20,}|[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+|=[^ ]{24,}'; }
 enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled host (server or client) must pass
   check "$3: kanidm-unixd online" "$(Rh "$1" "$2" 'kanidm-unix status 2>/dev/null | grep -c "Kanidm: online"')" "1"
   check "$3: authselect custom/kanidm + CUI features" "$(Rh "$1" "$2" 'authselect current -r | tr " " "\n" | sed "/^$/d" | tr "\n" " "')" "custom/kanidm with-faillock without-nullok "
@@ -412,10 +414,9 @@ os.write(fd, json.dumps({"password": pw}).encode()); os.close(fd)'
     t0=$(cat "$here/.quiet-t0" 2>/dev/null || echo 0)
     for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do read -r vm ip <<<"$v"; echo "=== $vm"
       Rh "$vm" "$ip" "uptime -s; journalctl --list-boots --no-pager | tail -3; systemctl list-timers chp-aide-check.timer --no-pager | sed -n 2p; journalctl -u chp-aide-check -u chp-aide-check.timer --since @$t0 --no-pager | grep -E 'Start|check: exit|Finish|Fail|Kill|Timeout|Deactivat' | cut -c1-160; cat /var/lib/chp/aide/last-result | grep -v '^REPORT'; r=\$(sed -n 's/^REPORT=//p' /var/lib/chp/aide/last-result); grep -E '^(Added|Removed|Changed) entries|^[fdlbcps][^:]{0,20}: /' \"\$r\" | cut -c1-150" | noleak
-      [[ ${AIDEINFO_CMD:-} ]] && Rh "$vm" "$ip" "$AIDEINFO_CMD" | noleak   # extra read-only diagnosis (lab)
       if [[ $# -gt 1 ]]; then   # details for the named paths: AIDE's "File:/Directory:" block, values filtered by noleak
         Rh "$vm" "$ip" "P='${*:2}'"'; r=$(sed -n "s/^REPORT=//p" /var/lib/chp/aide/last-result)
-          grep -c "Detailed information" "$r"; for p in $P; do grep -n -F -A12 ": $p" "$r" | grep -v -E "^[0-9]+-(f|d)[^:]*: /" | head -14; done' | noleak
+          grep -c "Detailed information" "$r"; for p in $P; do grep -F -A12 ": $p" "$r" | head -14; done' | noleak
       fi
     done ;;
   cleanup)
