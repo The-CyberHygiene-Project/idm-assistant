@@ -127,3 +127,10 @@ def test_specific_rules_come_before_their_parents():
     order = [l[0] for l in lines() if l[0].startswith("/")]
     assert order.index("/boot/efi") < order.index("/boot")
     assert order.index(r"/root/\.bash_history$") < order.index(r"/root/\..*")
+
+
+def test_tailoring_also_selects_the_aide_groups():
+    # Plan B gate 3 (2026-10-24): the CUI profile DESELECTS group_software-integrity and group_aide; XCCDF evaluates a
+    # selected rule only if its parent groups are selected, so the 8 AIDE rules came out "notselected" in a full scan.
+    for g in ("software-integrity", "aide"):
+        assert f'select idref="xccdf_org.ssgproject.content_group_{g}" selected="true"' in TAIL, g
