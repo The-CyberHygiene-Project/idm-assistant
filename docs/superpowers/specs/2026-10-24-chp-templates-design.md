@@ -1,6 +1,6 @@
 # Design: chp-templates, a shared SSP and POA&M template library (Rev 2 and Rev 3)
 
-**Status:** DRAFT for the owner's review (2026-10-24) · **Owner:** the CyberHygiene Project ISSO
+**Status:** APPROVED by the owner (2026-10-24) · **Owner:** the CyberHygiene Project ISSO
 **Consumers:** the CHP installer's site stick (this repo), and Automated_Compliance, which generates SSPs and POA&Ms
 from templates and then uses them as the editable "canvas".
 
