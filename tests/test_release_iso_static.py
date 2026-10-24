@@ -37,3 +37,18 @@ def test_upgrade_note_says_leave_the_stick_in():
     u = (R / "UPGRADE-FROM-0.1.0.md.in").read_text()
     assert "dnf --enablerepo=chp install chp-integrity" in u and "aide-pin" in u
     assert "leave the site stick plugged in" in u.lower()
+
+
+def test_release_repo_script_contract():                                # repo-only update (no ISO), e.g. 0.2.0-update1
+    t = (R / "release-repo.sh").read_text()
+    assert "set -Eeuo pipefail" in t and 'V=${V:?' in t and 'REPO_V=${REPO_V:?' in t
+    assert 'T="$B/$V"' in t and '[[ -e $T ]] && { echo "refusing:' in t      # never overwrites a published folder
+    assert "chp-repo-$REPO_V.tar.gz" in t and "UPDATE.md" in t and "RPM-GPG-KEY-cyberhygiene" in t
+    assert "--armor --detach-sign" in t and "2DE0D71BF37D8F5E4201A590521276F43C908F8E" in t and "gpg --verify" in t
+    assert ".iso" not in t and "idm-lab-secrets" not in t
+
+
+def test_update_note_tells_the_isso_how_to_check_aide_conf():
+    u = (R / "UPDATE.md.in").read_text()
+    assert "dnf --enablerepo=chp upgrade chp-integrity" in u and "aide-accept" in u
+    assert "cmp /etc/aide.conf /usr/share/chp-integrity/aide.conf" in u and "rpm -V chp-integrity" in u

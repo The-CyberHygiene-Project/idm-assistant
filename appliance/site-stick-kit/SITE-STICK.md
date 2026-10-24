@@ -1,4 +1,4 @@
-# Making the site stick — CyberHygiene Project Lab Installer 0.1.0
+# Making the site stick — CyberHygiene Project Lab Installer 0.1.0 and 0.2.0
 
 Internal test image for the CyberHygiene Project development team. Not an official Rocky Linux product.
 
@@ -15,7 +15,7 @@ Files in this kit:
 | `site.conf.template` | every setting, with what it means and an example |
 | `hosts.template` | the machine table, with the format and an example |
 | `chp-site.pyz` | the same checker the installer runs (Python 3; works on macOS and Linux) |
-| `SHA256SUMS`, `SHA256SUMS.asc` | checksums, signed with the project release key (check them as in `0.1.0/VERIFY.md`) |
+| `SHA256SUMS`, `SHA256SUMS.asc` | checksums, signed with the project release key (check them as in your release's `VERIFY.md`) |
 
 ## 1. Before you start (checklist)
 
