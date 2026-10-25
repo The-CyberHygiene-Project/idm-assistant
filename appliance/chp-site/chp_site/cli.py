@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
-aide-accept | aide-pin | aide-verify-pin | stick-pin-hash."""
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs."""
 import argparse
 import os
 import sys
@@ -208,6 +208,19 @@ def _stick_pin_hash(_a):
     print(f"site-stick hash pinned: {h}" if h else "site-stick hash: nothing to pin (already pinned, no pin, or no stick)")
 
 
+def _docs(a):
+    import subprocess
+    from . import docs
+    from .usbstick import site_stick
+    with site_stick(getattr(a, "stick", None)) as s:     # USBGuard: ONLY the pinned stick, temporarily; always re-blocked
+        out, used_profile, summary = docs.render(s, Path(a.site), Path(a.templates), Path(a.out_root), a.rev)
+    if not used_profile:
+        print("note: no profile.ini on the site stick; document values stay as placeholders (see fill-report.md)")
+    print(summary or f"wrote {out}")
+    print(f"documents: {out} (ssp.md, poam.md; fill-report.md lists what is still to fill)")
+    subprocess.run(["logger", "-t", "chp-site", f"docs rendered {out}"], check=False)
+
+
 def _aide_verify_pin(a):
     from . import aide
     from .usbstick import site_stick
@@ -286,6 +299,10 @@ def main(argv=None):
     apn = sub.add_parser("aide-pin", help="write this host's AIDE baseline hash to the site stick (aide/<host>.txt)")
     apn.add_argument("--stick")
     sub.add_parser("stick-pin-hash", help="pin the plugged-in (still blocked) site stick's USBGuard hash; never allows it")
+    dc = sub.add_parser("docs", help="render the site's SSP and POA&M from the site stick's profile.ini (chp-templates)")
+    dc.add_argument("--stick"); dc.add_argument("--site", default="/etc/chp/site.conf")
+    dc.add_argument("--templates", default="/usr/share/chp-templates"); dc.add_argument("--out-root", default="/var/lib/chp/docs")
+    dc.add_argument("--rev", default="rev2")
     avp = sub.add_parser("aide-verify-pin", help="compare the live AIDE database with the site stick's pin (MATCH/MISMATCH)")
     avp.add_argument("--stick")
     a = ap.parse_args(argv)
@@ -298,7 +315,7 @@ def main(argv=None):
          "pam-test": _pam_test,
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
-         "stick-pin-hash": _stick_pin_hash}[a.cmd](a)
+         "stick-pin-hash": _stick_pin_hash, "docs": _docs}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

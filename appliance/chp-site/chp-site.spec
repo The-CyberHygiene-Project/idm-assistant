@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.7.1
+Version:        0.7.2
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sun Oct 25 2026 The CyberHygiene Project - 0.7.2-1.chp
+- docs: render the site's SSP and POA&M from the site stick's profile.ini with the installed chp-templates renderer
+  into /var/lib/chp/docs/<UTC timestamp>/ (root-only, never overwritten).
+
 * Fri Oct 16 2026 The CyberHygiene Project - 0.7.1-1.chp
 - stick-pin-hash: pin the plugged-in, still blocked site stick's USBGuard hash without allowing it; aide-baseline
   runs it before aide --init so the first stick use no longer alerts (quiet check 2026-10-16).
