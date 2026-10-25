@@ -22,9 +22,10 @@ mkdir "$w/z"; cp "$src/render/chpfill.py" "$w/z/chpfill.py"
 printf 'import sys\nimport chpfill\nsys.exit(chpfill.main())\n' > "$w/z/__main__.py"
 python3 -m zipapp "$w/z" -o "$src/chpfill.pyz"
 rm -rf "$src/render" "$src/tests" "$src/tools"
-tar -C "$w" -czf "$w/chp-templates-1.2.0-rpm.tar.gz" chp-templates-1.2.0
+COPYFILE_DISABLE=1 tar --no-mac-metadata -C "$w" -czf "$w/chp-templates-1.2.0-rpm.tar.gz" chp-templates-1.2.0   # no ._* entries
 ssh aero 'rm -rf /tmp/chpt && mkdir -p /tmp/chpt/SOURCES /tmp/chpt/SPECS /data/chp-release/built'
 scp -q "$w/chp-templates-1.2.0-rpm.tar.gz" aero:/tmp/chpt/SOURCES/
 scp -q "$here/chp-templates.spec" aero:/tmp/chpt/SPECS/
 ssh aero 'rpmbuild -bb --define "_topdir /tmp/chpt" /tmp/chpt/SPECS/chp-templates.spec >/tmp/chpt/build.log 2>&1 || { tail -20 /tmp/chpt/build.log; exit 1; }
+          if rpm -qlp /tmp/chpt/RPMS/noarch/chp-templates-*.rpm | grep -q "/\._"; then echo "refusing: macOS ._ files in the RPM"; exit 1; fi
           cp /tmp/chpt/RPMS/noarch/chp-templates-*.rpm /data/chp-release/built/ && rpm -qlp /data/chp-release/built/chp-templates-*.rpm | head -12 && rm -rf /tmp/chpt'

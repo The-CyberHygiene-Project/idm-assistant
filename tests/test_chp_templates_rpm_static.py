@@ -29,3 +29,10 @@ def test_renderer_is_a_zipapp_built_from_the_verified_tarball():
     b = (D / "build-rpm.sh").read_text()
     assert "zipapp" in b and "sys.exit(chpfill.main())" in b
     assert b.index("shasum -a 256 -c") < b.index("zipapp")       # built only after verification
+
+
+def test_repack_carries_no_macos_metadata_and_the_rpm_is_checked():
+    # final review I1: bsdtar on macOS adds ._* AppleDouble entries for files with xattrs unless told not to
+    b = (D / "build-rpm.sh").read_text()
+    assert "COPYFILE_DISABLE=1 tar --no-mac-metadata" in b
+    assert 'grep -q "/\\._"' in b                       # the built RPM is refused if any ._ file slipped in (double quotes: inside ssh '...')

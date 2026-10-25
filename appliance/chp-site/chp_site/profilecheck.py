@@ -19,7 +19,7 @@ def _find(templates, site_dir, search):
     candidates = [Path(templates)] if templates else []
     if os.environ.get("CHP_TEMPLATES"):
         candidates.append(Path(os.environ["CHP_TEMPLATES"]))
-    candidates += list(search) + [Path(site_dir).parent / "chp-templates"]
+    candidates += list(search)        # never a folder next to the site: it could be any mounted volume (untrusted)
     for c in candidates:
         if (c / "chpfill.pyz").exists() or (c / "render" / "chpfill.py").exists():
             return c

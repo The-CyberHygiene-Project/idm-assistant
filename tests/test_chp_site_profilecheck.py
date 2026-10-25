@@ -84,3 +84,13 @@ def test_the_installed_zipapp_form_is_loaded(tmp_path):
     zipapp.create_archive(src, t / "chpfill.pyz")
     (t / "render" / "chpfill.py").unlink()
     assert check(site(tmp_path, "[organization]\nlegal_name = x\n"), t).startswith("profile.ini OK")
+
+
+def test_never_runs_a_renderer_found_next_to_the_site_folder(tmp_path, monkeypatch):
+    # final review M1 (up-graded): a 'chp-templates' folder beside the site (e.g. /Volumes/chp-templates) is untrusted
+    monkeypatch.delenv("CHP_TEMPLATES", raising=False)
+    s = site(tmp_path, "[organization]\nlegal_name = x\n")
+    planted = tmp_path / "chp-templates" / "render"
+    planted.mkdir(parents=True)
+    (planted / "chpfill.py").write_text("raise SystemExit('planted code ran')\n")
+    assert check(s, None, search=[tmp_path / "nowhere"]) == "profile.ini not checked: chp-templates not found (set CHP_TEMPLATES)"
