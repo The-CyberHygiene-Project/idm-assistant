@@ -30,7 +30,9 @@ def _validate(a):
         if a.role and h.role != a.role:
             raise SiteError(f"{h.hostname} is a {h.role}, not a {a.role}")
         msg += f"; this machine is {h.hostname} ({h.role}, {h.ip})"
-    print(msg)
+    from .profilecheck import check
+    extra = check(d, None)                                # profile.ini on the stick, when present (chp-templates rules)
+    print(msg + (f"\n{extra}" if extra else ""))
 
 
 def _load(site_dir):
