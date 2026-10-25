@@ -52,3 +52,17 @@ def test_update_note_tells_the_isso_how_to_check_aide_conf():
     u = (R / "UPDATE.md.in").read_text()
     assert "dnf --enablerepo=chp upgrade chp-integrity" in u and "aide-accept" in u
     assert "cmp /etc/aide.conf /usr/share/chp-integrity/aide.conf" in u and "rpm -V chp-integrity" in u
+
+
+def test_release_repo_note_is_selectable_and_default_unchanged():
+    t = (R / "release-repo.sh").read_text()
+    assert 'NOTE=${NOTE:-UPDATE.md.in}' in t                         # update1 behaviour unchanged
+    assert '[[ -f "$here/$NOTE" ]] || { echo "refusing:' in t
+    assert '"$here/$NOTE" > "$P/UPDATE.md"' in t
+
+
+def test_update2_note_covers_install_use_and_aide():
+    u = (R / "UPDATE-0.2.0-update2.md.in").read_text()
+    for s in ("dnf --enablerepo=chp upgrade chp-site", "dnf --enablerepo=chp install chp-templates", "chp-site docs",
+              "profile.ini.template", "aide-accept", "/var/lib/chp/docs"):
+        assert s in u, s

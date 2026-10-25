@@ -1,0 +1,46 @@
+# Package update @VERSION@ (signed repo @REPO@): no reinstall
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it adds
+
+**Your own SSP and POA&M, written on the appliance.**
+- **`chp-templates` 1.2.0 (new):** the project's signed SSP and POA&M templates for NIST SP 800-171 Rev 2 and their
+  renderer, installed to `/usr/share/chp-templates/`. They are the same release Automated_Compliance uses.
+- **`chp-site` 0.7.2:** a new command, `chp-site docs`, fills the templates from a `profile.ini` on the site stick.
+  `chp-site validate` checks that file.
+
+Nothing else changes, and every other package is the same build as in update1.
+
+## Apply it (each 0.2.0 host; the server needs it, the clients may have it)
+
+1. **Check this folder** as `0.2.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. Copy `chp-repo-@REPO@.tar.gz` to the host, then unpack it over the local repo as root:
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+
+3. Upgrade and install:
+
+       dnf --enablerepo=chp upgrade chp-site
+       dnf --enablerepo=chp install chp-templates
+
+## Expect one AIDE alert, then accept it
+
+The new files under `/usr/share/chp-templates/` and the updated `chp-site` show in the next daily check. In the
+`aide-accept` summary they are listed under **"Explained by signed package updates"**. Accept them as the ISSO or a
+named delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: chp-templates + chp-site 0.7.2"
+
+## Use it
+
+1. **Make your profile.** Copy `profile.ini.template` from the site-stick kit to the stick's top level as
+   `profile.ini`, next to `site.conf`, and fill in your values. Never put passwords in it.
+2. **Render.** With the stick plugged into the server, run as root: `chp-site docs`.
+3. **Read the output.** The documents are written to a new root-only folder under `/var/lib/chp/docs/`:
+   - `ssp.md` and `poam.md` are your starting documents;
+   - `fill-report.md` lists every value still to fill.
+
+   AIDE does not watch that folder, so editing the documents raises no alerts.
