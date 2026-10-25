@@ -73,3 +73,14 @@ def test_kit_ships_the_profile_template_and_readme_lists_every_folder():
     assert '"$kit/profile.ini.template"' in t and "profile.ini.template" in t.split("> SHA256SUMS")[0]
     for row in ("`0.2.0-update1/`", "`0.2.0-update2/`", "`site-stick-kit-0.2.0-update2/`", "`site-stick-kit-0.2.0/`"):
         assert row in t, row
+
+
+def test_update3_note_covers_both_upgrades_and_aide():
+    u = (R / "UPDATE-0.2.0-update3.md.in").read_text()
+    for s in ("dnf --enablerepo=chp upgrade chp-identity-client chp-site", "chp-identity-client` 0.2.3",
+              "chp-site` 0.7.3", "aide-accept", "Explained by signed package updates", "still denied"):
+        assert s in u, s
+
+
+def test_readme_lists_update3():
+    assert "`0.2.0-update3/`" in (R / "release-kit.sh").read_text()
