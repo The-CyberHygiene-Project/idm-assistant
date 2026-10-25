@@ -13,3 +13,4 @@ chp-identity-server ours
 chp-identity-client ours
 aide rocky
 chp-integrity ours
+chp-templates ours
