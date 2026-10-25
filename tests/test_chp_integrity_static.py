@@ -18,7 +18,8 @@ def test_chp_paths_get_content_checks_before_the_etc_catch_all():
     etc = next(i for i, l in enumerate(ls) if l == ["/etc", "PERMS"])
     for p in CHP:
         i = next(i for i, l in enumerate(ls) if l[0] == p)
-        assert i < etc and ls[i][1] == "CHPCONTENT", p
+        want = "CHPCONTENT-c" if p == "/etc/fapolicyd" else "CHPCONTENT"   # owner 2026-10-20: fapolicyd resets ownership (ctime) at start
+        assert i < etc and ls[i][1] == want, p
 
 
 def test_no_non_fips_hash_in_any_used_group():
@@ -82,8 +83,8 @@ def test_growing_logs_have_no_content_hash():
 def test_measured_exclusions_are_present_and_justified():
     ex = [l[0] for l in lines() if l[0].startswith("!")]
     for p in ("/etc/pki/kanidm", "/etc/step-ca/db", "/var/log/aide"):
-        assert "!" + p in ex, p
-        assert re.search(rf"^# EXCLUDE {re.escape(p)}: .*covered by", CONF, re.M), p
+        assert "!" + p + "(/|$)" in ex, p                                 # anchored (final review I2)
+        assert re.search(rf"^# EXCLUDE {re.escape(p + '(/|$)')}: .*covered by", CONF, re.M), p
     # the CA's configuration and keys stay fully content-checked
     assert ["/etc/step-ca", "CHPCONTENT"] in lines()
 
@@ -95,3 +96,55 @@ def test_rotated_audit_logs_are_excluded_but_the_live_log_stays_watched():
     assert {l[0]: l[1] for l in lines() if len(l) > 1}["/var/log/audit"] == "PERMS-sha512"
     add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
     assert r"!/var/log/audit/audit\.log\.[0-9]+$" in add          # the source block and the shipped file agree
+
+
+def test_escrow_staging_is_excluded_from_aide():
+    # Plan B (owner 2026-10-18): export-client empties this AFTER the first-boot baseline, and /root NORMAL would
+    # also keep SHA-512 hashes of the recovery secrets in the AIDE database. Covered by 40-escrow-pending.
+    ex = [l[0] for l in lines() if l[0].startswith("!")]
+    assert "!/root/chp-escrow-pending(/|$)" in ex
+    assert "!/root/chp-escrow-pending(/|$)" in (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert {l[0]: l[1] for l in lines() if len(l) > 1}["/root"] == "NORMAL"      # the rest of /root stays watched
+
+
+def test_reboot_and_login_churn_is_not_an_alert():
+    # Plan B gate 1 on rc1 (2026-10-20, reboot test on iso5-cli1): owner decisions 2026-10-20
+    rules = {l[0]: l[1] for l in lines() if len(l) > 1 and l[0].startswith("/")}
+    assert rules["/boot/efi"] == "NORMAL-i"                          # vfat: inode numbers regenerated at every mount
+    assert rules["/boot"] == "NORMAL"                                # the rest of /boot unchanged
+    assert rules["/var/lib/systemd/random-seed$"] == "PERMS-sha512"  # rewritten at every boot (stock: permissions only)
+    assert rules["/var/log/lastlog$"] == "PERMS-sha512"              # every login (stock: permissions only)
+    assert rules[r"/root/\.bash_history$"] == "PERMS-sha512"         # every root shell; other root dotfiles stay hashed
+    assert rules[r"/root/\..*"] == "PERMS"
+    assert rules["/etc/fapolicyd"] == "CHPCONTENT-c"                 # fapolicyd resets ownership at every start
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    assert "/etc/fapolicyd CHPCONTENT-c" in add
+
+
+def test_specific_rules_come_before_their_parents():
+    # AIDE takes the first matching rule for an identical path; keep the specific lines first so a later
+    # reordering cannot silently undo them (confirmed with aide --path-check in Plan B Task 5)
+    order = [l[0] for l in lines() if l[0].startswith("/")]
+    assert order.index("/boot/efi") < order.index("/boot")
+    assert order.index(r"/root/\.bash_history$") < order.index(r"/root/\..*")
+
+
+def test_tailoring_also_selects_the_aide_groups():
+    # Plan B gate 3 (2026-10-24): the CUI profile DESELECTS group_software-integrity and group_aide; XCCDF evaluates a
+    # selected rule only if its parent groups are selected, so the 8 AIDE rules came out "notselected" in a full scan.
+    for g in ("software-integrity", "aide"):
+        assert f'select idref="xccdf_org.ssgproject.content_group_{g}" selected="true"' in TAIL, g
+
+
+def test_chp_exclusions_are_anchored_at_the_end():
+    # Final review I2 (2026-10-24): AIDE anchors a rule only at the START, so "!/root/chp-escrow-pending" also hid
+    # /root/chp-escrow-pendingX/... Every CHP exclusion must end in "$" (one file) or "(/|$)" (the dir and below only).
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    ex = [l.split()[0] for l in add.splitlines() if l.startswith("!")]
+    assert ex, "no CHP exclusions found"
+    for e in ex:
+        assert e.endswith("$") or e.endswith("(/|$)"), f"{e}: unanchored exclusion also hides every sibling path with this prefix"
+    conf_ex = {l[0] for l in lines() if l[0].startswith("!")}
+    for e in ex:
+        assert e in conf_ex, f"{e}: missing from the shipped aide.conf"
+    assert "!/root/chp-escrow-pending(/|$)" in ex

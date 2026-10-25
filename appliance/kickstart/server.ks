@@ -46,6 +46,7 @@ clevis-systemd
 tpm2-tools
 mokutil
 chp-site
+chp-integrity
 chp-base
 chp-identity-server
 chp-identity-client
@@ -117,7 +118,7 @@ rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
 # ISSO 2026-10-10 (CUI ensure_redhat_gpgkey_installed): trust the OS vendor's key too (the CUI remediation imports
 # Red Hat's, not Rocky's); also lets the collector verify Rocky signers (row 46 backlog).
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9
-systemctl enable chp-firstboot-common.service chp-monitor.timer chp-server-firstboot.service
+systemctl enable chp-firstboot-common.service chp-monitor.timer chp-aide-check.timer chp-aide-baseline.service chp-server-firstboot.service
 dnf config-manager --set-disabled baseos appstream extras >/dev/null 2>&1 || true
 # dc2 tailoring: dc2 UNSELECTS sysctl_user_max_user_namespaces; the CUI files are also inside the initramfs.
 grep -rlE 'user\.max_user_namespaces' /etc/sysctl.d /etc/sysctl.conf 2>/dev/null | xargs -r sed -i '/user\.max_user_namespaces/d'

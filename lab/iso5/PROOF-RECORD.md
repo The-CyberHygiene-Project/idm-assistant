@@ -1,4 +1,63 @@
-# ISO Plan 5a proof record: install from nothing, from the ISO (gate 1)
+# ISO proof record: install from nothing, from the ISO (gates 1 and 3)
+
+## Core 0.2.0 Plan B: ISO 0.2.0-rc2 (repo 0.7.4), gates 1 and 3 MET (2026-10-24)
+
+**ISO** sha256 `1332d9114c9cd7fdfc7459ab68a529171aaa39f8beea666b097e381499f4d24e` (`appliance/release/RELEASE-RECORD-0.7.4.md`).
+The hosts are iso5-srv, iso5-cli1 and iso5-cli2, installed from nothing on 2026-10-20 with the lab `chpadmin` key
+rotated. Logs are in `~/idm-lab-secrets/iso5-0.2.0-rc2-run{1,2,3}.log`.
+
+**Gate 1:**
+- **Install** (`cleanup prep negrepo server firstboot reboot export client1 client2 quiet quietpoke`): **105 PASS,
+  0 FAIL**. On every host:
+  - the site stick was blocked at first boot;
+  - the AIDE baseline was `first-boot`, built after the role marker;
+  - the stick hash was pinned before the baseline;
+  - the escrow folder is not in AIDE;
+  - the daily timer is enabled;
+  - the baselines are pinned (server by `export-client`, clients by `aide-pin`);
+  - monitors are quiet.
+- **Quiet check:**
+  - The window started 2026-10-22T14:46Z, followed by `quietpoke` (a root shell, then a reboot, on every host).
+  - The second daily check after that, on 2026-10-24, gave `quietcheck` **ALL PASS**: 0 added, removed and changed,
+    `db_match=yes`, and AIDE monitors OK on all three hosts. The window included the 20:01 certificate renewal and
+    log rotation.
+  - **Unplanned extra evidence:** aero lost power (its battery ran flat, 2026-10-20 ~11:00 to 10-22 07:12). The VMs
+    were hard-stopped for about 2 days, and the Kanidm certificate expired while they were down. After restart:
+    - every disk unlocked through its TPM;
+    - the renewal timer re-issued the certificate over ACME, and clients were online within 2 minutes;
+    - the catch-up AIDE checks were clean (0/0/0) on all three hosts, after the reboot, root shell and power loss.
+- **`baseline ga negtrust`:** ALL PASS. The diagnostic engine found 0 problems.
+
+**Gate 2 (2026-10-24):** `engine regress --runs 3`, with `IDM_PROFILE=appliance`, on the rc2 golden hosts.
+- **Result:** **11 of 11 scenarios green in every run (33/33)**, with model answers 3/3 valid and 3/3 agreeing on
+  every scenario (`regression-2026-10-24.md`). Row 36 ×3 also passed: `gdm-password` accepts lab01 with password +
+  GA code, and the token label is right.
+- **Timing:** the regression ran 10:41–12:01 and did not overlap a daily AIDE check (03:30–04:45).
+- **Before it could run:**
+  - The lab clock had to be corrected. aero's clock was 92 s slow after its battery ran flat, so every GA code was
+    rejected. It was set once from the Mac, and aero stays wired-only by the owner's design.
+  - The golden snapshots were retaken after the fixtures, in Plan 5b's order.
+
+**Gate 3:** **108 pass and 2 fail** on every host. The two failures are the AIDE deviations accepted in spec §8;
+`deviations.py` exit 0. See `DEVIATIONS.md`.
+
+**What rc1 found (0.2.0-rc1, repo 0.7.3; gate 1 FAILED 2026-10-20):** every host alerted on about 30 paths after the
+post-install reboot and root-console use. A reboot test on cli1 found the causes:
+- vfat inode numbers under `/boot/efi`;
+- fapolicyd resetting ownership on its config (ctime);
+- the FIPS-hash rule making Rocky's permissions-only lines hash `random-seed`, `lastlog` and `.bash_history`.
+
+Fixed in `chp-integrity` 0.1.4 (owner decisions 2026-10-20).
+
+**Fixed in the harness during Plan B:**
+- `quietcheck` counted a journal line that is not always attributed to the unit.
+- The gate-3 tailoring selected the AIDE rules but not their parent groups, which the CUI profile deselects, so a full
+  scan reported them "notselected". Plan A's 6-pass/2-deviation figure came from per-rule fix generation, not a
+  profile scan; it is confirmed now.
+
+---
+
+## History: ISO 0.1.0 (ISO Plan 5a proof record: install from nothing, from the ISO (gate 1))
 
 **Update 2026-10-11 (ISO Plan 5b): the proof of record is run 4, on ISO 0.1.0-rc5** (sha256
 `efcba98a4268ec35ccef0b66b78122b3c78246424f76186cfa45a1ba80ff81b2`, repo 0.6.3), together with **gate 2** below.

@@ -1,3 +1,5 @@
 # rule_id<TAB>decision<TAB>decided_by<TAB>reason
 xccdf_org.ssgproject.content_rule_ensure_redhat_gpgkey_installed	fix	D. Shannon (ISSO)	Import the Rocky 9 release key in %post (2026-10-10); also closes the row-46 backlog item
 xccdf_org.ssgproject.content_rule_grub2_password	fix	D. Shannon (ISSO)	Per-host random boot-loader password escrowed on the site stick (2026-10-10): TPM PCR 7 unlock does not cover boot-option edits
+xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking	accept	D. Shannon (ISSO)	Met by equivalent means (spec §8, 2026-10-12): chp-aide-check.timer daily + 61-aide-stale; the OVAL test accepts only a cron line
+xccdf_org.ssgproject.content_rule_aide_scan_notification	accept	D. Shannon (ISSO)	Met by equivalent means (spec §8, 2026-10-12): monitor -> journal + ALERT_HOOK (no MTA on the appliance); the OVAL test accepts only /bin/mail on the cron line

@@ -1,0 +1,44 @@
+# Package update @VERSION@ (signed repo @REPO@): no reinstall
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it fixes
+
+**`chp-integrity` 0.1.5.** The AIDE exclusions in 0.2.0 matched as name *prefixes*. So, for example, the exclusion for
+`/root/chp-escrow-pending` also hid a lookalike path such as `/root/chp-escrow-pendingX/`. The same was true for the
+Kanidm certificate, step-ca database and AIDE log folders.
+
+The exclusions now cover only their own folder and its contents, and every lookalike path is checked. Only someone who
+already has root could have used the gap.
+
+Nothing else changes. Every other package in this repo is the same build as in 0.2.0.
+
+## Apply it (each 0.2.0 host, server first)
+
+1. **Check this folder** as `0.2.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. Copy `chp-repo-@REPO@.tar.gz` to the host, then unpack it over the local repo as root:
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+
+3. Upgrade:
+
+       dnf --enablerepo=chp upgrade chp-integrity
+
+## Expect one AIDE alert, then accept it
+
+The update replaces `/etc/aide.conf`, so the next daily check reports it. In the `aide-accept` summary, the package's
+own files are listed under "Explained by signed package updates". **`/etc/aide.conf` is listed under "NOT explained"**,
+because the package installs it by copying its own copy into place.
+
+Before accepting, confirm it is exactly the packaged file:
+
+    cmp /etc/aide.conf /usr/share/chp-integrity/aide.conf && echo SAME
+    rpm -V chp-integrity && echo PACKAGE-OK
+
+If both print, accept the change as the ISSO or a named delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "chp-integrity 0.1.5 update (@VERSION@): anchored exclusions"
+
+If either check fails, **do not accept.** Investigate first: the file was changed by something other than the update.

@@ -1,0 +1,47 @@
+# Upgrading a 0.1.0 site to @VERSION@ (no reinstall)
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+@VERSION@ adds **AIDE file integrity**. Every host builds a baseline of its system files and checks it daily. The CHP
+monitor alerts on any change, and a baseline changes only through an audited `chp-site aide-accept` by the ISSO or a
+named delegate. A fresh @VERSION@ install does all of this at first boot. An existing 0.1.0 host gets it from the signed
+package repo, as described below. Do the server first, then each client.
+
+**Before you start:** check this folder as `VERIFY.md` describes, including `SHA256SUMS.asc` and the sha256 of
+`chp-repo-@REPO@.tar.gz`.
+
+## On each host (server first)
+
+1. **Leave the site stick plugged in** for the whole upgrade. The host records the stick's USB identity just before
+   it builds its first AIDE baseline. If the stick is out, its first later use raises one AIDE alert, which the ISSO
+   accepts with `chp-site aide-accept`.
+2. Copy `chp-repo-@REPO@.tar.gz` to the host, then unpack it over the local repo:
+
+       sudo rm -rf /var/lib/chp/repo/*
+       sudo tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+
+3. Install the update:
+
+       sudo dnf --enablerepo=chp upgrade chp-site
+       sudo dnf --enablerepo=chp install chp-integrity
+
+4. Wait for the first baseline, which takes a few minutes:
+
+       sudo cat /var/lib/chp/aide/baseline      # BUILT_BY=package-install when it is ready
+
+5. Pin the baseline to the site stick:
+   - **server:** `sudo chp-site export-client` (it pins the server's baseline as well);
+   - **each client:** `sudo chp-site aide-pin`.
+
+   Until a host is pinned, its monitor alerts "AIDE baseline not pinned".
+
+## Who may accept file changes
+
+The ISSO (`ISSO_NAME`) and anyone listed in `BASELINE_DELEGATES` in `site.conf` (comma separated; it may be empty).
+This list is separate from `UNEXPIRE_DELEGATES` on purpose. See `SITE-STICK.md`, "From 0.2.0 on".
+
+## What this baseline proves
+
+A baseline built this way proves the host's files **at the moment of the upgrade**, not at its first boot. A host
+installed fresh from @VERSION@ has the stronger first-boot baseline. If you have any doubt about a host's history,
+reinstall it from the @VERSION@ ISO instead.

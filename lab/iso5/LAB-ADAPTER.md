@@ -25,3 +25,9 @@ contains nothing of it. A host built from the ISO never has it unless someone ad
   harness's Kanidm admin session.
 
 Decision: assumed default stated in ISO Plan 5a (2026-10-10). Accepted with the Plan 5a rulings (ISSO, 2026-10-11).
+
+## Core 0.2.0 (Plan B, 2026-10-24)
+
+The adapter was added after the rc2 gate-3 scan, as before. The rc2 hosts run AIDE, so the adapter's sudoers file and the
+scenario fixtures **will** be reported by the next daily AIDE checks. That is expected lab activity. No `aide-accept` is
+done, so the alerts stay visible as a record of the lab changes. None of this is in the ISO or an RPM.

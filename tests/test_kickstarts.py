@@ -131,3 +131,12 @@ def test_pre_shows_the_banner(role):
 def test_post_imports_the_rocky_release_key(role):          # ISSO 2026-10-10 (CUI rule ensure_redhat_gpgkey_installed)
     post = (KS / f"{role}.ks").read_text().split("\n%post --log=/root/chp-post.log", 1)[1].split("\n%end", 1)[0]
     assert "rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9" in post
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_integrity_installed_and_enabled_on_a_fresh_install(role):   # Plan B; PROOF-RECORD "carried into Plan B"
+    ks = (KS / f"{role}.ks").read_text()
+    assert re.search(r"^chp-integrity$", _section(ks, "%packages"), re.M)
+    post = _section(ks, "%post --log=/root/chp-post.log")
+    line = next(l for l in post.splitlines() if l.startswith("systemctl enable "))
+    assert "chp-aide-check.timer" in line.split() and "chp-aide-baseline.service" in line.split()

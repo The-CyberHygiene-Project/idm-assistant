@@ -48,6 +48,10 @@
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_sysctl_user_max_user_namespaces" selected="false"/>
     <!-- core 0.2.0 (spec 2026-10-12): AIDE in the core; all 8 SSG AIDE rules selected. Two are deviations "met by
          equivalent means" (systemd timer + CHP monitor instead of cron + mail): spec §8. -->
+    <!-- Plan B gate 3 (2026-10-24): the CUI profile deselects these two parent groups; XCCDF evaluates a rule only if
+         its groups are selected too, so without these the 8 rules below are reported "notselected". -->
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_group_software-integrity" selected="true"/>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_group_aide" selected="true"/>
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_package_aide_installed" selected="true"/>
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_build_database" selected="true"/>
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking" selected="true"/>
