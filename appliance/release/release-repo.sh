@@ -9,10 +9,12 @@
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"
 V=${V:?set V (the update folder name, e.g. 0.2.0-update1)} REPO_V=${REPO_V:?set REPO_V (the signed repo, e.g. 0.7.5)}
+NOTE=${NOTE:-UPDATE.md.in}                     # the update note template in appliance/release (default: update1's)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 SHARE="/Volumes/For Jeff"; B="$SHARE/cyberhygiene-lab-installer"; T="$B/$V"; P="$T.partial"
 [[ -d $SHARE ]] || { echo "refusing: $SHARE is not mounted"; exit 1; }
 [[ -e $T ]] && { echo "refusing: $T already exists"; exit 1; }
+[[ -f "$here/$NOTE" ]] || { echo "refusing: update note $NOTE not found in $here"; exit 1; }
 gpg --card-status >/dev/null 2>&1 || { echo "refusing: YubiKey not found (plug it in)"; exit 1; }
 rm -rf "$P"; mkdir -p "$P"
 echo "== signed repo $REPO_V as a tarball (verified on aero first)"
@@ -20,7 +22,7 @@ ssh aero "bash /data/chp-release/tools/verify-repo.sh /data/chp-release/$REPO_V/
   || { echo "refusing: repo $REPO_V does not verify on aero"; exit 1; }
 ssh aero "tar -C /data/chp-release/$REPO_V -czf - repo" > "$P/chp-repo-$REPO_V.tar.gz"
 cp "$here/RPM-GPG-KEY-cyberhygiene" "$top/appliance/branding/NOTICE.txt" "$P/"
-sed -e "s/@VERSION@/$V/g" -e "s/@REPO@/$REPO_V/g" "$here/UPDATE.md.in" > "$P/UPDATE.md"
+sed -e "s/@VERSION@/$V/g" -e "s/@REPO@/$REPO_V/g" "$here/$NOTE" > "$P/UPDATE.md"
 (cd "$P" && shasum -a 256 "chp-repo-$REPO_V.tar.gz" RPM-GPG-KEY-cyberhygiene NOTICE.txt UPDATE.md > SHA256SUMS)
 echo "== signing SHA256SUMS (PIN dialog if not cached; then TOUCH the key when it flashes)"
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"

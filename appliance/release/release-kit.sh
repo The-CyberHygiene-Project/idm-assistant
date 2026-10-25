@@ -26,8 +26,8 @@ RPM=$(tar tzf "$TAR" | grep -E '^(\./)?repo/chp-site-.*\.noarch\.rpm$' | head -1
 [[ -n $RPM ]] || { echo "refusing: no chp-site RPM in $TAR"; exit 1; }
 (cd "$w" && tar xzf "$TAR" "$RPM" && tar xf "$RPM")
 cp "$w/usr/share/chp-site/chp-site.pyz" "$P/"
-cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$P/"
-(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template chp-site.pyz > SHA256SUMS)
+cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$kit/profile.ini.template" "$P/"
+(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz > SHA256SUMS)
 echo "== signing SHA256SUMS (PIN dialog, then touch the key)"; say "Kit signing now. Watch for the PIN dialog." 2>/dev/null || true
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
 echo "== checks"
@@ -46,6 +46,9 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `site-stick-kit/` | the site-stick kit for 0.1.0 | `site-stick-kit/SITE-STICK.md` |
 | `0.2.0/` | release 0.2.0 (adds AIDE file integrity): ISO, signed repo, key, upgrade note for 0.1.0 sites | `0.2.0/VERIFY.md` |
 | `site-stick-kit-0.2.0/` | the site-stick kit for 0.2.0 | `site-stick-kit-0.2.0/SITE-STICK.md` |
+| `0.2.0-update1/` | package update for 0.2.0 hosts (`chp-integrity` 0.1.5, no reinstall) | `0.2.0-update1/UPDATE.md` |
+| `0.2.0-update2/` | package update: your SSP and POA&M on the appliance (`chp-templates`, `chp-site docs`) | `0.2.0-update2/UPDATE.md` |
+| `site-stick-kit-0.2.0-update2/` | the site-stick kit with `profile.ini.template` | `site-stick-kit-0.2.0-update2/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.

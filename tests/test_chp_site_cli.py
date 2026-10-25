@@ -54,7 +54,7 @@ def test_zipapp_builds_and_runs(tmp_path):
     # hosts run it through the /usr/bin/chp-site shell wrapper, the installer and the Mac as `python3 chp-site.pyz`
     assert pyz.read_bytes()[:2] == b"PK"
     r = subprocess.run([sys.executable, str(pyz), "--version"], capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.7.1"
+    assert r.returncode == 0 and r.stdout.strip() == "chp-site 0.7.2"
 
 
 def test_wrapper_runs_the_packaged_zipapp():
@@ -159,12 +159,12 @@ def test_aide_accept_without_a_stick_still_succeeds(tmp_path, monkeypatch, capsy
     assert rc == 0 and "NOT pinned yet" in capsys.readouterr().out
 
 
-def test_version_is_0_7_1(capsys):
+def test_version_is_0_7_2(capsys):
     import pytest
     from chp_site import cli as cli_mod
     with pytest.raises(SystemExit):
         cli_mod.main(["--version"])
-    assert "chp-site 0.7.1" in capsys.readouterr().out
+    assert "chp-site 0.7.2" in capsys.readouterr().out
 
 
 def test_export_client_pins_the_aide_baseline_when_there_is_one(tmp_path, monkeypatch, capsys):
