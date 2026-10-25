@@ -56,7 +56,7 @@ def test_enrol_patches_through_chp_site():
 
 def test_selinux_module_is_the_lab_policy_renamed():
     te = text("selinux/chp_kanidm.te")
-    assert "module chp_kanidm 1.0;" in te and "type kanidm_unixd_var_run_t;" in te
+    assert "module chp_kanidm 1.1;" in te and "type kanidm_unixd_var_run_t;" in te
     assert "allow nsswitch_domain kanidm_unixd_var_run_t:sock_file { getattr write };" in te
     assert "/var/run/kanidm-unixd(/.*)?" in text("selinux/chp_kanidm.fc")
 
@@ -140,7 +140,7 @@ def test_client_rpm_carries_the_second_factor():
     assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
     assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.1", s, re.M)
     assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
-    assert "53-ga.sh" in s and "Version:        0.2.2" in s
+    assert "53-ga.sh" in s and "Version:        0.2.3" in s
     assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
 
 
@@ -170,3 +170,13 @@ def test_enrol_writes_the_collector_conf():          # Plan 5b P1: clients had n
     assert "chp-site render collect-conf > /etc/idm-collect/collect.conf.new" in t
     assert "install -m 0644 /etc/idm-collect/collect.conf.new /etc/idm-collect/collect.conf" in t
     assert t.index("step collect do_collect") > t.index("step trust do_trust")
+
+
+def test_row49_fapolicyd_lookups_are_silenced_never_allowed():
+    # requirements row 49 (owner decision 2026-10-25: dontaudit): fapolicyd resolves only LOCAL accounts; its NSS lookups
+    # try the kanidm socket first (kanidm before files) and are denied. Keep them denied, stop the log noise.
+    te = (Path(__file__).resolve().parents[1] / "appliance/rpm/chp-identity-client/selinux/chp_kanidm.te").read_text()
+    assert "module chp_kanidm 1.1;" in te and "type fapolicyd_t;" in te
+    assert "dontaudit fapolicyd_t kanidm_unixd_var_run_t:sock_file write;" in te
+    assert "dontaudit fapolicyd_t unconfined_service_t:unix_stream_socket connectto;" in te
+    assert not re.search(r"^allow fapolicyd_t", te, re.M)

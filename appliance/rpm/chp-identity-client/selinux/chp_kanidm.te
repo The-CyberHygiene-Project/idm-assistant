@@ -6,11 +6,12 @@
 # through libnss_kanidm -> /run/kanidm-unixd/sock (context rule on /var/run: subs_dist maps /run to /var/run). The socket directory gets its own type, and only name-service clients
 # may use it. CAVEAT (POA&M, ISSO #12): kanidm-unixd itself stays unconfined, so the connectto rule lets nsswitch_domain
 # connect to any unconfined_service_t stream socket it can reach; full confinement of unixd is a follow-on project.
-module chp_kanidm 1.0;
+module chp_kanidm 1.1;
 
 require {
     type unconfined_service_t;
     type init_t;
+    type fapolicyd_t;
     attribute nsswitch_domain;
     attribute file_type;
     attribute non_security_file_type;
@@ -30,3 +31,11 @@ allow nsswitch_domain unconfined_service_t:unix_stream_socket connectto;
 # (proof: without this, init_t was denied remove_name/rmdir when unixd stopped). Management only; no connectto.
 allow init_t kanidm_unixd_var_run_t:dir { create getattr setattr search open read write add_name remove_name rmdir };
 allow init_t kanidm_unixd_var_run_t:sock_file { getattr setattr unlink };
+
+# Requirements row 49 (owner decision 2026-10-25: dontaudit). fapolicyd resolves only LOCAL accounts (its own fapolicyd
+# user, and package file owners for its RPM loader). Because kanidm comes before files in nsswitch, each lookup first
+# tries the unixd socket, is denied, then correctly falls through to /etc/passwd. Keep it DENIED (fapolicyd needs no
+# identity-daemon access, and must not wait on Kanidm at boot), and stop logging it.
+dontaudit fapolicyd_t kanidm_unixd_var_run_t:sock_file write;
+dontaudit fapolicyd_t kanidm_unixd_var_run_t:dir { getattr search };
+dontaudit fapolicyd_t unconfined_service_t:unix_stream_socket connectto;
