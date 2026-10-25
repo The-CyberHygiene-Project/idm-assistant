@@ -1,0 +1,34 @@
+# Package update @VERSION@ (signed repo @REPO@): no reinstall
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it fixes
+
+- **`chp-identity-client` 0.2.3: no more false SELinux alarms from fapolicyd.** fapolicyd looks up local accounts
+  only, but the host asks Kanidm first, and SELinux denies fapolicyd that socket. Each fapolicyd start logged about
+  four denials. SELinux module `chp_kanidm` 1.1 now records those denials silently. The access is **still denied**;
+  only the log noise is gone (requirements row 49, owner decision 2026-10-25).
+- **`chp-site` 0.7.3:** `chp-site validate` no longer runs a template renderer found next to the site folder, which
+  could be on any mounted volume. It uses only `/usr/share/chp-templates`, or a path you name.
+
+Every other package is the same build as in update2.
+
+## Apply it (each 0.2.0 host)
+
+1. **Check this folder** as `0.2.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. Copy `chp-repo-@REPO@.tar.gz` to the host, then unpack it over the local repo as root:
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+
+3. Upgrade (a host without one of these packages just skips it):
+
+       dnf --enablerepo=chp upgrade chp-identity-client chp-site
+
+## Expect one AIDE alert, then accept it
+
+The updated packages show in the next daily check. In the `aide-accept` summary they are listed under
+**"Explained by signed package updates"**. Accept them as the ISSO or a named delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: chp-identity-client 0.2.3 + chp-site 0.7.3"

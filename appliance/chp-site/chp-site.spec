@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.7.2
+Version:        0.7.3
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -36,6 +36,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sun Oct 25 2026 The CyberHygiene Project - 0.7.3-1.chp
+- validate: never runs a chp-templates renderer found next to the site folder (it could be any mounted volume);
+  only CHP_TEMPLATES, an explicit path or /usr/share/chp-templates (Plan C3 final review).
+
 * Sun Oct 25 2026 The CyberHygiene Project - 0.7.2-1.chp
 - docs: render the site's SSP and POA&M from the site stick's profile.ini with the installed chp-templates renderer
   into /var/lib/chp/docs/<UTC timestamp>/ (root-only, never overwritten).
