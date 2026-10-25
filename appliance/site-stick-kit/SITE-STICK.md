@@ -123,6 +123,24 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.2.0 update 2 on: your SSP and POA&M
+
+The appliance can write a first draft of your **System Security Plan (SSP)** and **Plan of Action and Milestones
+(POA&M)**. It uses the CyberHygiene Project's templates (`chp-templates`), filled with your own values.
+
+1. Copy `profile.ini.template` from this kit to the site stick's top level, **next to `site.conf`**, as `profile.ini`.
+   Replace every example value with your own. **Never put passwords, keys or tokens in it.**
+2. Check it at your desk: `python3 chp-site.pyz validate --site /Volumes/OEMDRV`. Point `CHP_TEMPLATES` at a copy of
+   chp-templates so `profile.ini` is checked too.
+3. On the server, with the site stick plugged in, run as root: `chp-site docs`.
+
+The documents go to a new folder under `/var/lib/chp/docs/`, readable by root only, and an earlier one is never
+overwritten.
+- `ssp.md` and `poam.md` are your editable starting point.
+- `fill-report.md` lists every value still to fill. It shows each as `{{placeholder}}` in the documents, together with
+  any default you have not yet confirmed.
+- For a Word copy, run `pandoc ssp.md -o ssp.docx` on your workstation.
+
 ## 7. Limits in 0.1.0
 
 - **Adding a client after the server is installed is not yet a supported procedure.** The server builds its DNS zone
