@@ -66,3 +66,10 @@ def test_update2_note_covers_install_use_and_aide():
     for s in ("dnf --enablerepo=chp upgrade chp-site", "dnf --enablerepo=chp install chp-templates", "chp-site docs",
               "profile.ini.template", "aide-accept", "/var/lib/chp/docs"):
         assert s in u, s
+
+
+def test_kit_ships_the_profile_template_and_readme_lists_every_folder():
+    t = (R / "release-kit.sh").read_text()
+    assert '"$kit/profile.ini.template"' in t and "profile.ini.template" in t.split("> SHA256SUMS")[0]
+    for row in ("`0.2.0-update1/`", "`0.2.0-update2/`", "`site-stick-kit-0.2.0-update2/`", "`site-stick-kit-0.2.0/`"):
+        assert row in t, row
