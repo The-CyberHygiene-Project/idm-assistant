@@ -26,6 +26,14 @@ business's own SSP and POA&M, which it then maintains.
 | Values | The site stick **keeps `site.conf`** for machine settings, unchanged, and **adds `profile.ini`** for document values. A published mapping links the overlaps. |
 | Public or private | The repo holds **placeholders only**. Every site's values are private and never enter the library. |
 
+### Decisions of 2026-10-26 (owner, Plan C2)
+
+| Topic | Decision |
+|---|---|
+| First Rev 3 release | **Scaffold first.** The Rev 3 reference implementation has had no Rev 3 walk, so every Rev 3 block is `pending`. Narratives come in later batches. |
+| ODP names | **`odp.<memo part id, dots as underscores>`** (e.g. `odp.03_01_01_f_02`) in a new `[odp]` section, never mixed into `decision.*`. The DoD memo's IDs are authoritative (80 ODPs; NIST's OSCAL splits some differently). |
+| Rev 3 SSP layout | **Keyed to the 03.xx families,** with the same fixed layouts as Rev 2, because Rev 3 defines no separate SSP structure. |
+
 ## 2. Repository layout
 
 ```
