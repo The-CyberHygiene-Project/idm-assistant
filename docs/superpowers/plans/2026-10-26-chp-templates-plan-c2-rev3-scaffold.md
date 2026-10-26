@@ -9,7 +9,7 @@
 **Tech Stack:** Python 3.9 standard library (`render/`, `tools/`). `pdftotext` (poppler) runs only in the developer-side ODP checker. Tests use pytest in `.venv`.
 
 **Spec:** `docs/superpowers/specs/2026-10-24-chp-templates-design.md` (idm-assistant). Owner decisions of 2026-10-26 amend it (Task 7 writes them in):
-- **Scaffold first:** diwai has had no Rev 3 walk, so every Rev 3 block is `pending` in this release.
+- **Scaffold first:** the Rev 3 reference implementation (RS#2) has had no Rev 3 walk, so every Rev 3 block is `pending` in this release.
 - **ODP keys** are `odp.<memo part id with dots as underscores>`, e.g. `odp.03_01_01_f_02`, in a new `[odp]` section, never mixed into `decision.*`.
 - **The DoD memo's IDs are authoritative.** The memo has 80 ODPs over 50 requirements. NIST's OSCAL file splits some of them differently (88), so it is not used.
 - **The Rev 3 SSP is keyed to the 03.xx families,** because Rev 3 has no separate SSP layout.
@@ -21,8 +21,8 @@
 - `render/chpfill.py` stays Python 3.9 standard library only, and `tests/test_py39_and_contract.py` must keep passing.
 - **Placeholders are only ever added.** No existing placeholder is renamed or removed.
 - **Rev 2 output must not change.** `tests/test_golden.py` must still pass unchanged, except for the deliberate Rev 2 POA&M T-06 update in Task 5. That task regenerates the Rev 2 golden snapshot and says why.
-- **Nothing real:** no organization, person, host, address or diwai fact enters the library. `tests/test_nothing_real.py` must pass. Its domain allow-list gains only `dodcio.defense.gov`, for the memo citation.
-- **Never copy diwai content.** diwai supplied only "no Rev 3 walk yet". No block may claim diwai proof.
+- **Nothing real:** no organization, person, host, address or reference-system fact enters the library. `tests/test_nothing_real.py` must pass. Its domain allow-list gains only `dodcio.defense.gov`, for the memo citation.
+- **Never copy reference-system content.** No block may claim proof on the reference implementation.
 - **Sources (pinned):**
   - NIST change analysis `https://csrc.nist.gov/files/pubs/sp/800/171/r3/final/docs/sp800-171r2-to-r3-analysis.xlsx`, sha256 `ad0908f52945e316dec05a4032cbcaa75958eab2534d2627b3a89f696fb30b84`.
   - DoD memo "Department of Defense Organization-Defined Parameters for NIST SP 800-171 Revision 3", signed 2025-04-10, `https://dodcio.defense.gov/Portals/0/Documents/CMMC/OrgDefinedParmsNISTSP800-171.pdf`, sha256 `fd83ecf4e0998f0b29d5e6f222e7364ce67eb6fdedb5ac4f34ec4310ba495916`. The site refuses scripted downloads (HTTP 403); the owner's copy is at `~/rag-library/documents-sysadmin/2026-10/DOD 800-171 ODP guidance.pdf`.
@@ -388,7 +388,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Generate the data files**
 
-Run: `cd ~/chp-templates && .venv/bin/python -m tools.import_catalog_r3 "$SCRATCH/nist-r3/analysis.xlsx"`. SCRATCH is this session's scratchpad (`/private/tmp/claude-501/-Users-dshannon/70ba5b3a-b884-4620-8909-fa61db9c207a/scratchpad`); if that file is gone, run with no argument to fetch the URL.
+Run: `cd ~/chp-templates && .venv/bin/python -m tools.import_catalog_r3 "$SCRATCH/nist-r3/analysis.xlsx"`. SCRATCH is the session's scratchpad folder; if that file is gone, run with no argument to fetch the URL.
 Expected: `wrote rev3/catalog.csv (97 requirements) and rev3/crosswalk.csv (110 Rev 2 IDs)`
 
 If a withdrawn row's note yields a target that isn't in the catalog, or a row has no change type, stop. Look at that row, decide how to handle it, and record the ruling in the ledger.
@@ -1127,9 +1127,9 @@ Commit with the attribution lines.
 
 - [ ] **Step 3: Pre-publication scan.** Scan `git diff main..c2-rev3-scaffold` in chp-templates for:
   - secrets or keys;
-  - real names (`shannon`, `diwai`, `cyberinabox`, `contract-coach`);
+  - real names (the names `test_nothing_real.py` denies);
   - IP addresses, and email addresses other than `example.test`;
-  - any diwai fact.
+  - any reference-system fact.
 
   `test_nothing_real.py` already covers most of this; read its result and grep the diff.
 
@@ -1145,9 +1145,9 @@ cd ~/idm-assistant && git push -u origin c2-spec-amendment && gh pr create --bas
   - Ask the owner for "go", explain the key touch, then run `V=1.3.0 bash tools/release.sh`.
   - Expected: `RELEASED: /Volumes/For Jeff/chp-templates/1.3.0`.
 
-- [ ] **Step 6: Tell diwai** (SendMessage to the diwai session). Send IDs and key names only: 1.3.0 adds the `odp.*` keys (owner-approved naming, additive), a Rev 3 library with every block pending, and Rev 2 content version 1.2.1 (T-06).
+- [ ] **Step 6: Tell the RS#2 session** (SendMessage). Send IDs and key names only: 1.3.0 adds the `odp.*` keys (owner-approved naming, additive), a Rev 3 library with every block pending, and Rev 2 content version 1.2.1 (T-06).
 
-- [ ] **Step 7: Memory.** Update `project_chp_template_library.md` and the MEMORY.md line with the 1.3.0 release, the PR numbers and the next batch: narratives after diwai's Rev 3 walk.
+- [ ] **Step 7: Memory.** Update `project_chp_template_library.md` and the MEMORY.md line with the 1.3.0 release, the PR numbers and the next batch: narratives after the reference implementation's Rev 3 walk.
 
 ## Out of scope (later)
 
