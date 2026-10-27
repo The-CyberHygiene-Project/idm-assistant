@@ -84,3 +84,16 @@ def test_follow_yields_none_when_idle(tmp_path):
     log.write_text("")
     got = list(wa.follow(log, state, sleep=lambda s: None, stop=iter([False, False, True]).__next__))
     assert got and all(a is None for a in got)
+
+
+def test_load_alerts_counts_hard_linked_files_once(tmp_path):
+    # W1 Task 7 (lab): Wazuh writes logs/alerts/alerts.json as a hard link to logs/alerts/YYYY/Mon/ossec-alerts-DD.json;
+    # reading both doubled every count in `chp-site alerts`
+    import gzip, os, time
+    day = tmp_path / "2026" / "Oct"; day.mkdir(parents=True)
+    (day / "ossec-alerts-27.json").write_text(json.dumps(alert()) + "\n")
+    os.link(day / "ossec-alerts-27.json", tmp_path / "alerts.json")
+    with gzip.open(day / "ossec-alerts-26.json.gz", "wt") as fh:
+        fh.write(json.dumps(alert(rid="5902", level=8)) + "\n")
+    got = wa.load_alerts(tmp_path, since_epoch=time.time() - 7 * 86400)
+    assert sorted(a["rule"]["id"] for a in got) == ["5712", "5902"]

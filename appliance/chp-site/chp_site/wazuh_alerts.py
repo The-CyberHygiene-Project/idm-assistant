@@ -3,12 +3,14 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """Wazuh alerts to the site (security bundle spec §5): level >= threshold (and agent lifecycle) to the hook, repeats
 grouped per host+rule for 15 minutes, a daily line for levels 7-9, and the chp-site alerts summary."""
+import gzip
 import json
 import os
 import re
 import time
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 LIFECYCLE = {"504", "505", "506"}          # agent disconnected / removed / stopped (planning ruling: always sent)
 DAY = 86400
@@ -120,6 +122,25 @@ def summarize(alerts, since_epoch, min_level):
     for (h, rid, lvl, d), n in sorted(c.items(), key=lambda kv: (-kv[0][2], -kv[1])):
         rows.append(f"{h:<16} {rid:>6} {lvl:>5} {n:>5}  {d}")
     return "\n".join(rows)
+
+
+def load_alerts(base, since_epoch):
+    """Every alert in base (alerts.json and the dated YYYY/Mon/ossec-alerts-DD.json[.gz] files). Wazuh's alerts.json is
+    a hard link to today's dated file, so each file is read once (by device + inode)."""
+    seen, out = set(), []
+    for p in sorted(Path(base).rglob("*.json*")):
+        st = p.stat()
+        if (st.st_dev, st.st_ino) in seen or st.st_mtime < since_epoch - DAY:
+            continue
+        seen.add((st.st_dev, st.st_ino))
+        opener = gzip.open if p.suffix == ".gz" else open
+        with opener(p, "rt", errors="replace") as fh:
+            for ln in fh:
+                try:
+                    out.append(json.loads(ln))
+                except ValueError:
+                    pass
+    return out
 
 
 def parse_since(s):

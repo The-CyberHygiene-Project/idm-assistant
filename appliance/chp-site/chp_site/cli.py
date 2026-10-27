@@ -274,26 +274,13 @@ def _security(a):
 
 
 def _alerts(a):
-    import gzip
-    import json
     import time
     from . import wazuh_alerts as wa
     try:
         since = time.time() - wa.parse_since(a.since)
     except ValueError as err:
         raise SiteError(str(err)) from None
-    alerts = []
-    for p in sorted(Path("/var/ossec/logs/alerts").rglob("*.json*")):
-        if p.stat().st_mtime < since - 86400:
-            continue
-        opener = gzip.open if p.suffix == ".gz" else open
-        with opener(p, "rt", errors="replace") as fh:
-            for ln in fh:
-                try:
-                    alerts.append(json.loads(ln))
-                except ValueError:
-                    pass
-    print(wa.summarize(alerts, since, a.level))
+    print(wa.summarize(wa.load_alerts("/var/ossec/logs/alerts", since), since, a.level))
     return 0
 
 
