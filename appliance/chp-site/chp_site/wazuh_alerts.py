@@ -69,8 +69,8 @@ def _read_state(p):
 
 
 def follow(path, state_path, sleep=time.sleep, stop=lambda: False):
-    """Yield each new alert (a dict) appended to path; the (inode, offset) state survives restarts; a new inode
-    (rotation) restarts at 0; lines that are not JSON are skipped."""
+    """Yield each new alert (a dict) appended to path, and None after each pass; the (inode, offset) state survives
+    restarts; a new inode (rotation) restarts at 0; lines that are not JSON are skipped."""
     ino, off = _read_state(state_path)
     while True:
         try:
@@ -96,6 +96,7 @@ def follow(path, state_path, sleep=time.sleep, stop=lambda: False):
             os.replace(tmp, state_path)
         if stop():
             return
+        yield None                                  # idle pass: lets the caller flush groups and the daily line
         sleep(2)
 
 

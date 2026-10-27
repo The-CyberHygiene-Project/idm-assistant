@@ -49,14 +49,14 @@ def test_line_survives_missing_fields():
 def test_follow_reads_new_lines_survives_restart_and_rotation(tmp_path):
     log, state = tmp_path / "alerts.json", tmp_path / "state"
     log.write_text(json.dumps(alert(rid="1")) + "\n" + json.dumps(alert(rid="2")) + "\n")
-    got = list(wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__))
+    got = [a for a in wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__) if a is not None]
     assert [a["rule"]["id"] for a in got] == ["1", "2"]
     with log.open("a") as fh:
         fh.write("not json\n" + json.dumps(alert(rid="3")) + "\n")
-    got = list(wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__))
+    got = [a for a in wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__) if a is not None]
     assert [a["rule"]["id"] for a in got] == ["3"]                 # restart: no repeats; bad line skipped
     log.unlink(); log.write_text(json.dumps(alert(rid="4")) + "\n")  # rotation: new inode, start at 0
-    got = list(wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__))
+    got = [a for a in wa.follow(log, state, sleep=lambda s: None, stop=iter([False, True]).__next__) if a is not None]
     assert [a["rule"]["id"] for a in got] == ["4"]
 
 
@@ -76,3 +76,11 @@ def test_parse_since(s, n):
 def test_parse_since_rejects_garbage():
     with pytest.raises(ValueError):
         wa.parse_since("soon")
+
+
+def test_follow_yields_none_when_idle(tmp_path):
+    # Task 3 refinement: an idle pass yields None so the forwarder can flush groups with no new alert
+    log, state = tmp_path / "alerts.json", tmp_path / "state"
+    log.write_text("")
+    got = list(wa.follow(log, state, sleep=lambda s: None, stop=iter([False, False, True]).__next__))
+    assert got and all(a is None for a in got)

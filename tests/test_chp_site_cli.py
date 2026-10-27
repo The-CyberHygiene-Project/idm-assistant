@@ -200,3 +200,15 @@ def test_stick_pin_hash_only_lists_devices_never_allows(tmp_path, monkeypatch, c
     assert cli_mod.main(["stick-pin-hash"]) == 0
     assert calls == [["usbguard", "list-devices"]] and (tmp_path / "hash").read_text() == "h1=\n"
     assert "pinned" in capsys.readouterr().out
+
+
+def test_security_status_without_the_add_on(capsys):
+    from chp_site import cli as cli_mod
+    assert cli_mod.main(["security", "status"]) == 0
+    assert "not enabled" in capsys.readouterr().out
+
+
+def test_alerts_rejects_a_bad_since(capsys):
+    from chp_site import cli as cli_mod
+    assert cli_mod.main(["alerts", "--since", "soon"]) == 2
+    assert "--since" in capsys.readouterr().err
