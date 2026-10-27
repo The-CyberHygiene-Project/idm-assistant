@@ -75,7 +75,8 @@ def test_rich_rules_only_clients_on_1514():
 
 
 def test_api_listens_on_loopback_and_shared_config_is_off():
-    assert "host: 127.0.0.1" in w.API_YAML and "0.0.0.0" not in w.API_YAML
+    # W1 Task 6 (lab): Wazuh 4.14's API schema wants host as a LIST (default ["0.0.0.0", "::"]); a scalar stops apid
+    assert 'host: ["127.0.0.1"]' in w.API_YAML and "0.0.0.0" not in w.API_YAML and "::" not in w.API_YAML
     assert w.LOCAL_INTERNAL_AGENT == "agent.remote_conf=0\n"
 
 

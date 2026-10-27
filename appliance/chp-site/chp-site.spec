@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.8.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -39,6 +39,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Tue Oct 27 2026 The CyberHygiene Project - 0.8.0-2.chp
+- Lab proof: Wazuh 4.14's API wants host as a list (a scalar stopped wazuh-apid); a failed step is now a clear
+  message naming the command, not a traceback.
+
 * Tue Oct 27 2026 The CyberHygiene Project - 0.8.0-1.chp
 - Security bundle: security enable|status, alerts, wazuh-forward; ships Wazuh's signing key
   (pinned 0DCFCA5547B19D2A6099506096B3EE5F29111145).

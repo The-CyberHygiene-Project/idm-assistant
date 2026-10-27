@@ -6,6 +6,7 @@ agent keys carried on the site stick (wazuh/<host>.key). Idempotent: a second ru
 never makes new agent keys."""
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from . import wazuh as w
@@ -68,6 +69,16 @@ def _conf(root, role, d):
 
 
 def enable(role, host, site, hosts, *, stick, run, root=Path("/"), data_is_mount=None, chown=None, record=None):
+    try:
+        return _enable(role, host, site, hosts, stick=stick, run=run, root=root, data_is_mount=data_is_mount,
+                       chown=chown, record=record)
+    except subprocess.CalledProcessError as e:
+        cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
+        raise SiteError(f"{cmd} failed (exit {e.returncode}); see its log, fix the cause, then re-run "
+                        "chp-site security enable (it is safe to repeat)") from None
+
+
+def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, record):
     from . import audit
     if role not in ("server", "client"):
         raise SiteError(f"role must be server or client, not {role!r}")

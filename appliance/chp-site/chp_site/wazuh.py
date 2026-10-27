@@ -9,7 +9,8 @@ import xml.etree.ElementTree as ET
 
 WAZUH_FPR = "0DCFCA5547B19D2A6099506096B3EE5F29111145"
 HEADER = "<!-- Managed by chp-security (security bundle spec §4); edits are replaced by chp-site security enable -->\n"
-API_YAML = "# Managed by chp-security: the Wazuh API listens on this host only (spec §4).\nhost: 127.0.0.1\nport: 55000\n"
+API_YAML = ('# Managed by chp-security: the Wazuh API listens on this host only (spec §4). Wazuh 4.14 wants a list.\n'
+            'host: ["127.0.0.1"]\nport: 55000\n')
 LOCAL_INTERNAL_AGENT = "agent.remote_conf=0\n"
 
 _MANAGER = [("auth", "disabled", "yes"), ("vulnerability-detection", "enabled", "no"), ("indexer", "enabled", "no"),

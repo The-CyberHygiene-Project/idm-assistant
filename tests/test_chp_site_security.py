@@ -113,3 +113,14 @@ def test_status_reports_role_and_services(tmp_path):
     r, _, _, _ = enable(tmp_path, "server")
     out = sec.status(r, Run())
     assert "role: server" in out and "wazuh-manager" in out
+
+
+def test_a_failing_step_is_a_clear_error_not_a_traceback(tmp_path):
+    import subprocess
+    class Fails(Run):
+        def __call__(self, argv, **kw):
+            if argv[:3] == ["systemctl", "enable", "--now"] and kw.get("check"):
+                raise subprocess.CalledProcessError(1, argv)
+            return super().__call__(argv, **kw)
+    with pytest.raises(SiteError, match="systemctl enable --now wazuh-manager .* failed .*re-run chp-site security enable"):
+        enable(tmp_path, "server", run=Fails())
