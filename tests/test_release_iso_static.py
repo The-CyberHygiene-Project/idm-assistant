@@ -102,3 +102,10 @@ def test_release_scripts_check_key_expiry_first():
 def test_notice_names_wazuh_gplv2():
     n = (R.parent / "branding" / "NOTICE.txt").read_text()
     assert "Wazuh" in n and "GPL" in n
+
+
+def test_verify_repo_accepts_v3_signatures_from_pinned_keys():
+    # W1 Task 6: Wazuh signs with V3 signature packets (RSA/SHA256, key 29111145); the check matched only V4. The key ID
+    # must still be a pinned primary key, so this widens the packet format, never the trust.
+    v = (R / "verify-repo.sh").read_text()
+    assert r"Header V[34] RSA\/SHA256 Signature, key ID" in v
