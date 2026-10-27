@@ -9,6 +9,7 @@
 # only when every check passed.
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; kit="$top/appliance/site-stick-kit"
+bash "$here/check-key-expiry.sh" "$here" || { echo "refusing: a pinned signing key has expired or expires soon"; exit 1; }
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 V=${V:?set V (the released version, e.g. 0.2.0)} REPO_V=${REPO_V:?set REPO_V (its signed repo)}
 SHARE="/Volumes/For Jeff"; B="$SHARE/cyberhygiene-lab-installer"; T="$B/site-stick-kit-$V"; P="$T.partial"
