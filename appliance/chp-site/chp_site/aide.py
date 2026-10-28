@@ -62,7 +62,8 @@ def baseline_record(db, built_by, now):
     return {"DB_SHA512": sha512_file(db), "BUILT_AT": stamp(now), "BUILT_EPOCH": str(int(now)), "BUILT_BY": built_by}
 
 
-PINNED_SIGNERS = {"521276f43c908f8e": "CyberHygiene", "8a3872bf3228467c": "EPEL 9", "702d426d350d275d": "Rocky 9"}
+PINNED_SIGNERS = {"521276f43c908f8e": "CyberHygiene", "8a3872bf3228467c": "EPEL 9", "702d426d350d275d": "Rocky 9",
+                  "96b3ee5f29111145": "Wazuh"}          # = the keys in appliance/release/trusted-keys.txt (tested)
 _SIGQF = "%{INSTALLTIME} %|DSAHEADER?{%{DSAHEADER:pgpsig}}:{%|RSAHEADER?{%{RSAHEADER:pgpsig}}:{(none)}|}|\n"
 
 
