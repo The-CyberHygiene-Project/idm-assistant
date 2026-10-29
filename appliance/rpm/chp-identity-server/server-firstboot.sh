@@ -165,6 +165,12 @@ do_unixd_tokens() {
 
 do_self_client() { /usr/libexec/chp/client-enrol --role server; }
 
+# Security add-on (0.3.0, spec §3): Wazuh manager; agent keys go to the pending folder for export-client (no USB).
+do_security() {
+  [ "$(chp-site get SECURITY_ADDONS)" = yes ] || return 0
+  chp-site security enable --firstboot
+}
+
 step bind do_bind
 step step-ca do_stepca
 step kanidm-cert do_kanidm_cert
@@ -175,6 +181,7 @@ step ssh-ca do_sshca
 step cache-key do_cachekey
 step unixd-tokens do_unixd_tokens
 step self-client do_self_client
+step security do_security
 current=done
 touch "$M/server.done"
 log "CHP: server first boot complete. Move the recovery secrets offline: plug in the site stick and run chp-site export-client"

@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.8.0
-Release:        3.chp%{?dist}
+Version:        0.9.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -39,6 +39,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Oct 29 2026 The CyberHygiene Project - 0.9.0-1.chp
+- Security bundle W2: SECURITY_ADDONS / SECURITY_ALERT_LEVEL site keys; security enable --firstboot (pending
+  folder on the server, staged key on clients; no USB); export-client moves Wazuh agent keys; pre stages a client's key
+  and the ISO's repo path.
+
 * Wed Oct 28 2026 The CyberHygiene Project - 0.8.0-3.chp
 - Final review: security enable locks the Wazuh API's default logins with random passwords (never stored); manager
   update_check off; agent upgrade module off; forwarder never crash-loops (odd alerts, hook errors), checkpoints per

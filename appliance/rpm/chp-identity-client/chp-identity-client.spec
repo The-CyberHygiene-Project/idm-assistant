@@ -1,5 +1,5 @@
 Name:           chp-identity-client
-Version:        0.2.3
+Version:        0.2.4
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
@@ -86,6 +86,9 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Thu Oct 29 2026 The CyberHygiene Project - 0.2.4-1.chp
+- Security bundle W2: client enrolment: the security step (clients only; SECURITY_ADDONS=yes).
+
 * Sun Oct 25 2026 The CyberHygiene Project - 0.2.3-1.chp
 - chp_kanidm 1.1 (requirements row 49, owner decision dontaudit): fapolicyd's NSS lookups of local accounts no
   longer log AVCs at the kanidm-unixd socket; the access stays denied.

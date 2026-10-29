@@ -140,7 +140,7 @@ def test_client_rpm_carries_the_second_factor():
     assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
     assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.5\.1", s, re.M)
     assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
-    assert "53-ga.sh" in s and "Version:        0.2.3" in s
+    assert "53-ga.sh" in s and "Version:        0.2.4" in s
     assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices
 
 
@@ -180,3 +180,11 @@ def test_row49_fapolicyd_lookups_are_silenced_never_allowed():
     assert "dontaudit fapolicyd_t kanidm_unixd_var_run_t:sock_file write;" in te
     assert "dontaudit fapolicyd_t unconfined_service_t:unix_stream_socket connectto;" in te
     assert not re.search(r"^allow fapolicyd_t", te, re.M)
+
+
+# ---- security bundle W2 ----
+def test_client_enrol_runs_the_security_step_only_on_clients_when_on():
+    t = (ROOT / "appliance/rpm/chp-identity-client/client-enrol.sh").read_text()
+    assert "step security do_security" in t and t.index("step collect do_collect") < t.index("step security do_security")
+    assert '[ "$ROLE" = client ] || return 0' in t                       # the server's self-client gets no agent
+    assert '[ "$(chp-site get SECURITY_ADDONS)" = yes ] || return 0' in t and "chp-site security enable --firstboot" in t
