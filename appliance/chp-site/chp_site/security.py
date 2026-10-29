@@ -6,6 +6,7 @@ agent keys carried on the site stick (wazuh/<host>.key). Idempotent: a second ru
 never makes new agent keys."""
 import os
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -62,7 +63,7 @@ def _write(path, text, mode, chown=None):
     os.replace(tmp, path)
 
 
-def _conf(root, role, d):
+def _conf(root, role, d, level=10):
     p = _p(root, SECURITY_CONF)
     old = {}
     if p.exists():
@@ -70,23 +71,32 @@ def _conf(root, role, d):
             if "=" in ln:
                 k, v = ln.split("=", 1)
                 old[k] = v
-    text = (f"ROLE={role}\nALERT_LEVEL={old.get('ALERT_LEVEL', '10')}\n"
+    text = (f"ROLE={role}\nALERT_LEVEL={old.get('ALERT_LEVEL', str(level))}\n"
             f"RETENTION_DAYS={old.get('RETENTION_DAYS', '90')}\nDATA_DIR={d}\n")
     _write(p, text, 0o644)
 
 
-def enable(role, host, site, hosts, *, stick, run, root=Path("/"), data_is_mount=None, chown=None, record=None,
-           api=None, sleep=time.sleep):
+def enable(role, host, site, hosts, *, run, stick=None, pending=None, key_file=None, root=Path("/"), data_is_mount=None,
+           chown=None, record=None, api=None, sleep=time.sleep):
+    """stick set: the update path (W1). stick None: first boot (W2): the server's keys go to the pending folder for
+    export-client; a client's key comes from the file the installer staged (no USB at first boot)."""
     try:
-        return _enable(role, host, site, hosts, stick=stick, run=run, root=root, data_is_mount=data_is_mount,
-                       chown=chown, record=record, api=api, sleep=sleep)
+        return _enable(role, host, site, hosts, stick=stick, pending=pending, key_file=key_file, run=run, root=root,
+                       data_is_mount=data_is_mount, chown=chown, record=record, api=api, sleep=sleep)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
         raise SiteError(f"{cmd} failed (exit {e.returncode}); see its log, fix the cause, then re-run "
                         "chp-site security enable (it is safe to repeat)") from None
 
 
-def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, record, api, sleep):
+def _keyline(host, text):
+    line = text.strip()
+    if not re.fullmatch(rf"\d{{3}} {re.escape(host)} \S+ [0-9a-f]{{64}}", line):
+        raise SiteError(f"the staged Wazuh key is not {host}'s (expected 'NNN {host} <ip> <64 hex>')")
+    return line + "\n"
+
+
+def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, data_is_mount, chown, record, api, sleep):
     from . import audit
     if role not in ("server", "client"):
         raise SiteError(f"role must be server or client, not {role!r}")
@@ -94,11 +104,23 @@ def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, 
     data_is_mount = os.path.ismount("/data") if data_is_mount is None else data_is_mount
     group_wazuh = chown or (lambda p: shutil.chown(p, "root", "wazuh"))
     done = []
+    if stick is None and not _p(root, "var/lib/chp/repo/repodata/repomd.xml").exists():
+        raise SiteError("the security add-on is on but this host has no local package repo (the ISO's repo is copied "
+                        "at install; a network install does not copy it): unpack a signed repo tarball into "
+                        "/var/lib/chp/repo, then run chp-site security enable")
+    agent_line = None
     if role == "client":                                   # refuse before changing anything
-        keyline = (Path(stick) / "wazuh" / f"{host}.key")
-        if not keyline.exists():
-            raise SiteError(f"no Wazuh key for {host} on the site stick (wazuh/{host}.key): "
-                            "run chp-site security enable on the server first")
+        if stick is not None:
+            src = Path(stick) / "wazuh" / f"{host}.key"
+            if not src.exists():
+                raise SiteError(f"no Wazuh key for {host} on the site stick (wazuh/{host}.key): "
+                                "run chp-site security enable on the server first")
+        else:
+            src = Path(key_file) if key_file else None
+            if src is None or not src.exists():
+                raise SiteError(f"no staged Wazuh key for {host} ({key_file}): reinstall with the site stick, after "
+                                "export-client on the server")
+        agent_line = _keyline(host, src.read_text())
     _check_key(root, run); done.append("Wazuh signing key verified and imported")
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
     pkg = "wazuh-manager" if role == "server" else "wazuh-agent"
@@ -113,12 +135,21 @@ def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, 
             _write(keys, "".join(v + "\n" for v in lines.values()), 0o640, group_wazuh)
             done.append(f"{len(lines)} agent keys made")
         mine = {ln.split()[1]: ln for ln in keys.read_text().splitlines() if ln.strip()}
+        if stick is not None:
+            dest = Path(stick) / "wazuh"
+            dest.mkdir(parents=True, exist_ok=True)
+        else:                                              # first boot: pending folder (0700), moved by export-client
+            dest = Path(pending) / "wazuh"
+            dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+            os.chmod(dest, 0o700)
         for h, ln in mine.items():
-            kp = Path(stick) / "wazuh" / f"{h}.key"
-            kp.parent.mkdir(parents=True, exist_ok=True)
+            kp = dest / f"{h}.key"
             if not kp.exists() or kp.read_text().strip() != ln:
-                kp.write_text(ln + "\n")
-        done.append("agent keys on the site stick (wazuh/<host>.key)")
+                fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(ln + "\n")
+        done.append("agent keys on the site stick (wazuh/<host>.key)" if stick is not None
+                    else "agent keys staged for export-client (pending folder)")
         have = run(["firewall-cmd", "--permanent", "--list-rich-rules"], capture_output=True, text=True).stdout
         new = [r for r in w.rich_rules(hosts) if r not in have.splitlines()]
         for r in new:
@@ -134,9 +165,12 @@ def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, 
         cur = lio.read_text() if lio.exists() else ""
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
-        _write(keys, (Path(stick) / "wazuh" / f"{host}.key").read_text(), 0o640, group_wazuh)
+        _write(keys, agent_line, 0o640, group_wazuh)
+        if stick is None and key_file:                     # the installer's staged copy: shred it now it is in place
+            if run(["shred", "-u", str(key_file)]).returncode != 0 or Path(key_file).exists():
+                Path(key_file).unlink(missing_ok=True)
         units = ["wazuh-agent"]
-    _conf(root, role, d)
+    _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
     if role == "server":

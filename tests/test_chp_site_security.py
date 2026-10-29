@@ -169,3 +169,52 @@ def test_key_check_uses_a_private_gnupg_home(tmp_path):
     enable(tmp_path, "server", run=run)
     gpg = [c for c in run.calls if c[:1] == ["gpg"]]
     assert gpg and all("--homedir" in c for c in gpg)
+
+
+# ---- security bundle W2: --firstboot ----
+def repo(r):
+    (r / "var/lib/chp/repo/repodata").mkdir(parents=True, exist_ok=True)
+    (r / "var/lib/chp/repo/repodata/repomd.xml").write_text("<repomd/>")
+def test_firstboot_server_writes_keys_to_pending_not_a_stick(tmp_path):
+    r = root(tmp_path, "server"); pend = tmp_path / "pending"; repo(r)
+    sec.enable("server", "srv1", {"ALERT_HOOK": "", "SECURITY_ALERT_LEVEL": 12}, hosts(), stick=None, pending=pend,
+               run=Run(), root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None,
+               api=Api(), sleep=lambda x: None)
+    k = (pend / "wazuh" / "ws1.key")
+    assert k.read_text().split()[:3] == ["001", "ws1", "192.0.2.21"]
+    assert oct(k.stat().st_mode & 0o777) == "0o600" and oct((pend / "wazuh").stat().st_mode & 0o777) == "0o700"
+    assert "ALERT_LEVEL=12" in (r / "etc/chp/security.conf").read_text()
+
+
+def test_firstboot_client_reads_and_shreds_its_staged_key(tmp_path):
+    r = root(tmp_path, "client"); kf = tmp_path / "agent.key"; repo(r)
+    kf.write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+    sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
+               data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None)
+    assert (r / "var/ossec/etc/client.keys").read_text().startswith("001 ws1 192.0.2.21 ")
+    assert not kf.exists()
+
+
+def test_firstboot_client_without_a_staged_key_is_refused(tmp_path):
+    r = root(tmp_path, "client"); repo(r)
+    with pytest.raises(SiteError, match="no staged Wazuh key"):
+        sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=tmp_path / "none.key",
+                   run=Run(), root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None)
+
+
+def test_staged_key_must_be_this_hosts(tmp_path):
+    r = root(tmp_path, "client"); kf = tmp_path / "agent.key"; repo(r)
+    kf.write_text("002 ws2 192.0.2.22 " + "ab" * 32 + "\n")
+    with pytest.raises(SiteError, match="not ws1's"):
+        sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
+                   data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None)
+    assert kf.exists()                                  # refused before anything changed
+
+
+def test_firstboot_without_a_local_repo_is_refused(tmp_path):
+    # owner 2026-10-29: the ISO may be on another device; a network install copies no repo -> a clear refusal
+    r = root(tmp_path, "server")
+    with pytest.raises(SiteError, match="no local package repo"):
+        sec.enable("server", "srv1", {"ALERT_HOOK": ""}, hosts(), stick=None, pending=tmp_path / "p", run=Run(),
+                   root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, api=Api(),
+                   sleep=lambda x: None)
