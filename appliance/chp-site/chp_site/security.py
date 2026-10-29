@@ -5,8 +5,11 @@
 agent keys carried on the site stick (wazuh/<host>.key). Idempotent: a second run changes nothing it already did and
 never makes new agent keys."""
 import os
+import json
 import shutil
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 from . import wazuh as w
@@ -25,7 +28,11 @@ def _check_key(root, run):
     k = _p(root, KEYFILE)
     if not k.exists():
         raise SiteError(f"/{KEYFILE} is missing: apply the update (chp-site 0.8.0) first")
-    r = run(["gpg", "--show-keys", "--with-colons", str(k)], capture_output=True, text=True)
+    home = tempfile.mkdtemp(prefix="chp-gpg-")             # never creates /root/.gnupg (an AIDE change)
+    try:
+        r = run(["gpg", "--homedir", home, "--show-keys", "--with-colons", str(k)], capture_output=True, text=True)
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
     fprs = [ln.split(":")[9] for ln in r.stdout.splitlines() if ln.startswith("fpr:")]
     if not fprs or fprs[0] != w.WAZUH_FPR:
         raise SiteError(f"Wazuh key fingerprint {fprs[0] if fprs else 'unreadable'} is not the pinned {w.WAZUH_FPR}")
@@ -68,17 +75,18 @@ def _conf(root, role, d):
     _write(p, text, 0o644)
 
 
-def enable(role, host, site, hosts, *, stick, run, root=Path("/"), data_is_mount=None, chown=None, record=None):
+def enable(role, host, site, hosts, *, stick, run, root=Path("/"), data_is_mount=None, chown=None, record=None,
+           api=None, sleep=time.sleep):
     try:
         return _enable(role, host, site, hosts, stick=stick, run=run, root=root, data_is_mount=data_is_mount,
-                       chown=chown, record=record)
+                       chown=chown, record=record, api=api, sleep=sleep)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
         raise SiteError(f"{cmd} failed (exit {e.returncode}); see its log, fix the cause, then re-run "
                         "chp-site security enable (it is safe to repeat)") from None
 
 
-def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, record):
+def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, record, api, sleep):
     from . import audit
     if role not in ("server", "client"):
         raise SiteError(f"role must be server or client, not {role!r}")
@@ -131,8 +139,65 @@ def _enable(role, host, site, hosts, *, stick, run, root, data_is_mount, chown, 
     _conf(root, role, d)
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
+    if role == "server":
+        done.append(_lock_api(api or _https_api, sleep))
     record("security enable", {"role": role, "host": host}, after=True)
     return done
+
+
+API_USERS = ((1, "wazuh"), (2, "wazuh-wui"))           # Wazuh's two reserved API users (lab: ids 1 and 2)
+
+
+def _https_api(method, path, user=None, token=None, body=None):
+    """One call to the local Wazuh API (127.0.0.1:55000, self-signed TLS). Credentials travel in the request, never on a
+    command line. Returns (HTTP status, text); status 0 = not reachable."""
+    import base64
+    import ssl
+    import urllib.error
+    import urllib.request
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request("https://127.0.0.1:55000" + path, method=method,
+                                 data=json.dumps(body).encode() if body is not None else None)
+    if user:
+        req.add_header("Authorization", "Basic " + base64.b64encode(f"{user[0]}:{user[1]}".encode()).decode())
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    if body is not None:
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+            return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, ""
+    except (urllib.error.URLError, OSError):
+        return 0, ""
+
+
+def _lock_api(api, sleep, wait=90):
+    """Final review C1: replace the API's default logins (wazuh:wazuh, wazuh-wui:wazuh-wui) with random passwords that
+    are never stored or printed. Nothing in the appliance uses the API. Idempotent: a refused default login = already
+    locked."""
+    locked, refused = 0, 0
+    for uid, name in API_USERS:
+        for _ in range(wait // 3):
+            code, tok = api("POST", "/security/user/authenticate?raw=true", user=(name, name))
+            if code:
+                break
+            sleep(3)                                     # the API starts a little after the manager
+        else:
+            raise SiteError("the Wazuh API did not answer on 127.0.0.1:55000; re-run chp-site security enable")
+        if code == 401:
+            refused += 1
+            continue
+        if code != 200:
+            raise SiteError(f"the Wazuh API answered {code} to a login; re-run chp-site security enable")
+        c, _ = api("PUT", f"/security/users/{uid}", token=tok.strip(), body={"password": w.api_password()})
+        if c != 200:
+            raise SiteError(f"could not change the Wazuh API password for {name} (HTTP {c}); re-run chp-site security enable")
+        locked += 1
+    if locked:
+        return f"Wazuh API logins locked ({locked} default passwords replaced with random ones, not stored)"
+    return "Wazuh API logins already locked (default passwords refused)"
 
 
 def status(root, run):

@@ -290,16 +290,28 @@ def _wazuh_forward(_a):
     from . import wazuh_alerts as wa
     kv = dict(ln.split("=", 1) for ln in Path("/etc/chp/security.conf").read_text().splitlines() if "=" in ln)
     hook = subprocess.run(["chp-site", "get", "ALERT_HOOK"], capture_output=True, text=True).stdout.strip()
-    f = wa.Forwarder(int(kv.get("ALERT_LEVEL", "10")))
 
-    def send(msg):
+    def log(msg):
         subprocess.run(["logger", "-p", "auth.warning", "-t", "chp-wazuh", msg], check=False)
-        if hook and os.access(hook, os.X_OK):
-            try:
-                subprocess.run([hook, msg], check=False, timeout=30)
-            except subprocess.TimeoutExpired:
-                subprocess.run(["logger", "-p", "auth.warning", "-t", "chp-wazuh", f"ALERT_HOOK timed out: {hook}"],
-                               check=False)
+    try:
+        level = int(kv.get("ALERT_LEVEL", "10"))
+    except ValueError:
+        level = 10
+        log(f"ALERT_LEVEL in /etc/chp/security.conf is not a number ({kv.get('ALERT_LEVEL')!r}); using 10")
+    f = wa.Forwarder(level)
+
+    def send(msg):                                       # final review I4: a hook problem is logged, never fatal
+        log(msg)
+        if not hook:
+            return
+        try:
+            r = subprocess.run([hook, msg], check=False, timeout=30)
+            if r.returncode != 0:
+                log(f"ALERT_HOOK {hook} exited {r.returncode}")
+        except subprocess.TimeoutExpired:
+            log(f"ALERT_HOOK timed out: {hook}")
+        except OSError as e:
+            log(f"ALERT_HOOK could not run ({hook}: {e.strerror}); check it is executable and trusted by fapolicyd")
     Path("/var/lib/chp/wazuh").mkdir(parents=True, exist_ok=True)
     for alert in wa.follow("/var/ossec/logs/alerts/alerts.json", "/var/lib/chp/wazuh/forward.state"):
         now = time.time()

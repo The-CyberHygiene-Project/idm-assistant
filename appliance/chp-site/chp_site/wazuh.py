@@ -12,14 +12,25 @@ HEADER = "<!-- Managed by chp-security (security bundle spec §4); edits are rep
 API_YAML = ('# Managed by chp-security: the Wazuh API listens on this host only (spec §4). Wazuh 4.14 wants a list.\n'
             'host: ["127.0.0.1"]\nport: 55000\n')
 LOCAL_INTERNAL_AGENT = "agent.remote_conf=0\n"
+API_SYMBOLS = "-_.,+=@#%^*"
+
+
+def api_password():
+    """A random API password meeting Wazuh's policy (8-64 chars; upper, lower, digit, symbol). Never stored."""
+    import string
+    pools = (string.ascii_lowercase, string.ascii_uppercase, string.digits, API_SYMBOLS)
+    while True:
+        pw = "".join(secrets.choice("".join(pools)) for _ in range(40))
+        if all(any(c in pool for c in pw) for pool in pools):
+            return pw
 
 _MANAGER = [("auth", "disabled", "yes"), ("vulnerability-detection", "enabled", "no"), ("indexer", "enabled", "no"),
             ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"), ("cluster", "disabled", "yes"),
             ("rootcheck", "disabled", "no"), ("remote", "connection", "secure"), ("remote", "port", "1514"),
             ("remote", "protocol", "tcp"), ("global", "jsonout_output", "yes"), ("global", "email_notification", "no"),
-            ("global", "agents_disconnection_time", "10m")]
+            ("global", "agents_disconnection_time", "10m"), ("global", "update_check", "no")]
 _AGENT = [("active-response", "disabled", "yes"), ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"),
-          ("rootcheck", "disabled", "no")]
+          ("rootcheck", "disabled", "no"), ("agent-upgrade", "enabled", "no")]
 _WODLES_OFF = ("syscollector", "cis-cat", "osquery")
 
 

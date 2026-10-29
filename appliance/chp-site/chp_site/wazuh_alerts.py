@@ -16,8 +16,20 @@ LIFECYCLE = {"504", "505", "506"}          # agent disconnected / removed / stop
 DAY = 86400
 
 
+def _parts(a):
+    """(rule dict, agent dict, level int, rule id str) from any JSON value; odd input gives safe empties."""
+    a = a if isinstance(a, dict) else {}
+    r = a.get("rule") if isinstance(a.get("rule"), dict) else {}
+    ag = a.get("agent") if isinstance(a.get("agent"), dict) else {}
+    try:
+        lvl = int(r.get("level", 0) or 0)
+    except (TypeError, ValueError):
+        lvl = 0
+    return r, ag, lvl, str(r.get("id", ""))
+
+
 def line(a):
-    r, ag = a.get("rule", {}), a.get("agent", {})
+    r, ag, _lvl, _rid = _parts(a)
     return f"{ag.get('name', '?')} rule {r.get('id', '?')} level {r.get('level', '?')}: {r.get('description', '?')}"
 
 
@@ -30,14 +42,14 @@ class Forwarder:
     def feed(self, a, now):
         if self.day_start is None:
             self.day_start = now
-        r = a.get("rule", {})
-        lvl = int(r.get("level", 0) or 0)
-        rid = str(r.get("id", ""))
+        r, ag, lvl, rid = _parts(a)
+        if not r:
+            return []                                   # not an alert (final review I4: never crash on odd lines)
         if not (lvl >= self.level or rid in LIFECYCLE):
             if 7 <= lvl <= 9:
-                self.medium.append(a.get("agent", {}).get("name", "?"))
+                self.medium.append(ag.get("name", "?"))
             return []
-        key = (a.get("agent", {}).get("name", "?"), rid)
+        key = (ag.get("name", "?"), rid)
         g = self.groups.get(key)
         if g and now - g[0] < self.window:
             g[1] += 1
@@ -71,35 +83,60 @@ def _read_state(p):
 
 
 def follow(path, state_path, sleep=time.sleep, stop=lambda: False):
-    """Yield each new alert (a dict) appended to path, and None after each pass; the (inode, offset) state survives
-    restarts; a new inode (rotation) restarts at 0; lines that are not JSON are skipped."""
+    """Yield each new alert (a dict) appended to path, and None after each idle pass. The (inode, offset) state is saved
+    before each alert is handed over, so a restart never re-sends one. On rotation (a new inode) the old file is read to
+    its end first, then the new one from 0. Lines that are not JSON are skipped; a partly written line waits."""
     ino, off = _read_state(state_path)
-    while True:
-        try:
-            st = os.stat(path)
-        except FileNotFoundError:
-            st = None
-        if st is not None:
-            if st.st_ino != ino or st.st_size < off:
+    fh = None
+
+    def save():
+        tmp = f"{state_path}.tmp"
+        with open(tmp, "w") as s:
+            s.write(f"{ino} {off}\n")
+        os.replace(tmp, state_path)
+
+    def lines():
+        nonlocal off
+        while True:
+            pos = fh.tell()
+            raw = fh.readline()
+            if not raw or not raw.endswith(b"\n"):
+                fh.seek(pos)                            # nothing, or a partly written line: read it next time
+                return
+            off += len(raw)
+            save()
+            try:
+                yield json.loads(raw)
+            except ValueError:
+                pass
+
+    try:
+        while True:
+            try:
+                st = os.stat(path)
+            except FileNotFoundError:
+                st = None
+            if fh is not None and st is not None and st.st_ino != ino:
+                yield from lines()                      # rotation: finish the old file first
+                fh.close(); fh = None
                 ino, off = st.st_ino, 0
-            with open(path, "rb") as fh:
+                save()
+            if fh is None and st is not None:
+                if st.st_ino != ino or st.st_size < off:
+                    ino, off = st.st_ino, 0
+                fh = open(path, "rb")
                 fh.seek(off)
-                for raw in fh:
-                    if not raw.endswith(b"\n"):
-                        break                       # a partly written line: read it next time
-                    off += len(raw)
-                    try:
-                        yield json.loads(raw)
-                    except ValueError:
-                        pass
-            tmp = f"{state_path}.tmp"
-            with open(tmp, "w") as fh:
-                fh.write(f"{ino} {off}\n")
-            os.replace(tmp, state_path)
-        if stop():
-            return
-        yield None                                  # idle pass: lets the caller flush groups and the daily line
-        sleep(2)
+            elif fh is not None and st is not None and st.st_size < off:
+                fh.seek(0); off = 0                    # truncated in place
+            if fh is not None:
+                yield from lines()
+            if stop():
+                return
+            yield None                                  # idle pass: lets the caller flush groups and the daily line
+            sleep(2)
+    finally:
+        if fh is not None:
+            fh.close()
 
 
 def _epoch(ts):

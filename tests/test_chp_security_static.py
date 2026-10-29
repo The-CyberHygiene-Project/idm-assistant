@@ -31,4 +31,6 @@ def test_aide_watches_wazuh_config_but_never_hashes_its_secrets():
     for f in ("chp-additions.conf", "aide.conf"):               # the source block and the shipped file agree
         a = (top / f).read_text()
         assert "/var/ossec/etc CHPCONTENT" in a, f
-        assert r"!/var/ossec/etc/client\.keys$" in a and r"!/var/ossec/etc/sslmanager\.(key|cert)$" in a, f
+        # final review (re-graded): anchored, but also covering suffixed copies (client.keys.chp-tmp, .bak, …)
+        assert r"!/var/ossec/etc/client\.keys(\.[A-Za-z0-9_-]+)?$" in a, f
+        assert r"!/var/ossec/etc/sslmanager\.(key|cert)(\.[A-Za-z0-9_-]+)?$" in a, f

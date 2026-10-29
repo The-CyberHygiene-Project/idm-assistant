@@ -97,3 +97,37 @@ def test_load_alerts_counts_hard_linked_files_once(tmp_path):
         fh.write(json.dumps(alert(rid="5902", level=8)) + "\n")
     got = wa.load_alerts(tmp_path, since_epoch=time.time() - 7 * 86400)
     assert sorted(a["rule"]["id"] for a in got) == ["5712", "5902"]
+
+
+# ---- final-review fix pass (W1) ----
+@pytest.mark.parametrize("bad", [[], "x", 7, {"rule": None}, {"rule": {"level": "high"}}, {"agent": None}])
+def test_feed_never_raises_on_odd_alerts(bad):
+    # final review I4: one odd line crashed the forwarder into a restart loop
+    assert wa.Forwarder(level=10).feed(bad, now=0) == []
+
+
+def test_follow_checkpoints_each_alert(tmp_path):
+    # final review I5: a kill mid-pass re-sent the whole pass; the state now advances per alert
+    log, state = tmp_path / "alerts.json", tmp_path / "state"
+    log.write_text(json.dumps(alert(rid="1")) + "\n" + json.dumps(alert(rid="2")) + "\n")
+    g = wa.follow(log, state, sleep=lambda s: None, stop=lambda: True)
+    assert next(g)["rule"]["id"] == "1"
+    g.close()                                        # killed after the first alert was handled
+    got = [a for a in wa.follow(log, state, sleep=lambda s: None, stop=lambda: True) if a is not None]
+    assert [a["rule"]["id"] for a in got] == ["2"]
+
+
+def test_follow_drains_the_old_file_on_rotation(tmp_path):
+    # final review I5: alerts written to the old file just before rotation were lost
+    import os
+    log, state = tmp_path / "alerts.json", tmp_path / "state"
+    log.write_text(json.dumps(alert(rid="1")) + "\n")
+    stops = iter([False, False, True])
+    g = wa.follow(log, state, sleep=lambda s: None, stop=lambda: next(stops))
+    assert next(g)["rule"]["id"] == "1"
+    assert next(g) is None                            # idle pass
+    with log.open("a") as fh:                         # late write to the old file, then rotation
+        fh.write(json.dumps(alert(rid="2")) + "\n")
+    os.rename(log, tmp_path / "old.json"); log.write_text(json.dumps(alert(rid="3")) + "\n")
+    rest = [a["rule"]["id"] for a in g if a is not None]
+    assert rest == ["2", "3"]

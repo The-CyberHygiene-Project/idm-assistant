@@ -64,7 +64,7 @@
 From the lab capture (`$SCRATCH/wz-defaults/`), keep only the XML. The agent capture also has an `=== internal` tail; drop it.
 
 ```bash
-S=/private/tmp/claude-501/-Users-dshannon/70ba5b3a-b884-4620-8909-fa61db9c207a/scratchpad/wz-defaults
+S=$SCRATCH/wz-defaults
 mkdir -p tests/fixtures/wazuh
 cp "$S/manager-ossec.conf" tests/fixtures/wazuh/manager-ossec.conf
 sed '/^=== internal/,$d' "$S/agent-ossec.conf" > tests/fixtures/wazuh/agent-ossec.conf
@@ -1401,7 +1401,7 @@ Expected: FAIL (the files and lines are missing).
 Copy the Wazuh key in from the session download, and re-check its fingerprint first:
 
 ```bash
-S=/private/tmp/claude-501/-Users-dshannon/70ba5b3a-b884-4620-8909-fa61db9c207a/scratchpad/wazuh-dl
+S=$SCRATCH/wazuh-dl
 gpg --show-keys --with-colons "$S/GPG-KEY-WAZUH" | awk -F: '/^fpr/{print $10; exit}'   # must print 0DCFCA5547B19D2A6099506096B3EE5F29111145
 cp "$S/GPG-KEY-WAZUH" appliance/release/RPM-GPG-KEY-WAZUH
 echo "0DCFCA5547B19D2A6099506096B3EE5F29111145 wazuh RPM-GPG-KEY-WAZUH" >> appliance/release/trusted-keys.txt
@@ -1470,7 +1470,7 @@ git commit -m "Repo trust: Wazuh key pinned, wazuh-manager/agent + chp-security 
 - [ ] **Step 1: Stage the Wazuh RPMs as third-party inputs on aero, verified**
 
 ```bash
-S=/private/tmp/claude-501/-Users-dshannon/70ba5b3a-b884-4620-8909-fa61db9c207a/scratchpad/wazuh-dl
+S=$SCRATCH/wazuh-dl
 ssh aero 'ls -d /data/chp-release/third-party' && scp "$S"/wazuh-*.rpm aero:/data/chp-release/third-party/
 ssh aero 'cd /data/chp-release/third-party && sha256sum wazuh-*.rpm'
 ```

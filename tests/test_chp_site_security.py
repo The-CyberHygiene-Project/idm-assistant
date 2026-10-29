@@ -17,7 +17,7 @@ class Run:
 
     def __call__(self, argv, **kw):
         self.calls.append(argv)
-        out = self.fpr if argv[:2] == ["gpg", "--show-keys"] else (self.rules if "--list-rich-rules" in argv else "")
+        out = self.fpr if argv[:1] == ["gpg"] and "--show-keys" in argv else (self.rules if "--list-rich-rules" in argv else "")
         return type("R", (), {"returncode": 0, "stdout": out, "stderr": ""})()
 
 
@@ -42,7 +42,8 @@ def enable(tmp_path, role, run=None, stick=None):
     s = stick or (tmp_path / "stick"); s.mkdir(exist_ok=True)
     run = run or Run()
     done = sec.enable(role, "srv1" if role == "server" else "ws1", {"ALERT_HOOK": ""}, hosts(), stick=s, run=run,
-                      root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None)
+                      root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None,
+                      api=Api(), sleep=lambda x: None)
     return r, s, run, done
 
 
@@ -96,7 +97,7 @@ def test_keys_never_reach_the_audit_record(tmp_path):
     rec = []
     r = root(tmp_path, "server"); s = tmp_path / "stick"; s.mkdir()
     sec.enable("server", "srv1", {"ALERT_HOOK": ""}, hosts(), stick=s, run=Run(), root=r, data_is_mount=False,
-               chown=lambda *a: None, record=lambda *a, **k: rec.append(a))
+               chown=lambda *a: None, record=lambda *a, **k: rec.append(a), api=Api(), sleep=lambda x: None)
     key = (r / "var/ossec/etc/client.keys").read_text().split()[3]
     assert rec and key not in repr(rec)
 
@@ -124,3 +125,47 @@ def test_a_failing_step_is_a_clear_error_not_a_traceback(tmp_path):
             return super().__call__(argv, **kw)
     with pytest.raises(SiteError, match="systemctl enable --now wazuh-manager .* failed .*re-run chp-site security enable"):
         enable(tmp_path, "server", run=Fails())
+
+
+# ---- final-review fix pass (W1) ----
+class Api:
+    """Fake Wazuh API: default logins work until the passwords are changed."""
+    def __init__(self, defaults_work=True):
+        self.defaults_work, self.changed = defaults_work, {}
+
+    def __call__(self, method, path, user=None, token=None, body=None):
+        if path.startswith("/security/user/authenticate"):
+            ok = self.defaults_work and user in (("wazuh", "wazuh"), ("wazuh-wui", "wazuh-wui"))
+            return (200, "tok") if ok else (401, "")
+        if method == "PUT" and path.startswith("/security/users/") and token == "tok":
+            self.changed[path.rsplit("/", 1)[1]] = body["password"]
+            return 200, ""
+        return 404, ""
+
+
+def test_server_enable_locks_the_api_default_logins(tmp_path):
+    # final review C1 (confirmed on the lab): default wazuh:wazuh / wazuh-wui:wazuh-wui gave any local user an
+    # administrator token; enable replaces both with random passwords that are never stored or printed
+    api = Api()
+    r = root(tmp_path, "server"); s = tmp_path / "stick"; s.mkdir()
+    done = sec.enable("server", "srv1", {"ALERT_HOOK": ""}, hosts(), stick=s, run=Run(), root=r, data_is_mount=False,
+                      chown=lambda *a: None, record=lambda *a, **k: None, api=api, sleep=lambda x: None)
+    assert set(api.changed) == {"1", "2"} and len(set(api.changed.values())) == 2
+    assert any("API logins locked" in d for d in done)
+    assert not any(pw in repr(done) for pw in api.changed.values())
+
+
+def test_api_lock_is_idempotent(tmp_path):
+    api = Api(defaults_work=False)                    # already locked by an earlier run
+    r = root(tmp_path, "server"); s = tmp_path / "stick"; s.mkdir()
+    done = sec.enable("server", "srv1", {"ALERT_HOOK": ""}, hosts(), stick=s, run=Run(), root=r, data_is_mount=False,
+                      chown=lambda *a: None, record=lambda *a, **k: None, api=api, sleep=lambda x: None)
+    assert api.changed == {} and any("already locked" in d for d in done)
+
+
+def test_key_check_uses_a_private_gnupg_home(tmp_path):
+    # final review I6: gpg --show-keys without GNUPGHOME created /root/.gnupg (an AIDE change after enable)
+    run = Run()
+    enable(tmp_path, "server", run=run)
+    gpg = [c for c in run.calls if c[:1] == ["gpg"]]
+    assert gpg and all("--homedir" in c for c in gpg)

@@ -82,3 +82,23 @@ def test_api_listens_on_loopback_and_shared_config_is_off():
 
 def test_pinned_fingerprint():
     assert w.WAZUH_FPR == "0DCFCA5547B19D2A6099506096B3EE5F29111145"
+
+
+# ---- final-review fix pass (W1) ----
+def test_manager_update_check_is_off():
+    # final review I2: <global><update_check> would contact Wazuh's CTI service from a CUI host
+    assert w.setting(w.parse_conf(w.harden_manager(MGR)), "global/update_check") == "no"
+
+
+def test_agent_upgrade_module_is_off():
+    # final review I3: WPK upgrades pushed from the manager bypass the signed repo; lab: with this the agent's
+    # upgrade module never starts ("Module Agent Upgrade started" is absent)
+    assert w.setting(w.parse_conf(w.harden_agent(AGT, "192.0.2.10")), "agent-upgrade/enabled") == "no"
+
+
+def test_api_password_meets_wazuh_policy_and_is_random():
+    pws = {w.api_password() for _ in range(20)}
+    assert len(pws) == 20
+    for p in pws:
+        assert 32 <= len(p) <= 64 and any(c.islower() for c in p) and any(c.isupper() for c in p)
+        assert any(c.isdigit() for c in p) and any(c in w.API_SYMBOLS for c in p)
