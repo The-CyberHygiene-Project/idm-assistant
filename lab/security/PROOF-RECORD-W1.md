@@ -54,3 +54,22 @@ attaches the real site-stick image as a USB disk, so the USBGuard path is exerci
 **Found and fixed during proofs 2–3** (ledger): `chp-site alerts` double-counted (Wazuh's `alerts.json` is a hard link
 to the dated file). AIDE did not count Wazuh-signed packages as explained (Wazuh's key ID was missing from
 `PINNED_SIGNERS`; a test now ties that list to `trusted-keys.txt`).
+
+## Re-run after the final-review fixes (2026-10-29, repo 0.7.8 re-signed: chp-site 0.8.0-3, chp-integrity 0.1.6-2)
+
+Fresh golden lab (T0 = 10/29/2026 08:54:40), `prove-w1.sh repo`, `enable srv`, `enable cli2`:
+
+| Check | Result |
+|---|---|
+| Server `security enable` | all steps as in proof 1, plus **"Wazuh API logins locked (2 default passwords replaced with random ones, not stored)"** |
+| Default API logins as non-root `chpadmin` (`wazuh:wazuh`, `wazuh-wui:wazuh-wui`) | **HTTP 401** for both (before the fix both returned an administrator token) |
+| `update_check` | `no` |
+| "No such tag" warnings (`wazuh-analysisd -t`, `wazuh-modulesd -t`, `wazuh-agentd -t`) | **0** on both hosts (Wazuh's `-t` only warns on unknown tags, so this is the real "setting understood" check) |
+| Agent upgrade module | `<agent-upgrade><enabled>no`; **0** "Module Agent Upgrade started" lines (the line appears when the switch is removed) |
+| Agents | iso5-cli2 Active; iso5-cli1 Never connected (negative case) |
+| AIDE summary (not accepted) | Wazuh files **explained** (wazuh-manager 65 paths, wazuh-agent 5) together with chp-security, chp-site and chp-integrity; the NOT-explained items are the ones listed in `UPDATE-0.2.0-update4.md.in`. client2 also showed lab baseline drift unrelated to Wazuh (`/etc/pki/ca-trust` ×450, `client.conf`, `/usr/libexec/chp`); its first run showed the same |
+| Catch (rewritten forwarder) | burst at 09:03:54 → hook `09:03:56 … rule 5712 level 10`; agent stop at 09:04:06 → hook `09:04:06 … rule 506`; the forwarder restart at 09:03:54 re-sent nothing from 09:02 (per-alert checkpoint) |
+
+Lab-side slip (not a product defect): the first catch attempt appended a second `ALERT_HOOK=` to the lab's `site.conf`.
+`chp-site get` rightly refused it, and the forwarder then ran with no hook (it logged the alerts). Deferred minor: the
+forwarder should log when the hook lookup fails.

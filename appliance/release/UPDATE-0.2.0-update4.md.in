@@ -46,15 +46,27 @@ Nothing changes until you run `chp-site security enable`. A host that never runs
 
 ## Expect one AIDE alert, then accept it
 
-The next daily check reports the new files. In the `aide-accept` summary:
-- **"Explained by signed package updates":** the Wazuh, `chp-security`, `chp-site` and `chp-integrity` files.
-- **"NOT explained"** (written by `security enable` itself, so review them, then accept):
-  - `/etc/chp/security.conf`;
-  - `/etc/fstab` (one added line: `<data dir> /var/ossec none bind 0 0`);
-  - the service links under `/etc/systemd/system/*.wants/` for `wazuh-manager`/`wazuh-agent`, `chp-wazuh-alerts`
-    and `chp-wazuh-retention`;
-  - `/var/ossec/etc/ossec.conf` (the hardened settings);
-  - on clients, `/var/ossec/etc/local_internal_options.conf`.
+The next daily check reports the change. In the `aide-accept` summary (lab, 10/29/2026):
+- **"Explained by signed package updates":** Wazuh's own files (about 65 on the server, 5 on a client), and the
+  `chp-security`, `chp-site` and `chp-integrity` files.
+- **"NOT explained", and expected.** Review these, then accept:
+  - **written by `security enable`:**
+    - `/etc/chp/security.conf`;
+    - `/etc/fstab` (one added line: `<data dir> /var/ossec none bind 0 0`);
+    - on the server, `/etc/firewalld/zones/public.xml` (and `.old`): one rule per client for port 1514;
+    - the service links and drop-in folders under `/etc/systemd/system/` for `wazuh-manager`/`wazuh-agent`,
+      `chp-wazuh-alerts` and `chp-wazuh-retention`;
+    - `/var/ossec/etc/ossec.conf` (the hardened settings), and on clients `/var/ossec/etc/local_internal_options.conf`;
+  - **made by Wazuh's installer and first start** (not package files):
+    - the `wazuh` user and group (`/etc/passwd`, `/etc/group`, `/etc/shadow`, `/etc/gshadow` and their `-` backups);
+    - `/etc/ld.so.cache` and the SELinux file contexts under `/etc/selinux/targeted/`;
+    - `/var/ossec/etc/localtime`, the compiled lists `/var/ossec/etc/lists/*.cdb` (server) and the files under
+      `/var/ossec/etc/shared/` (`ar.conf`, `merged.mg`, and on clients the rootcheck rule files and `agent.conf`);
+  - `/etc/aide.conf`: replaced by the `chp-integrity` update. Confirm it is the packaged file first, as in
+    `0.2.0-update1/UPDATE.md` (`cmp /etc/aide.conf /usr/share/chp-integrity/aide.conf` and `rpm -V chp-integrity`);
+  - the folders `/etc/pki`, `/etc/pki/rpm-gpg` and `/usr/share/licenses` (a new file inside each).
+
+Anything outside this list was not made by this update: investigate it before accepting.
 
 Accept as the ISSO or a named delegate:
 
