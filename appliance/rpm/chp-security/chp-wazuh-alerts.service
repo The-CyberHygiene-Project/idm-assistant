@@ -1,0 +1,12 @@
+[Unit]
+Description=CyberHygiene: send important Wazuh alerts to the log and ALERT_HOOK (security bundle spec §5)
+After=wazuh-manager.service
+Requires=wazuh-manager.service
+
+[Service]
+ExecStart=/usr/bin/chp-site wazuh-forward
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

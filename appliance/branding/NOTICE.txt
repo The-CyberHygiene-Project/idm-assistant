@@ -42,6 +42,10 @@ listed with:
 
     rpm -qa --qf '%{NAME} - %{LICENSE}\n'
 
+Third-party components shipped unmodified with their vendors' signatures
+include the security add-on's Wazuh 4.14.9 manager and agent (GPLv2,
+copyright Wazuh, Inc.; signed by Wazuh).
+
 This image is provided AS IS, with no warranty of any kind.
 
 Distribution status

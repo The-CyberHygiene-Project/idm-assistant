@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.7.3
-Release:        1.chp%{?dist}
+Version:        0.8.0
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -11,6 +11,7 @@ Source1:        chp.repo
 Source2:        RPM-GPG-KEY-cyberhygiene
 Source3:        LICENSE
 Source4:        chp-site.sh
+Source5:        RPM-GPG-KEY-WAZUH
 Requires:       python3, openssl, util-linux
 
 %description
@@ -22,6 +23,7 @@ install -Dm0644 %{SOURCE0} %{buildroot}%{_datadir}/chp-site/chp-site.pyz
 install -Dm0755 %{SOURCE4} %{buildroot}%{_bindir}/chp-site
 install -Dm0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/yum.repos.d/chp.repo
 install -Dm0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+install -Dm0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-WAZUH
 install -dm0755 %{buildroot}%{_sharedstatedir}/chp/repo
 install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
@@ -32,10 +34,24 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_datadir}/chp-site/chp-site.pyz
 %config(noreplace) %{_sysconfdir}/yum.repos.d/chp.repo
 %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
+%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-WAZUH
 %dir %{_sharedstatedir}/chp
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Wed Oct 28 2026 The CyberHygiene Project - 0.8.0-3.chp
+- Final review: security enable locks the Wazuh API's default logins with random passwords (never stored); manager
+  update_check off; agent upgrade module off; forwarder never crash-loops (odd alerts, hook errors), checkpoints per
+  alert and drains the old file on rotation; key check uses a private GnuPG home; AIDE explains Wazuh-signed files.
+
+* Tue Oct 27 2026 The CyberHygiene Project - 0.8.0-2.chp
+- Lab proof: Wazuh 4.14's API wants host as a list (a scalar stopped wazuh-apid); a failed step is now a clear
+  message naming the command, not a traceback.
+
+* Tue Oct 27 2026 The CyberHygiene Project - 0.8.0-1.chp
+- Security bundle: security enable|status, alerts, wazuh-forward; ships Wazuh's signing key
+  (pinned 0DCFCA5547B19D2A6099506096B3EE5F29111145).
+
 * Sun Oct 25 2026 The CyberHygiene Project - 0.7.3-1.chp
 - validate: never runs a chp-templates renderer found next to the site folder (it could be any mounted volume);
   only CHP_TEMPLATES, an explicit path or /usr/share/chp-templates (Plan C3 final review).

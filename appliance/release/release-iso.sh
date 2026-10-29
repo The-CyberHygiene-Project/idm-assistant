@@ -8,6 +8,7 @@
 # check passed. Never rebuilds anything.
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"
+bash "$here/check-key-expiry.sh" "$here" || { echo "refusing: a pinned signing key has expired or expires soon"; exit 1; }
 V=${V:?set V (e.g. 0.2.0)} RC=${RC:?set RC (the tested rc)} REPO_V=${REPO_V:?set REPO_V (its signed repo)}
 ISO=cyberhygiene-lab-installer-el9.iso
 ISO_SHA=${ISO_SHA:?set ISO_SHA (sha256 of the tested rc)}     # 0.1.0 = rc5 efcba98a…; 0.2.0 = rc2 1332d911…

@@ -9,6 +9,7 @@
 # only when every check passed.
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; kit="$top/appliance/site-stick-kit"
+bash "$here/check-key-expiry.sh" "$here" || { echo "refusing: a pinned signing key has expired or expires soon"; exit 1; }
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 V=${V:?set V (the released version, e.g. 0.2.0)} REPO_V=${REPO_V:?set REPO_V (its signed repo)}
 SHARE="/Volumes/For Jeff"; B="$SHARE/cyberhygiene-lab-installer"; T="$B/site-stick-kit-$V"; P="$T.partial"
@@ -50,6 +51,7 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `0.2.0-update2/` | package update: your SSP and POA&M on the appliance (`chp-templates`, `chp-site docs`) | `0.2.0-update2/UPDATE.md` |
 | `site-stick-kit-0.2.0-update2/` | the site-stick kit with `profile.ini.template` | `site-stick-kit-0.2.0-update2/SITE-STICK.md` |
 | `0.2.0-update3/` | package update: quiet fapolicyd SELinux denials (`chp-identity-client` 0.2.3), `chp-site` 0.7.3 | `0.2.0-update3/UPDATE.md` |
+| `0.2.0-update4/` | package update: the security add-on, part 1 (Wazuh log monitoring and intrusion detection; optional) | `0.2.0-update4/UPDATE.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.
