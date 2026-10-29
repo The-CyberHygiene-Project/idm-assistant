@@ -158,3 +158,22 @@ def test_baseline_delegates_bad_name_refused():
     from chp_site.sitefile import parse_site, SiteError
     with pytest.raises(SiteError, match="BASELINE_DELEGATES: bad name"):
         parse_site(GOOD + "BASELINE_DELEGATES=ok, " + "x" * 65 + "\n")
+
+
+# ---- security bundle W2 ----
+def test_security_keys_default_off():
+    s = parse_site(GOOD)
+    assert s["SECURITY_ADDONS"] == "no" and s["SECURITY_ALERT_LEVEL"] == 10
+
+
+def test_security_keys_parse():
+    s = parse_site(GOOD + "SECURITY_ADDONS=yes\nSECURITY_ALERT_LEVEL=12\n")
+    assert s["SECURITY_ADDONS"] == "yes" and s["SECURITY_ALERT_LEVEL"] == 12
+
+
+@pytest.mark.parametrize("line,msg", [("SECURITY_ADDONS=maybe", "SECURITY_ADDONS: yes or no"),
+                                      ("SECURITY_ALERT_LEVEL=2", "SECURITY_ALERT_LEVEL: a number from 3 to 15"),
+                                      ("SECURITY_ALERT_LEVEL=ten", "SECURITY_ALERT_LEVEL: a number from 3 to 15")])
+def test_security_keys_refuse_bad_values(line, msg):
+    with pytest.raises(SiteError, match=msg):
+        parse_site(GOOD + line + "\n")

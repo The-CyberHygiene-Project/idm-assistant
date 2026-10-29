@@ -50,3 +50,9 @@ ACCESSIBILITY=off
 
 # Optional: absolute path of a script on the hosts that receives each monitor alert. Empty = alerts go to the log only.
 ALERT_HOOK=
+
+# Optional (0.3.0 on): the security add-on (Wazuh log monitoring and intrusion detection). yes = the installer sets it
+# up at first boot on every host; no (default) = the same as 0.2.0. Important alerts go to ALERT_HOOK.
+SECURITY_ADDONS=no
+# Optional: the Wazuh alert level sent to ALERT_HOOK right away (3-15, default 10). Lower levels go into a daily summary.
+SECURITY_ALERT_LEVEL=10

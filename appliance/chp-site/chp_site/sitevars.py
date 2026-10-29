@@ -15,7 +15,9 @@ def values(site, hosts, client=None):
          "SERVER_IP": srv.ip, "SERVER_HOSTNAME": srv.hostname, "SERVER_FQDN": f"{srv.hostname}.{d}",
          "KANIDM_FQDN": f"idm.{d}", "CA_FQDN": f"ca.{d}", "ALERT_HOOK": site["ALERT_HOOK"],
          "CLIENT_HOSTS": " ".join(h.hostname for h in hosts if h.role == "client"),
-         "COLLECTOR_IP": site.get("COLLECTOR_IP", ""), "COLLECTOR_SSH_PUBKEY": site.get("COLLECTOR_SSH_PUBKEY", "")}
+         "COLLECTOR_IP": site.get("COLLECTOR_IP", ""), "COLLECTOR_SSH_PUBKEY": site.get("COLLECTOR_SSH_PUBKEY", ""),
+         "SECURITY_ADDONS": site.get("SECURITY_ADDONS", "no"),
+         "SECURITY_ALERT_LEVEL": str(site.get("SECURITY_ALERT_LEVEL", 10))}
     if client:
         v.update({k: client[k] for k in ("CA_ROOT_SHA256", "SSH_CA_PUBKEY", "SSH_CA_FPR", "CACHE_PUBKEY", "KANIDM_URL")})
     return v

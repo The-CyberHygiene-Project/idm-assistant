@@ -91,3 +91,9 @@ def test_get_reads_client_conf_when_present(tmp_path):
     (d / "client.conf").write_text(make_client_conf(SITE["DOMAIN"], PEM, PUB, CACHE))
     r = get("CACHE_PUBKEY")
     assert r.returncode == 0 and r.stdout.startswith("ecdsa-sha2-nistp384 ")
+
+
+def test_values_expose_the_security_keys():
+    v = values(dict(SITE, SECURITY_ADDONS="yes", SECURITY_ALERT_LEVEL=12), HS)
+    assert v["SECURITY_ADDONS"] == "yes" and v["SECURITY_ALERT_LEVEL"] == "12"
+    assert values(SITE, HS)["SECURITY_ADDONS"] == "no"
