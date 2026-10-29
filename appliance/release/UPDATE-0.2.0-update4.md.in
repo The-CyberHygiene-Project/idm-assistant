@@ -1,0 +1,77 @@
+# Package update @VERSION@ (signed repo @REPO@): the security add-on, part 1 (Wazuh). No reinstall.
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it adds
+
+- **Wazuh log monitoring and intrusion detection** (optional): a Wazuh 4.14.9 manager on the identity server and an
+  agent on each client. Wazuh's own signed packages are included unmodified, and its signing key is pinned
+  (`0DCF CA55 47B1 9D2A 6099 5060 96B3 EE5F 2911 1145`).
+- **Important alerts reach you:** alerts at level 10 or above, and any agent that stops or disconnects, go to the
+  system log and to your `ALERT_HOOK`. A repeat within 15 minutes is grouped into one line with a count. Medium
+  alerts (levels 7 to 9) give one summary line a day. `chp-site alerts` shows a table by host and rule.
+- **Hardened by default:**
+  - enrolment is off (each client gets a pre-made key from the site stick);
+  - the Wazuh API listens on the server only;
+  - only your own clients can reach the manager (port 1514);
+  - no automatic responses, no remote upgrades, no remote configuration;
+  - vulnerability detection is off (in this Wazuh version it needs the indexer, which is not included).
+- **`chp-site` 0.8.0** (`security enable`, `security status`, `alerts`), **`chp-security` 0.1.0** (monitor checks,
+  alert forwarder, log retention) and **`chp-integrity` 0.1.6** (AIDE watches Wazuh's settings, and never stores
+  hashes of its keys).
+
+Nothing changes until you run `chp-site security enable`. A host that never runs it is the same as on update3.
+
+## Apply it
+
+1. **Check this folder** as `0.2.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. **Every host:** copy `chp-repo-@REPO@.tar.gz` to it, unpack it over the local repo as root, and upgrade:
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+       dnf --enablerepo=chp upgrade chp-site chp-integrity
+
+3. **To turn the add-on on, do the server first,** with the site stick plugged in. Run as root:
+
+       chp-site security enable
+
+   This installs Wazuh and writes one agent key per client to the site stick (`wazuh/<host>.key`). The stick holds
+   secrets, so keep it as safe as always.
+4. **Then each client,** one at a time, with the site stick plugged in: `chp-site security enable`.
+5. **Check:** on the server, `chp-site security status` and `/var/ossec/bin/agent_control -l`. Every client should
+   show `Active`.
+
+## Expect one AIDE alert, then accept it
+
+The next daily check reports the new files. In the `aide-accept` summary:
+- **"Explained by signed package updates":** the Wazuh, `chp-security`, `chp-site` and `chp-integrity` files.
+- **"NOT explained"** (written by `security enable` itself, so review them, then accept):
+  - `/etc/chp/security.conf`;
+  - `/etc/fstab` (one added line: `<data dir> /var/ossec none bind 0 0`);
+  - the service links under `/etc/systemd/system/*.wants/` for `wazuh-manager`/`wazuh-agent`, `chp-wazuh-alerts`
+    and `chp-wazuh-retention`;
+  - `/var/ossec/etc/ossec.conf` (the hardened settings);
+  - on clients, `/var/ossec/etc/local_internal_options.conf`.
+
+Accept as the ISSO or a named delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: security add-on (Wazuh) enabled"
+
+## Where the data lives
+
+Wazuh's data goes in a directory bind-mounted at `/var/ossec`. That is `/data/wazuh` if the host has a `/data`
+volume, otherwise `/srv/wazuh` on the root volume; the appliance's fixed 20 GB `/var` is never used. The appliance
+monitor alerts if that file system passes 80%. Alert logs are kept for 90 days by default (`RETENTION_DAYS` in
+`/etc/chp/security.conf`).
+
+## Known limit (POA&M): FIPS
+
+Wazuh uses its own bundled OpenSSL 3.5.1, which is outside the FIPS-validated module; the algorithms it uses are
+approved (TLS 1.3, AES-256). Record this in your POA&M. The compensating controls:
+- the traffic stays on your internal network;
+- the firewall allows only your own hosts;
+- Wazuh's enrolment service and remote API are off.
+
+Each new Wazuh version will be checked for a FIPS-capable build. Wazuh also runs without its own SELinux policy
+(unconfined), as Kanidm's identity client does.

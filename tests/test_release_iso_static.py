@@ -109,3 +109,14 @@ def test_verify_repo_accepts_v3_signatures_from_pinned_keys():
     # must still be a pinned primary key, so this widens the packet format, never the trust.
     v = (R / "verify-repo.sh").read_text()
     assert r"Header V[34] RSA\/SHA256 Signature, key ID" in v
+
+
+def test_update4_note_covers_enable_order_and_aide():
+    u = (R / "UPDATE-0.2.0-update4.md.in").read_text()
+    for s in ("dnf --enablerepo=chp upgrade chp-site chp-integrity", "chp-site security enable", "server first",
+              "site stick", "aide-accept", "Explained by signed package updates", "FIPS", "POA&M"):
+        assert s in u, s
+
+
+def test_readme_lists_update4():
+    assert "`0.2.0-update4/`" in (R / "release-kit.sh").read_text()

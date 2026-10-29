@@ -123,6 +123,13 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.2.0 update 4 on: the security add-on (optional)
+
+`chp-site security enable` turns on Wazuh log monitoring and intrusion detection: the server first, then each
+client, **with the site stick plugged in each time**. The server writes one agent key per client to the stick
+(`wazuh/<host>.key`), and each client reads its own. Those keys are secrets, so the stick needs the same care as
+always. Important alerts go to your `ALERT_HOOK` (set it in `site.conf`). See `0.2.0-update4/UPDATE.md`.
+
 ### From 0.2.0 update 2 on: your SSP and POA&M
 
 The appliance can write a first draft of your **System Security Plan (SSP)** and **Plan of Action and Milestones
