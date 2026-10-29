@@ -101,6 +101,10 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     toks = move_tokens(pending / "tokens", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
         if (pending / "tokens").is_dir() else []
     print("tokens moved to the stick: " + ", ".join(toks) if toks else "no client tokens pending")
+    from .escrow import move_wazuh_keys                  # security bundle W2: agent keys travel like the tokens
+    wk = move_wazuh_keys(pending / "wazuh", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
+        if (pending / "wazuh").is_dir() else []
+    print("Wazuh agent keys moved to the stick: " + ", ".join(wk) if wk else "no Wazuh agent keys pending")
     from . import aide
     base = aide.read_record(aide.STATE / "baseline")
     if base.get("DB_SHA512"):

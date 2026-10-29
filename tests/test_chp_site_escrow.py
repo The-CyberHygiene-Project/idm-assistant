@@ -94,3 +94,32 @@ def test_move_tokens_replaces_old_as_dot_old(tmp_path):
     (p / "cli1.token").write_text("n" * 20 + ".n" + "n" * 20 + ".n" + "n" * 20)
     move_tokens(p, stick, "NOW")
     assert (stick / "tokens" / "cli1.token.NOW.old").read_text() == "old"
+
+
+# ---- security bundle W2: Wazuh agent keys travel like the client tokens ----
+WKEY = "001 cli1 192.0.2.21 " + "ab" * 32 + "\n"
+
+
+def test_move_wazuh_keys_writes_reads_back_then_shreds(tmp_path):
+    from chp_site.escrow import move_wazuh_keys
+    p = tmp_path / "pending" / "wazuh"; p.mkdir(parents=True); stick = tmp_path / "stick"; stick.mkdir()
+    (p / "cli1.key").write_text(WKEY)
+    assert move_wazuh_keys(p, stick, "20261029T000000Z") == ["cli1"]
+    out = stick / "wazuh" / "cli1.key"
+    assert out.read_text() == WKEY and not (p / "cli1.key").exists() and oct(out.stat().st_mode & 0o777) == "0o600"
+
+
+def test_move_wazuh_keys_nothing_pending(tmp_path):
+    from chp_site.escrow import move_wazuh_keys
+    assert move_wazuh_keys(tmp_path / "none", tmp_path, "x") == []
+
+
+def test_move_wazuh_keys_keeps_source_when_readback_differs(tmp_path, monkeypatch):
+    from chp_site import escrow
+    from chp_site.sitefile import SiteError
+    p = tmp_path / "w"; p.mkdir(); stick = tmp_path / "s"; stick.mkdir()
+    (p / "cli1.key").write_text(WKEY)
+    monkeypatch.setattr(escrow, "_read_back", lambda path: "corrupted")
+    with pytest.raises(SiteError, match="Wazuh agent keys.*kept on the server"):
+        escrow.move_wazuh_keys(p, stick, "N")
+    assert (p / "cli1.key").exists()
