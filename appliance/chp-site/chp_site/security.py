@@ -118,8 +118,13 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         else:
             src = Path(key_file) if key_file else None
             if src is None or not src.exists():
-                raise SiteError(f"no staged Wazuh key for {host} ({key_file}): reinstall with the site stick, after "
-                                "export-client on the server")
+                # W2 final review I1: a retried first boot after the staged copy was used: the installed key is valid
+                installed = _p(root, f"{OSSEC}/etc/client.keys")
+                if installed.exists() and installed.read_text().strip():
+                    src = installed
+                else:
+                    raise SiteError(f"no staged Wazuh key for {host} ({key_file}): reinstall with the site stick, "
+                                    "after export-client on the server")
         agent_line = _keyline(host, src.read_text())
     _check_key(root, run); done.append("Wazuh signing key verified and imported")
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
@@ -166,9 +171,6 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
-        if stick is None and key_file:                     # the installer's staged copy: shred it now it is in place
-            if run(["shred", "-u", str(key_file)]).returncode != 0 or Path(key_file).exists():
-                Path(key_file).unlink(missing_ok=True)
         units = ["wazuh-agent"]
     _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     run(["systemctl", "enable", "--now", *units], check=True)
@@ -182,6 +184,10 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         done.append("agent's first sync from the manager received" if synced.exists()
                     else "agent not synced yet (the manager was not reachable within 2 minutes; AIDE may report "
                          "/var/ossec/etc/shared once)")
+    if role == "client" and stick is None and key_file and Path(key_file).exists():
+        # shredded only now that the agent runs (W2 final review I1): a failed step above leaves it for the retry
+        if run(["shred", "-u", str(key_file)]).returncode != 0 or Path(key_file).exists():
+            Path(key_file).unlink(missing_ok=True)
     if role == "server":
         done.append(_lock_api(api or _https_api, sleep))
     record("security enable", {"role": role, "host": host}, after=True)

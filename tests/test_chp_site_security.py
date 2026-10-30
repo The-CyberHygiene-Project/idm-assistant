@@ -243,3 +243,33 @@ def test_firstboot_client_sync_wait_is_bounded(tmp_path):
     done = sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
                       data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=waits.append)
     assert sum(waits) <= 130 and any("not synced yet" in d for d in done)
+
+
+# ---- W2 final review I1: a failed client step must be retryable ----
+def test_client_step_failing_after_key_install_can_be_retried(tmp_path):
+    import subprocess
+    r = root(tmp_path, "client"); repo(r); kf = tmp_path / "agent.key"
+    kf.write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+
+    class FailStart(Run):
+        def __call__(self, argv, **kw):
+            if argv[:3] == ["systemctl", "enable", "--now"] and kw.get("check"):
+                raise subprocess.CalledProcessError(1, argv)
+            return super().__call__(argv, **kw)
+    with pytest.raises(SiteError):
+        sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=FailStart(), root=r,
+                   data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=lambda x: None)
+    assert kf.exists()                                   # not shredded before the step succeeded
+    sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
+               data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=lambda x: None)
+    assert not kf.exists() and (r / "var/ossec/etc/client.keys").read_text().startswith("001 ws1 ")
+
+
+def test_client_retry_uses_the_installed_key_when_the_staged_one_is_gone(tmp_path):
+    r = root(tmp_path, "client"); repo(r)
+    (r / "var/ossec/etc/client.keys").write_text("001 ws1 192.0.2.21 " + "cd" * 32 + "\n")
+    done = sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=tmp_path / "gone.key",
+                      run=Run(), root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None,
+                      sleep=lambda x: None)
+    assert (r / "var/ossec/etc/client.keys").read_text() == "001 ws1 192.0.2.21 " + "cd" * 32 + "\n"
+    assert any("started: wazuh-agent" in d for d in done)

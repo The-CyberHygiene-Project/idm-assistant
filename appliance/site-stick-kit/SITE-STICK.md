@@ -136,7 +136,9 @@ Keep the usual order, because the agent keys travel on the stick like the client
 
 A client installed before step 2 stops at the start of the install ("no Wazuh agent key"), before any disk is touched.
 With `SECURITY_ADDONS=no` (the default) nothing changes from 0.2.0. `SECURITY_ALERT_LEVEL` (default 10) sets which
-Wazuh alerts go to `ALERT_HOOK` straight away; the rest go into a daily summary.
+Wazuh alerts go to `ALERT_HOOK` straight away; the rest go into a daily summary. It is read once, at the first enable:
+to change it later, edit `ALERT_LEVEL` in `/etc/chp/security.conf` on the server and run
+`systemctl restart chp-wazuh-alerts`.
 
 ### From 0.2.0 update 4 on: the security add-on (optional)
 

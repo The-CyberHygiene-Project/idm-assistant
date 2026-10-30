@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.9.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -39,6 +39,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Oct 30 2026 The CyberHygiene Project - 0.9.0-3.chp
+- W2 final review I1: a client's staged agent key is shredded only after the agent runs, and a retried first boot
+  reuses the installed key, so a failed security step can always be retried.
+
 * Thu Oct 29 2026 The CyberHygiene Project - 0.9.0-2.chp
 - W2 lab: a client's first boot waits (up to 2 min) for the agent's first sync, so AIDE's first baseline includes it.
 
