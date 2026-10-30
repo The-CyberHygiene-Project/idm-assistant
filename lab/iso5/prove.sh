@@ -27,7 +27,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=${CHP_REPO:-0.7.9}; ISO=${ISO:-/var/lib/libvirt/images/chp-iso/0.3.0-rc1/cyberhygiene-lab-installer-el9.iso}
+export CHP_REPO=${CHP_REPO:-0.7.9}; ISO=${ISO:-/var/lib/libvirt/images/chp-iso/0.3.0-rc2/cyberhygiene-lab-installer-el9.iso}
 SECURITY_ADDONS=${SECURITY_ADDONS:-no}   # security bundle W2: the lab site's add-on setting for this run (yes|no)
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
@@ -176,6 +176,10 @@ case ${1:-} in
   aidepeek)     # read-only: the Wazuh paths in each host's latest AIDE report (paths only, no hashes)
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
       Rh "$1" "$2" 'R=$(sed -n s/^REPORT=//p /var/lib/chp/aide/last-result); grep -E "(/var/ossec|wazuh)" "$R" | grep -v "^ *$" | sed -E "s/ +/ /g" | cut -c1-100 | head -25'
+    done ;;
+  syncinfo)     # read-only: each client's first-boot security step result + when its agent last (re)connected
+    for h in "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
+      Rh "$1" "$2" 'journalctl -u chp-client-firstboot --no-pager | grep -E "first sync|not synced|started: wazuh" | tail -2 | cut -c1-140; grep -E "Connected to the server|Lost connection|Unable to connect" /var/ossec/logs/ossec.log | tail -3 | cut -c1-120; uptime -s'
     done ;;
   reboot)
     A "sudo virsh reboot $SRV >/dev/null"; sleep 20
