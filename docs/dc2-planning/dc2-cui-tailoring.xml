@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2"
+                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                      id="xccdf_net.cyberinabox_tailoring_dc2">
+  <xccdf-1.2:benchmark href="/usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml" version="0.1.82"/>
+  <xccdf-1.2:version time="2026-09-14T18:48:44">1</xccdf-1.2:version>
+  <xccdf-1.2:Profile id="xccdf_net.cyberinabox_profile_cui_dc2" extends="xccdf_org.ssgproject.content_profile_cui">
+    <xccdf-1.2:title xml:lang="en-US" override="true">CUI, tailored for dc2 (cyberinabox)</xccdf-1.2:title>
+    <xccdf-1.2:description xml:lang="en-US" override="true">
+      Extends xccdf_org.ssgproject.content_profile_cui with one documented deviation.
+
+      Deviation: CCE-83956-3 / rule sysctl_user_max_user_namespaces.
+      The base "cui" profile sets user.max_user_namespaces = 0. On dc2 this
+      conflicts with systemd's own unit-level sandboxing (PrivateUsers=true/yes,
+      used by stock RHEL 9 irqbalance.service and upower.service, plus GNOME
+      session helper units), which requires the ability to create at least one
+      user namespace per sandboxed service and fails with ENOSPC when the
+      kernel-wide limit is 0.
+
+      The rule's own upstream description states: "When containers are deployed
+      on the machine, the value should be set to large non-zero value" and warns
+      remediation "might impair or prevent functionality of certain applications
+      ... especially for general container usage and for certain desktop
+      applications." dc2's kickstart installs both @container-management and
+      @graphical-server-environment package groups, i.e. exactly the cases the
+      rule itself calls out.
+
+      Deviation applied: /etc/sysctl.d/user_max_user_namespaces.conf sets
+      user.max_user_namespaces = 15000 instead of 0 -- bounded well short of
+      unlimited, but sufficient for systemd unit sandboxing and normal
+      container/session use. This rule is deselected below so scans reflect
+      an intentional, documented exception rather than an unexplained fail.
+
+      Approved by: Don Shannon. Date: 2026-09-14.
+
+      Note: this tailoring targets ssg-rl9-ds.xml (the Rocky Linux 9 native
+      SCAP content), not ssg-rhel9-ds.xml. The original 2026-08-15 kickstart's
+      %addon com_redhat_oscap block referenced ssg-rhel9-ds.xml, whose
+      platform/CPE data is scoped to cpe:/o:redhat:enterprise_linux:9 and does
+      not match this host's actual cpe:/o:rocky:rocky:9::baseos identity --
+      confirmed empirically: evaluating the base cui profile against
+      ssg-rhel9-ds.xml yields zero pass/fail results (everything reports
+      notapplicable/notselected), while the same profile against
+      ssg-rl9-ds.xml yields real pass/fail results. Future compliance scans
+      on this host should use ssg-rl9-ds.xml.
+    </xccdf-1.2:description>
+    <!-- CCE-83956-3: user.max_user_namespaces held at 15000, not 0; see description above -->
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_sysctl_user_max_user_namespaces" selected="false"/>
+  </xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>
