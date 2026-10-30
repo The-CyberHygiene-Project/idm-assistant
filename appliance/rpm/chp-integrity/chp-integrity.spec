@@ -1,6 +1,6 @@
 Name:           chp-integrity
-Version:        0.1.6
-Release:        2.chp%{?dist}
+Version:        0.1.7
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene file integrity: AIDE baseline, daily check, monitor alerts
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -77,6 +77,10 @@ fi
 %dir %attr(0700,root,root) %{_localstatedir}/log/aide
 
 %changelog
+* Thu Oct 29 2026 The CyberHygiene Project - 0.1.7-1.chp
+- W2 lab: /var/ossec/etc/shared checked by content and permissions, not timestamps (the manager rewrites it
+  unchanged at each start and pushes it to agents at first connection).
+
 * Wed Oct 28 2026 The CyberHygiene Project - 0.1.6-2.chp
 - Final review: the Wazuh key exclusions also cover suffixed temp/backup copies (still anchored).
 

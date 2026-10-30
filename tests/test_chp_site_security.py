@@ -190,7 +190,7 @@ def test_firstboot_client_reads_and_shreds_its_staged_key(tmp_path):
     r = root(tmp_path, "client"); kf = tmp_path / "agent.key"; repo(r)
     kf.write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
     sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
-               data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None)
+               data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=lambda x: None)
     assert (r / "var/ossec/etc/client.keys").read_text().startswith("001 ws1 192.0.2.21 ")
     assert not kf.exists()
 
@@ -218,3 +218,28 @@ def test_firstboot_without_a_local_repo_is_refused(tmp_path):
         sec.enable("server", "srv1", {"ALERT_HOOK": ""}, hosts(), stick=None, pending=tmp_path / "p", run=Run(),
                    root=r, data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, api=Api(),
                    sleep=lambda x: None)
+
+
+def test_firstboot_client_waits_for_the_agents_first_sync(tmp_path):
+    # W2 lab: the shared bundle arrived after AIDE's first baseline; first boot now waits for it (bounded)
+    r = root(tmp_path, "client"); repo(r); kf = tmp_path / "agent.key"
+    kf.write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+    waits = []
+
+    def sleep(s):
+        waits.append(s)
+        if len(waits) == 3:                              # the bundle arrives on the third poll
+            (r / "var/ossec/etc/shared").mkdir(parents=True, exist_ok=True)
+            (r / "var/ossec/etc/shared/merged.mg").write_text("x")
+    done = sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
+                      data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=sleep)
+    assert len(waits) == 3 and any("first sync" in d for d in done)
+
+
+def test_firstboot_client_sync_wait_is_bounded(tmp_path):
+    r = root(tmp_path, "client"); repo(r); kf = tmp_path / "agent.key"
+    kf.write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+    waits = []
+    done = sec.enable("client", "ws1", {"ALERT_HOOK": ""}, hosts(), stick=None, key_file=kf, run=Run(), root=r,
+                      data_is_mount=False, chown=lambda *a: None, record=lambda *a, **k: None, sleep=waits.append)
+    assert sum(waits) <= 130 and any("not synced yet" in d for d in done)

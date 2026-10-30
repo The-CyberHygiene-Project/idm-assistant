@@ -173,6 +173,15 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
+    if role == "client" and stick is None:               # W2: let the agent's first sync land before AIDE's baseline
+        synced = _p(root, f"{OSSEC}/etc/shared/merged.mg")
+        for _ in range(40):
+            if synced.exists():
+                break
+            sleep(3)
+        done.append("agent's first sync from the manager received" if synced.exists()
+                    else "agent not synced yet (the manager was not reachable within 2 minutes; AIDE may report "
+                         "/var/ossec/etc/shared once)")
     if role == "server":
         done.append(_lock_api(api or _https_api, sleep))
     record("security enable", {"role": role, "host": host}, after=True)
