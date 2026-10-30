@@ -1,4 +1,4 @@
-# build1: offline Kanidm build host (disposable). DERIVED FROM cyberhygiene-dc2/anaconda-ks.cfg.
+# build1: offline Kanidm build host (disposable). DERIVED FROM dc2's anaconda-ks.cfg (lab/kickstart/dc2-reference/; docs/dc2-planning/FOLDED.md).
 # Differences from dc2 are listed in lab/vm-deviations.md.
 text
 cdrom
