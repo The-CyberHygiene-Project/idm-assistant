@@ -181,6 +181,16 @@ case ${1:-} in
     for h in "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
       Rh "$1" "$2" 'journalctl -u chp-client-firstboot --no-pager | grep -E "first sync|not synced|started: wazuh" | tail -2 | cut -c1-140; grep -E "Connected to the server|Lost connection|Unable to connect" /var/ossec/logs/ossec.log | tail -3 | cut -c1-120; uptime -s'
     done ;;
+  w2catch)      # W2 proof 6: lab hook on the server, one brute-force burst at cli2, the hook gets it (level >= 10)
+    Rv 'printf "#!/bin/bash\necho \"\$(date +%%H:%%M:%%S) \$1\" >> /var/log/lab-hook.log\n" > /usr/local/sbin/lab-hook; chmod 0755 /usr/local/sbin/lab-hook; touch /var/log/lab-hook.log; sed -i "s#^ALERT_HOOK=.*#ALERT_HOOK=/usr/local/sbin/lab-hook#" /etc/chp/site.conf; systemctl restart chp-wazuh-alerts' >/dev/null
+    check "lab hook set" "$(Rv 'chp-site get ALERT_HOOK')" "/usr/local/sbin/lab-hook"
+    Rv "for i in \$(seq 1 12); do ssh -n -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null probe\$i@$C2IP true >/dev/null 2>&1; done" >/dev/null
+    sleep 30
+    check "brute force reached the hook" "$(Rv 'grep -c "iso5-cli2 rule 5712 level 10" /var/log/lab-hook.log')" "1" ;;
+  w2res)        # W2 proof 6: resources (manager RSS, data size) on every host
+    for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      echo "$1: $(Rh "$1" "$2" 'ps -eo rss,comm | grep -E "wazuh|python3" | awk "{s+=\$1} END {print int(s/1024) \" MB RSS\"}"; du -sh /srv/wazuh | cut -f1; uptime -p' | tr '\n' ' ')"
+    done ;;
   reboot)
     A "sudo virsh reboot $SRV >/dev/null"; sleep 20
     ok=no; for _ in $(seq 30); do if Vh "$SIP" true; then ok=yes; break; fi; sleep 10; done

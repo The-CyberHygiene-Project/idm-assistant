@@ -1,4 +1,4 @@
-# Making the site stick — CyberHygiene Project Lab Installer 0.1.0 and 0.2.0
+# Making the site stick — CyberHygiene Project Lab Installer 0.1.0, 0.2.0 and 0.3.0
 
 Internal test image for the CyberHygiene Project development team. Not an official Rocky Linux product.
 
@@ -122,6 +122,21 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
   `aide/<client>.txt` to the stick. The monitor keeps alerting "AIDE baseline not pinned" until you do.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
+
+### From 0.3.0 on: the security add-on at install (optional)
+
+Set `SECURITY_ADDONS=yes` in `site.conf` before you install, and the installer sets up Wazuh at each host's first boot.
+Keep the usual order, because the agent keys travel on the stick like the client tokens:
+
+1. **Install the server first.** Its first boot makes one Wazuh agent key per client.
+2. **Plug the stick into the server and run `chp-site export-client`.** It copies the client tokens *and* the agent
+   keys (`wazuh/<host>.key`) to the stick, checks them, and removes them from the server.
+3. **Install each client** with the stick. The installer copies that client's own key to the client, and the client's
+   first boot connects its agent to the server.
+
+A client installed before step 2 stops at the start of the install ("no Wazuh agent key"), before any disk is touched.
+With `SECURITY_ADDONS=no` (the default) nothing changes from 0.2.0. `SECURITY_ALERT_LEVEL` (default 10) sets which
+Wazuh alerts go to `ALERT_HOOK` straight away; the rest go into a daily summary.
 
 ### From 0.2.0 update 4 on: the security add-on (optional)
 
