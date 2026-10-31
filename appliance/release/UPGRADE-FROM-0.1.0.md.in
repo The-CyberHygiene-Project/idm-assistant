@@ -2,7 +2,7 @@
 
 Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
 
-@VERSION@ adds **AIDE file integrity**. Every host builds a baseline of its system files and checks it daily. The CHP
+Since 0.2.0 the installer includes **AIDE file integrity**. Every host builds a baseline of its system files and checks it daily. The CHP
 monitor alerts on any change, and a baseline changes only through an audited `chp-site aide-accept` by the ISSO or a
 named delegate. A fresh @VERSION@ install does all of this at first boot. An existing 0.1.0 host gets it from the signed
 package repo, as described below. Do the server first, then each client.
@@ -45,3 +45,11 @@ This list is separate from `UNEXPIRE_DELEGATES` on purpose. See `SITE-STICK.md`,
 A baseline built this way proves the host's files **at the moment of the upgrade**, not at its first boot. A host
 installed fresh from @VERSION@ has the stronger first-boot baseline. If you have any doubt about a host's history,
 reinstall it from the @VERSION@ ISO instead.
+
+## The security add-on (Wazuh), from 0.3.0
+
+A fresh 0.3.0 or later install can switch Wazuh on from the site stick (`SECURITY_ADDONS=yes`). An upgraded host gets it
+afterwards, from the same signed repo: with the site stick plugged in, run `sudo chp-site security enable` on the server
+first, then on each client. The `0.2.0-update4/UPDATE.md` notes describe it, including the one AIDE alert to accept.
+
+A 0.2.0 site does not use this guide: it applies the `0.2.0-update…` folders in order.
