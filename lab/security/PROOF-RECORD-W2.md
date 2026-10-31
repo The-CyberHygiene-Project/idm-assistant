@@ -1,6 +1,6 @@
 # Proof record: security bundle Plan W2 (Wazuh in ISO 0.3.0) on the iso5 lab
 
-Repo **0.7.9** (signed 2026-10-30, 17 packages: `chp-site-0.9.0-2`, `chp-identity-server-0.1.2`,
+Repo **0.7.9** (signed 2026-10-30, re-signed after the final review with `chp-site-0.9.0-3`; 17 packages: `chp-site-0.9.0-2`/`-3`, `chp-identity-server-0.1.2`,
 `chp-identity-client-0.2.4`, `chp-integrity-0.1.7`, `chp-security-0.1.0`, Wazuh 4.14.9 manager and agent, plus the 0.7.8
 set). ISO **0.3.0-rc2** (`check-iso.sh`: ISO OK; Secure Boot chain unchanged from the Rocky 9.8 DVD). The installs
 replaced the previous iso5 VMs and golden snapshots (owner choice, 2026-10-29).
@@ -67,3 +67,18 @@ Wazuh FIPS and unconfined POA&M items are recorded in `lab/iso5/DEVIATIONS.md` (
 - On the server, most of the memory is the Wazuh API's Python workers (5 processes, 60-110 MB each); `wazuh-modulesd`
   is 85 MB. The rise from 405 to 558 MB is one reading, not a trend. The data directory did not grow.
 - Within the sizing guidance (server 32 GB minimum): Wazuh uses under 2% of server memory, and agents use under 50 MB.
+
+## Release candidate: ISO 0.3.0-rc3 (2026-10-31)
+
+After the final review's fix (chp-site 0.9.0-3: a failed client security step can be retried), repo 0.7.9 was re-signed
+and **ISO 0.3.0-rc3** built (`check-iso.sh`: ISO OK; sha256 `de69d364cf26f91e01977dc0cad0992319a87a90b331c10179d8c3c21f05c393`).
+All three hosts were reinstalled from it with `SECURITY_ADDONS=yes`:
+
+| Stage | Result |
+|---|---|
+| prep, server, firstboot, export, client1, client2 | ALL PASS (120 checks) |
+| `wazuh-on` | ALL PASS, 28 checks (the first run, right after cli2's TPM-test reboot, saw 1 of 2 agents Active; cli2 reconnected 26 s after boot, as on rc2; re-run clean) |
+| `scan` (CUI) | **108 pass / 2 fail on every host**, the same two accepted rules; `deviations.py`: **Gate 3 met** |
+| adapter, nvram, snapspike, golden | ALL PASS (new golden snapshots) |
+
+rc3 is the release candidate for ISO 0.3.0.
