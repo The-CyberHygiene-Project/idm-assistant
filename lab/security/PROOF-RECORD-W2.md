@@ -51,4 +51,19 @@ rc2 is clean.
 `aide_scan_notification`, both accepted by the ISSO as met by equivalent means. `deviations.py`: **Gate 3 met**. The
 Wazuh FIPS and unconfined POA&M items are recorded in `lab/iso5/DEVIATIONS.md` ("Known limits outside the scan").
 
-## Proof 6: resources and catch (pending: 24 h)
+## Proof 6: resources and catch (2026-10-30 to 2026-10-31)
+
+**Catch** (`w2catch`, 2026-10-30): PASS. A test event above the alert level reached `ALERT_HOOK`.
+
+**Resources** (`w2res`; Wazuh and its API's Python processes, and the data directory):
+
+| Host | After 1 h (10-30 10:05) | After ~28 h (10-31 13:49) |
+|---|---|---|
+| iso5-srv (manager) | 405 MB RSS, `/srv/wazuh` 1.2 GB | 558 MB RSS, 1.2 GB |
+| iso5-cli1 (agent) | 43-46 MB, 28 MB | 18 MB, 28 MB |
+| iso5-cli2 (agent) | 43-46 MB, 28 MB | 43 MB, 28 MB |
+
+- No Wazuh process restarted (every process's run time equals the host's uptime). Both agents Active.
+- On the server, most of the memory is the Wazuh API's Python workers (5 processes, 60-110 MB each); `wazuh-modulesd`
+  is 85 MB. The rise from 405 to 558 MB is one reading, not a trend. The data directory did not grow.
+- Within the sizing guidance (server 32 GB minimum): Wazuh uses under 2% of server memory, and agents use under 50 MB.
