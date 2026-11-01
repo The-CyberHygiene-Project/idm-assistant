@@ -7,12 +7,73 @@ import ipaddress
 import secrets
 import xml.etree.ElementTree as ET
 
+from . import yara_scan as _ys
+
 WAZUH_FPR = "0DCFCA5547B19D2A6099506096B3EE5F29111145"
 HEADER = "<!-- Managed by chp-security (security bundle spec §4); edits are replaced by chp-site security enable -->\n"
 API_YAML = ('# Managed by chp-security: the Wazuh API listens on this host only (spec §4). Wazuh 4.14 wants a list.\n'
             'host: ["127.0.0.1"]\nport: 55000\n')
 LOCAL_INTERNAL_AGENT = "agent.remote_conf=0\n"
 API_SYMBOLS = "-_.,+=@#%^*"
+
+
+YARA_RULES = """<!-- Managed by chp-security (YARA spec §5): YARA scan results from /var/log/chp-yara.json -->
+<group name="chp,yara,">
+  <rule id="100500" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="chp_yara.event">\\.+</field>
+    <description>CHP YARA: $(chp_yara.event)</description>
+  </rule>
+  <rule id="100501" level="12">
+    <if_sid>100500</if_sid>
+    <field name="chp_yara.event">^match$</field>
+    <description>YARA match: $(chp_yara.rules) in $(chp_yara.file)</description>
+    <group>malware,</group>
+  </rule>
+  <rule id="100502" level="7">
+    <if_sid>100500</if_sid>
+    <field name="chp_yara.event">^error$</field>
+    <description>YARA scan error: $(chp_yara.detail)</description>
+  </rule>
+</group>
+"""
+
+
+def _syscheck(blocks):
+    sc = _first(blocks, "syscheck")
+    for tag in ("directories", "ignore"):
+        for e in list(sc.findall(tag)):
+            sc.remove(e)
+    for child, value in (("frequency", "43200"), ("scan_on_start", "no")):
+        c = sc.find(child) if sc.find(child) is not None else ET.SubElement(sc, child)
+        c.text = value
+    d = ET.SubElement(sc, "directories", {"realtime": "yes", "check_all": "yes"})
+    d.text = ",".join(_ys.WATCHED)
+    for p in _ys.NEVER:
+        ET.SubElement(sc, "ignore").text = p
+
+
+def _yara_log(blocks):
+    for b in blocks:
+        for e in b.findall("localfile"):
+            if e.findtext("location") == _ys.LOG:
+                return
+    lf = ET.SubElement(blocks[0], "localfile")
+    ET.SubElement(lf, "log_format").text = "json"
+    ET.SubElement(lf, "location").text = _ys.LOG
+
+
+def _yara_response(blocks):
+    for b in blocks:
+        for e in list(b.findall("command")):
+            if e.findtext("name") == "chp-yara-scan":
+                b.remove(e)
+    c = ET.SubElement(blocks[0], "command")
+    for k, v in (("name", "chp-yara-scan"), ("executable", "chp-yara-scan"), ("timeout_allowed", "no")):
+        ET.SubElement(c, k).text = v
+    ar = ET.SubElement(blocks[0], "active-response")
+    for k, v in (("command", "chp-yara-scan"), ("location", "local"), ("rules_id", "550,554")):
+        ET.SubElement(ar, k).text = v
 
 
 def api_password():
@@ -25,11 +86,11 @@ def api_password():
             return pw
 
 _MANAGER = [("auth", "disabled", "yes"), ("vulnerability-detection", "enabled", "no"), ("indexer", "enabled", "no"),
-            ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"), ("cluster", "disabled", "yes"),
+            ("syscheck", "disabled", "no"), ("sca", "enabled", "no"), ("cluster", "disabled", "yes"),
             ("rootcheck", "disabled", "no"), ("remote", "connection", "secure"), ("remote", "port", "1514"),
             ("remote", "protocol", "tcp"), ("global", "jsonout_output", "yes"), ("global", "email_notification", "no"),
             ("global", "agents_disconnection_time", "10m"), ("global", "update_check", "no")]
-_AGENT = [("active-response", "disabled", "yes"), ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"),
+_AGENT = [("active-response", "disabled", "no"), ("syscheck", "disabled", "no"), ("sca", "enabled", "no"),
           ("rootcheck", "disabled", "no"), ("agent-upgrade", "enabled", "no")]
 _WODLES_OFF = ("syscollector", "cis-cat", "osquery")
 
@@ -90,6 +151,7 @@ def harden_manager(text):
     for tag, child, value in _MANAGER:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
+    _syscheck(blocks); _yara_log(blocks); _yara_response(blocks)
     return _render(blocks)
 
 
@@ -113,6 +175,7 @@ def harden_agent(text, server_ip):
     for tag, child, value in _AGENT:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
+    _syscheck(blocks); _yara_log(blocks)
     return _render(blocks)
 
 
