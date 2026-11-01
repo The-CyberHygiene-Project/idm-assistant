@@ -14,3 +14,6 @@ chp-identity-client ours
 aide rocky
 chp-integrity ours
 chp-templates ours
+chp-security ours
+wazuh-manager wazuh
+wazuh-agent wazuh

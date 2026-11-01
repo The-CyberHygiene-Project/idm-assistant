@@ -84,3 +84,39 @@ def test_update3_note_covers_both_upgrades_and_aide():
 
 def test_readme_lists_update3():
     assert "`0.2.0-update3/`" in (R / "release-kit.sh").read_text()
+
+
+def test_wazuh_key_pinned_and_packages_listed():
+    t = (R / "trusted-keys.txt").read_text()
+    assert "0DCFCA5547B19D2A6099506096B3EE5F29111145 wazuh RPM-GPG-KEY-WAZUH" in t
+    p = (R / "PACKAGES.txt").read_text()
+    assert "wazuh-manager wazuh" in p and "wazuh-agent wazuh" in p and "chp-security ours" in p
+
+
+def test_release_scripts_check_key_expiry_first():
+    for s in ("release-repo.sh", "release-iso.sh", "release-kit.sh"):
+        t = (R / s).read_text()
+        assert 'bash "$here/check-key-expiry.sh"' in t, s
+
+
+def test_notice_names_wazuh_gplv2():
+    n = (R.parent / "branding" / "NOTICE.txt").read_text()
+    assert "Wazuh" in n and "GPL" in n
+
+
+def test_verify_repo_accepts_v3_signatures_from_pinned_keys():
+    # W1 Task 6: Wazuh signs with V3 signature packets (RSA/SHA256, key 29111145); the check matched only V4. The key ID
+    # must still be a pinned primary key, so this widens the packet format, never the trust.
+    v = (R / "verify-repo.sh").read_text()
+    assert r"Header V[34] RSA\/SHA256 Signature, key ID" in v
+
+
+def test_update4_note_covers_enable_order_and_aide():
+    u = (R / "UPDATE-0.2.0-update4.md.in").read_text()
+    for s in ("dnf --enablerepo=chp upgrade chp-site chp-integrity", "chp-site security enable", "server first",
+              "site stick", "aide-accept", "Explained by signed package updates", "FIPS", "POA&M"):
+        assert s in u, s
+
+
+def test_readme_lists_update4():
+    assert "`0.2.0-update4/`" in (R / "release-kit.sh").read_text()

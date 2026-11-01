@@ -32,7 +32,7 @@ shopt -s nullglob; n=0
 for f in "$R"/*.rpm; do
   n=$((n + 1))
   out=$(rpm --dbpath "$db" -Kv "$f" 2>&1 || true)
-  kid=$(sed -n 's/.*Header V4 RSA\/SHA256 Signature, key ID \([0-9a-f]*\): OK.*/\1/p' <<<"$out" | head -n 1)
+  kid=$(sed -n 's/.*Header V[34] RSA\/SHA256 Signature, key ID \([0-9a-f]*\): OK.*/\1/p' <<<"$out" | head -n 1)
   # rpm names the (sub)key that made the signature: it must be a pinned PRIMARY key, never a subkey
   if [[ -z $kid || " $ids " != *" $kid "* ]] || grep -qE 'NOKEY|NOT OK|BAD' <<<"$out"; then
     say "BAD SIGNATURE: $(basename "$f")"

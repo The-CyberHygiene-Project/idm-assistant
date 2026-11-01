@@ -1,0 +1,6 @@
+[Unit]
+Description=CyberHygiene: delete Wazuh alert logs older than the site's retention period
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/wazuh-retention

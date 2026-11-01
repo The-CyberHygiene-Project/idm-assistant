@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
-aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs."""
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | alerts | wazuh-forward."""
 import argparse
 import os
 import sys
@@ -254,6 +254,73 @@ def _aide_accept(a):
     return 0
 
 
+def _security(a):
+    import subprocess
+    from . import security
+    from .usbstick import site_stick
+    if a.action == "status":
+        print(security.status(Path("/"), subprocess.run))
+        return 0
+    site, hosts = _load(a.site)
+    me = next((h for h in hosts if h.hostname == _host()), None)
+    if me is None:
+        raise SiteError(f"this host ({_host()}) is not in the hosts table")
+    with site_stick(getattr(a, "stick", None)) as s:     # USBGuard: ONLY the pinned stick, temporarily
+        done = security.enable(me.role, me.hostname, site, hosts, stick=s, run=subprocess.run)
+    print("\n".join(f"- {x}" for x in done))
+    if me.role == "server":
+        print("next: run `chp-site security enable` on each client, with the site stick")
+    return 0
+
+
+def _alerts(a):
+    import time
+    from . import wazuh_alerts as wa
+    try:
+        since = time.time() - wa.parse_since(a.since)
+    except ValueError as err:
+        raise SiteError(str(err)) from None
+    print(wa.summarize(wa.load_alerts("/var/ossec/logs/alerts", since), since, a.level))
+    return 0
+
+
+def _wazuh_forward(_a):
+    import subprocess
+    import time
+    from . import wazuh_alerts as wa
+    kv = dict(ln.split("=", 1) for ln in Path("/etc/chp/security.conf").read_text().splitlines() if "=" in ln)
+    hook = subprocess.run(["chp-site", "get", "ALERT_HOOK"], capture_output=True, text=True).stdout.strip()
+
+    def log(msg):
+        subprocess.run(["logger", "-p", "auth.warning", "-t", "chp-wazuh", msg], check=False)
+    try:
+        level = int(kv.get("ALERT_LEVEL", "10"))
+    except ValueError:
+        level = 10
+        log(f"ALERT_LEVEL in /etc/chp/security.conf is not a number ({kv.get('ALERT_LEVEL')!r}); using 10")
+    f = wa.Forwarder(level)
+
+    def send(msg):                                       # final review I4: a hook problem is logged, never fatal
+        log(msg)
+        if not hook:
+            return
+        try:
+            r = subprocess.run([hook, msg], check=False, timeout=30)
+            if r.returncode != 0:
+                log(f"ALERT_HOOK {hook} exited {r.returncode}")
+        except subprocess.TimeoutExpired:
+            log(f"ALERT_HOOK timed out: {hook}")
+        except OSError as e:
+            log(f"ALERT_HOOK could not run ({hook}: {e.strerror}); check it is executable and trusted by fapolicyd")
+    Path("/var/lib/chp/wazuh").mkdir(parents=True, exist_ok=True)
+    for alert in wa.follow("/var/ossec/logs/alerts/alerts.json", "/var/lib/chp/wazuh/forward.state"):
+        now = time.time()
+        msgs = (f.feed(alert, now) if alert is not None else []) + f.flush(now)
+        d = f.daily(now)
+        for m in msgs + ([d] if d else []):
+            send(m)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -307,6 +374,11 @@ def main(argv=None):
     dc.add_argument("--rev", default="rev2")
     avp = sub.add_parser("aide-verify-pin", help="compare the live AIDE database with the site stick's pin (MATCH/MISMATCH)")
     avp.add_argument("--stick")
+    se = sub.add_parser("security", help="security add-on: enable Wazuh on this host (server first), or show status")
+    se.add_argument("action", choices=("enable", "status")); se.add_argument("--stick"); se.add_argument("--site", default="/etc/chp")
+    al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
+    al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)
+    sub.add_parser("wazuh-forward", help="(service) send important Wazuh alerts to the log and ALERT_HOOK")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -317,7 +389,8 @@ def main(argv=None):
          "pam-test": _pam_test,
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
-         "stick-pin-hash": _stick_pin_hash, "docs": _docs}[a.cmd](a)
+         "stick-pin-hash": _stick_pin_hash, "docs": _docs,
+         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

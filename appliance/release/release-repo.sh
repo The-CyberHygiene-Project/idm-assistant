@@ -8,6 +8,7 @@
 # renamed only when every check passed. Never touches an existing folder; never rebuilds anything.
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"
+bash "$here/check-key-expiry.sh" "$here" || { echo "refusing: a pinned signing key has expired or expires soon"; exit 1; }
 V=${V:?set V (the update folder name, e.g. 0.2.0-update1)} REPO_V=${REPO_V:?set REPO_V (the signed repo, e.g. 0.7.5)}
 NOTE=${NOTE:-UPDATE.md.in}                     # the update note template in appliance/release (default: update1's)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
