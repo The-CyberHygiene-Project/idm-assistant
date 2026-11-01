@@ -77,3 +77,8 @@ def test_spec_pins_yara_and_ships_licence_and_notice():
 def test_packages_list_has_the_new_packages():
     p = (Path(__file__).resolve().parents[1] / "appliance" / "release" / "PACKAGES.txt").read_text().splitlines()
     assert "chp-yara-rules ours" in p and "yara rocky" in p
+
+
+def test_spec_names_our_vendor_so_sign_repo_signs_it():
+    # sign-repo signs only Vendor=The CyberHygiene Project + .chp releases (it refused 2026.10.29-1 without it)
+    assert "Vendor:         The CyberHygiene Project" in (D / "chp-yara-rules.spec").read_text()

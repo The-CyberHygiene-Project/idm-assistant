@@ -3,6 +3,8 @@ Version:        %{rules_version}
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene Project YARA rules (Neo23x0 signature-base, compiled)
 License:        DRL-1.1
+Vendor:         The CyberHygiene Project
+URL:            https://github.com/The-CyberHygiene-Project/idm-assistant
 BuildArch:      noarch
 Source0:        rules.yarc
 Source1:        SKIPPED.txt
