@@ -135,6 +135,10 @@ Keep the usual order, because the agent keys travel on the stick like the client
    first boot connects its agent to the server.
 
 A client installed before step 2 stops at the start of the install ("no Wazuh agent key"), before any disk is touched.
+The packages come from the ISO's own repo, which the installer copies to each host. **Installing over the network
+instead of from the ISO?** Then no repo is copied: before first boot reaches its security step, unpack the release's
+`chp-repo-<version>.tar.gz` into `/var/lib/chp/repo` (as in the update notes). If the step has already failed, unpack it
+and reboot; the step runs again.
 With `SECURITY_ADDONS=no` (the default) nothing changes from 0.2.0. `SECURITY_ALERT_LEVEL` (default 10) sets which
 Wazuh alerts go to `ALERT_HOOK` straight away; the rest go into a daily summary. It is read once, at the first enable:
 to change it later, edit `ALERT_LEVEL` in `/etc/chp/security.conf` on the server and run
