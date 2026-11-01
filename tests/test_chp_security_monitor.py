@@ -56,3 +56,34 @@ def test_agents_check_is_server_only(tmp_path):
 def test_disk_over_80_alerts(tmp_path):
     assert "ALERT Wazuh data directory /srv/wazuh is 85% full" in run(tmp_path, "72-wazuh-disk.sh", dfpct="85")
     assert run(tmp_path, "72-wazuh-disk.sh", dfpct="50").startswith("OK")
+
+
+def run_yara(tmp_path, last_full=None, conf_age_days=0, now=1_000_000_000):
+    st = tmp_path / "yara"; st.mkdir(exist_ok=True)
+    if last_full is not None:
+        (st / "last-full").write_text(f"{last_full}\n")
+    c = tmp_path / "security.conf"; c.write_text("ROLE=client\n")
+    os.utime(c, (now - conf_age_days * 86400,) * 2)
+    env = dict(os.environ, CHP_SECURITY_CONF=str(c), CHP_YARA_STATE=str(st), CHP_NOW=str(now))
+    r = subprocess.run(["bash", str(M / "73-yara-scan.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_yara_recent_full_scan_is_ok(tmp_path):
+    assert run_yara(tmp_path, last_full=1_000_000_000 - 3 * 86400).startswith("OK")
+
+
+def test_yara_full_scan_overdue_alerts(tmp_path):
+    assert "ALERT" in run_yara(tmp_path, last_full=1_000_000_000 - 9 * 86400)
+
+
+def test_yara_never_scanned_is_ok_in_the_first_week_then_alerts(tmp_path):
+    assert run_yara(tmp_path, conf_age_days=2).startswith("OK")
+    assert "ALERT" in run_yara(tmp_path, conf_age_days=9)
+
+
+def test_yara_not_enabled_is_silent_ok(tmp_path):
+    env = dict(os.environ, CHP_SECURITY_CONF=str(tmp_path / "none"))
+    out = subprocess.run(["bash", str(M / "73-yara-scan.sh")], env=env, capture_output=True, text=True).stdout
+    assert out.startswith("OK")

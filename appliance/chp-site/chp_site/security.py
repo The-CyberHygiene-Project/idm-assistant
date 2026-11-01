@@ -129,12 +129,15 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     _check_key(root, run); done.append("Wazuh signing key verified and imported")
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
     pkg = "wazuh-manager" if role == "server" else "wazuh-agent"
-    run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security"], check=True); done.append(f"{pkg} installed")
+    run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security", "yara", "chp-yara-rules"], check=True)
+    done.append(f"{pkg}, YARA and its rules installed")
     conf = _p(root, f"{OSSEC}/etc/ossec.conf")
     keys = _p(root, f"{OSSEC}/etc/client.keys")
     if role == "server":
         _write(conf, w.harden_manager(conf.read_text()), 0o640, group_wazuh)
         _write(_p(root, f"{OSSEC}/api/configuration/api.yaml"), w.API_YAML, 0o640, group_wazuh)
+        _p(root, f"{OSSEC}/etc/rules").mkdir(parents=True, exist_ok=True)
+        _write(_p(root, f"{OSSEC}/etc/rules/chp_yara_rules.xml"), w.YARA_RULES, 0o640, group_wazuh)
         if not keys.exists() or not keys.read_text().strip():
             lines = w.client_keys(hosts)
             _write(keys, "".join(v + "\n" for v in lines.values()), 0o640, group_wazuh)
@@ -162,7 +165,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if new:
             run(["firewall-cmd", "-q", "--reload"], check=True)
         done.append(f"firewall: 1514/tcp from {len(w.rich_rules(hosts))} clients")
-        units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer"]
+        units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer", "chp-yara-fullscan.timer"]
     else:
         server = next(h for h in hosts if h.role == "server")
         _write(conf, w.harden_agent(conf.read_text(), server.ip), 0o640, group_wazuh)
@@ -171,7 +174,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
-        units = ["wazuh-agent"]
+        units = ["wazuh-agent", "chp-yara-fullscan.timer"]
     _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")

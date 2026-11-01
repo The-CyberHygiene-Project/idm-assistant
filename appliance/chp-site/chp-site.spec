@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.9.0
-Release:        3.chp%{?dist}
+Version:        0.10.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -39,6 +39,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sun Nov 01 2026 The CyberHygiene Project - 0.10.0-1.chp
+- Security bundle part 2 (Plan Y1): chp-site yara-scan (one file, a Wazuh event, or a weekly full scan; alert only);
+  security enable installs YARA and its rules, watches the risky folders and adds the scan-only active response.
+
 * Fri Oct 30 2026 The CyberHygiene Project - 0.9.0-3.chp
 - W2 final review I1: a client's staged agent key is shredded only after the agent runs, and a retried first boot
   reuses the installed key, so a failed security step can always be retried.
