@@ -1,0 +1,2 @@
+# <file.yar> <reason>: rule files left out for false alarms on a clean appliance (YARA spec §2).
+# Plan Y1 spike (2026-11-01, signature-base 36ab704): a full scan of a clean iso5 server and client found none.
