@@ -81,4 +81,14 @@ All three hosts were reinstalled from it with `SECURITY_ADDONS=yes`:
 | `scan` (CUI) | **108 pass / 2 fail on every host**, the same two accepted rules; `deviations.py`: **Gate 3 met** |
 | adapter, nvram, snapspike, golden | ALL PASS (new golden snapshots) |
 
-rc3 is the release candidate for ISO 0.3.0.
+| fixtures, golden (re-taken with the scenario users) | FIXTURES OK; golden ALL PASS, 0 findings |
+| **Gate 2:** regression (`lab/iso5/regression-2026-10-31.md`) | **33/33 GREEN** (11 scenarios x 3), with Wazuh running on every host |
+| **Gate 2:** row 36 (desktop login: password + authenticator code) | 3/3 |
+
+Gate 2 needed three tries, both causes in the lab harness, not the product: (1) the golden snapshots were first taken
+without `lab/iso5/fixtures.py`; (2) the lab's `kanidm-login.exp` sent the admin password the instant the prompt
+appeared, and the CLI's switch to hidden input can discard it (twice in about 30 runs). The lab copy now pauses 400 ms,
+as `enrol-user.exp` already did. The appliance's own copy is used only at server first boot, inside a five-try retry;
+it gets the same fix in the next update (owner decision, 2026-11-01).
+
+rc3 is the release candidate for ISO 0.3.0: gates 1, 2 and 3 met.
