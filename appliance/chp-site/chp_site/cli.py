@@ -330,6 +330,19 @@ def _wazuh_forward(_a):
             send(m)
 
 
+def _yara_scan(a):
+    import subprocess
+    from . import yara_scan as ys
+    if a.full:
+        s = ys.full_scan(run=subprocess.run)
+        print(f"full scan: {s['files']} files, {s['matches']} matches, {s['errors']} errors, {s['seconds']} s")
+        return 0
+    path = ys.from_wazuh(sys.stdin.read()) if a.wazuh else a.path
+    if path:
+        ys.scan_file(path, run=subprocess.run)
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -389,6 +402,9 @@ def main(argv=None):
     al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
     al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)
     sub.add_parser("wazuh-forward", help="(service) send important Wazuh alerts to the log and ALERT_HOOK")
+    ys_ = sub.add_parser("yara-scan", help="(security add-on) YARA scan of one file, a Wazuh event (--wazuh), or "
+                                           "every local file system (--full); alert only, never moves a file")
+    ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -400,7 +416,7 @@ def main(argv=None):
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
-         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward}[a.cmd](a)
+         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
