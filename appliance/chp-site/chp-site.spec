@@ -1,5 +1,5 @@
 Name:           chp-site
-Version:        0.8.0
+Version:        0.9.0
 Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
@@ -39,6 +39,18 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Oct 30 2026 The CyberHygiene Project - 0.9.0-3.chp
+- W2 final review I1: a client's staged agent key is shredded only after the agent runs, and a retried first boot
+  reuses the installed key, so a failed security step can always be retried.
+
+* Thu Oct 29 2026 The CyberHygiene Project - 0.9.0-2.chp
+- W2 lab: a client's first boot waits (up to 2 min) for the agent's first sync, so AIDE's first baseline includes it.
+
+* Thu Oct 29 2026 The CyberHygiene Project - 0.9.0-1.chp
+- Security bundle W2: SECURITY_ADDONS / SECURITY_ALERT_LEVEL site keys; security enable --firstboot (pending
+  folder on the server, staged key on clients; no USB); export-client moves Wazuh agent keys; pre stages a client's key
+  and the ISO's repo path.
+
 * Wed Oct 28 2026 The CyberHygiene Project - 0.8.0-3.chp
 - Final review: security enable locks the Wazuh API's default logins with random passwords (never stored); manager
   update_check off; agent upgrade module off; forwarder never crash-loops (odd alerts, hook errors), checkpoints per

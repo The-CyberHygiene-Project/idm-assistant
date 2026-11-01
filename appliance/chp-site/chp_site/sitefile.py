@@ -126,7 +126,7 @@ def parse_site(text):
         _plain(k, v, where[k])
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
              "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY",
-             "COLLECTOR_SSH_PUBKEY", "BASELINE_DELEGATES"}
+             "COLLECTOR_SSH_PUBKEY", "BASELINE_DELEGATES", "SECURITY_ADDONS", "SECURITY_ALERT_LEVEL"}
     for k in raw:
         if k not in known:
             raise SiteError(f"site.conf: unknown key {k}")
@@ -180,6 +180,14 @@ def parse_site(text):
     if h and not re.fullmatch(_PATH, h):
         raise SiteError(f"ALERT_HOOK: {h!r} is not an absolute path")
     s["ALERT_HOOK"] = h
+    sa = raw.get("SECURITY_ADDONS", "no") or "no"        # security bundle (0.3.0): additive, default off
+    if sa not in ("yes", "no"):
+        raise SiteError("SECURITY_ADDONS: yes or no")
+    s["SECURITY_ADDONS"] = sa
+    lv = raw.get("SECURITY_ALERT_LEVEL", "10") or "10"
+    if not (lv.isdigit() and 3 <= int(lv) <= 15):
+        raise SiteError("SECURITY_ALERT_LEVEL: a number from 3 to 15 (Wazuh rule level; default 10)")
+    s["SECURITY_ALERT_LEVEL"] = int(lv)
     s["ADMIN_SSH_PUBKEY"] = ssh_pubkey(raw["ADMIN_SSH_PUBKEY"])
     ck = raw.get("COLLECTOR_SSH_PUBKEY", "")
     if ck:

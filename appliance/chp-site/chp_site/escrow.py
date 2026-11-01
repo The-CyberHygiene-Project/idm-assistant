@@ -80,12 +80,12 @@ def move_pending(pending, stick, server_hostname, now):
     return [f.name for f in files]
 
 
-def move_tokens(pending_tokens, stick, now):
-    """Per-client unixd tokens -> stick/tokens/<host>.token with the same guarantee as the escrow: written, fsync'd,
-    read back from the DEVICE and compared, only then shredded on the server."""
-    pending_tokens, d = Path(pending_tokens), Path(stick) / "tokens"
-    files = sorted(f for f in pending_tokens.iterdir() if f.is_file() and f.name.endswith(".token")) \
-        if pending_tokens.is_dir() else []
+def _move_files(pending_dir, stick, sub, suffix, now, what):
+    """pending_dir/*<suffix> -> stick/<sub>/ with the escrow guarantee: written, fsync'd, read back from the DEVICE and
+    compared, only then shredded on the server (and the emptied pending dir removed). Returns the host names moved."""
+    pending_dir, d = Path(pending_dir), Path(stick) / sub
+    files = sorted(f for f in pending_dir.iterdir() if f.is_file() and f.name.endswith(suffix)) \
+        if pending_dir.is_dir() else []
     if not files:
         return []
     try:
@@ -99,12 +99,22 @@ def move_tokens(pending_tokens, stick, now):
             if _read_back(out) != v:
                 raise OSError(0, f"read-back of {f.name} from the stick does not match")
     except OSError as e:
-        raise SiteError(f"could not write the client tokens to the stick ({getattr(e, 'strerror', None) or e}); they are "
+        raise SiteError(f"could not write the {what} to the stick ({getattr(e, 'strerror', None) or e}); they are "
                         "kept on the server and the monitor keeps warning") from None
     for f in files:
         _shred(f)
     try:
-        pending_tokens.rmdir()
+        pending_dir.rmdir()
     except OSError:
         pass
-    return [f.name[:-len(".token")] for f in files]
+    return [f.name[:-len(suffix)] for f in files]
+
+
+def move_tokens(pending_tokens, stick, now):
+    """Per-client unixd tokens -> stick/tokens/<host>.token (see _move_files)."""
+    return _move_files(pending_tokens, stick, "tokens", ".token", now, "client tokens")
+
+
+def move_wazuh_keys(pending_wazuh, stick, now):
+    """Security bundle W2: per-client Wazuh agent keys -> stick/wazuh/<host>.key, exactly like the client tokens."""
+    return _move_files(pending_wazuh, stick, "wazuh", ".key", now, "Wazuh agent keys")

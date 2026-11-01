@@ -107,10 +107,19 @@ do_collect() {        # Plan 5b P1: the collector's site data (the server writes
   restorecon -R /etc/idm-collect
 }
 
+# Security add-on (0.3.0, spec §3): Wazuh agent with the key the installer staged (no site stick at first boot).
+# Clients only: the server's own self-client enrolment never gets an agent (it runs the manager).
+do_security() {
+  [ "$ROLE" = client ] || return 0
+  [ "$(chp-site get SECURITY_ADDONS)" = yes ] || return 0
+  chp-site security enable --firstboot
+}
+
 step trust do_trust
 step unixd do_unixd
 step authselect do_authselect
 step sshd do_sshd
 step accounts do_accounts
 step collect do_collect
+step security do_security
 if [ -z "$ONLY" ]; then current=done; touch "$M/client.done"; log "CHP: client enrolment complete ($ROLE; logins: $LOGIN_GROUP)"; fi

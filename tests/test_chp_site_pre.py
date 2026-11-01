@@ -155,3 +155,49 @@ def test_client_token_garbage_refused(tmp_path):
 def test_server_gets_no_token_file(tmp_path):
     h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
     assert not (out / "unixd.token").exists()
+
+
+# ---- security bundle W2 ----
+WKEY = "001 iso2-cli 192.168.100.31 " + "ab" * 32 + "\n"
+
+
+def addon_stick(tmp_path, key=True):
+    s = stick(tmp_path); (s / "site.conf").write_text(GOOD + "SECURITY_ADDONS=yes\n")
+    (s / "tokens").mkdir(); (s / "tokens" / "iso2-cli.token").write_text(TOKEN + "\n")
+    if key:
+        (s / "wazuh").mkdir(); (s / "wazuh" / "iso2-cli.key").write_text(WKEY)
+    return s
+
+
+def test_pre_stages_this_clients_wazuh_key_when_the_add_on_is_on(tmp_path):
+    h, s, out = run(tmp_path, "client", CLI_MAC, stick_dir=addon_stick(tmp_path))
+    k = out / "wazuh.key"
+    assert k.read_text() == WKEY and stat.S_IMODE(k.stat().st_mode) == 0o600
+    assert (out / "security-addons").read_text().strip() == "yes"
+    assert (out / "repo-dir").read_text().strip() == "/run/install/repo/chp"     # the ISO's repo, not the stick
+
+
+def test_pre_refuses_a_client_without_its_wazuh_key_before_any_disk(tmp_path):
+    s = addon_stick(tmp_path, key=False)
+    with pytest.raises(SiteError, match=r"no Wazuh agent key for iso2-cli .*export-client"):
+        run(tmp_path, "client", CLI_MAC, stick_dir=s)
+    assert not (s / "escrow").exists() and not (tmp_path / "out").exists()
+
+
+def test_pre_refuses_another_hosts_wazuh_key(tmp_path):
+    s = addon_stick(tmp_path); (s / "wazuh" / "iso2-cli.key").write_text(WKEY.replace("iso2-cli", "iso2-xyz"))
+    with pytest.raises(SiteError, match="not iso2-cli's"):
+        run(tmp_path, "client", CLI_MAC, stick_dir=s)
+
+
+def test_pre_add_on_off_stages_nothing(tmp_path):
+    s = stick(tmp_path); (s / "tokens").mkdir(); (s / "tokens" / "iso2-cli.token").write_text(TOKEN + "\n")
+    h, s, out = run(tmp_path, "client", CLI_MAC, stick_dir=s)
+    assert not (out / "wazuh.key").exists() and (out / "security-addons").read_text().strip() == "no"
+
+
+def test_pre_network_repo_writes_no_repo_dir(tmp_path):
+    s = addon_stick(tmp_path); out = tmp_path / "out"
+    run_pre("client", s, out, "http://192.0.2.1/chp", facts(CLI_MAC), hasher=lambda pw: "$6$x$" + str(len(pw)),
+            secret=lambda n: "S" * n)
+    assert not (out / "repo-dir").exists()

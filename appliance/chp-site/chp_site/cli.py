@@ -101,6 +101,10 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     toks = move_tokens(pending / "tokens", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
         if (pending / "tokens").is_dir() else []
     print("tokens moved to the stick: " + ", ".join(toks) if toks else "no client tokens pending")
+    from .escrow import move_wazuh_keys                  # security bundle W2: agent keys travel like the tokens
+    wk = move_wazuh_keys(pending / "wazuh", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
+        if (pending / "wazuh").is_dir() else []
+    print("Wazuh agent keys moved to the stick: " + ", ".join(wk) if wk else "no Wazuh agent keys pending")
     from . import aide
     base = aide.read_record(aide.STATE / "baseline")
     if base.get("DB_SHA512"):
@@ -265,6 +269,11 @@ def _security(a):
     me = next((h for h in hosts if h.hostname == _host()), None)
     if me is None:
         raise SiteError(f"this host ({_host()}) is not in the hosts table")
+    if a.firstboot:                                      # W2: no site stick at first boot (no USB access at all)
+        done = security.enable(me.role, me.hostname, site, hosts, stick=None, pending=Path("/root/chp-escrow-pending"),
+                               key_file=Path("/var/lib/chp/wazuh/agent.key"), run=subprocess.run)
+        print("\n".join(f"- {x}" for x in done))
+        return 0
     with site_stick(getattr(a, "stick", None)) as s:     # USBGuard: ONLY the pinned stick, temporarily
         done = security.enable(me.role, me.hostname, site, hosts, stick=s, run=subprocess.run)
     print("\n".join(f"- {x}" for x in done))
@@ -376,6 +385,7 @@ def main(argv=None):
     avp.add_argument("--stick")
     se = sub.add_parser("security", help="security add-on: enable Wazuh on this host (server first), or show status")
     se.add_argument("action", choices=("enable", "status")); se.add_argument("--stick"); se.add_argument("--site", default="/etc/chp")
+    se.add_argument("--firstboot", action="store_true", help="first boot: no site stick (keys via the pending folder / the staged key)")
     al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
     al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)
     sub.add_parser("wazuh-forward", help="(service) send important Wazuh alerts to the log and ALERT_HOOK")

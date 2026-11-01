@@ -140,3 +140,16 @@ def test_firstboot_tokens_and_self_client_after_cache_key():
     assert '"$P/tokens/$h.token"' in t and "/etc/kanidm/token" in t
     assert "/usr/libexec/chp/client-enrol --role server" in t
     assert t.count("kanidm_login") >= 3          # defined once, used by collector and unixd-tokens
+
+
+# ---- security bundle W2 ----
+def test_server_firstboot_runs_the_security_step_only_when_on():
+    t = (SRV / "server-firstboot.sh").read_text()
+    assert "step security do_security" in t and t.index("step self-client") < t.index("step security do_security")
+    assert '[ "$(chp-site get SECURITY_ADDONS)" = yes ] || return 0' in t and "chp-site security enable --firstboot" in t
+
+
+def test_pending_monitor_also_reminds_about_wazuh_keys():
+    # 40-escrow-pending lists every entry of /root/chp-escrow-pending, so a waiting wazuh/ folder alerts too
+    t = (SRV / "monitor.d" / "40-escrow-pending.sh").read_text()
+    assert 'ls -A "$P"' in t and "chp-site export-client" in t

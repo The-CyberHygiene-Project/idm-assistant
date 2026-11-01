@@ -1,4 +1,29 @@
-# Gate 3: CUI scan and deviation table (core 0.2.0 Plan B)
+# Gate 3: CUI scan and deviation table (ISO 0.3.0, security bundle Plan W2)
+
+**ISO:** `cyberhygiene-lab-installer-el9.iso` 0.3.0-rc2 (repo 0.7.9) · **Scanned:** 2026-10-30, on the three hosts
+installed from that ISO with `SECURITY_ADDONS=yes` (Wazuh manager on `iso5-srv`, agents on `iso5-cli1`, `iso5-cli2`),
+before the lab adapter. Same profile and tailoring as 0.2.0 (below). **Results:** `scan-results/*.xml.xz` (the 0.2.0
+results are in git history).
+
+**Result on every host: 108 pass, 2 fail: identical to 0.2.0** (rule by rule, the same two failing rules). The
+security add-on introduced no new failing rule. `deviations.py` exit code 0: **Gate 3 met.**
+
+| rule | severity | hosts | decision | decided by | reason |
+|---|---|---|---|---|---|
+| aide_periodic_cron_checking | medium | all three | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): chp-aide-check.timer daily + 61-aide-stale |
+| aide_scan_notification | medium | all three | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): monitor -> journal + ALERT_HOOK (no MTA) |
+
+## Known limits outside the scan (POA&M; security bundle spec §6)
+
+- **Wazuh's cryptography is outside the FIPS-validated module:** Wazuh 4.14.9 links its own OpenSSL 3.5.1 (manager,
+  agents, API). The algorithms are approved (TLS 1.3, AES-256); compensating controls: internal network only, the
+  manager accepts 1514/tcp only from the site's clients, enrolment (1515) off, the API on 127.0.0.1 only with its
+  default logins replaced. Each new Wazuh version is checked for a FIPS-capable build.
+- **Wazuh runs unconfined** (`unconfined_service_t`), recorded like Kanidm's identity client.
+
+---
+
+# History: Gate 3 for core 0.2.0 Plan B
 
 **ISO:** `cyberhygiene-lab-installer-el9.iso` 0.2.0-rc2 (repo 0.7.4) · **Scanned:** 2026-10-24, on the three hosts
 installed from that ISO (`iso5-srv`, `iso5-cli1`, `iso5-cli2`). The hosts had passed gate 1's quiet check, and the

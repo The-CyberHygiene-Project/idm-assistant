@@ -1,5 +1,5 @@
 Name:           chp-identity-server
-Version:        0.1.1
+Version:        0.1.2
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
@@ -61,6 +61,9 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Thu Oct 29 2026 The CyberHygiene Project - 0.1.2-1.chp
+- Security bundle W2: server first boot: the security step (chp-site security enable --firstboot when SECURITY_ADDONS=yes).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.1-1.chp
 - unixd-tokens step (login groups chp_users/chp_admins, one read-only unixd token per host) and self-client step (the server becomes its own Kanidm client, ISO Plan 4a).
 

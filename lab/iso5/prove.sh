@@ -27,7 +27,8 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=0.7.4; ISO=/var/lib/libvirt/images/chp-iso/0.2.0-rc2/cyberhygiene-lab-installer-el9.iso
+export CHP_REPO=${CHP_REPO:-0.7.9}; ISO=${ISO:-/var/lib/libvirt/images/chp-iso/0.3.0-rc3/cyberhygiene-lab-installer-el9.iso}
+SECURITY_ADDONS=${SECURITY_ADDONS:-no}   # security bundle W2: the lab site's add-on setting for this run (yes|no)
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }
 check() { if [[ $2 == "$3" ]]; then pass "$1"; else fail "$1" "got '$2', want '$3'"; fi; }
@@ -91,7 +92,7 @@ case ${1:-} in
     [[ -f $DKEY ]] || ssh-keygen -q -t ecdsa -b 384 -N '' -C 'idm-assistant diag (iso5 lab)' -f "$DKEY"
     [[ -f $UKEY ]] || ssh-keygen -q -t ecdsa -b 384 -N '' -C 'ops user (iso5 lab)' -f "$UKEY"
     rm -rf "$R"; (umask 077; mkdir -p "$R")
-    sed -e "s|@ADMIN_PUBKEY@|$(cut -d' ' -f1,2 "$KEY.pub")|" -e "s|@DIAG_PUBKEY@|$(cut -d' ' -f1,2 "$DKEY.pub")|" "$here/site.conf.in" > "$R/site.conf"
+    sed -e "s|@ADMIN_PUBKEY@|$(cut -d' ' -f1,2 "$KEY.pub")|" -e "s|@DIAG_PUBKEY@|$(cut -d' ' -f1,2 "$DKEY.pub")|" -e "s|@SECURITY_ADDONS@|$SECURITY_ADDONS|" "$here/site.conf.in" > "$R/site.conf"
     cp "$here/hosts" "$R/hosts"
     out=$(python3 "$PYZ" validate --site "$R"); [[ $out == OK:* ]] && pass "chp-site validate (iso5 site, diag key)" || fail "validate" "$out"
     A 'sudo rm -rf /tmp/iso2 && mkdir -p -m 700 /tmp/iso2'
@@ -142,8 +143,54 @@ case ${1:-} in
     aide_firstboot_checks "$SRV" "$SIP" server server.done
     detach_stick "$SRV"
     al=$(Rv 'for c in /usr/lib/chp/monitor.d/*; do "$c"; done | grep ^ALERT')
+    [[ $SECURITY_ADDONS == yes ]] && al=$(grep -v "has never connected" <<<"$al")   # W2: clients not installed yet
     [[ $(grep -c . <<<"$al") == 2 && $al == *"recovery secrets still on the server"* && $al == *"not pinned"* ]] \
       && pass "monitor alerts only: secrets still on the server + AIDE baseline not pinned" || fail "monitor alerts" "$al" ;;
+  wazuh-off)    # security bundle W2 proof 4 (off): SECURITY_ADDONS=no -> the server is exactly as in 0.2.0
+    check "no Wazuh packages" "$(Rv 'rpm -q wazuh-manager wazuh-agent chp-security >/dev/null 2>&1 && echo some || echo none')" "none"
+    check "no repo copied to /var/lib/chp/repo" "$(Rv 'ls -A /var/lib/chp/repo 2>/dev/null | wc -l')" "0"
+    check "security step ran and did nothing (add-on off)" "$(Rv 'ls /var/lib/chp/firstboot/security.done 2>/dev/null | wc -l; ls -d /var/ossec /etc/chp/security.conf 2>/dev/null | wc -l' | tr '\n' ' ')" "1 0 "
+    check "no wazuh keys pending" "$(Rv 'ls -A /root/chp-escrow-pending/wazuh 2>/dev/null | wc -l')" "0"
+    n=$(Rv 'rpm -qa | sort > /root/w2-off-rpms.txt; wc -l < /root/w2-off-rpms.txt' | tr -dc '0-9')
+    (( ${n:-0} > 300 )) && pass "package list kept on the host (/root/w2-off-rpms.txt, $n packages)" || fail "package list" "${n:-none}" ;;
+  wazuh-on)     # security bundle W2 proof 4 (on): everything in place from first boot on all three hosts
+    check "agents Active (2)" "$(Rv '/var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
+    check "pending wazuh folder empty after export" "$(Rv 'ls -A /root/chp-escrow-pending/wazuh 2>/dev/null | wc -l')" "0"
+    check "server: default API logins refused" "$(Rv 'for u in wazuh:wazuh wazuh-wui:wazuh-wui; do curl -sk -o /dev/null -w "%{http_code} " -u $u -X POST https://127.0.0.1:55000/security/user/authenticate; done')" "401 401 "
+    check "server: listeners" "$(Rv 'ss -ltn | awk "{print \$4}" | grep -E ":(1514|1515|55000)$" | sort | tr "\n" " "')" "0.0.0.0:1514 127.0.0.1:55000 "
+    check "server: update_check off" "$(Rv 'grep -c "<update_check>no</update_check>" /var/ossec/etc/ossec.conf')" "1"
+    for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      check "$1: no 'No such tag' warnings" "$(Rh "$1" "$2" 'for t in wazuh-analysisd wazuh-agentd wazuh-modulesd; do [ -x /var/ossec/bin/$t ] && /var/ossec/bin/$t -t 2>&1; done | grep -c "No such tag"')" "0"
+      check "$1: data bind-mounted" "$(Rh "$1" "$2" 'findmnt -no SOURCE /var/ossec | sed "s/.*\[//; s/\]//"')" "/srv/wazuh"
+      want=1; [[ $1 == "$SRV" ]] && want=2   # the server also runs client-enrol for itself (its step does nothing)
+      check "$1: security step done" "$(Rh "$1" "$2" 'ls /var/lib/chp/firstboot/security.done /var/lib/chp/firstboot/client-security.done 2>/dev/null | wc -l')" "$want"
+      check "$1: 0 Wazuh SELinux denials" "$(Rh "$1" "$2" 'ausearch -m AVC --input-logs 2>/dev/null | grep denied | grep -v kanidm_unixd | grep -c denied')" "0"
+      check "$1: 0 fapolicyd denials" "$(Rh "$1" "$2" 'ausearch -m FANOTIFY --input-logs 2>/dev/null | grep -c type=FANOTIFY')" "0"
+      check "$1: AIDE baseline includes Wazuh (no Wazuh path in the next check)" "$(Rh "$1" "$2" 'systemctl start chp-aide-check; while systemctl is-active -q chp-aide-check; do sleep 5; done; grep -c -E "^(added|changed|removed)?.*(/var/ossec|wazuh)" "$(sed -n s/^REPORT=//p /var/lib/chp/aide/last-result)"')" "0"
+    done
+    for h in "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      check "$1: staged agent.key shredded" "$(Rh "$1" "$2" 'ls /var/lib/chp/wazuh/agent.key 2>/dev/null | wc -l')" "0"
+      check "$1: agent upgrade module off" "$(Rh "$1" "$2" 'grep -c "Module Agent Upgrade started" /var/ossec/logs/ossec.log')" "0"
+    done
+    check "USBGuard allow events only from export-client (server)" "$(Rv 'journalctl -u usbguard --no-pager | grep -ci "allow"')" "$(Rv 'journalctl -t chp-site --no-pager | grep -c "export-client\|stick allowed"')" ;;
+  aidepeek)     # read-only: the Wazuh paths in each host's latest AIDE report (paths only, no hashes)
+    for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
+      Rh "$1" "$2" 'R=$(sed -n s/^REPORT=//p /var/lib/chp/aide/last-result); grep -E "(/var/ossec|wazuh)" "$R" | grep -v "^ *$" | sed -E "s/ +/ /g" | cut -c1-100 | head -25'
+    done ;;
+  syncinfo)     # read-only: each client's first-boot security step result + when its agent last (re)connected
+    for h in "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
+      Rh "$1" "$2" 'journalctl -u chp-client-firstboot --no-pager | grep -E "first sync|not synced|started: wazuh" | tail -2 | cut -c1-140; grep -E "Connected to the server|Lost connection|Unable to connect" /var/ossec/logs/ossec.log | tail -3 | cut -c1-120; uptime -s'
+    done ;;
+  w2catch)      # W2 proof 6: lab hook on the server, one brute-force burst at cli2, the hook gets it (level >= 10)
+    Rv 'printf "#!/bin/bash\necho \"\$(date +%%H:%%M:%%S) \$1\" >> /var/log/lab-hook.log\n" > /usr/local/sbin/lab-hook; chmod 0755 /usr/local/sbin/lab-hook; touch /var/log/lab-hook.log; sed -i "s#^ALERT_HOOK=.*#ALERT_HOOK=/usr/local/sbin/lab-hook#" /etc/chp/site.conf; systemctl restart chp-wazuh-alerts' >/dev/null
+    check "lab hook set" "$(Rv 'chp-site get ALERT_HOOK')" "/usr/local/sbin/lab-hook"
+    Rv "for i in \$(seq 1 12); do ssh -n -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null probe\$i@$C2IP true >/dev/null 2>&1; done" >/dev/null
+    sleep 30
+    check "brute force reached the hook" "$(Rv 'grep -c "iso5-cli2 rule 5712 level 10" /var/log/lab-hook.log')" "1" ;;
+  w2res)        # W2 proof 6: resources (manager RSS, data size) on every host
+    for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      echo "$1: $(Rh "$1" "$2" 'ps -eo rss,comm | grep -E "wazuh|python3" | awk "{s+=\$1} END {print int(s/1024) \" MB RSS\"}"; du -sh /srv/wazuh | cut -f1; uptime -p' | tr '\n' ' ')"
+    done ;;
   reboot)
     A "sudo virsh reboot $SRV >/dev/null"; sleep 20
     ok=no; for _ in $(seq 30); do if Vh "$SIP" true; then ok=yes; break; fi; sleep 10; done
@@ -160,7 +207,11 @@ case ${1:-} in
     check "nothing pending on the server" "$(Rv 'ls -A /root/chp-escrow-pending | wc -l')" "0"
     check "server AIDE baseline pinned by export-client" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK aide/$SRV.txt && echo yes")" "yes"
     check "server: escrow emptied, AIDE baseline unchanged" "$(Rv 'sha512sum /var/lib/aide/aide.db.gz | cut -d" " -f1; sed -n s/^DB_SHA512=//p /var/lib/chp/aide/baseline' | uniq | wc -l | tr -d ' ')" "1"
-    check "server monitor quiet" "$(Rv '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0" ;;
+    if [[ $SECURITY_ADDONS == yes ]]; then   # W2: until the clients are installed, their agents have "never connected"
+      check "server monitor: only the not-yet-installed agents" "$(Rv 'for c in /usr/lib/chp/monitor.d/*; do "$c"; done | grep ^ALERT | grep -vc "has never connected"')" "0"
+    else
+      check "server monitor quiet" "$(Rv '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0"
+    fi ;;
   client1|client2)
     if [[ $1 == client1 ]]; then VM=$C1; IP=$C1IP; MAC=52:54:00:c4:05:51; else VM=$C2; IP=$C2IP; MAC=52:54:00:c4:05:52; fi
     out=$(A "sudo bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")

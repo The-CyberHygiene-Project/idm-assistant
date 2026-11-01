@@ -140,3 +140,13 @@ def test_integrity_installed_and_enabled_on_a_fresh_install(role):   # Plan B; P
     post = _section(ks, "%post --log=/root/chp-post.log")
     line = next(l for l in post.splitlines() if l.startswith("systemctl enable "))
     assert "chp-aide-check.timer" in line.split() and "chp-aide-baseline.service" in line.split()
+
+
+# ---- security bundle W2 ----
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_kickstart_copies_the_isos_repo_and_installs_the_agent_key_only_when_needed(role):
+    t = (KS / f"{role}.ks").read_text()
+    assert "grep -qx yes /tmp/chp/security-addons" in t
+    assert 'rsync -a "$(cat /tmp/chp/repo-dir)/" /mnt/sysimage/var/lib/chp/repo/' in t      # the ISO's repo, not the stick
+    assert "install -D -m 0600 /tmp/chp/wazuh.key /mnt/sysimage/var/lib/chp/wazuh/agent.key" in t
+    assert "shred -u /tmp/chp/wazuh.key" in t

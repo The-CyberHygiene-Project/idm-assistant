@@ -34,3 +34,12 @@ def test_aide_watches_wazuh_config_but_never_hashes_its_secrets():
         # final review (re-graded): anchored, but also covering suffixed copies (client.keys.chp-tmp, .bak, …)
         assert r"!/var/ossec/etc/client\.keys(\.[A-Za-z0-9_-]+)?$" in a, f
         assert r"!/var/ossec/etc/sslmanager\.(key|cert)(\.[A-Za-z0-9_-]+)?$" in a, f
+
+
+def test_aide_checks_wazuh_shared_files_by_content_not_timestamps():
+    # W2 lab: the manager rewrites etc/shared/ar.conf (same content) at every start; clients receive the shared bundle
+    # at first connection. Content and permissions stay checked; mtime/ctime/inode do not.
+    top = Path(__file__).resolve().parents[1] / "appliance/rpm/chp-integrity"
+    for f in ("chp-additions.conf", "aide.conf"):
+        a = (top / f).read_text()
+        assert "CHPSHARED = p+u+g+s+acl+selinux+xattrs+sha512" in a and "/var/ossec/etc/shared CHPSHARED" in a, f

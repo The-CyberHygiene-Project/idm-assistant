@@ -98,6 +98,12 @@ done
 if [ -f /tmp/chp/site-stick.id ]; then install -m 0644 /tmp/chp/site-stick.id /mnt/sysimage/etc/chp/site-stick.id; fi
 # This client's own unixd token (chp-site pre staged ONLY this host's token, 0600): to /etc/kanidm/token, then shred.
 if [ -f /tmp/chp/unixd.token ]; then install -D -m 0600 /tmp/chp/unixd.token /mnt/sysimage/etc/kanidm/token; shred -u /tmp/chp/unixd.token; fi
+# Security add-on (0.3.0, spec §3): the ISO's own signed repo (wherever the ISO is mounted; never the stick) stays on the
+# host so first boot can install Wazuh; this client's agent key (staged by chp-site pre, 0600) becomes agent.key.
+if grep -qx yes /tmp/chp/security-addons 2>/dev/null && [ -d "$(cat /tmp/chp/repo-dir 2>/dev/null)" ]; then
+  install -d -m 0755 /mnt/sysimage/var/lib/chp/repo && rsync -a "$(cat /tmp/chp/repo-dir)/" /mnt/sysimage/var/lib/chp/repo/
+fi
+if [ -f /tmp/chp/wazuh.key ]; then install -D -m 0600 /tmp/chp/wazuh.key /mnt/sysimage/var/lib/chp/wazuh/agent.key; shred -u /tmp/chp/wazuh.key; fi
 # One-time key for the first-boot TPM binding (chp-base): a random 64-byte key in its OWN LUKS slot, added with the
 # passphrase that exists only in installer RAM; first boot binds clevis with it, then kills that slot and shreds it.
 dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')

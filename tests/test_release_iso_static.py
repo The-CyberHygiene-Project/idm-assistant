@@ -120,3 +120,15 @@ def test_update4_note_covers_enable_order_and_aide():
 
 def test_readme_lists_update4():
     assert "`0.2.0-update4/`" in (R / "release-kit.sh").read_text()
+
+
+# ---- security bundle W2 ----
+def test_readme_lists_iso_030_and_its_kit():
+    t = (R / "release-kit.sh").read_text()
+    assert "`0.3.0/`" in t and "`site-stick-kit-0.3.0/`" in t
+
+
+def test_kit_guide_explains_the_add_on_at_install():
+    s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
+    for x in ("SECURITY_ADDONS=yes", "export-client", "wazuh/<host>.key", "Install the server first"):
+        assert x in s, x

@@ -47,6 +47,15 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         token = read_file(tp, f"unixd token for {host.hostname}").strip()
         if not re.fullmatch(TOKEN_RE, token):
             raise SiteError(f"tokens/{host.hostname}.token is not a Kanidm API token")
+    wkey = None
+    if role == "client" and site["SECURITY_ADDONS"] == "yes":   # security bundle W2: this client's own agent key
+        kp = stick / "wazuh" / f"{host.hostname}.key"
+        if not kp.is_file():
+            raise SiteError(f"no Wazuh agent key for {host.hostname} on the site stick: on the server run "
+                            "`chp-site export-client` (the security add-on is on)")
+        wkey = read_file(kp, f"Wazuh agent key for {host.hostname}").strip()
+        if not re.fullmatch(rf"\d{{3}} {re.escape(host.hostname)} \S+ [0-9a-f]{{64}}", wkey):
+            raise SiteError(f"wazuh/{host.hostname}.key is not {host.hostname}'s Wazuh agent key")
     disk = choose_disk(facts.disks, host.disk)
     # --- everything is valid: now the secrets, escrow first ---
     luks, rootpw, grubpw = secret(32), secret(18), secret(18)
@@ -83,4 +92,11 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         fd = os.open(out / "unixd.token", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(token)
+    if wkey is not None:     # this client's OWN Wazuh agent key, for %post --nochroot (installs it 0600, then shreds this)
+        fd = os.open(out / "wazuh.key", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(wkey + "\n")
+    (out / "security-addons").write_text(site["SECURITY_ADDONS"] + "\n")
+    if repo_url.startswith("file://"):   # owner 2026-10-29: the ISO may be on another device; copy ITS repo, never the stick
+        (out / "repo-dir").write_text(repo_url[len("file://"):] + "\n")
     return host

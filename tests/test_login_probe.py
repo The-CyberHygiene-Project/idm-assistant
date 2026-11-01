@@ -38,3 +38,12 @@ def test_probe_certificates_outlive_a_regression():
     import inspect
     src = inspect.getsource(_login)
     assert _login.LAB_CERT_VALIDITY == "+30d" and '"+10m"' not in src and '"+1h"' not in src
+
+
+def test_lab_kanidm_login_pauses_before_sending_the_password():
+    # Gate 2 (ISO 0.3.0): sending the password the instant the prompt appears raced the CLI's switch to hidden input
+    # (typed-ahead input is discarded), so the CLI waited until expect's timeout. enrol-user.exp already pauses 400 ms.
+    import re
+    from pathlib import Path
+    t = (Path(__file__).resolve().parents[1] / "lab" / "srv1" / "kanidm-login.exp").read_text()
+    assert re.search(r"password\.\*:\} \{ after [1-9][0-9]{2,}; send -- \"\$pw\\r\" \}", t)
