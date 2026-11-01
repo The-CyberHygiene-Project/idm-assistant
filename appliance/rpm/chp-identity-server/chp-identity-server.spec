@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.2
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -61,6 +61,10 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Sun Nov 01 2026 The CyberHygiene Project - 0.1.2-2.chp
+- kanidm-login.exp pauses 400 ms before sending the password: sending it the instant the prompt appears can lose it
+  to the CLI's switch to hidden input (expect then times out).
+
 * Thu Oct 29 2026 The CyberHygiene Project - 0.1.2-1.chp
 - Security bundle W2: server first boot: the security step (chp-site security enable --firstboot when SECURITY_ADDONS=yes).
 

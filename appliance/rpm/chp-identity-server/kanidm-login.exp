@@ -9,7 +9,7 @@ gets stdin pw
 log_user 0
 spawn kanidm login --name $name
 expect {
-  -re {(?i)password.*:} { send -- "$pw\r" }
+  -re {(?i)password.*:} { after 400; send -- "$pw\r" }
   eof { puts stderr "kanidm exited before asking for a password"; exit 2 }
   timeout { puts stderr "no password prompt"; exit 2 }
 }
