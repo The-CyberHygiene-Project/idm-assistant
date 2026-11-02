@@ -290,7 +290,7 @@ def test_client_enable_starts_the_weekly_scan_but_writes_no_rules(tmp_path):
     (s / "wazuh/ws1.key").write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
     r, _, run, _ = enable(tmp_path, "client", stick=s)
     en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
-    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer"]
+    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]
     assert not (r / "var/ossec/etc/rules/chp_yara_rules.xml").exists()
 
 

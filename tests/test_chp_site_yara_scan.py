@@ -185,3 +185,72 @@ def test_full_scan_ignores_errors_for_files_that_vanished(tmp_path):          # 
                     skip=(), mounts_text="")
     errs = [e for e in lines(tmp_path / "log") if e["event"] == "error"]
     assert s["errors"] == 1 and len(errs) == 1 and str(keep) in errs[0]["detail"]
+
+
+# --- spec §10 (owner decision B): clients scan files changed in the watched folders every 5 minutes ---------------
+
+def _recent(tmp_path, root, now, run):
+    return y.recent_scan(run=run, log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: now,
+                         watched=(str(root),), never=())
+
+
+def _listing():
+    listed = {}
+    def run(argv, **kw):
+        listed["files"] = Path(argv[argv.index("--scan-list") + 1]).read_text().splitlines()
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    return listed, run
+
+
+def test_recent_scan_lists_only_files_changed_since_the_last_run(tmp_path):
+    # ctime counts too (a file moved or unpacked with an old mtime is still new here), so this test uses the real clock
+    import time as _t
+    root = tmp_path / "home"; root.mkdir(); (root / "old").write_text("o"); _t.sleep(0.05)
+    mark = _t.time(); (tmp_path / "st").mkdir(); (tmp_path / "st" / "last-recent").write_text(f"{mark}\n"); _t.sleep(0.05)
+    new = root / "new"; new.write_text("n"); os.utime(new, (1.0, 1.0))         # an old mtime: found by its ctime
+    listed = {}
+    def run(argv, **kw):
+        listed["files"] = Path(argv[argv.index("--scan-list") + 1]).read_text().splitlines()
+        return SimpleNamespace(returncode=0, stdout=f"Rule_X {new}\n", stderr="")
+    s = _recent(tmp_path, root, _t.time(), run)
+    assert listed["files"] == [str(new)] and s == {"files": 1, "matches": 1, "errors": 0}
+    assert lines(tmp_path / "log")[0]["event"] == "match"
+    assert int((tmp_path / "st" / "last-recent").read_text().strip()) >= int(mark)
+
+
+def test_recent_scan_first_run_looks_back_five_minutes(tmp_path):
+    import time as _t
+    root = tmp_path / "home"; root.mkdir(); f = root / "f"; f.write_text("x"); t = _t.time()
+    listed, run = _listing()
+    _recent(tmp_path, root, t + 200, run)                                     # 200 s later: inside the look-back
+    assert listed["files"] == [str(f)]
+    seen = []
+    y.recent_scan(run=lambda a, **k: seen.append(a), log=tmp_path / "log2", state_dir=tmp_path / "st2",
+                  now=lambda: t + 400, watched=(str(root),), never=())       # 400 s later: outside it
+    assert seen == []
+
+
+def test_recent_scan_with_nothing_new_runs_no_yara_and_writes_no_line(tmp_path):
+    root = tmp_path / "home"; root.mkdir()
+    seen = []
+    s = _recent(tmp_path, root, 1000.0, lambda a, **k: seen.append(a))
+    assert seen == [] and s["files"] == 0 and lines(tmp_path / "log") == []
+
+
+def test_recent_scan_skips_never_folders_symlinks_and_fifos(tmp_path):
+    root = tmp_path / "home"; root.mkdir(); w = root / "wazuh"; w.mkdir(); (w / "a").write_text("x")
+    (root / "link").symlink_to(tmp_path); os.mkfifo(root / "pipe"); ok = root / "ok"; ok.write_text("x")
+    listed = {}
+    def run(argv, **kw):
+        listed["files"] = Path(argv[argv.index("--scan-list") + 1]).read_text().splitlines()
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    y.recent_scan(run=run, log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: 0.0,
+                  watched=(str(root),), never=(str(w),))                     # now=0: every file is newer
+    assert listed["files"] == [str(ok)]
+
+
+def test_cli_recent_mode(monkeypatch):
+    from chp_site import cli
+    got = {}
+    monkeypatch.setattr(y, "recent_scan", lambda run: got.setdefault("called", True) and {"files": 0, "matches": 0, "errors": 0})
+    assert cli.main(["yara-scan", "--recent"]) == 0 and got["called"]

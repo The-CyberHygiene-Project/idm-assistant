@@ -90,7 +90,7 @@ _MANAGER = [("auth", "disabled", "yes"), ("vulnerability-detection", "enabled", 
             ("rootcheck", "disabled", "no"), ("remote", "connection", "secure"), ("remote", "port", "1514"),
             ("remote", "protocol", "tcp"), ("global", "jsonout_output", "yes"), ("global", "email_notification", "no"),
             ("global", "agents_disconnection_time", "10m"), ("global", "update_check", "no")]
-_AGENT = [("active-response", "disabled", "no"), ("syscheck", "disabled", "no"), ("sca", "enabled", "no"),
+_AGENT = [("active-response", "disabled", "yes"), ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"),
           ("rootcheck", "disabled", "no"), ("agent-upgrade", "enabled", "no")]
 _WODLES_OFF = ("syscollector", "cis-cat", "osquery")
 
@@ -175,7 +175,7 @@ def harden_agent(text, server_ip):
     for tag, child, value in _AGENT:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
-    _syscheck(blocks); _yara_log(blocks)
+    _yara_log(blocks)                                   # spec §10: clients scan on a timer; the agent forwards the log
     return _render(blocks)
 
 

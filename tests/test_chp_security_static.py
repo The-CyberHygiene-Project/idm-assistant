@@ -63,3 +63,10 @@ def test_weekly_scan_runs_at_low_priority():
     assert "ExecStart=/usr/bin/chp-site yara-scan --full" in s
     assert "Nice=19" in s and "IOSchedulingClass=idle" in s
     assert "OnCalendar=Sun *-*-* 03:30:00" in t and "Persistent=true" in t
+
+
+def test_clients_scan_recent_files_every_five_minutes():                     # spec §10
+    s = (D / "chp-yara-recent.service").read_text(); t = (D / "chp-yara-recent.timer").read_text()
+    assert "ExecStart=/usr/bin/chp-site yara-scan --recent" in s and "Nice=19" in s and "IOSchedulingClass=idle" in s
+    assert "OnUnitActiveSec=5min" in t and "OnBootSec=2min" in t
+    assert "chp-yara-recent.service" in SPEC and "chp-yara-recent.timer" in SPEC

@@ -39,7 +39,7 @@ def test_manager_has_only_the_yara_active_response_and_keeps_the_log_collection(
 
 @pytest.mark.parametrize("path,want", [
     ("client/server/address", "192.0.2.10"), ("client/enrollment/enabled", "no"),
-    ("active-response/disabled", "no"), ("syscheck/disabled", "no"), ("sca/enabled", "no"),
+    ("active-response/disabled", "yes"), ("syscheck/disabled", "yes"), ("sca/enabled", "no"),
     ('wodle[@name="syscollector"]/disabled', "yes"), ("rootcheck/disabled", "no"),
     ("client/crypto_method", "aes")])
 def test_agent_settings(path, want):
@@ -125,8 +125,9 @@ def test_manager_syscheck_watches_only_the_risky_folders_in_real_time():
     _check_syscheck(w.harden_manager(w.harden_manager(MGR)))                  # idempotent: still one <directories>
 
 
-def test_agent_syscheck_watches_only_the_risky_folders_in_real_time():
-    _check_syscheck(w.harden_agent(AGT, "192.0.2.10"))
+def test_agent_keeps_file_monitoring_and_active_response_off():           # spec §10: clients scan on a timer
+    b = _blocks(w.harden_agent(AGT, "192.0.2.10"))
+    assert w.setting(b, "syscheck/disabled") == "yes" and w.setting(b, "active-response/disabled") == "yes"
 
 
 def test_both_roles_read_the_yara_log_once():
@@ -147,8 +148,7 @@ def test_manager_has_only_the_scan_only_active_response():
     assert len(cmds) == 1 and cmds[0].findtext("executable") == "chp-yara-scan"
 
 
-def test_agent_allows_active_response():
-    assert w.setting(_blocks(w.harden_agent(AGT, "192.0.2.10")), "active-response/disabled") == "no"
+
 
 
 def test_yara_rules_levels():

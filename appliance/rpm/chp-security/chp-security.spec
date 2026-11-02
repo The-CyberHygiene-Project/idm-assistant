@@ -20,6 +20,8 @@ Source10:       chp-yara-scan
 Source11:       chp-yara-fullscan.service
 Source12:       chp-yara-fullscan.timer
 Source13:       73-yara-scan.sh
+Source14:       chp-yara-recent.service
+Source15:       chp-yara-recent.timer
 Requires:       chp-site >= 0.10.0, chp-base, yara, chp-yara-rules
 BuildRequires:  systemd-rpm-macros
 
@@ -45,15 +47,17 @@ install -Dm0644 %{SOURCE9} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -Dm0750 %{SOURCE10} %{buildroot}/var/ossec/active-response/bin/chp-yara-scan
 install -Dm0644 %{SOURCE11} %{buildroot}%{_unitdir}/chp-yara-fullscan.service
 install -Dm0644 %{SOURCE12} %{buildroot}%{_unitdir}/chp-yara-fullscan.timer
+install -Dm0644 %{SOURCE14} %{buildroot}%{_unitdir}/chp-yara-recent.service
+install -Dm0644 %{SOURCE15} %{buildroot}%{_unitdir}/chp-yara-recent.timer
 install -Dm0755 %{SOURCE13} %{buildroot}%{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/yara
 
 %post
-%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer
+%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
 systemctl daemon-reload >/dev/null 2>&1 || :
 
 %preun
-%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer
+%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -70,13 +74,16 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %attr(0750,root,root) /var/ossec/active-response/bin/chp-yara-scan
 %{_unitdir}/chp-yara-fullscan.service
 %{_unitdir}/chp-yara-fullscan.timer
+%{_unitdir}/chp-yara-recent.service
+%{_unitdir}/chp-yara-recent.timer
 %{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
 * Sun Nov 01 2026 The CyberHygiene Project - 0.2.0-1.chp
 - Security bundle part 2 (Plan Y1): YARA. Active-response wrapper chp-yara-scan, weekly chp-yara-fullscan timer,
-  monitor check 73-yara-scan; requires yara and chp-yara-rules.
+  monitor check 73-yara-scan; requires yara and chp-yara-rules. Clients: chp-yara-recent timer (every 5 minutes,
+  spec §10).
 
 * Tue Oct 27 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release (security bundle Plan W1): monitor checks 70/71/72, alert forwarder unit, retention, mount drop-ins.

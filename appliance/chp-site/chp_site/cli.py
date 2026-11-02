@@ -337,6 +337,9 @@ def _yara_scan(a):
         s = ys.full_scan(run=subprocess.run)
         print(f"full scan: {s['files']} files, {s['matches']} matches, {s['errors']} errors, {s['seconds']} s")
         return 0
+    if a.recent:
+        ys.recent_scan(run=subprocess.run)
+        return 0
     path = ys.from_wazuh(sys.stdin.read()) if a.wazuh else a.path
     if path:
         ys.scan_file(path, run=subprocess.run)
@@ -405,6 +408,7 @@ def main(argv=None):
     ys_ = sub.add_parser("yara-scan", help="(security add-on) YARA scan of one file, a Wazuh event (--wazuh), or "
                                            "every local file system (--full); alert only, never moves a file")
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
+    ys_.add_argument("--recent", action="store_true", help="(clients, every 5 min) files changed in the watched folders")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,

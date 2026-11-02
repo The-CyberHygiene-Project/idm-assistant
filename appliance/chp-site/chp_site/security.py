@@ -174,7 +174,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
-        units = ["wazuh-agent", "chp-yara-fullscan.timer"]
+        units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]   # spec §10
     _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
