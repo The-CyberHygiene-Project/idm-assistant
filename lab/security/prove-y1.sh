@@ -6,6 +6,7 @@
 #   repo        unpack signed repo 0.8.0 on all three hosts; dnf upgrade
 #   enable H    attach the site stick to H's VM, run `chp-site security enable` there, detach it (srv first)
 #   yara-on     every host: YARA pieces installed and wired; no Wazuh config errors; no denials; keys unchanged
+#   hook        a lab ALERT_HOOK on srv (writes /var/log/lab-hook.log), as prove.sh w2catch
 #   catch       EICAR in the admin's home (/home) and /tmp on cli2 -> match lines, rule-100501 alerts, hook lines; files unmoved
 #   full        a weekly scan on cli2 now (EICAR in /var/tmp) -> summary, last-full, monitor 73 OK
 # Hosts: srv = iso5-srv, cli2 = iso5-cli2, cli1 = iso5-cli1 (reached with the client2 lab key and its IP).
@@ -57,6 +58,10 @@ case ${1:-} in
     check "srv: both agents Active" "$(X srv 'sudo /var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
     check "srv: no active response" "$(X srv 'sudo grep -c "<active-response>" /var/ossec/etc/ossec.conf')" "0"
     done_ yara-on ;;
+  hook)                    # as prove.sh w2catch: a lab ALERT_HOOK on the server that appends to /var/log/lab-hook.log
+    X srv 'printf "#!/bin/bash\necho \"\$(date +%%H:%%M:%%S) \$1\" >> /var/log/lab-hook.log\n" | sudo tee /usr/local/sbin/lab-hook >/dev/null; sudo chmod 0755 /usr/local/sbin/lab-hook; sudo touch /var/log/lab-hook.log; sudo sed -i "s#^ALERT_HOOK=.*#ALERT_HOOK=/usr/local/sbin/lab-hook#" /etc/chp/site.conf; sudo systemctl restart chp-wazuh-alerts'
+    check "lab hook set" "$(X srv 'chp-site get ALERT_HOOK')" "/usr/local/sbin/lab-hook"
+    done_ hook ;;
   catch)
     ts=$(date +%s)
     X cli2 "printf '%s\n' '$EICAR' > \$HOME/eicar-$ts.txt; printf '%s\n' '$EICAR' > /tmp/eicar-$ts.txt; sha256sum \$HOME/eicar-$ts.txt /tmp/eicar-$ts.txt | sudo tee /root/y1-eicar-sums >/dev/null"
