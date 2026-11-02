@@ -39,20 +39,6 @@ YARA_RULES = """<!-- Managed by chp-security (YARA spec §5): YARA scan results 
 """
 
 
-def _syscheck(blocks):
-    sc = _first(blocks, "syscheck")
-    for tag in ("directories", "ignore"):
-        for e in list(sc.findall(tag)):
-            sc.remove(e)
-    for child, value in (("frequency", "43200"), ("scan_on_start", "no")):
-        c = sc.find(child) if sc.find(child) is not None else ET.SubElement(sc, child)
-        c.text = value
-    d = ET.SubElement(sc, "directories", {"realtime": "yes", "check_all": "yes"})
-    d.text = ",".join(_ys.WATCHED)
-    for p in _ys.NEVER:
-        ET.SubElement(sc, "ignore").text = p
-
-
 def _yara_log(blocks):
     for b in blocks:
         for e in b.findall("localfile"):
@@ -61,19 +47,6 @@ def _yara_log(blocks):
     lf = ET.SubElement(blocks[0], "localfile")
     ET.SubElement(lf, "log_format").text = "json"
     ET.SubElement(lf, "location").text = _ys.LOG
-
-
-def _yara_response(blocks):
-    for b in blocks:
-        for e in list(b.findall("command")):
-            if e.findtext("name") == "chp-yara-scan":
-                b.remove(e)
-    c = ET.SubElement(blocks[0], "command")
-    for k, v in (("name", "chp-yara-scan"), ("executable", "chp-yara-scan"), ("timeout_allowed", "no")):
-        ET.SubElement(c, k).text = v
-    ar = ET.SubElement(blocks[0], "active-response")
-    for k, v in (("command", "chp-yara-scan"), ("location", "local"), ("rules_id", "550,554")):
-        ET.SubElement(ar, k).text = v
 
 
 def api_password():
@@ -86,7 +59,7 @@ def api_password():
             return pw
 
 _MANAGER = [("auth", "disabled", "yes"), ("vulnerability-detection", "enabled", "no"), ("indexer", "enabled", "no"),
-            ("syscheck", "disabled", "no"), ("sca", "enabled", "no"), ("cluster", "disabled", "yes"),
+            ("syscheck", "disabled", "yes"), ("sca", "enabled", "no"), ("cluster", "disabled", "yes"),
             ("rootcheck", "disabled", "no"), ("remote", "connection", "secure"), ("remote", "port", "1514"),
             ("remote", "protocol", "tcp"), ("global", "jsonout_output", "yes"), ("global", "email_notification", "no"),
             ("global", "agents_disconnection_time", "10m"), ("global", "update_check", "no")]
@@ -151,7 +124,7 @@ def harden_manager(text):
     for tag, child, value in _MANAGER:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
-    _syscheck(blocks); _yara_log(blocks); _yara_response(blocks)
+    _yara_log(blocks)                                   # spec §10: YARA runs on a timer on every host
     return _render(blocks)
 
 

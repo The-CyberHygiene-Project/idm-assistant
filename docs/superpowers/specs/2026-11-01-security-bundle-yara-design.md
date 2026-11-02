@@ -133,3 +133,11 @@ separate client systems. Owner decision: **approach 3 for clients, approach 1 ke
   off on clients (as in 0.3.0); the agent still forwards `/var/log/chp-yara.json` to the manager.
 - **Cost:** a new file on a client may wait up to 5 minutes before it is scanned. Success criterion §1 becomes "within
   10 minutes" for clients.
+
+### 10.1 Amendment 2 (owner, 2026-11-02): the 5-minute scan on every host
+
+On a freshly enabled server the scan-only active response did not run for the server's own file events either (alert
+554 fired, no scan; it had run once during testing). Owner decision: **every host, server included, uses
+`chp-yara-recent.timer`**. Wazuh file monitoring and active response stay off everywhere (as in 0.3.0), and the
+active-response wrapper is not shipped. A new file anywhere may wait up to 5 minutes before it is scanned; the weekly
+full scan, the JSON lines and the alerts are unchanged.

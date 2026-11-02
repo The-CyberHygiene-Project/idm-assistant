@@ -45,29 +45,27 @@ case ${1:-} in
       check "$h: yara, rules, chp-security 0.2.0" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " yara chp-yara-rules chp-security')" \
         "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-0.2.0 "
       check "$h: weekly scan timer enabled" "$(X $h 'systemctl is-enabled chp-yara-fullscan.timer')" "enabled"
-      check "$h: active-response script root 750" "$(X $h 'sudo stat -c "%U %a" /var/ossec/active-response/bin/chp-yara-scan')" "root 750"
+      check "$h: recent-files timer enabled (spec §10)" "$(X $h 'systemctl is-enabled chp-yara-recent.timer')" "enabled"
+      check "$h: Wazuh FIM off (spec §10.1)" "$(X $h 'sudo grep -A1 "<syscheck>" /var/ossec/etc/ossec.conf | grep -c "<disabled>yes</disabled>"')" "1"
+      check "$h: YARA log present before any scan" "$(X $h 'sudo test -f /var/log/chp-yara.json && echo yes')" "yes"
       check "$h: 0 'No such tag' since enable" "$(X $h 'sudo awk -v t="$(sudo cat /root/y1-t0 | tr - /)" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "No such tag"')" "0"
       check "$h: 0 YARA/Wazuh AVCs since enable" "$(X $h 'sudo ausearch -m AVC -ts "$(sudo cat /root/y1-t0 | awk "{split(\$1,d,\"-\"); print d[2]\"/\"d[3]\"/\"d[1], \$2}")" 2>/dev/null | grep denied | grep -c -E "yara|ossec|wazuh"')" "0"
       check "$h: 0 fapolicyd denials since enable" "$(X $h 'sudo ausearch -m FANOTIFY -ts "$(sudo cat /root/y1-t0 | awk "{split(\$1,d,\"-\"); print d[2]\"/\"d[3]\"/\"d[1], \$2}")" 2>/dev/null | grep -c "type=FANOTIFY"')" "0"
       check "$h: agent keys unchanged" "$(X $h '[ "$(sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16)" = "$(sudo cat /root/y1-keys-before)" ] && echo same || echo changed')" "same"
     done
-    check "srv: realtime folders in ossec.conf" "$(X srv 'sudo grep -c "realtime=\"yes\".*/home,/root,/tmp,/var/tmp,/dev/shm,/srv,/data" /var/ossec/etc/ossec.conf')" "1"
-    check "srv: FIM real-time started" "$(X srv 'sudo grep -c "Real-time file integrity monitoring started" /var/ossec/logs/ossec.log | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
-    check "cli2: recent-files timer enabled (spec §10)" "$(X cli2 'systemctl is-enabled chp-yara-recent.timer')" "enabled"
-    check "cli2: agent FIM and active response off" "$(X cli2 'sudo grep -A1 -E "<(syscheck|active-response)>" /var/ossec/etc/ossec.conf | grep -c "<disabled>yes</disabled>"')" "2"
     check "srv: YARA alert rules present" "$(X srv 'sudo test -f /var/ossec/etc/rules/chp_yara_rules.xml && echo yes')" "yes"
     check "srv: both agents Active" "$(X srv 'sudo /var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
-    check "srv: only the YARA active response" "$(X srv 'sudo grep -c "<active-response>" /var/ossec/etc/ossec.conf')" "1"
+    check "srv: no active response" "$(X srv 'sudo grep -c "<active-response>" /var/ossec/etc/ossec.conf')" "0"
     done_ yara-on ;;
   catch)
     ts=$(date +%s)
     X cli2 "printf '%s\n' '$EICAR' > \$HOME/eicar-$ts.txt; printf '%s\n' '$EICAR' > /tmp/eicar-$ts.txt; sha256sum \$HOME/eicar-$ts.txt /tmp/eicar-$ts.txt | sudo tee /root/y1-eicar-sums >/dev/null"
     X srv "printf '%s\n' '$EICAR' > /tmp/eicar-srv-$ts.txt"
-    n=0; for _ in $(seq 18); do n=$(X srv "sudo grep -c 'eicar-srv-$ts' /var/log/chp-yara.json 2>/dev/null"); [[ $n -ge 1 ]] && break; sleep 5; done
-    check "srv: real-time scan caught its own test file within 90 s" "$n" "1"
-    X srv "rm -f /tmp/eicar-srv-$ts.txt"
     n=0; for _ in $(seq 84); do n=$(X cli2 "sudo grep -c 'eicar-$ts' /var/log/chp-yara.json 2>/dev/null"); [[ $n -ge 2 ]] && break; sleep 5; done   # spec §10: ≤ 5 min + scan
     check "cli2: two match lines for the EICAR files" "$(X cli2 "sudo grep 'eicar-$ts' /var/log/chp-yara.json | grep -c '\"event\": \"match\"'")" "2"
+    n=0; for _ in $(seq 84); do n=$(X srv "sudo grep -c 'eicar-srv-$ts' /var/log/chp-yara.json 2>/dev/null"); [[ $n -ge 1 ]] && break; sleep 5; done
+    check "srv: its own test file caught (5-minute scan)" "$n" "1"
+    X srv "rm -f /tmp/eicar-srv-$ts.txt"
     sleep 20
     check "srv: two rule-100501 alerts for cli2" "$(X srv "sudo grep 'eicar-$ts' /var/ossec/logs/alerts/alerts.json | grep -c '\"id\":\"100501\"'")" "2"
     check "srv: hook got the YARA alerts" "$(X srv "sudo grep -c 'eicar-$ts' /var/log/lab-hook.log | awk '{print (\$1>0)?\"yes\":\"no\"}'")" "yes"

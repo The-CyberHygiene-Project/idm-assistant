@@ -1,6 +1,0 @@
-#!/bin/sh
-# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
-# Not an official Rocky Linux product.
-# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-# Wazuh active response (YARA spec §3): scan the one file in the event. Scan only; never moves or deletes anything.
-exec /usr/bin/chp-site yara-scan --wazuh

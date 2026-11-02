@@ -165,7 +165,8 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if new:
             run(["firewall-cmd", "-q", "--reload"], check=True)
         done.append(f"firewall: 1514/tcp from {len(w.rich_rules(hosts))} clients")
-        units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer", "chp-yara-fullscan.timer"]
+        units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer", "chp-yara-fullscan.timer",
+                 "chp-yara-recent.timer"]                                    # spec §10: every host
     else:
         server = next(h for h in hosts if h.role == "server")
         _write(conf, w.harden_agent(conf.read_text(), server.ip), 0o640, group_wazuh)

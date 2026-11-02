@@ -48,14 +48,9 @@ def test_aide_checks_wazuh_shared_files_by_content_not_timestamps():
 def test_yara_pieces_are_packaged():
     assert "Version:        0.2.0" in SPEC
     assert "Requires:       chp-site >= 0.10.0, chp-base, yara, chp-yara-rules" in SPEC
-    for f in ("chp-yara-scan", "chp-yara-fullscan.service", "chp-yara-fullscan.timer", "73-yara-scan.sh"):
+    for f in ("chp-yara-fullscan.service", "chp-yara-fullscan.timer", "73-yara-scan.sh"):
         assert f in SPEC, f
-    assert "%attr(0750,root,root) /var/ossec/active-response/bin/chp-yara-scan" in SPEC
-
-
-def test_active_response_wrapper_only_calls_the_scan():
-    t = (D / "chp-yara-scan").read_text()
-    assert t.startswith("#!/bin/sh") and "exec /usr/bin/chp-site yara-scan --wazuh" in t
+    assert "active-response/bin" not in SPEC                                  # spec §10: no Wazuh trigger, no wrapper
 
 
 def test_weekly_scan_runs_at_low_priority():

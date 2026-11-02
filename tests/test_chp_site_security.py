@@ -280,7 +280,7 @@ def test_enable_installs_yara_and_starts_the_weekly_scan(tmp_path):
     assert ["dnf", "--enablerepo=chp", "install", "-y", "wazuh-manager", "chp-security", "yara",
             "chp-yara-rules"] in run.calls
     en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
-    assert "chp-yara-fullscan.timer" in en
+    assert "chp-yara-fullscan.timer" in en and "chp-yara-recent.timer" in en   # spec §10: every host
     rules = r / "var/ossec/etc/rules/chp_yara_rules.xml"
     assert rules.read_text() == w.YARA_RULES and oct(rules.stat().st_mode & 0o777) == "0o640"
 
