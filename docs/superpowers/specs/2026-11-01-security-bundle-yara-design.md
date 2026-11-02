@@ -118,3 +118,18 @@ fapolicyd, AIDE and the CUI scan stay as clean as in 0.3.0.
 - Online lookups (RS#2's VirusTotal integration) and any rule download on the appliance.
 - Rules of our own.
 - Suricata and metrics (parts 3 and 4).
+
+## 10. Amendment (owner, 2026-11-02): clients scan new files every 5 minutes
+
+Lab finding (Plan Y1 Task 6): the Wazuh manager runs the scan-only active response for its OWN file events, but never
+sends it to a remote agent (tested: rule IDs, a level threshold, locations `local` and `all`, no white list, agent key
+IP `any`, Wazuh 4.14.9 and 4.14.7; `agent_control -b` by hand does reach the agent). RS#2 cannot settle it: it has no
+separate client systems. Owner decision: **approach 3 for clients, approach 1 kept on the server.**
+
+- **Server:** unchanged: Wazuh real-time file events on the watched folders start `chp-yara-scan`.
+- **Clients:** a systemd timer (`chp-yara-recent.timer`, every 5 minutes) runs `chp-site yara-scan --recent`, which scans
+  regular files in the watched folders whose content or metadata changed since the previous run (first run: the last
+  5 minutes), with the same path rules, size limit and JSON lines. Wazuh's file monitoring and active response stay
+  off on clients (as in 0.3.0); the agent still forwards `/var/log/chp-yara.json` to the manager.
+- **Cost:** a new file on a client may wait up to 5 minutes before it is scanned. Success criterion §1 becomes "within
+  10 minutes" for clients.
