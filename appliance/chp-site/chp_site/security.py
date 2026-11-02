@@ -176,6 +176,11 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         _write(keys, agent_line, 0o640, group_wazuh)
         units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]   # spec §10
     _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
+    ylog = _p(root, "var/log/chp-yara.json")              # Y1 lab: Wazuh reads a log that appears later from its end
+    ylog.parent.mkdir(parents=True, exist_ok=True)
+    if not ylog.exists():
+        fd = os.open(ylog, os.O_WRONLY | os.O_CREAT, 0o640); os.close(fd)
+    os.chmod(ylog, 0o640)
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
     if role == "client" and stick is None:               # W2: let the agent's first sync land before AIDE's baseline

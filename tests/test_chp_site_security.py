@@ -301,3 +301,12 @@ def test_enable_rerun_on_an_enabled_server_keeps_keys_and_adds_yara(tmp_path):
     r, s, run2, _ = enable(tmp_path, "server", run=Run(rules=w.rich_rules(hosts())[0] + "\n"), stick=s)
     assert (r / "var/ossec/etc/client.keys").read_text() == keys1
     assert (r / "var/ossec/etc/rules/chp_yara_rules.xml").read_text() == w.YARA_RULES
+
+
+def test_enable_creates_the_yara_log_before_wazuh_starts(tmp_path):
+    # Y1 lab: Wazuh opens a log that appears later from its END, so the first YARA matches on a new host were lost
+    r, s, run, _ = enable(tmp_path, "server")
+    log = r / "var/log/chp-yara.json"
+    assert log.exists() and log.read_text() == "" and oct(log.stat().st_mode & 0o777) == "0o640"
+    first_start = next(i for i, c in enumerate(run.calls) if c[:3] == ["systemctl", "enable", "--now"])
+    assert first_start > 0                                     # (the file is written before this call, by _enable)
