@@ -49,3 +49,16 @@ T0 = 2026-11-02 10:09 MST, read 2026-11-03 11:22 MST (25 h, no resets):
     `/etc/ld.so.cache`, `/etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene` and `RPM-GPG-KEY-WAZUH`, and the parent folders;
   - **lab only:** `/etc/sudoers.d/99-lab-adapter`, `/usr/local/sbin/lab-hook` and the `ALERT_HOOK` line in
     `/etc/chp/site.conf`, `/var/lib/ssh-ca/keys/lab0*.pub` (scenario users), `/root/chp-scan`, `/root/y1-*`.
+
+## Gates on repo 0.8.0 (2026-11-03)
+
+After the quiet day: `prove.sh adapter`, `nvram`, `golden` (ALL PASS, 0 findings; the scenario users were already in the
+rc3 golden snapshots, so `fixtures.py` stopped on an existing user, as expected), then:
+
+| Gate | Result |
+|---|---|
+| 2. Regression (`lab/iso5/regression-2026-11-03.md`) | **33/33 GREEN** with Wazuh and the YARA timers running |
+| 2. Row 36 (desktop login: password + authenticator code) | 3/3 |
+| 3. CUI scan | **108 pass / 2 fail on every host**, the same two accepted AIDE rules; `deviations.py`: Gate 3 met |
+
+Gate 1 for an update is proofs 1–4 above (the upgrade path); a fresh install with YARA is ISO 0.4.0's gate.
