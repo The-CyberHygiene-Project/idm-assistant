@@ -76,6 +76,12 @@ case ${1:-} in
     check "srv: hook got the YARA alerts" "$(X srv "sudo grep -c 'eicar-$ts' /var/log/lab-hook.log | awk '{print (\$1>0)?\"yes\":\"no\"}'")" "yes"
     check "cli2: both files still there, unchanged" "$(X cli2 'sudo sha256sum -c /root/y1-eicar-sums >/dev/null 2>&1 && echo unchanged')" "unchanged"
     X cli2 "rm -f \$HOME/eicar-$ts.txt /tmp/eicar-$ts.txt"
+    # final review C1/C2: a non-UTF-8 name and a name with a line break are caught too, and the 5-minute scan stays healthy
+    X cli2 "printf '%s\\n' '$EICAR' > \$'/tmp/odd1-$ts-\\xff.txt'; printf '%s\\n' '$EICAR' > \$'/tmp/odd2-$ts\\nx.txt'"
+    n=0; for _ in $(seq 84); do n=$(X cli2 "sudo grep -c 'odd[12]-$ts' /var/log/chp-yara.json 2>/dev/null"); [[ $n -ge 2 ]] && break; sleep 5; done
+    check "cli2: odd-name test files caught (non-UTF-8, line break)" "$n" "2"
+    check "cli2: monitor 73 OK after the odd names" "$(X cli2 'sudo bash /usr/lib/chp/monitor.d/73-yara-scan.sh | grep -c ALERT')" "0"
+    X cli2 "rm -f /tmp/odd1-$ts-* /tmp/odd2-$ts*"
     done_ catch ;;
   full)
     ts=$(date +%s)
