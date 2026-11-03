@@ -33,6 +33,19 @@ first matches on a new host were lost. `security enable` now creates `/var/log/c
 iso5-cli2, started by hand with an EICAR file in `/var/tmp`: 111,940 files in 64 s, 1 match (the test file), 0 errors;
 `last-full` written; monitor check 73 OK.
 
-## Proof 4: quiet day (pending)
+## Proof 4: quiet day: PASS
 
-T0 = 2026-11-02 10:09 MST. No resets until it is read.
+T0 = 2026-11-02 10:09 MST, read 2026-11-03 11:22 MST (25 h, no resets):
+- **No false alarms:** the only YARA matches on either host are the EICAR test files written before T0; 0 errors.
+- The 5-minute scan ran all day on both hosts (about 280 runs each); the weekly timer is next due Sunday 03:30;
+  monitor check 73 OK.
+- **AIDE** (the first daily check after the update; added / changed): iso5-srv 39 / 43, iso5-cli2 35 / 28. Every entry is
+  explained:
+  - **added by the update:** the `yara` and `chp-yara-rules` package files, `/usr/lib64/libyara.so.10*`, the
+    `chp-yara-recent` and `chp-yara-fullscan` units and their `timers.target.wants` links, monitor check 73, and on the
+    server `/var/ossec/etc/rules/chp_yara_rules.xml`;
+  - **changed by the update:** the upgraded CHP packages' files (`chp-site`, `chp-security`, and on the server
+    `chp-identity-server`), `/etc/chp/security.conf` and `/var/ossec/etc/ossec.conf` (rewritten by `security enable`),
+    `/etc/ld.so.cache`, `/etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene` and `RPM-GPG-KEY-WAZUH`, and the parent folders;
+  - **lab only:** `/etc/sudoers.d/99-lab-adapter`, `/usr/local/sbin/lab-hook` and the `ALERT_HOOK` line in
+    `/etc/chp/site.conf`, `/var/lib/ssh-ca/keys/lab0*.pub` (scenario users), `/root/chp-scan`, `/root/y1-*`.
