@@ -1,6 +1,6 @@
 Name:           chp-security
 Version:        0.2.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention and YARA scanning
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -77,6 +77,9 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Tue Nov 03 2026 The CyberHygiene Project - 0.2.0-2.chp
+- Final-review fixes (Y1): unit time limits (TimeoutStartSec), monitor 73 also checks the 5-minute scan.
+
 * Sun Nov 01 2026 The CyberHygiene Project - 0.2.0-1.chp
 - Security bundle part 2 (Plan Y1): YARA. chp-yara-recent timer (every 5 minutes, every host, spec §10), weekly
   chp-yara-fullscan timer, monitor check 73-yara-scan; requires yara and chp-yara-rules.
