@@ -123,6 +123,13 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.3.0 update 1 on: malware scanning (YARA)
+
+With the security add-on on, every host scans new or changed files in the user and temporary folders every 5 minutes,
+and every local file system weekly, with YARA and the signature-base rules. It is **alert only**: a match is reported to
+`ALERT_HOOK` and left in place for a person to decide. Results are kept in `/var/log/chp-yara.json`. New rules arrive as
+a small signed update each month. See `0.3.0-update1/UPDATE.md`.
+
 ### From 0.3.0 on: the security add-on at install (optional)
 
 Set `SECURITY_ADDONS=yes` in `site.conf` before you install, and the installer sets up Wazuh at each host's first boot.

@@ -1,0 +1,70 @@
+# Package update @VERSION@ (signed repo @REPO@): the security add-on, part 2 (YARA malware scanning). No reinstall.
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it adds
+
+- **YARA malware scanning** on every host that has the security add-on (`SECURITY_ADDONS=yes`, or `chp-site security
+  enable` from update 4):
+  - **every 5 minutes:** files that are new or changed in `/home`, `/root`, `/tmp`, `/var/tmp`, `/dev/shm`, `/srv` and
+    `/data` are scanned;
+  - **weekly (Sunday 03:30):** every local file system is scanned. On the lab this took about one minute;
+  - **alert only:** a match is never moved, changed or deleted. It becomes a level-12 Wazuh alert, so it reaches your
+    `ALERT_HOOK` straight away. A scan error goes into the daily summary. Results are kept in `/var/log/chp-yara.json`;
+  - the monitor alerts if the weekly scan has not completed in 8 days.
+- **The rules:** Neo23x0 signature-base (the set the RS#2 reference system uses), compiled once and shipped as the
+  signed package `chp-yara-rules` (version = the upstream date). Licence: Detection Rule License 1.1, with attribution in
+  `/usr/share/chp-yara-rules/NOTICE`. New rules arrive as a small **monthly** signed update; the appliance never
+  downloads anything.
+- **YARA 4.5.2** comes from Rocky Linux's own AppStream, signed by the Rocky key, and uses the system's FIPS-validated
+  OpenSSL.
+- **Also included:** `chp-identity-server` 0.1.2-2 (the server's first-boot sign-in script pauses before typing the
+  password; it only matters for new installs).
+
+## Apply it
+
+1. **Check this folder** as `0.3.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. **Every host:** copy `chp-repo-@REPO@.tar.gz` to it, unpack it over the local repo as root, and upgrade. The
+   `--refresh` matters: without it, dnf may keep its record of the old repo and report "Nothing to do".
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+       dnf --refresh --enablerepo=chp upgrade
+
+3. **Turn YARA on, server first,** with the site stick plugged in, as root:
+
+       chp-site security enable
+
+   Then each client, one at a time, with the stick. Hosts without the security add-on are not changed by this update.
+
+## Test it
+
+On a client, write the harmless EICAR test string to a file in `/tmp` (the text is published at eicar.org). Within
+about 5 minutes the client's `/var/log/chp-yara.json` has a `match` line, the server raises a "YARA match" alert at
+level 12, and your `ALERT_HOOK` receives it. The file is still there: delete it yourself.
+
+## Expect one AIDE alert, then accept it
+
+The next daily check reports the update (lab, 11/03/2026: about 35–40 added and 30–45 changed entries per host):
+- **added:** the `yara` and `chp-yara-rules` files, `/usr/lib64/libyara.so.10*`, the `chp-yara-recent` and
+  `chp-yara-fullscan` units and their links under `/etc/systemd/system/timers.target.wants/`, monitor check 73, and on
+  the server `/var/ossec/etc/rules/chp_yara_rules.xml`;
+- **changed:**
+  - the upgraded CHP packages' files (`chp-site`, `chp-security`, and on the server `chp-identity-server`);
+  - `/etc/chp/security.conf` and `/var/ossec/etc/ossec.conf` (rewritten by `security enable`);
+  - `/etc/ld.so.cache`, and the signing-key files under `/etc/pki/rpm-gpg/`;
+  - the folders that hold all of these.
+
+Anything outside this list was not made by this update: investigate it before accepting. Accept as the ISSO or a named
+delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: YARA malware scanning added"
+
+## Known limits
+
+- **Up to 5 minutes:** a new file is scanned at the next 5-minute run, not the moment it arrives. Wazuh's own
+  file-triggered response was tested and is not used: on the lab it never reached the clients.
+- **Rule coverage:** all 748 signature-base rule files compile and are used. A few rules also look at a file's name
+  or path; the scheduled scans give them empty values, so those rules rely on the file's content alone.
+- **Proved on VMs only.**

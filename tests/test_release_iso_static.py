@@ -132,3 +132,18 @@ def test_kit_guide_explains_the_add_on_at_install():
     s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
     for x in ("SECURITY_ADDONS=yes", "export-client", "wazuh/<host>.key", "Install the server first"):
         assert x in s, x
+
+
+def test_update_0_3_0_update1_notes():
+    u = (R / "UPDATE-0.3.0-update1.md.in").read_text()
+    for s in ("@REPO@", "chp-site security enable", "alert only", "/var/log/chp-yara.json", "chp-site aide-accept",
+              "Detection Rule License", "monthly", "--refresh", "every 5 minutes", "EICAR"):
+        assert s in u, s
+
+
+def test_monthly_rules_procedure_and_readme_row():
+    r = (R / "RULES-UPDATE.md").read_text()
+    for s in ("fetch-signature-base.sh", "SIG_COMMIT", "SIG_SHA256", "SIG_DATE", "exclude.txt", "prove-y1.sh full",
+              "release-repo.sh"):
+        assert s in r, s
+    assert "| `0.3.0-update1/` |" in (R / "release-kit.sh").read_text()
