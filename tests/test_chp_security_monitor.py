@@ -87,3 +87,16 @@ def test_yara_not_enabled_is_silent_ok(tmp_path):
     env = dict(os.environ, CHP_SECURITY_CONF=str(tmp_path / "none"))
     out = subprocess.run(["bash", str(M / "73-yara-scan.sh")], env=env, capture_output=True, text=True).stdout
     assert out.startswith("OK")
+
+
+def test_yara_recent_scan_stale_alerts(tmp_path):                                     # final review I2
+    now = 1_000_000_000
+    st = tmp_path / "yara"; st.mkdir(); (st / "last-full").write_text(f"{now - 86400}\n")
+    (st / "last-recent").write_text(f"{now - 45 * 60}\n")
+    c = tmp_path / "security.conf"; c.write_text("ROLE=client\n"); os.utime(c, (now - 3 * 86400,) * 2)
+    env = dict(os.environ, CHP_SECURITY_CONF=str(c), CHP_YARA_STATE=str(st), CHP_NOW=str(now))
+    out = subprocess.run(["bash", str(M / "73-yara-scan.sh")], env=env, capture_output=True, text=True).stdout
+    assert "ALERT" in out and "5-minute" in out
+    (st / "last-recent").write_text(f"{now - 4 * 60}\n")
+    out = subprocess.run(["bash", str(M / "73-yara-scan.sh")], env=env, capture_output=True, text=True).stdout
+    assert out.startswith("OK")

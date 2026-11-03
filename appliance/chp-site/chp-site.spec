@@ -40,8 +40,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
 %changelog
 * Sun Nov 01 2026 The CyberHygiene Project - 0.10.0-1.chp
-- Security bundle part 2 (Plan Y1): chp-site yara-scan (one file, a Wazuh event, or a weekly full scan; alert only);
-  security enable installs YARA and its rules, watches the risky folders and adds the scan-only active response.
+- Security bundle part 2 (Plan Y1): chp-site yara-scan (--recent every 5 minutes, --full weekly; alert only);
+  security enable installs YARA and its rules and starts both timers. Wazuh file monitoring and active response stay
+  off (YARA spec §10).
 
 * Fri Oct 30 2026 The CyberHygiene Project - 0.9.0-3.chp
 - W2 final review I1: a client's staged agent key is shredded only after the agent runs, and a retried first boot

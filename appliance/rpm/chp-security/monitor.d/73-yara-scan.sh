@@ -13,6 +13,15 @@ if [ -f "$S/last-full" ]; then
 else
   since=$(date -r "$C" +%s)                      # works with GNU and BSD date
   if [ $((now - since)) -le $limit ]; then echo "OK first weekly YARA scan not due yet"
-  else echo "ALERT the weekly YARA scan has never completed (systemctl status chp-yara-fullscan)"; fi
+  else echo "ALERT the weekly YARA scan has never completed (after an upgrade: chp-site security enable; else systemctl status chp-yara-fullscan)"; fi
+fi
+# Final review I2: the 5-minute scan is the main path; a mark older than 30 minutes means it has stopped or keeps failing.
+if [ -f "$S/last-recent" ]; then
+  r=$(tr -dc '0-9' < "$S/last-recent")
+  if [ -n "$r" ] && [ $((now - r)) -gt 1800 ]; then
+    echo "ALERT the 5-minute YARA scan has not succeeded for $(( (now - r) / 60 )) minutes (journalctl -u chp-yara-recent)"
+  fi
+elif [ $((now - $(date -r "$C" +%s))) -gt 1800 ]; then
+  echo "ALERT the 5-minute YARA scan has never succeeded (run chp-site security enable, then journalctl -u chp-yara-recent)"
 fi
 exit 0

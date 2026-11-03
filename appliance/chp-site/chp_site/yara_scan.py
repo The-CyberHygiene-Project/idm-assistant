@@ -1,6 +1,7 @@
-"""YARA malware scanning (YARA spec §4). Scan only: it never changes, moves or deletes a file. Wazuh starts a
-single-file scan for a file added or changed in a watched folder; a weekly timer starts a full scan. Every result
-worth recording is one JSON line in LOG, which Wazuh reads (match = level 12 -> ALERT_HOOK)."""
+"""YARA malware scanning (YARA spec §4, §10). Scan only: it never changes, moves or deletes a file. On every host a
+5-minute timer scans files changed in the watched folders and a weekly timer scans every local file system. Every
+result worth recording is one JSON line in LOG, which Wazuh reads (match = level 12 -> ALERT_HOOK). File names are
+handled as bytes: a name need not be UTF-8, and a name with a line break is never put in a scan list."""
 import hashlib
 import json
 import os
@@ -13,7 +14,7 @@ RULES_DIR = "/usr/share/chp-yara-rules"
 RULES = RULES_DIR + "/rules.yarc"
 LOG = "/var/log/chp-yara.json"
 STATE = "/var/lib/chp/yara"
-WATCHED = ("/home", "/root", "/tmp", "/var/tmp", "/dev/shm", "/srv", "/data")
+WATCHED = ("/home", "/root", "/tmp", "/var/tmp", "/dev/shm", "/run/user", "/srv", "/data")
 NEVER = ("/var/ossec", "/srv/wazuh", "/data/wazuh", "/root/chp-onboard", "/root/chp-escrow-pending",
          "/var/lib/chp/repo")
 FULL_SKIP = ("/proc", "/sys", "/dev", "/run", RULES_DIR) + NEVER       # the rules file matches itself (Y1 spike)
@@ -22,7 +23,8 @@ MAX_BYTES = 256 * 1024 * 1024        # Task 1 measures; files above it are not s
 TIMEOUT = 60                         # seconds, one-file scan (yara --timeout limits the whole run)
 FULL_TIMEOUT = 6 * 3600              # seconds, the weekly scan (measured: about 1 minute, Y1 spike)
 RATE_S = 60                          # the same file again within this many seconds: not scanned again
-RECENT_S = 300                       # clients (spec §10): the timer's period; a first run looks back this far
+RECENT_S = 300                       # spec §10: the timer's period; a first run looks back this far
+RECENT_TIMEOUT = 20 * 60             # seconds, one 5-minute run (the unit itself stops after 30 min)
 
 
 def _under(p, roots):
@@ -61,10 +63,73 @@ def _sha256(path):
 
 
 def _yara(run, args, timeout=TIMEOUT):
-    try:
-        return run(["yara", "-w", "-C", RULES, f"--timeout={timeout}", *args], capture_output=True, text=True)
+    try:                                                   # bytes: file names need not be UTF-8
+        return run(["yara", "-w", "-C", RULES, f"--timeout={timeout}", *args], capture_output=True)
     except FileNotFoundError:
         return None
+
+
+def _text(data):
+    """Lines of yara's output; undecodable bytes in a file name are kept (as surrogates), never an exception."""
+    if isinstance(data, bytes):
+        return [os.fsdecode(ln) for ln in data.splitlines()]
+    return (data or "").splitlines()
+
+
+def _hits(stdout):
+    hits = {}
+    for ln in _text(stdout):
+        rule, _, p = ln.partition(" ")
+        if p:
+            hits.setdefault(p, set()).add(rule)
+    return hits
+
+
+def _write_list(path, files):
+    Path(path).write_bytes(b"".join(os.fsencode(p) + b"\n" for p in files))
+
+
+def _scan_files(run, files, timeout, log, sd, name):
+    """Scan FILES: names without a line break through one --scan-list, any others one by one (a line break would split
+    the list entry). Returns (matches, errors, ok); ok is False when yara could not do its job."""
+    plain = [p for p in files if "\n" not in p and "\r" not in p]
+    runs = []
+    if plain:
+        lst = sd / name
+        _write_list(lst, plain)
+        try:
+            runs.append((None, _yara(run, ["--scan-list", str(lst)], timeout)))
+        finally:
+            lst.unlink(missing_ok=True)
+    for p in files:
+        if "\n" in p or "\r" in p:
+            runs.append((p, _yara(run, [p], timeout)))
+    matches = errors = 0
+    ok = True
+    for known, r in runs:
+        if r is None:
+            _write(log, {"event": "error", "file": "", "detail": "yara is not installed"}); return matches, errors + 1, False
+        if known is None:
+            hits = _hits(r.stdout)
+        else:                                              # one file through argv: every rule line names it
+            rules = {ln.split(" ", 1)[0] for ln in _text(r.stdout) if " " in ln}
+            hits = {known: rules} if rules else {}
+        for p, rules in sorted(hits.items()):
+            try:
+                h = _sha256(p)
+            except OSError:
+                h = ""
+            _write(log, {"event": "match", "file": p, "rules": ",".join(sorted(rules)), "sha256": h}); matches += 1
+        for ln in _text(r.stderr):
+            m = re.match(r"error scanning (.+): could not open file$", ln.strip())
+            if m and not os.path.lexists(m.group(1)):
+                continue                                   # a temporary file that went during the scan (Y1 spike)
+            if "error" in ln.lower() and errors < 20:
+                _write(log, {"event": "error", "file": "", "detail": ln.strip()}); errors += 1
+        if r.returncode != 0:
+            ok = False
+            _write(log, {"event": "error", "file": "", "detail": f"yara exit {r.returncode}"}); errors += 1
+    return matches, errors, ok
 
 
 def _recent(state_dir, path, t):
@@ -96,8 +161,8 @@ def scan_file(path, *, run, log=LOG, state_dir=STATE, now=time.time, watched=WAT
         return _write(log, {"event": "error", "file": real, "detail": "yara is not installed"})
     if r.returncode != 0:
         return _write(log, {"event": "error", "file": real,
-                            "detail": (r.stderr.strip().splitlines() or ["yara failed"])[-1]})
-    rules = sorted({ln.split(" ", 1)[0] for ln in r.stdout.splitlines() if ln.strip()})
+                            "detail": ([ln for ln in _text(r.stderr) if ln.strip()] or [f"yara exit {r.returncode}"])[-1]})
+    rules = sorted({ln.split(" ", 1)[0] for ln in _text(r.stdout) if ln.strip()})
     if not rules:
         return None
     return _write(log, {"event": "match", "file": real, "rules": ",".join(rules), "sha256": _sha256(real)})
@@ -112,103 +177,59 @@ def _remote_mounts(text):
     return out
 
 
-def full_scan(*, run, log=LOG, state_dir=STATE, now=time.time, walk_root="/", skip=FULL_SKIP, mounts_text=None,
-              max_bytes=MAX_BYTES):
-    t0 = now()
-    if mounts_text is None:
-        mounts_text = Path("/proc/mounts").read_text()
-    skip = tuple(skip) + tuple(_remote_mounts(mounts_text))
+def _walk(top, skip, max_bytes, since=None):
     files = []
-    for d, dirs, names in os.walk(walk_root):
-        dirs[:] = [x for x in dirs if not _under(os.path.join(d, x), skip)]
+    for d, dirs, names in os.walk(top):                    # os.walk never follows symlinks
+        dirs[:] = [n for n in dirs if not _under(os.path.join(d, n), skip)]
         for n in names:
             p = os.path.join(d, n)
             try:
                 st = os.lstat(p)
             except OSError:
                 continue
-            if stat.S_ISREG(st.st_mode) and st.st_size <= max_bytes:
+            if stat.S_ISREG(st.st_mode) and st.st_size <= max_bytes and \
+                    (since is None or max(st.st_mtime, st.st_ctime) > since):
                 files.append(p)
+    return files
+
+
+def full_scan(*, run, log=LOG, state_dir=STATE, now=time.time, walk_root="/", skip=FULL_SKIP, mounts_text=None,
+              max_bytes=MAX_BYTES):
+    t0 = now()
     sd = Path(state_dir); sd.mkdir(parents=True, exist_ok=True, mode=0o700)
-    lst = sd / "scan-list"
-    lst.write_text("".join(p + "\n" for p in files))
-    r = _yara(run, ["--scan-list", str(lst)], FULL_TIMEOUT)
-    matches = errors = 0
-    if r is None:
-        _write(log, {"event": "error", "file": "", "detail": "yara is not installed"}); errors = 1
-    else:
-        hits = {}
-        for ln in r.stdout.splitlines():
-            rule, _, p = ln.partition(" ")
-            if p:
-                hits.setdefault(p, set()).add(rule)
-        for p, rules in sorted(hits.items()):
-            try:
-                h = _sha256(p)
-            except OSError:
-                h = ""
-            _write(log, {"event": "match", "file": p, "rules": ",".join(sorted(rules)), "sha256": h}); matches += 1
-        for ln in r.stderr.splitlines():
-            m = re.match(r"error scanning (.+): could not open file$", ln.strip())
-            if m and not os.path.lexists(m.group(1)):
-                continue                                   # a temporary file that went during the scan (Y1 spike)
-            if "error" in ln.lower() and errors < 20:
-                _write(log, {"event": "error", "file": "", "detail": ln.strip()}); errors += 1
-    lst.unlink(missing_ok=True)
+    files, matches, errors, ok = [], 0, 0, False
+    try:
+        if mounts_text is None:
+            mounts_text = Path("/proc/mounts").read_text()
+        files = _walk(walk_root, tuple(skip) + tuple(_remote_mounts(mounts_text)), max_bytes)
+        matches, errors, ok = _scan_files(run, files, FULL_TIMEOUT, log, sd, "scan-list")
+    except Exception as e:                                 # one line, never a dead timer (final review C1)
+        _write(log, {"event": "error", "file": "", "detail": f"weekly scan failed: {e!r}"}); errors += 1
     s = {"event": "summary", "files": len(files), "matches": matches, "errors": errors, "seconds": int(now() - t0)}
     _write(log, s)
-    (sd / "last-full").write_text(f"{int(now())}\n")
+    if ok:                                                 # only a scan that ran counts (final review I1)
+        (sd / "last-full").write_text(f"{int(now())}\n")
     return s
 
 
 def recent_scan(*, run, log=LOG, state_dir=STATE, now=time.time, watched=WATCHED, never=NEVER, max_bytes=MAX_BYTES):
-    """Spec §10 (clients): scan the regular files in the watched folders whose content or metadata changed since the
-    previous run (a first run looks back RECENT_S). Same path rules and JSON lines as the other scans; no summary."""
+    """Spec §10: scan the regular files in the watched folders whose content or metadata changed since the previous
+    successful run (a first run looks back RECENT_S). A failed run leaves the mark, so its files are tried again."""
     t0 = now()
     sd = Path(state_dir); sd.mkdir(parents=True, exist_ok=True, mode=0o700)
+    files, matches, errors, ok = [], 0, 0, False
     try:
-        since = float((sd / "last-recent").read_text().strip())
-    except (OSError, ValueError):
-        since = t0 - RECENT_S
-    files = []
-    for top in watched:
-        for d, dirs, names in os.walk(top):
-            dirs[:] = [x for x in dirs if not _under(os.path.join(d, x), never)]   # os.walk never follows symlinks
-            for n in names:
-                p = os.path.join(d, n)
-                try:
-                    st = os.lstat(p)
-                except OSError:
-                    continue
-                if stat.S_ISREG(st.st_mode) and st.st_size <= max_bytes and max(st.st_mtime, st.st_ctime) > since:
-                    files.append(p)
-    matches = errors = 0
-    if files:
-        lst = sd / "recent-list"
-        lst.write_text("".join(p + "\n" for p in files))
-        r = _yara(run, ["--scan-list", str(lst)], FULL_TIMEOUT)
-        lst.unlink(missing_ok=True)
-        if r is None:
-            _write(log, {"event": "error", "file": "", "detail": "yara is not installed"}); errors = 1
-        else:
-            hits = {}
-            for ln in r.stdout.splitlines():
-                rule, _, p = ln.partition(" ")
-                if p:
-                    hits.setdefault(p, set()).add(rule)
-            for p, rules in sorted(hits.items()):
-                try:
-                    h = _sha256(p)
-                except OSError:
-                    h = ""
-                _write(log, {"event": "match", "file": p, "rules": ",".join(sorted(rules)), "sha256": h}); matches += 1
-            for ln in r.stderr.splitlines():
-                m = re.match(r"error scanning (.+): could not open file$", ln.strip())
-                if m and not os.path.lexists(m.group(1)):
-                    continue
-                if "error" in ln.lower() and errors < 20:
-                    _write(log, {"event": "error", "file": "", "detail": ln.strip()}); errors += 1
-    (sd / "last-recent").write_text(f"{int(t0)}\n")
+        try:
+            since = float((sd / "last-recent").read_text().strip())
+        except (OSError, ValueError):
+            since = t0 - RECENT_S
+        for top in watched:
+            files += _walk(top, never, max_bytes, since)
+        matches, errors, ok = _scan_files(run, files, RECENT_TIMEOUT, log, sd, "recent-list") if files else (0, 0, True)
+    except Exception as e:                                 # final review C1
+        _write(log, {"event": "error", "file": "", "detail": f"5-minute scan failed: {e!r}"}); errors += 1; ok = False
+    if ok:
+        (sd / "last-recent").write_text(f"{int(t0)}\n")
     return {"files": len(files), "matches": matches, "errors": errors}
 
 

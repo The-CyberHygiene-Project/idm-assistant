@@ -6,8 +6,8 @@ Internal test release for the CyberHygiene Project development team. Not an offi
 
 - **YARA malware scanning** on every host that has the security add-on (`SECURITY_ADDONS=yes`, or `chp-site security
   enable` from update 4):
-  - **every 5 minutes:** files that are new or changed in `/home`, `/root`, `/tmp`, `/var/tmp`, `/dev/shm`, `/srv` and
-    `/data` are scanned;
+  - **every 5 minutes:** files that are new or changed in `/home`, `/root`, `/tmp`, `/var/tmp`, `/dev/shm`,
+    `/run/user`, `/srv` and `/data` are scanned;
   - **weekly (Sunday 03:30):** every local file system is scanned. On the lab this took about one minute;
   - **alert only:** a match is never moved, changed or deleted. It becomes a level-12 Wazuh alert, so it reaches your
     `ALERT_HOOK` straight away. A scan error goes into the daily summary. Results are kept in `/var/log/chp-yara.json`;
@@ -64,7 +64,10 @@ delegate:
 ## Known limits
 
 - **Up to 5 minutes:** a new file is scanned at the next 5-minute run, not the moment it arrives. Wazuh's own
-  file-triggered response was tested and is not used: on the lab it never reached the clients.
+  file-triggered response was tested and is not used: on the lab it never reached the clients and did not run
+  reliably on the server either.
+- **Health of the scan:** the monitor alerts if the 5-minute scan has not succeeded for 30 minutes, or the weekly scan
+  for 8 days. Unusual file names (not UTF-8, or with a line break) are scanned too.
 - **Rule coverage:** all 748 signature-base rule files compile and are used. A few rules also look at a file's name
   or path; the scheduled scans give them empty values, so those rules rely on the file's content alone.
 - **Proved on VMs only.**

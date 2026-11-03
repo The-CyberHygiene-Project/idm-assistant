@@ -65,3 +65,8 @@ def test_clients_scan_recent_files_every_five_minutes():                     # s
     assert "ExecStart=/usr/bin/chp-site yara-scan --recent" in s and "Nice=19" in s and "IOSchedulingClass=idle" in s
     assert "OnUnitActiveSec=5min" in t and "OnBootSec=2min" in t
     assert "chp-yara-recent.service" in SPEC and "chp-yara-recent.timer" in SPEC
+
+
+def test_scan_services_have_time_limits():                                            # final review I4
+    assert "TimeoutStartSec=30min" in (D / "chp-yara-recent.service").read_text()
+    assert "TimeoutStartSec=7h" in (D / "chp-yara-fullscan.service").read_text()

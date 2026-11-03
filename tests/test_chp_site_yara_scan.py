@@ -144,7 +144,7 @@ def test_full_scan_skips_network_mounts(tmp_path):
         return SimpleNamespace(returncode=0, stdout="", stderr="")
     y.full_scan(run=run, log=log, state_dir=st, now=lambda: 1.0, walk_root=str(root), skip=(),
                 mounts_text=f"srv:/x {root}/mnt/nfs nfs4 rw 0 0\n")
-    assert listed["files"] == []
+    assert listed == {}                                                       # nothing to scan: yara is not even run
 
 
 def test_log_lines_are_not_world_readable(tmp_path):
@@ -254,3 +254,68 @@ def test_cli_recent_mode(monkeypatch):
     got = {}
     monkeypatch.setattr(y, "recent_scan", lambda run: got.setdefault("called", True) and {"files": 0, "matches": 0, "errors": 0})
     assert cli.main(["yara-scan", "--recent"]) == 0 and got["called"]
+
+
+# --- final review fixes (Y1) -----------------------------------------------------------------------------------------
+
+def test_scan_list_is_written_as_bytes_so_undecodable_names_cannot_crash(tmp_path):   # C1
+    lst = tmp_path / "list"
+    y._write_list(lst, ["/tmp/ok", "/tmp/bad\udcff"])                      # how os.walk returns a non-UTF-8 name
+    assert lst.read_bytes() == b"/tmp/ok\n/tmp/bad\xff\n"
+
+
+def test_yara_output_with_undecodable_bytes_is_parsed(tmp_path):                     # C1
+    hits = y._hits(b"Rule_A /tmp/bad\xff\nRule_B /tmp/ok\n")
+    assert hits == {"/tmp/bad\udcff": {"Rule_A"}, "/tmp/ok": {"Rule_B"}}
+
+
+def test_names_with_a_line_break_are_scanned_one_by_one_not_listed(tmp_path):         # C2
+    root = tmp_path / "home"; root.mkdir(); odd = root / "a\nb"; odd.write_text("x"); ok = root / "ok"; ok.write_text("x")
+    calls = []
+    def run(argv, **kw):
+        calls.append(argv)
+        if "--scan-list" in argv:
+            calls.append(Path(argv[argv.index("--scan-list") + 1]).read_bytes())
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    y.recent_scan(run=run, log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: 0.0,
+                  watched=(str(root),), never=())
+    listed = [c for c in calls if isinstance(c, bytes)][0]
+    assert listed == os.fsencode(str(ok)) + b"\n"                                     # the odd name is not in the list
+    assert [c for c in calls if isinstance(c, list) and c[-1] == str(odd)]           # it was scanned through argv
+
+
+def test_failed_yara_run_is_an_error_and_does_not_advance_the_recent_mark(tmp_path):  # I1
+    root = tmp_path / "home"; root.mkdir(); (root / "f").write_text("x")
+    (tmp_path / "st").mkdir(); (tmp_path / "st" / "last-recent").write_text("0\n")
+    s = y.recent_scan(run=lambda a, **k: SimpleNamespace(returncode=-9, stdout=b"", stderr=b""),
+                      log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: 5000.0,
+                      watched=(str(root),), never=())
+    assert s["errors"] == 1 and (tmp_path / "st" / "last-recent").read_text().strip() == "0"
+    assert "yara exit -9" in lines(tmp_path / "log")[0]["detail"]
+
+
+def test_failed_full_scan_does_not_write_last_full(tmp_path):                         # I1
+    root = tmp_path / "r"; (root / "a").mkdir(parents=True); (root / "a/f").write_text("x")
+    s = y.full_scan(run=lambda a, **k: SimpleNamespace(returncode=1, stdout=b"", stderr=b"error: could not load rules\n"),
+                    log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: 1.0, walk_root=str(root),
+                    skip=(), mounts_text="")
+    assert s["errors"] >= 1 and not (tmp_path / "st" / "last-full").exists()
+
+
+def test_an_unexpected_exception_becomes_one_error_line(tmp_path):                   # C1 belt and braces
+    root = tmp_path / "home"; root.mkdir(); (root / "f").write_text("x")
+    def run(a, **k):
+        raise RuntimeError("boom")
+    s = y.recent_scan(run=run, log=tmp_path / "log", state_dir=tmp_path / "st", now=lambda: 0.0,
+                      watched=(str(root),), never=())
+    assert s["errors"] == 1 and "boom" in lines(tmp_path / "log")[0]["detail"]
+
+
+def test_run_user_is_watched_and_recent_scan_has_its_own_limit():                    # I3, I4
+    assert "/run/user" in y.WATCHED and y.RECENT_TIMEOUT <= 30 * 60
+
+
+def test_cli_returns_1_when_a_scan_had_errors(monkeypatch):                          # I2 (systemd shows the failure)
+    from chp_site import cli
+    monkeypatch.setattr(y, "recent_scan", lambda run: {"files": 1, "matches": 0, "errors": 1})
+    assert cli.main(["yara-scan", "--recent"]) == 1
