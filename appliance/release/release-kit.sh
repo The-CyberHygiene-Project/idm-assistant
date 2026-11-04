@@ -55,6 +55,7 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `0.3.0/` | release 0.3.0: the installer ISO with the optional security add-on (Wazuh, `SECURITY_ADDONS=yes`), signed repo, key | `0.3.0/VERIFY.md` |
 | `site-stick-kit-0.3.0/` | the site-stick kit for 0.3.0 (`SECURITY_ADDONS`, `SECURITY_ALERT_LEVEL`) | `site-stick-kit-0.3.0/SITE-STICK.md` |
 | `0.3.0-update1/` | package update: the security add-on, part 2 (YARA malware scanning; optional, alert only) | `0.3.0-update1/UPDATE.md` |
+| `site-stick-kit-0.3.0-update1/` | the site-stick kit for 0.3.0 update 1 (guide section: malware scanning) | `site-stick-kit-0.3.0-update1/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.
