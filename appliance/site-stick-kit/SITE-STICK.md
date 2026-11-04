@@ -1,4 +1,4 @@
-# Making the site stick — CyberHygiene Project Lab Installer 0.1.0, 0.2.0 and 0.3.0
+# Making the site stick — CyberHygiene Project Lab Installer 0.1.0 to 0.4.0
 
 Internal test image for the CyberHygiene Project development team. Not an official Rocky Linux product.
 
@@ -122,6 +122,11 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
   `aide/<client>.txt` to the stick. The monitor keeps alerting "AIDE baseline not pinned" until you do.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
+
+### From 0.4.0 on: malware scanning at install
+
+With `SECURITY_ADDONS=yes`, a 0.4.0 install also turns on YARA malware scanning at each host's first boot (the same
+scanning that 0.3.0 update 1 adds to existing hosts): nothing more to set on the stick.
 
 ### From 0.3.0 update 1 on: malware scanning (YARA)
 
