@@ -57,7 +57,7 @@ def test_server_enable_writes_hardened_config_keys_and_firewall(tmp_path):
     assert (s / "wazuh/ws1.key").read_text().strip() == " ".join(keys)
     assert "/srv/wazuh /var/ossec none bind 0 0" in (r / "etc/fstab").read_text()
     assert any("--add-rich-rule" in " ".join(c) and "192.0.2.21/32" in " ".join(c) for c in run.calls)
-    assert ["dnf", "--enablerepo=chp", "install", "-y", "wazuh-manager", "chp-security"] in run.calls
+    assert ["dnf", "--enablerepo=chp", "install", "-y", "wazuh-manager", "chp-security", "yara", "chp-yara-rules"] in run.calls
     assert "ROLE=server" in (r / "etc/chp/security.conf").read_text()
 
 
@@ -273,3 +273,40 @@ def test_client_retry_uses_the_installed_key_when_the_staged_one_is_gone(tmp_pat
                       sleep=lambda x: None)
     assert (r / "var/ossec/etc/client.keys").read_text() == "001 ws1 192.0.2.21 " + "cd" * 32 + "\n"
     assert any("started: wazuh-agent" in d for d in done)
+
+
+def test_enable_installs_yara_and_starts_the_weekly_scan(tmp_path):
+    r, s, run, done = enable(tmp_path, "server")
+    assert ["dnf", "--enablerepo=chp", "install", "-y", "wazuh-manager", "chp-security", "yara",
+            "chp-yara-rules"] in run.calls
+    en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
+    assert "chp-yara-fullscan.timer" in en and "chp-yara-recent.timer" in en   # spec §10: every host
+    rules = r / "var/ossec/etc/rules/chp_yara_rules.xml"
+    assert rules.read_text() == w.YARA_RULES and oct(rules.stat().st_mode & 0o777) == "0o640"
+
+
+def test_client_enable_starts_the_weekly_scan_but_writes_no_rules(tmp_path):
+    s = tmp_path / "stick"; (s / "wazuh").mkdir(parents=True)
+    (s / "wazuh/ws1.key").write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+    r, _, run, _ = enable(tmp_path, "client", stick=s)
+    en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
+    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]
+    assert not (r / "var/ossec/etc/rules/chp_yara_rules.xml").exists()
+
+
+def test_enable_rerun_on_an_enabled_server_keeps_keys_and_adds_yara(tmp_path):
+    r, s, _, _ = enable(tmp_path, "server")
+    (r / "var/ossec/etc/rules/chp_yara_rules.xml").unlink()                  # as on a host enabled before update1
+    keys1 = (r / "var/ossec/etc/client.keys").read_text()
+    r, s, run2, _ = enable(tmp_path, "server", run=Run(rules=w.rich_rules(hosts())[0] + "\n"), stick=s)
+    assert (r / "var/ossec/etc/client.keys").read_text() == keys1
+    assert (r / "var/ossec/etc/rules/chp_yara_rules.xml").read_text() == w.YARA_RULES
+
+
+def test_enable_creates_the_yara_log_before_wazuh_starts(tmp_path):
+    # Y1 lab: Wazuh opens a log that appears later from its END, so the first YARA matches on a new host were lost
+    r, s, run, _ = enable(tmp_path, "server")
+    log = r / "var/log/chp-yara.json"
+    assert log.exists() and log.read_text() == "" and oct(log.stat().st_mode & 0o777) == "0o640"
+    first_start = next(i for i, c in enumerate(run.calls) if c[:3] == ["systemctl", "enable", "--now"])
+    assert first_start > 0                                     # (the file is written before this call, by _enable)

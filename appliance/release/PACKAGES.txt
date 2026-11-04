@@ -12,8 +12,10 @@ chp-base ours
 chp-identity-server ours
 chp-identity-client ours
 aide rocky
+yara rocky
 chp-integrity ours
 chp-templates ours
 chp-security ours
+chp-yara-rules ours
 wazuh-manager wazuh
 wazuh-agent wazuh

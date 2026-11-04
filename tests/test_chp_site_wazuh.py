@@ -30,7 +30,7 @@ def test_manager_settings(path, want):
 
 def test_manager_has_no_active_response_and_keeps_the_log_collection():
     out = w.harden_manager(MGR)
-    blocks = w.parse_conf(out)
+    blocks = w.parse_conf(out)                          # spec §10 (all hosts): YARA runs on a timer, not as a response
     assert not [e for b in blocks for e in b.iter("active-response")]
     locs = [e.findtext("location") for b in blocks for e in b.iter("localfile")]
     assert "journald" in locs and "/var/log/audit/audit.log" in locs
@@ -102,3 +102,36 @@ def test_api_password_meets_wazuh_policy_and_is_random():
     for p in pws:
         assert 32 <= len(p) <= 64 and any(c.islower() for c in p) and any(c.isupper() for c in p)
         assert any(c.isdigit() for c in p) and any(c in w.API_SYMBOLS for c in p)
+
+
+from chp_site import yara_scan as ys
+
+
+def _blocks(text):
+    return w.parse_conf(text)
+
+
+def test_agent_keeps_file_monitoring_and_active_response_off():           # spec §10: clients scan on a timer
+    b = _blocks(w.harden_agent(AGT, "192.0.2.10"))
+    assert w.setting(b, "syscheck/disabled") == "yes" and w.setting(b, "active-response/disabled") == "yes"
+
+
+def test_both_roles_read_the_yara_log_once():                               # still forwarded to the manager
+    for out in (w.harden_manager(MGR), w.harden_agent(AGT, "192.0.2.10"),
+                w.harden_manager(w.harden_manager(MGR))):                     # idempotent
+        locs = [e.findtext("location") for x in _blocks(out) for e in x.findall("localfile")
+                if e.findtext("location") == ys.LOG]
+        assert len(locs) == 1
+
+
+def test_yara_rules_levels():
+    r = w.YARA_RULES
+    assert 'level="12"' in r and "^match$" in r and 'level="7"' in r and "^error$" in r
+    assert "<decoded_as>json</decoded_as>" in r
+
+
+def test_no_host_turns_on_file_monitoring_or_responses():                     # spec §10 amendment 2 (all hosts)
+    for out in (w.harden_manager(MGR), w.harden_agent(AGT, "192.0.2.10")):
+        b = _blocks(out)
+        assert w.setting(b, "syscheck/disabled") == "yes"
+        assert not [e for x in b for e in x.findall("command") if e.findtext("name") == "chp-yara-scan"]

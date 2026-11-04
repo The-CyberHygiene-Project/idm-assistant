@@ -1,0 +1,10 @@
+[Unit]
+Description=CHP weekly YARA scan of every local file system (alert only)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=7h
+ExecStart=/usr/bin/chp-site yara-scan --full
+Nice=19
+IOSchedulingClass=idle

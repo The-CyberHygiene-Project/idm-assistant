@@ -1,0 +1,10 @@
+[Unit]
+Description=CHP YARA scan of files changed in the watched folders (every 5 minutes; alert only)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=30min
+ExecStart=/usr/bin/chp-site yara-scan --recent
+Nice=19
+IOSchedulingClass=idle

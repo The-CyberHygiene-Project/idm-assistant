@@ -9,6 +9,8 @@ ssh aero 'rm -rf /tmp/chpsec && mkdir -p /tmp/chpsec/SOURCES /tmp/chpsec/SPECS /
 scp -q "$here"/monitor.d/70-wazuh-service.sh "$here"/monitor.d/71-wazuh-agents.sh "$here"/monitor.d/72-wazuh-disk.sh \
   "$here"/chp-wazuh-alerts.service "$here"/chp-wazuh-retention.service "$here"/chp-wazuh-retention.timer \
   "$here"/wazuh-retention.sh "$here"/wazuh-manager.override.conf "$here"/wazuh-agent.override.conf "$top/LICENSE" \
+  "$here"/chp-yara-fullscan.service "$here"/chp-yara-fullscan.timer "$here"/monitor.d/73-yara-scan.sh \
+  "$here"/chp-yara-recent.service "$here"/chp-yara-recent.timer \
   aero:/tmp/chpsec/SOURCES/
 scp -q "$here/chp-security.spec" aero:/tmp/chpsec/SPECS/
 ssh aero 'rpmbuild -bb --define "_topdir /tmp/chpsec" /tmp/chpsec/SPECS/chp-security.spec >/tmp/chpsec/build.log 2>&1 || { tail -20 /tmp/chpsec/build.log; exit 1; }

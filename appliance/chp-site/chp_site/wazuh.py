@@ -7,12 +7,46 @@ import ipaddress
 import secrets
 import xml.etree.ElementTree as ET
 
+from . import yara_scan as _ys
+
 WAZUH_FPR = "0DCFCA5547B19D2A6099506096B3EE5F29111145"
 HEADER = "<!-- Managed by chp-security (security bundle spec §4); edits are replaced by chp-site security enable -->\n"
 API_YAML = ('# Managed by chp-security: the Wazuh API listens on this host only (spec §4). Wazuh 4.14 wants a list.\n'
             'host: ["127.0.0.1"]\nport: 55000\n')
 LOCAL_INTERNAL_AGENT = "agent.remote_conf=0\n"
 API_SYMBOLS = "-_.,+=@#%^*"
+
+
+YARA_RULES = """<!-- Managed by chp-security (YARA spec §5): YARA scan results from /var/log/chp-yara.json -->
+<group name="chp,yara,">
+  <rule id="100500" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="chp_yara.event">\\.+</field>
+    <description>CHP YARA: $(chp_yara.event)</description>
+  </rule>
+  <rule id="100501" level="12">
+    <if_sid>100500</if_sid>
+    <field name="chp_yara.event">^match$</field>
+    <description>YARA match: $(chp_yara.rules) in $(chp_yara.file)</description>
+    <group>malware,</group>
+  </rule>
+  <rule id="100502" level="7">
+    <if_sid>100500</if_sid>
+    <field name="chp_yara.event">^error$</field>
+    <description>YARA scan error: $(chp_yara.detail)</description>
+  </rule>
+</group>
+"""
+
+
+def _yara_log(blocks):
+    for b in blocks:
+        for e in b.findall("localfile"):
+            if e.findtext("location") == _ys.LOG:
+                return
+    lf = ET.SubElement(blocks[0], "localfile")
+    ET.SubElement(lf, "log_format").text = "json"
+    ET.SubElement(lf, "location").text = _ys.LOG
 
 
 def api_password():
@@ -90,6 +124,7 @@ def harden_manager(text):
     for tag, child, value in _MANAGER:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
+    _yara_log(blocks)                                   # spec §10: YARA runs on a timer on every host
     return _render(blocks)
 
 
@@ -113,6 +148,7 @@ def harden_agent(text, server_ip):
     for tag, child, value in _AGENT:
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
+    _yara_log(blocks)                                   # spec §10: clients scan on a timer; the agent forwards the log
     return _render(blocks)
 
 

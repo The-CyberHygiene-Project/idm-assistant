@@ -1,7 +1,7 @@
 Name:           chp-security
-Version:        0.1.0
-Release:        1.chp%{?dist}
-Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder and retention
+Version:        0.2.0
+Release:        2.chp%{?dist}
+Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention and YARA scanning
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
 URL:            https://github.com/The-CyberHygiene-Project/idm-assistant
@@ -16,13 +16,20 @@ Source6:        wazuh-retention.sh
 Source7:        wazuh-manager.override.conf
 Source8:        wazuh-agent.override.conf
 Source9:        LICENSE
-Requires:       chp-site >= 0.8.0, chp-base
+Source11:       chp-yara-fullscan.service
+Source12:       chp-yara-fullscan.timer
+Source13:       73-yara-scan.sh
+Source14:       chp-yara-recent.service
+Source15:       chp-yara-recent.timer
+Requires:       chp-site >= 0.10.0, chp-base, yara, chp-yara-rules
 BuildRequires:  systemd-rpm-macros
 
 %description
 Security bundle part 1 (spec 2026-10-27): monitor checks for the Wazuh services, agents and data directory; the
 chp-wazuh-alerts forwarder unit (chp-site wazuh-forward); daily alert-log retention; and drop-ins so Wazuh never
-starts without its bind-mounted data directory. Wazuh itself is configured by chp-site security enable.
+starts without its bind-mounted data directory. Part 2 (YARA spec 2026-11-01, §10): the chp-yara-recent timer (every 5 minutes) and
+the weekly chp-yara-fullscan timer (scan only, alert only), and monitor check 73. Wazuh itself is
+configured by chp-site security enable.
 
 %install
 install -Dm0755 %{SOURCE0} %{buildroot}%{_prefix}/lib/chp/monitor.d/70-wazuh-service.sh
@@ -36,13 +43,19 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/systemd/system/wazuh-manag
 install -Dm0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/systemd/system/wazuh-agent.service.d/chp.conf
 install -dm0755 %{buildroot}%{_sharedstatedir}/chp/wazuh
 install -Dm0644 %{SOURCE9} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+install -Dm0644 %{SOURCE11} %{buildroot}%{_unitdir}/chp-yara-fullscan.service
+install -Dm0644 %{SOURCE12} %{buildroot}%{_unitdir}/chp-yara-fullscan.timer
+install -Dm0644 %{SOURCE14} %{buildroot}%{_unitdir}/chp-yara-recent.service
+install -Dm0644 %{SOURCE15} %{buildroot}%{_unitdir}/chp-yara-recent.timer
+install -Dm0755 %{SOURCE13} %{buildroot}%{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
+install -dm0700 %{buildroot}%{_sharedstatedir}/chp/yara
 
 %post
-%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer
+%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
 systemctl daemon-reload >/dev/null 2>&1 || :
 
 %preun
-%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer
+%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -56,7 +69,20 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_sysconfdir}/systemd/system/wazuh-manager.service.d/chp.conf
 %{_sysconfdir}/systemd/system/wazuh-agent.service.d/chp.conf
 %dir %attr(0755,root,root) %{_sharedstatedir}/chp/wazuh
+%{_unitdir}/chp-yara-fullscan.service
+%{_unitdir}/chp-yara-fullscan.timer
+%{_unitdir}/chp-yara-recent.service
+%{_unitdir}/chp-yara-recent.timer
+%{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
+%dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Tue Nov 03 2026 The CyberHygiene Project - 0.2.0-2.chp
+- Final-review fixes (Y1): unit time limits (TimeoutStartSec), monitor 73 also checks the 5-minute scan.
+
+* Sun Nov 01 2026 The CyberHygiene Project - 0.2.0-1.chp
+- Security bundle part 2 (Plan Y1): YARA. chp-yara-recent timer (every 5 minutes, every host, spec §10), weekly
+  chp-yara-fullscan timer, monitor check 73-yara-scan; requires yara and chp-yara-rules.
+
 * Tue Oct 27 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release (security bundle Plan W1): monitor checks 70/71/72, alert forwarder unit, retention, mount drop-ins.

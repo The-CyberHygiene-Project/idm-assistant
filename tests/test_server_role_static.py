@@ -153,3 +153,10 @@ def test_pending_monitor_also_reminds_about_wazuh_keys():
     # 40-escrow-pending lists every entry of /root/chp-escrow-pending, so a waiting wazuh/ folder alerts too
     t = (SRV / "monitor.d" / "40-escrow-pending.sh").read_text()
     assert 'ls -A "$P"' in t and "chp-site export-client" in t
+
+
+def test_kanidm_login_pauses_before_sending_the_password():
+    # 0.3.0-update1: sending the password the instant the prompt appears races the CLI's switch to hidden input
+    # (typed-ahead input is discarded) -> expect times out; seen twice in ~30 gate-2 runs on the lab copy.
+    t = (SRV / "kanidm-login.exp").read_text()
+    assert re.search(r"password\.\*:\} \{ after [1-9][0-9]{2,}; send -- \"\$pw\\r\" \}", t)

@@ -123,6 +123,13 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.3.0 update 1 on: malware scanning (YARA)
+
+With the security add-on on, every host scans new or changed files in the user and temporary folders every 5 minutes,
+and every local file system weekly, with YARA and the signature-base rules. It is **alert only**: a match is reported to
+`ALERT_HOOK` and left in place for a person to decide. Results are kept in `/var/log/chp-yara.json`. New rules arrive as
+a small signed update each month. See `0.3.0-update1/UPDATE.md`.
+
 ### From 0.3.0 on: the security add-on at install (optional)
 
 Set `SECURITY_ADDONS=yes` in `site.conf` before you install, and the installer sets up Wazuh at each host's first boot.
@@ -135,6 +142,10 @@ Keep the usual order, because the agent keys travel on the stick like the client
    first boot connects its agent to the server.
 
 A client installed before step 2 stops at the start of the install ("no Wazuh agent key"), before any disk is touched.
+The packages come from the ISO's own repo, which the installer copies to each host. **Installing over the network
+instead of from the ISO?** Then no repo is copied: before first boot reaches its security step, unpack the release's
+`chp-repo-<version>.tar.gz` into `/var/lib/chp/repo` (as in the update notes). If the step has already failed, unpack it
+and reboot; the step runs again.
 With `SECURITY_ADDONS=no` (the default) nothing changes from 0.2.0. `SECURITY_ALERT_LEVEL` (default 10) sets which
 Wazuh alerts go to `ALERT_HOOK` straight away; the rest go into a daily summary. It is read once, at the first enable:
 to change it later, edit `ALERT_LEVEL` in `/etc/chp/security.conf` on the server and run
