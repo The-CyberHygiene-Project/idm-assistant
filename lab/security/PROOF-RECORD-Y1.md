@@ -62,3 +62,17 @@ rc3 golden snapshots, so `fixtures.py` stopped on an existing user, as expected)
 | 3. CUI scan | **108 pass / 2 fail on every host**, the same two accepted AIDE rules; `deviations.py`: Gate 3 met |
 
 Gate 1 for an update is proofs 1–4 above (the upgrade path); a fresh install with YARA is ISO 0.4.0's gate.
+
+## After the final review (2026-11-03): chp-site 0.10.0-2, chp-security 0.2.0-2, repo 0.8.0 re-signed
+
+The fixes (byte-safe scan lists, names with line breaks scanned one by one, failed runs not recorded as success, the
+5-minute-scan monitor check, `/run/user`, unit time limits) were proved by upgrading the golden hosts (which held the
+first 0.10.0-1 / 0.2.0-1 builds) and re-running proofs 1–3:
+- `yara-on`, `hook`, `catch`, `full`: **ALL PASS**;
+- `catch` now also writes two EICAR files with odd names on iso5-cli2, one with a non-UTF-8 byte and one with a line
+  break: **both caught**, and monitor check 73 stays OK. The first build crashed on exactly this
+  (`UnicodeEncodeError`), which is how the lab showed the stale packages;
+- weekly scan: 111,944 files, 65 s, 1 match (the test file), 0 errors.
+
+The quiet day and the gates (regression 33/33, row 36, CUI scan) were not repeated: the fixes touch only the scan
+code's error and file-name handling, not identity, authentication or the hardened settings those gates cover.
