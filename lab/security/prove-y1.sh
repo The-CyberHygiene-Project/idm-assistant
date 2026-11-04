@@ -6,6 +6,7 @@
 #   repo        unpack signed repo 0.8.0 on all three hosts; dnf upgrade
 #   enable H    attach the site stick to H's VM, run `chp-site security enable` there, detach it (srv first)
 #   yara-on     every host: YARA pieces installed and wired; no Wazuh config errors; no denials; keys unchanged
+#   fresh       ISO 0.4.0: YARA up after a fresh install (no upgrade)
 #   hook        a lab ALERT_HOOK on srv (writes /var/log/lab-hook.log), as prove.sh w2catch
 #   catch       EICAR in the admin's home (/home) and /tmp on cli2 -> match lines, rule-100501 alerts, hook lines; files unmoved
 #   full        a weekly scan on cli2 now (EICAR in /var/tmp) -> summary, last-full, monitor 73 OK
@@ -58,6 +59,18 @@ case ${1:-} in
     check "srv: both agents Active" "$(X srv 'sudo /var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
     check "srv: no active response" "$(X srv 'sudo grep -c "<active-response>" /var/ossec/etc/ossec.conf')" "0"
     done_ yara-on ;;
+  fresh)                   # ISO 0.4.0: YARA came up at first boot (no upgrade step), on every installed host
+    for h in srv cli2; do
+      check "$h: yara, rules, chp-security from the ISO" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " yara chp-yara-rules chp-security')" \
+        "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-0.2.0 "
+      check "$h: both YARA timers active" "$(X $h 'systemctl is-active chp-yara-recent.timer chp-yara-fullscan.timer | tr "\n" " "')" "active active "
+      check "$h: YARA log present" "$(X $h 'sudo test -f /var/log/chp-yara.json && echo yes')" "yes"
+      check "$h: Wazuh FIM off" "$(X $h 'sudo grep -A1 "<syscheck>" /var/ossec/etc/ossec.conf | grep -c "<disabled>yes</disabled>"')" "1"
+      check "$h: 5-minute scan has run" "$(X $h 'sudo test -s /var/lib/chp/yara/last-recent && echo yes')" "yes"
+    done
+    check "srv: YARA alert rules present" "$(X srv 'sudo test -f /var/ossec/etc/rules/chp_yara_rules.xml && echo yes')" "yes"
+    check "srv: no active response" "$(X srv 'sudo grep -c "<active-response>" /var/ossec/etc/ossec.conf')" "0"
+    done_ fresh ;;
   hook)                    # as prove.sh w2catch: a lab ALERT_HOOK on the server that appends to /var/log/lab-hook.log
     X srv 'printf "#!/bin/bash\necho \"\$(date +%%H:%%M:%%S) \$1\" >> /var/log/lab-hook.log\n" | sudo tee /usr/local/sbin/lab-hook >/dev/null; sudo chmod 0755 /usr/local/sbin/lab-hook; sudo touch /var/log/lab-hook.log; sudo sed -i "s#^ALERT_HOOK=.*#ALERT_HOOK=/usr/local/sbin/lab-hook#" /etc/chp/site.conf; sudo systemctl restart chp-wazuh-alerts'
     check "lab hook set" "$(X srv 'chp-site get ALERT_HOOK')" "/usr/local/sbin/lab-hook"
