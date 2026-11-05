@@ -1,6 +1,6 @@
 Name:           chp-security
 Version:        0.3.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention, YARA and Suricata
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -22,7 +22,7 @@ Source13:       73-yara-scan.sh
 Source14:       chp-yara-recent.service
 Source15:       chp-yara-recent.timer
 Source16:       74-suricata.sh
-Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules, suricata, chp-suricata-rules
+Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -30,7 +30,8 @@ Security bundle part 1 (spec 2026-10-27): monitor checks for the Wazuh services,
 chp-wazuh-alerts forwarder unit (chp-site wazuh-forward); daily alert-log retention; and drop-ins so Wazuh never
 starts without its bind-mounted data directory. Part 2 (YARA spec 2026-11-01, §10): the chp-yara-recent timer (every 5 minutes) and
 the weekly chp-yara-fullscan timer (scan only, alert only), and monitor check 73. Part 3 (Suricata spec 2026-11-04):
-monitor check 74 and the Suricata and chp-suricata-rules dependencies. Wazuh and Suricata themselves are configured by
+monitor check 74 (suricata and chp-suricata-rules are installed by chp-site security enable after it imports the
+EPEL key, so they are not required here). Wazuh and Suricata themselves are configured by
 chp-site security enable.
 
 %install
@@ -81,6 +82,10 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Thu Nov 05 2026 The CyberHygiene Project - 0.3.0-2.chp
+- No longer requires suricata / chp-suricata-rules: dnf upgrade pulled the EPEL-signed suricata before the EPEL key
+  was imported and failed its GPG check (S1 lab). security enable installs them after the key check.
+
 * Thu Nov 05 2026 The CyberHygiene Project - 0.3.0-1.chp
 - Security bundle part 3 (Plan S1): Suricata IDS. Monitor check 74-suricata (running, stats fresh, drops under 1 %);
   requires suricata and chp-suricata-rules. Log rotation = EPEL's file, rewritten by chp-site with RETENTION_DAYS.

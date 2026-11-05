@@ -132,7 +132,8 @@ def test_suricata_not_enabled_is_ok(tmp_path):
 
 
 def test_suricata_not_running_alerts(tmp_path):
-    assert "ALERT" in run_suri(tmp_path, active=False) and "Suricata is not running" in run_suri(tmp_path, active=False)
+    out = run_suri(tmp_path, active=False)
+    assert "ALERT" in out and "Suricata is not running" in out and "after an upgrade: chp-site security enable" in out
 
 
 def test_monitor_alerts_when_eve_is_stale_while_running(tmp_path):             # Review Focus 4

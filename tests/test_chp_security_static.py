@@ -72,8 +72,11 @@ def test_scan_services_have_time_limits():                                      
 
 
 def test_suricata_pieces_are_packaged():                                               # S1
-    assert "Version:        0.3.0" in SPEC and "Release:        1.chp%{?dist}" in SPEC
-    assert "Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules, suricata, chp-suricata-rules" in SPEC
+    assert "Version:        0.3.0" in SPEC and "Release:        2.chp%{?dist}" in SPEC
+    # S1 lab: NOT required here. suricata is EPEL-signed; `dnf upgrade` would pull it before chp-site's enable has
+    # imported the EPEL key, and the whole upgrade fails its GPG check. security enable installs both instead.
+    req = [ln for ln in SPEC.splitlines() if ln.startswith("Requires:")]
+    assert req == ["Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules"]
     assert "74-suricata.sh" in SPEC and (D / "monitor.d" / "74-suricata.sh").exists()
     assert "74-suricata.sh" in (D / "build-rpm.sh").read_text()
     assert "logrotate" not in SPEC                    # rotation = EPEL's file, rewritten by enable with RETENTION_DAYS

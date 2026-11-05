@@ -8,7 +8,7 @@ C=${CHP_SECURITY_CONF:-/etc/chp/security.conf}; L=${CHP_SURICATA_LOG_DIR:-/var/l
 now=${CHP_NOW:-$(date +%s)}
 [ -f "$C" ] || { echo "OK security add-on not enabled on this host"; exit 0; }
 if ! systemctl is-active --quiet suricata; then
-  echo "ALERT Suricata is not running (systemctl status suricata; journalctl -u suricata)"; exit 0
+  echo "ALERT Suricata is not running (after an upgrade: chp-site security enable; else systemctl status suricata)"; exit 0
 fi
 S="$L/stats.log"
 if [ ! -f "$S" ]; then
