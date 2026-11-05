@@ -1,0 +1,66 @@
+%YAML 1.1
+---
+# Managed by chp-security (Suricata spec §3); rewritten by chp-site security enable. IDS only: nothing is blocked.
+vars:
+  address-groups:
+    HOME_NET: "[192.168.100.0/24]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    GENEVE_PORTS: 6081
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+default-log-dir: /var/log/suricata/
+default-rule-path: /usr/share/chp-suricata-rules
+rule-files:
+  - chp-suricata.rules
+classification-file: /usr/share/chp-suricata-rules/classification.config
+reference-config-file: /usr/share/chp-suricata-rules/reference.config
+af-packet:
+  - interface: enp1s0
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    tpacket-v3: yes
+stats:
+  enabled: yes
+  interval: 60
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert
+  - stats:
+      enabled: yes
+      filename: stats.log
+      interval: 60
+logging:
+  default-log-level: notice
+  outputs:
+    - file:
+        enabled: yes
+        filename: /var/log/suricata/suricata.log
+unix-command:
+  enabled: no
