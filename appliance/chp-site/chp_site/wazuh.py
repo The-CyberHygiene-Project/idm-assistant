@@ -7,6 +7,7 @@ import ipaddress
 import secrets
 import xml.etree.ElementTree as ET
 
+from . import suricata_conf as _sc
 from . import yara_scan as _ys
 
 WAZUH_FPR = "0DCFCA5547B19D2A6099506096B3EE5F29111145"
@@ -39,14 +40,39 @@ YARA_RULES = """<!-- Managed by chp-security (YARA spec §5): YARA scan results 
 """
 
 
-def _yara_log(blocks):
+SURICATA_RULES = """<!-- Managed by chp-security (Suricata spec §4): levels for Suricata alerts by severity -->
+<group name="chp,suricata,ids,">
+  <rule id="100510" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.severity">^1$</field>
+    <description>Suricata (high): $(alert.signature)</description>
+  </rule>
+  <rule id="100511" level="7">
+    <if_sid>86601</if_sid>
+    <field name="alert.severity">^2$</field>
+    <description>Suricata (medium): $(alert.signature)</description>
+  </rule>
+</group>
+"""
+# Severity 3 keeps the stock level 3 of Wazuh rule 86601 (Suricata alert).
+
+
+def _json_log(blocks, location):
     for b in blocks:
         for e in b.findall("localfile"):
-            if e.findtext("location") == _ys.LOG:
+            if e.findtext("location") == location:
                 return
     lf = ET.SubElement(blocks[0], "localfile")
     ET.SubElement(lf, "log_format").text = "json"
-    ET.SubElement(lf, "location").text = _ys.LOG
+    ET.SubElement(lf, "location").text = location
+
+
+def _yara_log(blocks):
+    _json_log(blocks, _ys.LOG)
+
+
+def _eve_log(blocks):
+    _json_log(blocks, _sc.EVE)                          # Suricata spec §4: every host watches its own traffic
 
 
 def api_password():
@@ -125,6 +151,7 @@ def harden_manager(text):
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
     _yara_log(blocks)                                   # spec §10: YARA runs on a timer on every host
+    _eve_log(blocks)
     return _render(blocks)
 
 
@@ -149,6 +176,7 @@ def harden_agent(text, server_ip):
         _set(blocks, tag, child, value)
     _wodles_off(blocks)
     _yara_log(blocks)                                   # spec §10: clients scan on a timer; the agent forwards the log
+    _eve_log(blocks)
     return _render(blocks)
 
 
