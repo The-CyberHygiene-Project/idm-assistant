@@ -5,7 +5,7 @@ SPEC = (D / "chp-security.spec").read_text()
 
 
 def test_spec_requires_and_files():
-    assert "Requires:       chp-site >= 0.10.0, chp-base" in SPEC                      # 0.2.0: + yara (Y1)
+    assert "Requires:       chp-site >= 0.11.0, chp-base" in SPEC                      # 0.3.0: + suricata (S1)
     for f in ("70-wazuh-service.sh", "71-wazuh-agents.sh", "72-wazuh-disk.sh", "chp-wazuh-alerts.service",
               "chp-wazuh-retention.timer", "wazuh-retention"):
         assert f in SPEC, f
@@ -46,8 +46,7 @@ def test_aide_checks_wazuh_shared_files_by_content_not_timestamps():
 
 
 def test_yara_pieces_are_packaged():
-    assert "Version:        0.2.0" in SPEC
-    assert "Requires:       chp-site >= 0.10.0, chp-base, yara, chp-yara-rules" in SPEC
+    assert "Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules" in SPEC
     for f in ("chp-yara-fullscan.service", "chp-yara-fullscan.timer", "73-yara-scan.sh"):
         assert f in SPEC, f
     assert "active-response/bin" not in SPEC                                  # spec §10: no Wazuh trigger, no wrapper
@@ -70,3 +69,11 @@ def test_clients_scan_recent_files_every_five_minutes():                     # s
 def test_scan_services_have_time_limits():                                            # final review I4
     assert "TimeoutStartSec=30min" in (D / "chp-yara-recent.service").read_text()
     assert "TimeoutStartSec=7h" in (D / "chp-yara-fullscan.service").read_text()
+
+
+def test_suricata_pieces_are_packaged():                                               # S1
+    assert "Version:        0.3.0" in SPEC and "Release:        1.chp%{?dist}" in SPEC
+    assert "Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules, suricata, chp-suricata-rules" in SPEC
+    assert "74-suricata.sh" in SPEC and (D / "monitor.d" / "74-suricata.sh").exists()
+    assert "74-suricata.sh" in (D / "build-rpm.sh").read_text()
+    assert "logrotate" not in SPEC                    # rotation = EPEL's file, rewritten by enable with RETENTION_DAYS

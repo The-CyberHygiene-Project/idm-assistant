@@ -1,7 +1,7 @@
 Name:           chp-security
-Version:        0.2.0
-Release:        2.chp%{?dist}
-Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention and YARA scanning
+Version:        0.3.0
+Release:        1.chp%{?dist}
+Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention, YARA and Suricata
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
 URL:            https://github.com/The-CyberHygiene-Project/idm-assistant
@@ -21,15 +21,17 @@ Source12:       chp-yara-fullscan.timer
 Source13:       73-yara-scan.sh
 Source14:       chp-yara-recent.service
 Source15:       chp-yara-recent.timer
-Requires:       chp-site >= 0.10.0, chp-base, yara, chp-yara-rules
+Source16:       74-suricata.sh
+Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules, suricata, chp-suricata-rules
 BuildRequires:  systemd-rpm-macros
 
 %description
 Security bundle part 1 (spec 2026-10-27): monitor checks for the Wazuh services, agents and data directory; the
 chp-wazuh-alerts forwarder unit (chp-site wazuh-forward); daily alert-log retention; and drop-ins so Wazuh never
 starts without its bind-mounted data directory. Part 2 (YARA spec 2026-11-01, §10): the chp-yara-recent timer (every 5 minutes) and
-the weekly chp-yara-fullscan timer (scan only, alert only), and monitor check 73. Wazuh itself is
-configured by chp-site security enable.
+the weekly chp-yara-fullscan timer (scan only, alert only), and monitor check 73. Part 3 (Suricata spec 2026-11-04):
+monitor check 74 and the Suricata and chp-suricata-rules dependencies. Wazuh and Suricata themselves are configured by
+chp-site security enable.
 
 %install
 install -Dm0755 %{SOURCE0} %{buildroot}%{_prefix}/lib/chp/monitor.d/70-wazuh-service.sh
@@ -48,6 +50,7 @@ install -Dm0644 %{SOURCE12} %{buildroot}%{_unitdir}/chp-yara-fullscan.timer
 install -Dm0644 %{SOURCE14} %{buildroot}%{_unitdir}/chp-yara-recent.service
 install -Dm0644 %{SOURCE15} %{buildroot}%{_unitdir}/chp-yara-recent.timer
 install -Dm0755 %{SOURCE13} %{buildroot}%{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
+install -Dm0755 %{SOURCE16} %{buildroot}%{_prefix}/lib/chp/monitor.d/74-suricata.sh
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/yara
 
 %post
@@ -74,9 +77,14 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_unitdir}/chp-yara-recent.service
 %{_unitdir}/chp-yara-recent.timer
 %{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
+%{_prefix}/lib/chp/monitor.d/74-suricata.sh
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Thu Nov 05 2026 The CyberHygiene Project - 0.3.0-1.chp
+- Security bundle part 3 (Plan S1): Suricata IDS. Monitor check 74-suricata (running, stats fresh, drops under 1 %);
+  requires suricata and chp-suricata-rules. Log rotation = EPEL's file, rewritten by chp-site with RETENTION_DAYS.
+
 * Tue Nov 03 2026 The CyberHygiene Project - 0.2.0-2.chp
 - Final-review fixes (Y1): unit time limits (TimeoutStartSec), monitor 73 also checks the 5-minute scan.
 

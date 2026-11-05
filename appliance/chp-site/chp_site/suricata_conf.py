@@ -114,3 +114,27 @@ def dropin_text(iface):
     iface = _iface(iface)
     return ("# Managed by chp-security (Suricata spec §3): CHP config, site interface, IDS only\n[Service]\nExecStart=\n"
             f"ExecStart=/sbin/suricata -c {CONF} --pidfile /var/run/suricata.pid --af-packet={iface} --user suricata\n")
+
+
+LOGROTATE = "/etc/logrotate.d/suricata"
+
+
+def logrotate_text(days):
+    """Replaces EPEL's own /etc/logrotate.d/suricata (same globs; a second file would be a logrotate duplicate-entry
+    error). Daily, keeping the site's RETENTION_DAYS (spec §3); EPEL's HUP makes Suricata reopen its logs."""
+    if isinstance(days, bool) or not str(days).isdigit() or not 1 <= int(days) <= 3650:
+        raise SiteError(f"RETENTION_DAYS {days!r} must be a whole number of days from 1 to 3650")
+    return f"""# Managed by chp-security (Suricata spec §3); rewritten by chp-site security enable (RETENTION_DAYS).
+/var/log/suricata/*.log /var/log/suricata/*.json {{
+    daily
+    rotate {int(days)}
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/kill -HUP $(cat /var/run/suricata.pid 2>/dev/null) 2>/dev/null || true
+    endscript
+}}
+"""

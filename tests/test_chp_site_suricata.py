@@ -68,3 +68,18 @@ def test_bad_interface_name_is_refused():
         sc.config_text("en p1\n", "[192.168.100.0/24]")
     with pytest.raises(SiteError):
         sc.dropin_text("eth0 --x")
+
+
+def test_logrotate_keeps_the_site_retention_and_reloads_suricata():
+    t = sc.logrotate_text(90)
+    assert t.startswith("# Managed by chp-security") and "/var/log/suricata/*.log /var/log/suricata/*.json {" in t
+    for want in ("daily", "rotate 90", "missingok", "notifempty", "compress", "delaycompress", "sharedscripts",
+                 "kill -HUP"):
+        assert want in t, want
+    assert "copytruncate" not in t and sc.LOGROTATE == "/etc/logrotate.d/suricata"
+
+
+@pytest.mark.parametrize("bad", [0, -1, "90; rm", 100000])
+def test_logrotate_refuses_a_bad_retention(bad):
+    with pytest.raises(SiteError):
+        sc.logrotate_text(bad)

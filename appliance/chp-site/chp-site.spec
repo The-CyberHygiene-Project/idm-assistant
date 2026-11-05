@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.10.0
-Release:        2.chp%{?dist}
+Version:        0.11.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -39,6 +39,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Nov 05 2026 The CyberHygiene Project - 0.11.0-1.chp
+- Security bundle part 3 (Plan S1): security enable installs Suricata and chp-suricata-rules, writes the IDS-only
+  config for this host's site interface (HOME_NET = SUBNET), the service drop-in, log rotation with RETENTION_DAYS,
+  and (server) the Wazuh severity rules; both roles forward eve.json alerts to Wazuh.
+
 * Tue Nov 03 2026 The CyberHygiene Project - 0.10.0-2.chp
 - Final-review fixes (Y1): byte-safe scan lists, names with line breaks scanned one by one, failed yara runs not
   recorded as success, /run/user watched, exit status 1 on errors.
