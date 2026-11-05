@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.11.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -12,6 +12,7 @@ Source2:        RPM-GPG-KEY-cyberhygiene
 Source3:        LICENSE
 Source4:        chp-site.sh
 Source5:        RPM-GPG-KEY-WAZUH
+Source9:        RPM-GPG-KEY-EPEL-9
 Requires:       python3, openssl, util-linux
 
 %description
@@ -24,6 +25,7 @@ install -Dm0755 %{SOURCE4} %{buildroot}%{_bindir}/chp-site
 install -Dm0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/yum.repos.d/chp.repo
 install -Dm0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
 install -Dm0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-WAZUH
+install -Dm0644 %{SOURCE9} %{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9
 install -dm0755 %{buildroot}%{_sharedstatedir}/chp/repo
 install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
@@ -35,10 +37,15 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %config(noreplace) %{_sysconfdir}/yum.repos.d/chp.repo
 %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene
 %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-WAZUH
+%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9
 %dir %{_sharedstatedir}/chp
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Nov 05 2026 The CyberHygiene Project - 0.11.0-2.chp
+- Ships the pinned EPEL 9 key; security enable checks its fingerprint and imports it with Wazuh's before dnf (the S1
+  lab proof found dnf refusing the EPEL-signed suricata, hiredis and hyperscan without it).
+
 * Thu Nov 05 2026 The CyberHygiene Project - 0.11.0-1.chp
 - Security bundle part 3 (Plan S1): security enable installs Suricata and chp-suricata-rules, writes the IDS-only
   config for this host's site interface (HOME_NET = SUBNET), the service drop-in, log rotation with RETENTION_DAYS,

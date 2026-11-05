@@ -19,6 +19,8 @@ from .sitefile import SiteError
 
 SECURITY_CONF = "etc/chp/security.conf"
 KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH"
+EPEL_KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9"
+EPEL_FPR = "FF8AD1344597106ECE813B918A3872BF3228467C"   # = appliance/release/trusted-keys.txt epel9 (suricata, S1)
 OSSEC = "var/ossec"
 
 
@@ -26,19 +28,29 @@ def _p(root, rel):
     return Path(root) / rel
 
 
-def _check_key(root, run):
-    k = _p(root, KEYFILE)
-    if not k.exists():
-        raise SiteError(f"/{KEYFILE} is missing: apply the update (chp-site 0.8.0) first")
+def _key_fpr(path, run):
     home = tempfile.mkdtemp(prefix="chp-gpg-")             # never creates /root/.gnupg (an AIDE change)
     try:
-        r = run(["gpg", "--homedir", home, "--show-keys", "--with-colons", str(k)], capture_output=True, text=True)
+        r = run(["gpg", "--homedir", home, "--show-keys", "--with-colons", str(path)], capture_output=True, text=True)
     finally:
         shutil.rmtree(home, ignore_errors=True)
     fprs = [ln.split(":")[9] for ln in r.stdout.splitlines() if ln.startswith("fpr:")]
-    if not fprs or fprs[0] != w.WAZUH_FPR:
-        raise SiteError(f"Wazuh key fingerprint {fprs[0] if fprs else 'unreadable'} is not the pinned {w.WAZUH_FPR}")
-    run(["rpm", "--import", str(k)], check=True)
+    return fprs[0] if fprs else None
+
+
+def _check_key(root, run):
+    """Both vendor keys are checked against their pins before either is imported: Wazuh's, and EPEL 9's (suricata,
+    hiredis and hyperscan are EPEL-signed; dnf refuses them until the key is in the rpm database: S1 lab)."""
+    keys = ((KEYFILE, w.WAZUH_FPR, "Wazuh", "chp-site 0.8.0"), (EPEL_KEYFILE, EPEL_FPR, "EPEL 9", "chp-site 0.11.0"))
+    for rel, pin, name, since in keys:
+        k = _p(root, rel)
+        if not k.exists():
+            raise SiteError(f"/{rel} is missing: apply the update ({since}) first")
+        f = _key_fpr(k, run)
+        if f != pin:
+            raise SiteError(f"{name} key fingerprint {f or 'unreadable'} is not the pinned {pin}")
+    for rel, _, _, _ in keys:
+        run(["rpm", "--import", str(_p(root, rel))], check=True)
 
 
 def _data_dir(root, data_is_mount, run):
@@ -135,7 +147,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
                     raise SiteError(f"no staged Wazuh key for {host} ({key_file}): reinstall with the site stick, "
                                     "after export-client on the server")
         agent_line = _keyline(host, src.read_text())
-    _check_key(root, run); done.append("Wazuh signing key verified and imported")
+    _check_key(root, run); done.append("Wazuh and EPEL 9 signing keys verified and imported")
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
     pkg = "wazuh-manager" if role == "server" else "wazuh-agent"
     run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security", "yara", "chp-yara-rules", "suricata",

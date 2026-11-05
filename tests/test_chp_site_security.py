@@ -11,17 +11,20 @@ from chp_site.sitefile import SiteError
 
 FX = Path(__file__).parent / "fixtures" / "wazuh"
 FPR_COLONS = f"pub:-:4096:1:96B3EE5F29111145:1470009600:1810339200::-:\nfpr:::::::::{w.WAZUH_FPR}:\n"
+EPEL_COLONS = f"pub:-:4096:1:8A3872BF3228467C:1631033579:::-:\nfpr:::::::::{sec.EPEL_FPR}:\n"
 
 
 class Run:
-    def __init__(self, fpr=FPR_COLONS, rules=""):
-        self.calls, self.fpr, self.rules = [], fpr, rules
+    def __init__(self, fpr=FPR_COLONS, rules="", epel=EPEL_COLONS):
+        self.calls, self.fpr, self.rules, self.epel = [], fpr, rules, epel
 
     def __call__(self, argv, **kw):
         self.calls.append(argv)
         out = self.fpr if argv[:1] == ["gpg"] and "--show-keys" in argv else (self.rules if "--list-rich-rules" in argv else "")
         if argv[:2] == ["ip", "-o"]:
             out = IP_ADDR
+        if argv[:1] == ["gpg"] and argv[-1].endswith("RPM-GPG-KEY-EPEL-9"):
+            out = self.epel
         return type("R", (), {"returncode": 0, "stdout": out, "stderr": ""})()
 
 
@@ -43,6 +46,7 @@ def root(tmp_path, role):
     (r / "var/ossec/api/configuration").mkdir(parents=True)
     (r / "etc/pki/rpm-gpg").mkdir(parents=True)
     (r / "etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH").write_text("key")
+    (r / "etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9").write_text("epel key")
     (r / "etc/fstab").write_text("UUID=x / xfs defaults 0 0\n")
     (r / "var/ossec/etc/ossec.conf").write_text((FX / f"{'manager' if role == 'server' else 'agent'}-ossec.conf").read_text())
     return r
@@ -404,3 +408,30 @@ def test_no_interface_for_this_host_refuses_before_any_change(tmp_path):     # R
 def test_status_lists_suricata(tmp_path):
     r, _, _, _ = enable(tmp_path, "server")
     assert "suricata:" in sec.status(r, Run())
+
+
+def test_epel_key_is_checked_and_imported_before_dnf(tmp_path):              # S1 lab: dnf refused suricata without it
+    _, _, run, done = enable(tmp_path, "server")
+    imp = run.calls.index(["rpm", "--import", str(tmp_path / "root/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9")])
+    dnf = next(i for i, c in enumerate(run.calls) if c[:1] == ["dnf"])
+    assert imp < dnf and any("EPEL 9" in d for d in done)
+
+
+def test_wrong_epel_fingerprint_refuses_before_any_change(tmp_path):
+    run = Run(epel=EPEL_COLONS.replace(sec.EPEL_FPR, "0" * 40))
+    with pytest.raises(SiteError, match="EPEL 9 key fingerprint"):
+        enable(tmp_path, "server", run=run)
+    assert not [c for c in run.calls if c[:1] in (["dnf"], ["rpm"])]
+
+
+def test_missing_epel_key_is_a_clear_error(tmp_path):
+    r = root(tmp_path, "server"); (r / "etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9").unlink()
+    with pytest.raises(SiteError, match="RPM-GPG-KEY-EPEL-9 is missing"):
+        enable(tmp_path, "server")
+
+
+def test_chp_site_ships_the_pinned_epel_key():
+    top = Path(__file__).resolve().parents[1]
+    spec = (top / "appliance/chp-site/chp-site.spec").read_text()
+    assert "RPM-GPG-KEY-EPEL-9" in spec and "RPM-GPG-KEY-EPEL-9" in (top / "appliance/chp-site/build-rpm.sh").read_text()
+    assert f"{sec.EPEL_FPR} epel9 RPM-GPG-KEY-EPEL-9" in (top / "appliance/release/trusted-keys.txt").read_text()
