@@ -1,4 +1,4 @@
-# Making the site stick — CyberHygiene Project Lab Installer 0.1.0, 0.2.0 and 0.3.0
+# Making the site stick — CyberHygiene Project Lab Installer 0.1.0 to 0.4.0
 
 Internal test image for the CyberHygiene Project development team. Not an official Rocky Linux product.
 
@@ -130,6 +130,11 @@ With the security add-on on, every host runs Suricata on its own network interfa
 straight away; medium ones go into the daily summary. Alerts are kept in `/var/log/suricata/eve.json` for
 `RETENTION_DAYS`. Each host sees only its own traffic, and Suricata needs about 500 MB of memory per host. New rules
 arrive as a small signed update each month. See `0.4.0-update1/UPDATE.md`.
+
+### From 0.4.0 on: malware scanning at install
+
+With `SECURITY_ADDONS=yes`, a 0.4.0 install also turns on YARA malware scanning at each host's first boot (the same
+scanning that 0.3.0 update 1 adds to existing hosts): nothing more to set on the stick.
 
 ### From 0.3.0 update 1 on: malware scanning (YARA)
 
