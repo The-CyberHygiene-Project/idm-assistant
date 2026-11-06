@@ -10,6 +10,7 @@
 #   catch       srv serves the S1 test body (SID 2017025, severity 1) on a high port; cli2 fetches it ->
 #               eve alert on both hosts, rule-100510 alerts on the manager, a hook line
 #   res         RSS, CPU and kernel drops of Suricata on both hosts
+#   fresh       ISO install (0.5.0): Suricata came up at first boot; t0 = boot time, then every `on` check
 #   reboot      cold reboot of cli2 then srv (final review I-3): Suricata back, rules loaded, eve read, no denials
 # cli1 has no lab-adapter sudo: it stays on 0.4.0 without Suricata and must stay Active (mixed versions).
 set -Eeuo pipefail
@@ -98,6 +99,13 @@ case ${1:-} in
       check "$h: monitor 74 OK" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
     done
     done_ res ;;
+  fresh)
+    for h in srv cli2; do
+      X $h 'sudo date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" "+%F %T" | sudo tee /root/s1-t0 >/dev/null; sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16 | sudo tee /root/s1-keys-before >/dev/null'
+      check "$h: security step of first boot succeeded" "$(X $h 'sudo journalctl --no-pager -u chp-server-firstboot -u chp-client-firstboot | grep -c "Suricata watches" | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
+    done
+    bash "$0" on || fails=$((fails+1))
+    done_ fresh ;;
   reboot)
     for h in cli2 srv; do
       X $h 'sudo systemctl reboot' >/dev/null; sleep 30
