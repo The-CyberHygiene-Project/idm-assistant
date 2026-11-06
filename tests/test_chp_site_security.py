@@ -304,7 +304,7 @@ def test_client_enable_starts_the_weekly_scan_but_writes_no_rules(tmp_path):
     (s / "wazuh/ws1.key").write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
     r, _, run, _ = enable(tmp_path, "client", stick=s)
     en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
-    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer", "suricata"]
+    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]
     assert not (r / "var/ossec/etc/rules/chp_yara_rules.xml").exists()
 
 
@@ -346,21 +346,33 @@ def test_client_uses_its_own_interface(tmp_path):
     r, _, run, _ = enable(tmp_path, "client", stick=s)
     assert "- interface: enp2s0" in (r / "etc/suricata/chp-suricata.yaml").read_text()
     assert not (r / "var/ossec/etc/rules/chp_suricata_rules.xml").exists()
-    assert _units(run)[-1] == "suricata"
+    assert "suricata" not in _units(run) and ["systemctl", "enable", "suricata"] in run.calls
 
 
 def test_server_writes_the_suricata_wazuh_rules_and_starts_suricata(tmp_path):
     r, _, run, _ = enable(tmp_path, "server")
     x = r / "var/ossec/etc/rules/chp_suricata_rules.xml"
     assert x.read_text() == w.SURICATA_RULES and oct(x.stat().st_mode & 0o777) == "0o640"
-    assert _units(run)[-1] == "suricata"
+    assert ["systemctl", "enable", "suricata"] in run.calls
 
 
-def test_systemd_reloads_before_the_units_start_and_suricata_restarts(tmp_path):
-    _, _, run, _ = enable(tmp_path, "server")
+def test_systemd_reloads_before_the_units_start_and_suricata_loads_its_rules_once(tmp_path):   # final review M-3
+    _, _, run, done = enable(tmp_path, "server")
     i_reload = run.calls.index(["systemctl", "daemon-reload"])
     i_start = next(i for i, c in enumerate(run.calls) if c[:3] == ["systemctl", "enable", "--now"])
-    assert i_reload < i_start and ["systemctl", "restart", "suricata"] in run.calls[i_start:]
+    assert i_reload < i_start and "suricata" not in run.calls[i_start]          # enabled, not started, here
+    i_en = run.calls.index(["systemctl", "enable", "suricata"])
+    assert run.calls.count(["systemctl", "restart", "suricata"]) == 1 and run.calls.index(["systemctl", "restart", "suricata"]) > i_en
+    assert any("suricata" in d and d.startswith("started:") for d in done)
+
+
+def test_bad_retention_is_refused_before_any_change(tmp_path):                  # final review M-2
+    r = root(tmp_path, "server"); (r / "etc/chp").mkdir(parents=True)
+    (r / "etc/chp/security.conf").write_text("ROLE=server\nALERT_LEVEL=10\nRETENTION_DAYS=ninety\nDATA_DIR=/srv/wazuh\n")
+    run = Run()
+    with pytest.raises(SiteError, match="RETENTION_DAYS"):
+        enable(tmp_path, "server", run=run)
+    assert not [c for c in run.calls if c[:1] in (["dnf"], ["systemctl"], ["rpm"])]
 
 
 def test_enable_creates_eve_before_the_units_start(tmp_path):

@@ -43,4 +43,4 @@ both rules packages. Steps:
 6. **Release:** a short `UPDATE-0.4.0-rules-<YYYY-MM>.md.in` (the ET date, the enabled/disabled counts, the AIDE
    entries to expect: `/usr/share/chp-suricata-rules/*` only), then `release-repo.sh` as above.
 7. **Sites apply it** like any update: unpack the repo, `dnf --refresh --enablerepo=chp upgrade chp-suricata-rules`,
-   then `systemctl restart suricata` (Suricata reads its rules only at start), and accept the AIDE alert.
+   then `systemctl reload suricata` (the new rules load live; a restart works too), and accept the AIDE alert.

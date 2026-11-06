@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.11.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 06 2026 The CyberHygiene Project - 0.11.0-3.chp
+- Final-review fixes (S1): the alert forwarder groups repeats per Suricata signature, not only per rule, so a second
+  high-severity signature from a host is not held back (I-2); security enable checks RETENTION_DAYS before changing
+  anything (M-2) and starts Suricata once, so its rules load once (M-3).
+
 * Thu Nov 05 2026 The CyberHygiene Project - 0.11.0-2.chp
 - Ships the pinned EPEL 9 key; security enable checks its fingerprint and imports it with Wazuh's before dnf (the S1
   lab proof found dnf refusing the EPEL-signed suricata, hiredis and hyperscan without it).

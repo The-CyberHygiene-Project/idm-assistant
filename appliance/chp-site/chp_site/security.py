@@ -76,14 +76,19 @@ def _write(path, text, mode, chown=None):
     os.replace(tmp, path)
 
 
-def _conf(root, role, d, level=10):
-    p = _p(root, SECURITY_CONF)
-    old = {}
+def _old_conf(root):
+    p, old = _p(root, SECURITY_CONF), {}
     if p.exists():
         for ln in p.read_text().splitlines():
             if "=" in ln:
                 k, v = ln.split("=", 1)
                 old[k] = v
+    return old
+
+
+def _conf(root, role, d, level=10):
+    p = _p(root, SECURITY_CONF)
+    old = _old_conf(root)
     days = old.get('RETENTION_DAYS', '90')
     text = (f"ROLE={role}\nALERT_LEVEL={old.get('ALERT_LEVEL', str(level))}\n"
             f"RETENTION_DAYS={days}\nDATA_DIR={d}\n")
@@ -125,6 +130,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     if me is None:
         raise SiteError(f"{host} is not in the hosts table")
     iface, home = sc.iface_for(me.ip, run), sc.home_net(site)
+    sc.logrotate_text(_old_conf(root).get("RETENTION_DAYS", "90"))   # final review M-2: a bad value fails here, not late
     if stick is None and not _p(root, "var/lib/chp/repo/repodata/repomd.xml").exists():
         raise SiteError("the security add-on is on but this host has no local package repo (the ISO's repo is copied "
                         "at install; a network install does not copy it): unpack a signed repo tarball into "
@@ -189,7 +195,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
             run(["firewall-cmd", "-q", "--reload"], check=True)
         done.append(f"firewall: 1514/tcp from {len(w.rich_rules(hosts))} clients")
         units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer", "chp-yara-fullscan.timer",
-                 "chp-yara-recent.timer", "suricata"]                        # spec §10 / Suricata §3: every host
+                 "chp-yara-recent.timer"]                                    # spec §10: every host
     else:
         server = next(h for h in hosts if h.role == "server")
         _write(conf, w.harden_agent(conf.read_text(), server.ip), 0o640, group_wazuh)
@@ -198,7 +204,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
-        units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer", "suricata"]   # spec §10, S §3
+        units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]   # spec §10
     days = _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     _write(_p(root, sc.CONF.lstrip("/")), sc.config_text(iface, home), 0o640, group_suricata)
     _write(_p(root, sc.DROPIN.lstrip("/")), sc.dropin_text(iface), 0o644)
@@ -218,8 +224,11 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     run(["systemctl", "daemon-reload"], check=True)      # the Suricata drop-in
     run(["systemctl", "enable", "--now", *units], check=True)
     run(["systemctl", "restart", units[0]], check=True)
-    run(["systemctl", "restart", "suricata"], check=True)  # a re-run's new config or interface takes effect
-    done.append(f"started: {', '.join(units)}")
+    # Suricata spec §3 / final review M-3: enabled for boot, then (re)started once, so the 52k rules load once on a first
+    # install and a re-run's new config or interface takes effect
+    run(["systemctl", "enable", "suricata"], check=True)
+    run(["systemctl", "restart", "suricata"], check=True)
+    done.append(f"started: {', '.join(units + ['suricata'])}")
     if role == "client" and stick is None:               # W2: let the agent's first sync land before AIDE's baseline
         synced = _p(root, f"{OSSEC}/etc/shared/merged.mg")
         for _ in range(40):

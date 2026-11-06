@@ -1,6 +1,6 @@
 Name:           chp-security
 Version:        0.3.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention, YARA and Suricata
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -82,6 +82,10 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Fri Nov 06 2026 The CyberHygiene Project - 0.3.0-3.chp
+- Final-review fix (S1 I-1): monitor 74 judges drops only within the current Suricata run and over the last 15+
+  minutes (a restart or a past burst no longer gives false alerts); under 1000 packets is not judged.
+
 * Thu Nov 05 2026 The CyberHygiene Project - 0.3.0-2.chp
 - No longer requires suricata / chp-suricata-rules: dnf upgrade pulled the EPEL-signed suricata before the EPEL key
   was imported and failed its GPG check (S1 lab). security enable installs them after the key check.

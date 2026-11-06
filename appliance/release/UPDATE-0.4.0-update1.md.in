@@ -43,7 +43,8 @@ Internal test release for the CyberHygiene Project development team. Not an offi
 
    It imports the EPEL key, installs `suricata` and `chp-suricata-rules`, writes the settings, and starts Suricata
    (loading the rules takes about 20 seconds). Then each client, one at a time, with the stick. Hosts without the
-   security add-on are not changed by this update.
+   security add-on get only the new `chp-site` (and its `/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9`); nothing else on them
+   changes, and their next AIDE check reports just those files.
 
 ## Test it
 

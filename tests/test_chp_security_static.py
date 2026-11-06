@@ -72,7 +72,7 @@ def test_scan_services_have_time_limits():                                      
 
 
 def test_suricata_pieces_are_packaged():                                               # S1
-    assert "Version:        0.3.0" in SPEC and "Release:        2.chp%{?dist}" in SPEC
+    assert "Version:        0.3.0" in SPEC and "Release:        3.chp%{?dist}" in SPEC
     # S1 lab: NOT required here. suricata is EPEL-signed; `dnf upgrade` would pull it before chp-site's enable has
     # imported the EPEL key, and the whole upgrade fails its GPG check. security enable installs both instead.
     req = [ln for ln in SPEC.splitlines() if ln.startswith("Requires:")]

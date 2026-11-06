@@ -13,6 +13,9 @@ the ISSO's judgment.
 ## Still outside any FIPS module (POA&M, 3.13.11)
 
 - Kanidm **Argon2** password hashing and **TOTP HMAC-SHA256** (RustCrypto), in every build (Plan 2/3 finding).
+- **Suricata** 7.0.17 (EPEL, security bundle part 3) links no crypto library (`readelf -d`: no libcrypto, libssl or
+  NSS). Its hashes (JA3/JA4 MD5, file hashes) are Rust code used only to *match* traffic; nothing is protected by
+  them. Outside the validated boundary, but not a protection function (S1 spike, `lab/security/SPIKE-SURICATA.md`).
 - Plan 2 found the non-FIPS `aws-lc-sys` crate compiled into the (server-only) variant as unused code. This was **not re-checked** after `client-fips.patch`; an assessor may ask about it.
 
 ## Draft SSP text for ISSO #14 (for the ISSO to edit)

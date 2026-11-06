@@ -23,6 +23,9 @@ echo "$H  $T" | sha256sum -c --quiet || { echo "ET Open tarball does not match t
 tar -xzf "$T" -C /tmp/chpsr/src --strip-components=1
 python3 /tmp/chpsr/build-rules.pyz /tmp/chpsr/src /tmp/chpsr/disable.conf "$S"
 R=$(ls /data/lab-inputs/rpms/suricata-7.*.el9.x86_64.rpm | sort -V | tail -1)
+rpm -K "$R" | grep -q 'digests signatures OK' || { echo "the pinned suricata RPM $R does not verify"; exit 1; }
+SV=$(rpm -qp --qf '%{VERSION}' "$R"); AV=$(suricata -V | grep -o '[0-9]*\.[0-9]*\.[0-9]*' | head -1)
+[[ ${AV%.*} == "${SV%.*}" ]] || { echo "aero's suricata $AV is not the shipped $SV series: install the pinned RPM on aero"; exit 1; }
 (cd /tmp/chpsr/epel && rpm2cpio "$R" | cpio -id --quiet ./etc/suricata/reference.config)
 cp /tmp/chpsr/epel/etc/suricata/reference.config /tmp/chpsr/src/LICENSE /tmp/chpsr/NOTICE "$S/"; echo "$V" > "$S/ET_DATE"
 [[ -s $S/classification.config ]] || { echo "ET Open has no classification.config"; exit 1; }

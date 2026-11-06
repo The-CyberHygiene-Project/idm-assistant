@@ -102,8 +102,14 @@ def test_yara_recent_scan_stale_alerts(tmp_path):                               
     assert out.startswith("OK")
 
 
+def _uptime(s):
+    return f"{s // 86400}d, {s % 86400 // 3600}h {s % 3600 // 60}m {s % 60}s"
+
+
 def run_suri(tmp_path, active=True, stats_age_min=1, packets=1000, drops=None, conf=True, now=1_000_000_000,
-             earlier=None):
+             blocks=None):
+    """blocks: [(uptime_s, packets, drops or None)] oldest first, as Suricata appends them (zero counters left out);
+    default = one block of (3600, packets, drops)."""
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
     (b / "systemctl").write_text("#!/bin/bash\n" + ("exit 0\n" if active else "exit 3\n")); (b / "systemctl").chmod(0o755)
     c = tmp_path / "security.conf"
@@ -111,15 +117,17 @@ def run_suri(tmp_path, active=True, stats_age_min=1, packets=1000, drops=None, c
         c.write_text("ROLE=client\nALERT_LEVEL=10\nRETENTION_DAYS=90\nDATA_DIR=/srv/wazuh\n")
     d = tmp_path / "suricata"; d.mkdir(exist_ok=True)
     if stats_age_min is not None:
-        lines = [] if earlier is None else [
-            f"capture.kernel_packets | Total | {earlier[0]}", f"capture.kernel_drops | Total | {earlier[1]}"]
-        lines += ["Date: 11/5/2026 -- 08:07:58 (uptime: 0d, 15h 58m 18s)",
-                 f"capture.kernel_packets                         | Total                     | {packets}"]
-        if drops is not None:
-            lines.append(f"capture.kernel_drops                           | Total                     | {drops}")
+        lines = []
+        for up, pk, dr in (blocks or [(3600, packets, drops)]):
+            lines += ["-" * 79, f"Date: 11/5/2026 -- 08:07:58 (uptime: {_uptime(up)})", "-" * 79,
+                      "Counter                                       | TM Name                   | Value", "-" * 79,
+                      f"capture.kernel_packets                         | Total                     | {pk}"]
+            if dr is not None:
+                lines.append(f"capture.kernel_drops                           | Total                     | {dr}")
+            lines.append("decoder.pkts                                   | Total                     | 1")
         (d / "stats.log").write_text("\n".join(lines) + "\n")
-        t = now - stats_age_min * 60
-        os.utime(d / "stats.log", (t, t))
+        t0 = now - stats_age_min * 60
+        os.utime(d / "stats.log", (t0, t0))
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_SECURITY_CONF=str(c), CHP_SURICATA_LOG_DIR=str(d),
                CHP_NOW=str(now))
     r = subprocess.run(["bash", str(M / "74-suricata.sh")], env=env, capture_output=True, text=True)
@@ -153,12 +161,27 @@ def test_suricata_running_and_fresh_is_ok(tmp_path):
 
 def test_suricata_dropping_packets_alerts(tmp_path):
     out = run_suri(tmp_path, packets=1000, drops=50)
-    assert "ALERT" in out and "dropping packets" in out and "5.0%" in out
+    assert "ALERT" in out and "dropping packets" in out and "5.0%" in out and "since it started" in out
 
 
 def test_suricata_small_drop_rate_is_ok(tmp_path):
     assert "ALERT" not in run_suri(tmp_path, packets=100000, drops=50)
 
 
-def test_suricata_uses_the_last_stats_block(tmp_path):                          # counters are running totals
-    assert "ALERT" not in run_suri(tmp_path, packets=100000, drops=500, earlier=(1000, 500))
+def test_restart_does_not_count_the_old_runs_drops(tmp_path):                  # S1 final review I-1 (reproduced)
+    out = run_suri(tmp_path, blocks=[(57600, 100000, 60), (120, 1000, None)])
+    assert "ALERT" not in out and out.startswith("OK")
+
+
+def test_a_past_burst_clears(tmp_path):                                         # judged on the last 15+ minutes
+    out = run_suri(tmp_path, blocks=[(1000, 100000, 20000), (1900, 500000, 20000), (2000, 1000000, 20000)])
+    assert "ALERT" not in out
+
+
+def test_dropping_now_alerts_over_the_recent_window(tmp_path):
+    out = run_suri(tmp_path, blocks=[(1000, 100000, 0), (1900, 150000, 0), (2000, 200000, 5000)])
+    assert "dropping packets" in out and "5000 of 100000" in out and "in the last 16 minutes" in out
+
+
+def test_too_few_packets_are_not_judged(tmp_path):
+    assert "ALERT" not in run_suri(tmp_path, blocks=[(300, 500, 50)])
