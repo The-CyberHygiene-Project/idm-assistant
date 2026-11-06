@@ -70,3 +70,16 @@ held back from the hook by the forwarder's 15-minute grouping, as designed).
     `/var/lib/ssh-ca/keys/lab0{1,2,6}.pub` (`fixtures.py`).
 - For the update notes (Task 8): the files **`security enable`** adds or changes are the ones to list as "expected
   after enable".
+
+## Gates on the upgraded lab (Task 6, 2026-11-06)
+
+New golden snapshots taken on the upgraded hosts (0.4.0 + repo 0.9.0, Suricata on): `nvram` and `golden` ALL PASS
+(engine findings `[]` on both). The `adapter` stage was not run: it is for a fresh install (its precondition, a CUI scan
+newer than the install stamp, does not apply), and what it sets up was already in place from the 0.4.0 lab build (the
+sudo rule is in golden; the lab's pin and secret files on the Mac date from 11/04).
+
+| Gate | Result |
+|---|---|
+| 1. Regression (`lab/iso5/regression-2026-11-06.md`, commit `4254a4c`) | **33/33** (11 scenarios × 3 runs, all GREEN) |
+| 2. Row 36 (desktop login: password + authenticator code) | **3/3** |
+| 3. CUI scan | **108 pass / 2 fail on every host** (srv, cli1, cli2), the same two accepted AIDE rules; `deviations.py`: **Gate 3 met** |
