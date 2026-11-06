@@ -131,3 +131,23 @@ def test_follow_drains_the_old_file_on_rotation(tmp_path):
     os.rename(log, tmp_path / "old.json"); log.write_text(json.dumps(alert(rid="3")) + "\n")
     rest = [a["rule"]["id"] for a in g if a is not None]
     assert rest == ["2", "3"]
+
+
+def suri(sid, sig, host="ws1"):
+    a = alert(rid="100510", level=12, host=host, desc=f"Suricata (high): {sig}")
+    a["data"] = {"event_type": "alert", "alert": {"signature_id": sid, "signature": sig, "severity": 1}}
+    return a
+
+
+def test_different_suricata_signatures_are_not_grouped_together():             # S1 final review I-2
+    f = wa.Forwarder(level=10)
+    assert f.feed(suri(2017025, "Net User"), now=0) == ["ws1 rule 100510 level 12: Suricata (high): Net User"]
+    assert f.feed(suri(2024897, "Other"), now=60) == ["ws1 rule 100510 level 12: Suricata (high): Other"]
+    assert f.feed(suri(2017025, "Net User"), now=120) == []                     # the same signature is still grouped
+    assert f.flush(now=901) == ["ws1 rule 100510 level 12: Suricata (high): Net User (1 more in the last 15 min)"]
+
+
+def test_odd_signature_ids_never_break_grouping():
+    f = wa.Forwarder(level=10)
+    a = suri(2017025, "x"); a["data"]["alert"] = "not a dict"
+    assert f.feed(a, now=0) and f.feed(a, now=1) == []

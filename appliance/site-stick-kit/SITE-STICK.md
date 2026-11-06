@@ -123,6 +123,14 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.4.0 update 1 on: network intrusion detection (Suricata)
+
+With the security add-on on, every host runs Suricata on its own network interface, with the ET Open rules and your
+`SUBNET` as the home network. It is **IDS only: nothing is blocked**. A high-severity match is reported to `ALERT_HOOK`
+straight away; medium ones go into the daily summary. Alerts are kept in `/var/log/suricata/eve.json` for
+`RETENTION_DAYS`. Each host sees only its own traffic, and Suricata needs about 500 MB of memory per host. New rules
+arrive as a small signed update each month. See `0.4.0-update1/UPDATE.md`.
+
 ### From 0.4.0 on: malware scanning at install
 
 With `SECURITY_ADDONS=yes`, a 0.4.0 install also turns on YARA malware scanning at each host's first boot (the same

@@ -19,3 +19,8 @@ chp-security ours
 chp-yara-rules ours
 wazuh-manager wazuh
 wazuh-agent wazuh
+suricata epel
+hiredis epel
+hyperscan epel
+libnetfilter_queue rocky
+chp-suricata-rules ours

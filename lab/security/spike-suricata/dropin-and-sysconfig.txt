@@ -1,0 +1,6 @@
+# Managed by chp-security (Suricata spec §3): CHP config, site interface, IDS only
+[Service]
+ExecStart=
+ExecStart=/sbin/suricata -c /etc/suricata/chp-suricata.yaml --pidfile /var/run/suricata.pid --af-packet=enp1s0 --user suricata
+# Managed by chp-security (Suricata spec §3)
+OPTIONS=""

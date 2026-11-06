@@ -13,11 +13,14 @@ import tempfile
 import time
 from pathlib import Path
 
+from . import suricata_conf as sc
 from . import wazuh as w
 from .sitefile import SiteError
 
 SECURITY_CONF = "etc/chp/security.conf"
 KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH"
+EPEL_KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9"
+EPEL_FPR = "FF8AD1344597106ECE813B918A3872BF3228467C"   # = appliance/release/trusted-keys.txt epel9 (suricata, S1)
 OSSEC = "var/ossec"
 
 
@@ -25,19 +28,29 @@ def _p(root, rel):
     return Path(root) / rel
 
 
-def _check_key(root, run):
-    k = _p(root, KEYFILE)
-    if not k.exists():
-        raise SiteError(f"/{KEYFILE} is missing: apply the update (chp-site 0.8.0) first")
+def _key_fpr(path, run):
     home = tempfile.mkdtemp(prefix="chp-gpg-")             # never creates /root/.gnupg (an AIDE change)
     try:
-        r = run(["gpg", "--homedir", home, "--show-keys", "--with-colons", str(k)], capture_output=True, text=True)
+        r = run(["gpg", "--homedir", home, "--show-keys", "--with-colons", str(path)], capture_output=True, text=True)
     finally:
         shutil.rmtree(home, ignore_errors=True)
     fprs = [ln.split(":")[9] for ln in r.stdout.splitlines() if ln.startswith("fpr:")]
-    if not fprs or fprs[0] != w.WAZUH_FPR:
-        raise SiteError(f"Wazuh key fingerprint {fprs[0] if fprs else 'unreadable'} is not the pinned {w.WAZUH_FPR}")
-    run(["rpm", "--import", str(k)], check=True)
+    return fprs[0] if fprs else None
+
+
+def _check_key(root, run):
+    """Both vendor keys are checked against their pins before either is imported: Wazuh's, and EPEL 9's (suricata,
+    hiredis and hyperscan are EPEL-signed; dnf refuses them until the key is in the rpm database: S1 lab)."""
+    keys = ((KEYFILE, w.WAZUH_FPR, "Wazuh", "chp-site 0.8.0"), (EPEL_KEYFILE, EPEL_FPR, "EPEL 9", "chp-site 0.11.0"))
+    for rel, pin, name, since in keys:
+        k = _p(root, rel)
+        if not k.exists():
+            raise SiteError(f"/{rel} is missing: apply the update ({since}) first")
+        f = _key_fpr(k, run)
+        if f != pin:
+            raise SiteError(f"{name} key fingerprint {f or 'unreadable'} is not the pinned {pin}")
+    for rel, _, _, _ in keys:
+        run(["rpm", "--import", str(_p(root, rel))], check=True)
 
 
 def _data_dir(root, data_is_mount, run):
@@ -63,17 +76,24 @@ def _write(path, text, mode, chown=None):
     os.replace(tmp, path)
 
 
-def _conf(root, role, d, level=10):
-    p = _p(root, SECURITY_CONF)
-    old = {}
+def _old_conf(root):
+    p, old = _p(root, SECURITY_CONF), {}
     if p.exists():
         for ln in p.read_text().splitlines():
             if "=" in ln:
                 k, v = ln.split("=", 1)
                 old[k] = v
+    return old
+
+
+def _conf(root, role, d, level=10):
+    p = _p(root, SECURITY_CONF)
+    old = _old_conf(root)
+    days = old.get('RETENTION_DAYS', '90')
     text = (f"ROLE={role}\nALERT_LEVEL={old.get('ALERT_LEVEL', str(level))}\n"
-            f"RETENTION_DAYS={old.get('RETENTION_DAYS', '90')}\nDATA_DIR={d}\n")
+            f"RETENTION_DAYS={days}\nDATA_DIR={d}\n")
     _write(p, text, 0o644)
+    return days
 
 
 def enable(role, host, site, hosts, *, run, stick=None, pending=None, key_file=None, root=Path("/"), data_is_mount=None,
@@ -103,7 +123,14 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     record = record or audit.record
     data_is_mount = os.path.ismount("/data") if data_is_mount is None else data_is_mount
     group_wazuh = chown or (lambda p: shutil.chown(p, "root", "wazuh"))
+    group_suricata = chown or (lambda p: shutil.chown(p, "root", "suricata"))
+    own_suricata = chown or (lambda p: shutil.chown(p, "suricata", "suricata"))
     done = []
+    me = next((h for h in hosts if h.hostname == host), None)       # Suricata spec §3: refuse before changing anything
+    if me is None:
+        raise SiteError(f"{host} is not in the hosts table")
+    iface, home = sc.iface_for(me.ip, run), sc.home_net(site)
+    sc.logrotate_text(_old_conf(root).get("RETENTION_DAYS", "90"))   # final review M-2: a bad value fails here, not late
     if stick is None and not _p(root, "var/lib/chp/repo/repodata/repomd.xml").exists():
         raise SiteError("the security add-on is on but this host has no local package repo (the ISO's repo is copied "
                         "at install; a network install does not copy it): unpack a signed repo tarball into "
@@ -126,11 +153,12 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
                     raise SiteError(f"no staged Wazuh key for {host} ({key_file}): reinstall with the site stick, "
                                     "after export-client on the server")
         agent_line = _keyline(host, src.read_text())
-    _check_key(root, run); done.append("Wazuh signing key verified and imported")
+    _check_key(root, run); done.append("Wazuh and EPEL 9 signing keys verified and imported")
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
     pkg = "wazuh-manager" if role == "server" else "wazuh-agent"
-    run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security", "yara", "chp-yara-rules"], check=True)
-    done.append(f"{pkg}, YARA and its rules installed")
+    run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security", "yara", "chp-yara-rules", "suricata",
+         "chp-suricata-rules"], check=True)
+    done.append(f"{pkg}, YARA, Suricata and their rules installed")
     conf = _p(root, f"{OSSEC}/etc/ossec.conf")
     keys = _p(root, f"{OSSEC}/etc/client.keys")
     if role == "server":
@@ -138,6 +166,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         _write(_p(root, f"{OSSEC}/api/configuration/api.yaml"), w.API_YAML, 0o640, group_wazuh)
         _p(root, f"{OSSEC}/etc/rules").mkdir(parents=True, exist_ok=True)
         _write(_p(root, f"{OSSEC}/etc/rules/chp_yara_rules.xml"), w.YARA_RULES, 0o640, group_wazuh)
+        _write(_p(root, f"{OSSEC}/etc/rules/chp_suricata_rules.xml"), w.SURICATA_RULES, 0o640, group_wazuh)
         if not keys.exists() or not keys.read_text().strip():
             lines = w.client_keys(hosts)
             _write(keys, "".join(v + "\n" for v in lines.values()), 0o640, group_wazuh)
@@ -176,14 +205,30 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
         units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]   # spec §10
-    _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
+    days = _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
+    _write(_p(root, sc.CONF.lstrip("/")), sc.config_text(iface, home), 0o640, group_suricata)
+    _write(_p(root, sc.DROPIN.lstrip("/")), sc.dropin_text(iface), 0o644)
+    _write(_p(root, sc.SYSCONFIG.lstrip("/")), sc.SYSCONFIG_TEXT, 0o644)
+    _write(_p(root, sc.LOGROTATE.lstrip("/")), sc.logrotate_text(days), 0o644)
+    eve = _p(root, sc.EVE.lstrip("/"))                    # as for YARA: Wazuh reads a log that appears later from its end;
+    eve.parent.mkdir(parents=True, exist_ok=True)         # owned by suricata, or its eve-log setup fails (S1 spike)
+    if not eve.exists():
+        fd = os.open(eve, os.O_WRONLY | os.O_CREAT, 0o640); os.close(fd)
+    os.chmod(eve, 0o640); own_suricata(eve)
+    done.append(f"Suricata watches {iface} (HOME_NET {home}); logs kept {days} days")
     ylog = _p(root, "var/log/chp-yara.json")              # Y1 lab: Wazuh reads a log that appears later from its end
     ylog.parent.mkdir(parents=True, exist_ok=True)
     if not ylog.exists():
         fd = os.open(ylog, os.O_WRONLY | os.O_CREAT, 0o640); os.close(fd)
     os.chmod(ylog, 0o640)
+    run(["systemctl", "daemon-reload"], check=True)      # the Suricata drop-in
     run(["systemctl", "enable", "--now", *units], check=True)
-    run(["systemctl", "restart", units[0]], check=True); done.append(f"started: {', '.join(units)}")
+    run(["systemctl", "restart", units[0]], check=True)
+    # Suricata spec §3 / final review M-3: enabled for boot, then (re)started once, so the 52k rules load once on a first
+    # install and a re-run's new config or interface takes effect
+    run(["systemctl", "enable", "suricata"], check=True)
+    run(["systemctl", "restart", "suricata"], check=True)
+    done.append(f"started: {', '.join(units + ['suricata'])}")
     if role == "client" and stick is None:               # W2: let the agent's first sync land before AIDE's baseline
         synced = _p(root, f"{OSSEC}/etc/shared/merged.mg")
         for _ in range(40):
@@ -263,7 +308,7 @@ def status(root, run):
     if not p.exists():
         return "security add-on: not enabled on this host (chp-site security enable)"
     kv = dict(ln.split("=", 1) for ln in p.read_text().splitlines() if "=" in ln)
-    units = ["wazuh-manager", "chp-wazuh-alerts"] if kv.get("ROLE") == "server" else ["wazuh-agent"]
+    units = (["wazuh-manager", "chp-wazuh-alerts"] if kv.get("ROLE") == "server" else ["wazuh-agent"]) + ["suricata"]
     rows = [f"role: {kv.get('ROLE')}  alert level: {kv.get('ALERT_LEVEL')}  retention: {kv.get('RETENTION_DAYS')} days  "
             f"data: {kv.get('DATA_DIR')}"]
     for u in units:
