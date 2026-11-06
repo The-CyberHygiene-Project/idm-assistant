@@ -38,5 +38,35 @@ held back from the hook by the forwarder's 15-minute grouping, as designed).
 ## Quiet day
 
 - T0 **2026-11-05 10:12 MST**, end ≥ 2026-11-06 10:12. Lab untouched (no reset). Lab hook had 8 " rule " lines at T0.
-- Results: _pending_ (every Suricata alert by SID/severity on both hosts, expected no severity 1; first daily AIDE
-  check, all changes explained; RSS/CPU at 24 h).
+- Read 2026-11-06 10:35 MST (24 h 23 min). Results:
+
+| | iso5-srv | iso5-cli2 |
+|---|---|---|
+| Suricata alerts outside the two test windows | **0** | **0** |
+| Packets / kernel drops | 123,861 / 0 | 97,725 / 0 |
+| RSS at 24 h (at enable + 10 min) | 532 MB (532 MB): flat | 495 MB (495 MB): flat |
+| CPU over 24.6 h | 9 min 39 s (0.65 %) | 13 min 53 s (0.94 %) |
+| Monitor 74 | OK | OK |
+
+- **No severity-1 alert, no new SID:** `disable.conf` stays empty; no rebuild.
+- **AIDE, first daily check after the update** (03:50 srv, 04:06 cli2; added / removed / changed): iso5-srv
+  **190 / 0 / 50**, iso5-cli2 **186 / 0 / 45**. Every entry is explained:
+  - **added by the update (packages):** suricata (`/usr/sbin/suricata*`, `suricata-update`, `/usr/lib/suricata` 64,
+    `/usr/share/suricata` 24, `/etc/suricata/rules` 23, `/etc/suricata/{suricata.yaml,classification.config,
+    reference.config,threshold.config}`, its unit, `tmpfiles.d/suricata.conf`, docs, man pages, licences, build-ids),
+    `libhtp`, hiredis, hyperscan, libnetfilter_queue libraries, chp-suricata-rules (8), monitor `74-suricata.sh`,
+    `RPM-GPG-KEY-EPEL-9` (chp-site 0.11.0-2);
+  - **added by `security enable`:** `/etc/suricata/chp-suricata.yaml`, `/etc/systemd/system/suricata.service.d/chp.conf`,
+    the `multi-user.target.wants/suricata.service` link, `/etc/sysconfig/suricata`, `/etc/logrotate.d/suricata`
+    (EPEL's, rewritten), and on the server `/var/ossec/etc/rules/chp_suricata_rules.xml`;
+  - **changed by the update:** the upgraded chp-site / chp-security files (monitor 70–73, the chp units and drop-ins,
+    `wazuh-retention`, licences, `/usr/bin/chp-site`, `/usr/share/chp-site`), the two pinned keys chp-site reinstalls,
+    `/etc/passwd|group|shadow|gshadow` (+ backups) for the new `suricata` user, `/etc/ld.so.cache` (new libraries),
+    `/var/log` (new `/var/log/suricata`);
+  - **changed by `security enable`:** `/var/ossec/etc/ossec.conf` (eve.json localfile), `/etc/chp/security.conf`, and
+    on the server `chp_yara_rules.xml` (rewritten, same text);
+  - **lab only (not on a real site):** `/etc/sudoers.d/99-lab-adapter`, `/root/chp-scan/*`, `/root/s1-*`,
+    `/root/y1-eicar-sums` (cli2), and on the server `/usr/local/sbin/lab-hook`, `/etc/chp/site.conf` (ALERT_HOOK),
+    `/var/lib/ssh-ca/keys/lab0{1,2,6}.pub` (`fixtures.py`).
+- For the update notes (Task 8): the files **`security enable`** adds or changes are the ones to list as "expected
+  after enable".
