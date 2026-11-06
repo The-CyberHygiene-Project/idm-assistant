@@ -8,7 +8,8 @@ source "$here/gpgcheck.sh"
 fpr_ok() { gpg --batch --with-colons --fingerprint "$1" 2>/dev/null | awk -F: '/^fpr/{print $10; exit}' | grep -qx "$1"; }
 EPEL_FPR=FF8AD1344597106ECE813B918A3872BF3228467C
 BASE=https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages
-PKGS=(g/google-authenticator-1.09-5.el9.x86_64.rpm)
+PKGS=(g/google-authenticator-1.09-5.el9.x86_64.rpm
+      s/suricata-7.0.17-1.el9.x86_64.rpm h/hiredis-1.0.2-2.el9.x86_64.rpm h/hyperscan-5.4.1-2.el9.x86_64.rpm)   # Suricata + its EPEL-only deps (S1)
 gpg_sandbox
 curl -fsSL https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9 -o "$IN/RPM-GPG-KEY-EPEL-9"
 gpg --batch --import "$IN/RPM-GPG-KEY-EPEL-9" 2>/dev/null

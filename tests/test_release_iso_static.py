@@ -147,3 +147,26 @@ def test_monthly_rules_procedure_and_readme_row():
               "release-repo.sh"):
         assert s in r, s
     assert "| `0.3.0-update1/` |" in (R / "release-kit.sh").read_text()
+
+
+def test_update_0_4_0_update1_notes():                                           # S1 Task 7
+    u = (R / "UPDATE-0.4.0-update1.md.in").read_text()
+    for s in ("@REPO@", "chp-site security enable", "IDS", "nothing is blocked", "/var/log/suricata/eve.json",
+              "--refresh", "chp-site aide-accept", "ET Open", "monthly", "RPM-GPG-KEY-EPEL-9",
+              "/etc/logrotate.d/suricata", "/etc/suricata/chp-suricata.yaml"):
+        assert s in u, s
+
+
+def test_suricata_rules_procedure_and_readme_rows():
+    r = (R / "RULES-UPDATE.md").read_text()
+    for s in ("fetch-et-open.sh", "ET_DATE", "ET_SHA256", "disable.conf", "chp-suricata-rules/build-rpm.sh",
+              "prove-s1.sh"):
+        assert s in r, s
+    k = (R / "release-kit.sh").read_text()
+    for row in ("| `0.4.0/` |", "| `site-stick-kit-0.4.0/` |", "| `0.4.0-update1/` |", "| `site-stick-kit-0.4.0-update1/` |"):
+        assert row in k, row                    # the kit release rewrites the share README: keep every published row
+
+
+def test_kit_guide_has_the_suricata_section():
+    s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
+    assert "### From 0.4.0 update 1 on: network intrusion detection (Suricata)" in s

@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """Wazuh alerts to the site (security bundle spec §5): level >= threshold (and agent lifecycle) to the hook, repeats
-grouped per host+rule for 15 minutes, a daily line for levels 7-9, and the chp-site alerts summary."""
+grouped per host+rule (+ Suricata signature) for 15 minutes, a daily line for levels 7-9, and the chp-site alerts summary."""
 import gzip
 import json
 import os
@@ -28,6 +28,14 @@ def _parts(a):
     return r, ag, lvl, str(r.get("id", ""))
 
 
+def _signature(a):
+    """Suricata's signature ID when the alert carries one, so separate signatures under one CHP rule (100510) are not
+    grouped together (S1 final review I-2); '' for everything else."""
+    d = a.get("data") if isinstance(a, dict) and isinstance(a.get("data"), dict) else {}
+    s = d.get("alert") if isinstance(d.get("alert"), dict) else {}
+    return str(s.get("signature_id", ""))
+
+
 def line(a):
     r, ag, _lvl, _rid = _parts(a)
     return f"{ag.get('name', '?')} rule {r.get('id', '?')} level {r.get('level', '?')}: {r.get('description', '?')}"
@@ -36,7 +44,7 @@ def line(a):
 class Forwarder:
     def __init__(self, level, window=900):
         self.level, self.window = level, window
-        self.groups = {}                    # (host, rule) -> [first_sent_epoch, repeats, text]
+        self.groups = {}                    # (host, rule, signature) -> [first_sent_epoch, repeats, text]
         self.medium, self.day_start = [], None
 
     def feed(self, a, now):
@@ -49,7 +57,7 @@ class Forwarder:
             if 7 <= lvl <= 9:
                 self.medium.append(ag.get("name", "?"))
             return []
-        key = (ag.get("name", "?"), rid)
+        key = (ag.get("name", "?"), rid, _signature(a))
         g = self.groups.get(key)
         if g and now - g[0] < self.window:
             g[1] += 1

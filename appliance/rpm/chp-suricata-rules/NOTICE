@@ -1,0 +1,5 @@
+chp-suricata-rules contains the Emerging Threats Open ruleset (ET Open) for Suricata, © Proofpoint, Inc., downloaded on
+the date in ET_DATE and used unmodified except for the rules listed in DISABLED.txt. ET Open is distributed under the
+licence in LICENSE (rules with SIDs 1-3464 and 100000000-100000908 under GPLv2; Emerging Threats rules 2000000-2799999
+under the BSD licence). reference.config comes from the EPEL 9 suricata package (GPLv2), because ET Open ships none.
+Packaged by the CyberHygiene Project.

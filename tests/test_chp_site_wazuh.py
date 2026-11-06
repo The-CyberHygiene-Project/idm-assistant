@@ -135,3 +135,28 @@ def test_no_host_turns_on_file_monitoring_or_responses():                     # 
         b = _blocks(out)
         assert w.setting(b, "syscheck/disabled") == "yes"
         assert not [e for x in b for e in x.findall("command") if e.findtext("name") == "chp-yara-scan"]
+
+
+from chp_site import suricata_conf as _sc
+
+
+def test_both_roles_read_eve_once():
+    for out in (w.harden_manager(MGR), w.harden_agent(AGT, "192.0.2.10"), w.harden_manager(w.harden_manager(MGR))):
+        locs = [e for x in w.parse_conf(out) for e in x.findall("localfile") if e.findtext("location") == _sc.EVE]
+        assert len(locs) == 1 and locs[0].findtext("log_format") == "json"
+
+
+def test_suricata_levels():
+    r = w.SURICATA_RULES
+    assert "<if_sid>86601</if_sid>" in r and '<field name="alert.severity">^1$</field>' in r
+    assert 'level="12"' in r and 'level="7"' in r and '<field name="alert.severity">^2$</field>' in r
+
+
+def test_only_alert_events_are_levelled():                                     # Review Focus 3
+    assert "86600" not in w.SURICATA_RULES                                      # children of the alert rule only
+
+
+def test_suricata_rule_ids_do_not_collide_with_yara():
+    import re
+    ids = lambda t: set(re.findall(r'rule id="(\d+)"', t))
+    assert ids(w.SURICATA_RULES) == {"100510", "100511"} and not ids(w.SURICATA_RULES) & ids(w.YARA_RULES)
