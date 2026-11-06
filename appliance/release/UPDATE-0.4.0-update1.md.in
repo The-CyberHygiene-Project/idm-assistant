@@ -1,0 +1,101 @@
+# Package update @VERSION@ (signed repo @REPO@): the security add-on, part 3 (Suricata network intrusion detection). No reinstall.
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it adds
+
+- **Suricata network intrusion detection (IDS)** on every host that has the security add-on (`SECURITY_ADDONS=yes`,
+  or `chp-site security enable`):
+  - each host watches **its own** network traffic, on the interface that holds its site address, and treats your
+    `SUBNET` as the home network;
+  - **IDS only: nothing is blocked.** Suricata never drops or changes traffic; it only reports;
+  - alerts are written to `/var/log/suricata/eve.json` and sent to the Wazuh manager. Suricata's **severity 1** (high)
+    becomes a **level-12** Wazuh alert, so it reaches your `ALERT_HOOK` straight away; severity 2 becomes level 7
+    (the daily summary); severity 3 stays at Wazuh's level 3;
+  - logs rotate daily and are kept for the site's `RETENTION_DAYS` (default 90);
+  - the monitor alerts if Suricata stops, stops writing statistics (a dead capture interface), or drops more than 1 %
+    of packets.
+- **The rules: ET Open** (Emerging Threats Open, © Proofpoint), 52,859 rules, shipped as the signed package
+  `chp-suricata-rules` (version = the download date). Rules that fire on a clean appliance are switched off with the
+  reason in `/usr/share/chp-suricata-rules/DISABLED.txt` (none in this release). Licence: GPLv2 and BSD, in
+  `/usr/share/chp-suricata-rules/LICENSE` and `NOTICE`. New rules arrive as a small **monthly** signed update; the
+  appliance never downloads anything.
+- **Suricata 7.0.17** comes from EPEL 9, unmodified and signed by EPEL's key. `chp-site` now carries that key
+  (`/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9`), and `security enable` checks its fingerprint against the pinned one before
+  importing it. Suricata uses no cryptographic library.
+
+## Apply it
+
+1. **Check this folder** as `0.4.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. **Every host:** copy `chp-repo-@REPO@.tar.gz` to it, unpack it over the local repo as root, and upgrade. The
+   `--refresh` matters: without it, dnf may keep its record of the old repo and report "Nothing to do".
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+       dnf --refresh --enablerepo=chp upgrade
+
+   This upgrades `chp-site` and `chp-security` only. Suricata is not installed yet, and the monitor reports
+   "Suricata is not running" until the next step.
+3. **Turn Suricata on, server first,** with the site stick plugged in, as root:
+
+       chp-site security enable
+
+   It imports the EPEL key, installs `suricata` and `chp-suricata-rules`, writes the settings, and starts Suricata
+   (loading the rules takes about 20 seconds). Then each client, one at a time, with the stick. Hosts without the
+   security add-on are not changed by this update.
+
+## Test it
+
+The test sends a harmless piece of text that a high-severity ET Open rule (2017025, "Net User Command Response")
+recognises. On the **server**, as root (replace `<server IP>`):
+
+    mkdir /tmp/ids-test && cd /tmp/ids-test
+    printf 'User accounts for \\\\LAB\r\n\r\n%s\r\nids test\r\n' "$(printf -- '-%.0s' $(seq 79))" > test.txt
+    firewall-cmd --add-port=18080/tcp
+    timeout 120 python3 -m http.server 18080 --bind <server IP>
+
+On a **client**, within those two minutes: `curl http://<server IP>:18080/test.txt`. Within a minute both hosts'
+`eve.json` have an alert, the server raises "Suricata (high): ET ATTACK_RESPONSE Net User Command Response" at level 12
+for each host, and your `ALERT_HOOK` receives it. (A second test within 15 minutes is grouped with the first and does
+not reach the hook again.) Then, on the server: `firewall-cmd --remove-port=18080/tcp` and `rm -rf /tmp/ids-test`.
+The `firewall-cmd` change is not permanent: a reboot also removes it.
+
+## Expect one AIDE alert, then accept it
+
+The next daily check reports the update (lab, 11/06/2026: about 185–190 added and 45–50 changed entries per host):
+- **added:**
+  - the `suricata` files (`/usr/sbin/suricata*`, `/usr/lib/suricata`, `/usr/share/suricata`, `/etc/suricata/rules`,
+    `/etc/suricata/{suricata.yaml,classification.config,reference.config,threshold.config}`, its unit,
+    `/usr/lib/tmpfiles.d/suricata.conf`, documentation and licences) and the `libhtp`, `hiredis`, `hyperscan` and
+    `libnetfilter_queue` libraries under `/usr/lib64/`;
+  - `/usr/share/chp-suricata-rules/*`, monitor check `/usr/lib/chp/monitor.d/74-suricata.sh`, and
+    `/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9`;
+  - written by `security enable`: `/etc/suricata/chp-suricata.yaml`, `/etc/systemd/system/suricata.service.d/chp.conf`,
+    `/etc/systemd/system/multi-user.target.wants/suricata.service`, `/etc/sysconfig/suricata`,
+    `/etc/logrotate.d/suricata` (Suricata's own file, rewritten with your retention), and on the server
+    `/var/ossec/etc/rules/chp_suricata_rules.xml`;
+- **changed:**
+  - the upgraded CHP packages' files (`chp-site`, `chp-security`) and the signing-key files under `/etc/pki/rpm-gpg/`;
+  - `/etc/passwd`, `/etc/group`, `/etc/shadow`, `/etc/gshadow` and their `-` backups (the new `suricata` user);
+  - `/etc/ld.so.cache` (the new libraries) and `/var/log` (the new `/var/log/suricata`);
+  - `/etc/chp/security.conf` and `/var/ossec/etc/ossec.conf` (rewritten by `security enable`), and on the server
+    `/var/ossec/etc/rules/chp_yara_rules.xml` (rewritten, same text);
+  - the folders that hold all of these.
+
+Anything outside this list was not made by this update: investigate it before accepting. Accept as the ISSO or a named
+delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: Suricata network intrusion detection added"
+
+## Known limits
+
+- **Each host sees only its own traffic.** Traffic between two other machines, or that never reaches an appliance
+  host, is not inspected. There is no span port or network tap in this design.
+- **Encrypted traffic:** the contents of TLS and SSH sessions cannot be read. Rules that match on connection details
+  (addresses, ports, TLS names and fingerprints) still work.
+- **Resources (lab, 24 hours):** about 500 MB of memory per host, under 1 % CPU, no dropped packets. Plan for the
+  memory on small clients.
+- **SELinux:** EPEL ships no Suricata policy, so it runs unconfined (`unconfined_service_t`), like Wazuh. No denials
+  were seen under SELinux enforcing and fapolicyd.
+- **Proved on VMs only.**
