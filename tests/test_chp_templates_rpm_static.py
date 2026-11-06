@@ -1,13 +1,13 @@
-"""chp-templates RPM (Plan C3 Task 1): built only from the SIGNED templates-1.2.0 release, sha256-pinned."""
+"""chp-templates RPM (Plan C3 Task 1): built only from the SIGNED templates release (1.3.1 from ISO 0.5.0), sha256-pinned."""
 from pathlib import Path
 
 D = Path(__file__).resolve().parents[1] / "appliance" / "rpm" / "chp-templates"
-SHA = "ca40b7ff4cfa95040f3dc5155fc8c238d71e3f1feade89380e5072381c75b389"
+SHA = "73682cfc17b1707e68cda99770ffb9a873efaad04c08058d8169313018f5a5df"   # templates-1.3.1
 
 
 def test_spec_installs_only_the_shipped_library():
     s = (D / "chp-templates.spec").read_text()
-    assert "Version:        1.2.0" in s and "BuildArch:      noarch" in s and "Requires:       python3" in s
+    assert "Version:        1.3.1" in s and "BuildArch:      noarch" in s and "Requires:       python3" in s
     for p in ("rev2", "chpfill.pyz", "vocabulary.md", "site-conf-mapping.csv", "README.md"):
         assert f"%{{_datadir}}/chp-templates/{p}" in s, p
     assert "/tests" not in s and "/tools" not in s and "/render" not in s        # no raw .py: aero's fapolicyd (ruling)
@@ -36,3 +36,9 @@ def test_repack_carries_no_macos_metadata_and_the_rpm_is_checked():
     b = (D / "build-rpm.sh").read_text()
     assert "COPYFILE_DISABLE=1 tar --no-mac-metadata" in b
     assert 'grep -q "/\\._"' in b                       # the built RPM is refused if any ._ file slipped in (double quotes: inside ssh '...')
+
+
+def test_one_version_pin_drives_the_build():                                        # ISO 0.5.0: no stray 1.2.0
+    b = (D / "build-rpm.sh").read_text()
+    assert "\nV=1.3.1\n" in b and "1.2.0" not in b
+    assert "chp-templates-$V.tar.gz" in b and "chp-templates-$V-rpm.tar.gz" in b

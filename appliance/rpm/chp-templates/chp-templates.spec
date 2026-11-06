@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-templates
-Version:        1.2.0
+Version:        1.3.1
 Release:        1.chp%{?dist}
 Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2) and their renderer
 License:        Apache-2.0
@@ -37,6 +37,10 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 %{_datadir}/chp-templates/README.md
 
 %changelog
+* Fri Nov 06 2026 The CyberHygiene Project - 1.3.1-1.chp
+- chp-templates 1.3.1 from the signed tarball (sha256 73682cfc17b1707e…): Rev 2 content 1.2.3, narratives for the
+  security add-on (YARA 3.14.2/4/5, Suricata 3.14.6/7 and 3.13.1). Placeholders unchanged. Rev 2 library only.
+
 * Sun Oct 25 2026 The CyberHygiene Project - 1.2.0-1.chp
 - First release: chp-templates 1.2.0 from the signed tarball (sha256 ca40b7ff4cfa9504…). The renderer ships as the
   zipapp chpfill.pyz, built from the verified render/chpfill.py (fapolicyd blocks reading raw .py on the build host).
