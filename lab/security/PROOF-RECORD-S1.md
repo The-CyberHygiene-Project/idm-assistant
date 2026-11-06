@@ -83,3 +83,24 @@ sudo rule is in golden; the lab's pin and secret files on the Mac date from 11/0
 | 1. Regression (`lab/iso5/regression-2026-11-06.md`, commit `4254a4c`) | **33/33** (11 scenarios × 3 runs, all GREEN) |
 | 2. Row 36 (desktop login: password + authenticator code) | **3/3** |
 | 3. CUI scan | **108 pass / 2 fail on every host** (srv, cli1, cli2), the same two accepted AIDE rules; `deviations.py`: **Gate 3 met** |
+
+## Final review and re-proof (2026-11-06)
+
+Final whole-branch review (fresh reviewer): 0 Critical, 3 Important, 9 Minor; plan deviations 1–5 judged sound.
+Fixed in `2924ea2` (chp-site 0.11.0-3, chp-security 0.3.0-3): I-1 monitor 74 false drop alerts after a restart (only
+the current run, judged over the last 15+ minutes); I-2 forwarder grouping per Suricata signature; M-1, M-2, M-3, M-5,
+M-6, M-9. **Ruling M-4:** Suricata's default memcaps and thread counts are kept (spec §5 "set from the measurements":
+RSS flat at ~500 MB over 24 h, 0 drops), recorded here for the owner. M-7 (weak "86600" test) left: alert-only output
+plus the 86601 parent cover it. Repo 0.9.0 re-signed (`REPO OK`, 24 packages; the first attempt timed out at the key
+and wrote nothing). The dry-run upgrade from the unsigned stage was checked first: chp-site + chp-security only.
+
+Re-proof on the final packages, from golden (which held the `-2` builds, so this is the existing-site path: upgrade,
+then `security enable` re-run on hosts that already had Suricata):
+
+| Stage | Result |
+|---|---|
+| `repo` | chp-site 0.11.0-3, chp-security 0.3.0-3 on srv and cli2 |
+| `enable srv`, `enable cli2` | RC=0 on both (re-run) |
+| `on` | **ALL PASS**; RSS srv 514 MB, cli2 514 MB |
+| `hook`, `catch` | **ALL PASS**: eve alert on both hosts, two level-12 rule-100510 alerts, hook line, port closed |
+| `reboot` (I-3; new stage) | **ALL PASS**: cold reboot of cli2 then srv; Suricata active, 52,859 rules loaded / 0 failed, monitor 74 OK, Wazuh reading eve.json since boot (cli2: 13 s after boot), 0 AVCs, 0 fapolicyd denials; both agents Active. (A first run failed only its own log pattern, which missed Wazuh's quotes around the file name; fixed and re-run clean.) |

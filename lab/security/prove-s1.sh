@@ -10,6 +10,7 @@
 #   catch       srv serves the S1 test body (SID 2017025, severity 1) on a high port; cli2 fetches it ->
 #               eve alert on both hosts, rule-100510 alerts on the manager, a hook line
 #   res         RSS, CPU and kernel drops of Suricata on both hosts
+#   reboot      cold reboot of cli2 then srv (final review I-3): Suricata back, rules loaded, eve read, no denials
 # cli1 has no lab-adapter sudo: it stays on 0.4.0 without Suricata and must stay Active (mixed versions).
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; F="$top/lab/iso5/ssh_config"
@@ -97,5 +98,20 @@ case ${1:-} in
       check "$h: monitor 74 OK" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
     done
     done_ res ;;
-  *) sed -n '5,13p' "$0"; exit 2 ;;
+  reboot)
+    for h in cli2 srv; do
+      X $h 'sudo systemctl reboot' >/dev/null; sleep 30
+      for _ in $(seq 60); do [[ $(X $h 'echo up') == up ]] && break; sleep 10; done
+      sleep 60                                   # Suricata needs ~20 s for the rules after the network is up
+      check "$h: rebooted (uptime < 15 min)" "$(X $h 'awk "{print (\$1 < 900) ? \"yes\" : \"no\"}" /proc/uptime')" "yes"
+      check "$h: suricata active after boot" "$(X $h 'systemctl is-active suricata')" "active"
+      check "$h: rules loaded after boot" "$(X $h 'sudo journalctl -b -u suricata --no-pager | grep -c "Engine started"; sudo grep -o "[0-9]* rules successfully loaded, [0-9]* rules failed" /var/log/suricata/suricata.log | tail -1' | tail -1)" "52859 rules successfully loaded, 0 rules failed"
+      check "$h: monitor 74 OK after boot" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
+      check "$h: Wazuh reads eve.json since boot" "$(X $h 'b=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" "+%Y/%m/%d %H:%M:%S"); sudo awk -v t="$b" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "Analyzing file: .*/var/log/suricata/eve.json" | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
+      check "$h: 0 Suricata/Wazuh AVCs since boot" "$(X $h 'sudo ausearch -m AVC -ts boot 2>/dev/null | grep denied | grep -c -E "suricata|ossec|wazuh"')" "0"
+      check "$h: 0 fapolicyd denials since boot" "$(X $h 'sudo ausearch -m FANOTIFY -ts boot 2>/dev/null | grep -c "type=FANOTIFY"')" "0"
+    done
+    check "srv: both agents Active after the reboots" "$(sleep 30; X srv 'sudo /var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
+    done_ reboot ;;
+  *) sed -n '5,14p' "$0"; exit 2 ;;
 esac
