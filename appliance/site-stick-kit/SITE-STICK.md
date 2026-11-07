@@ -123,6 +123,16 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.5.0 update 1 on: the daily security review
+
+With the security add-on on, the server builds a review of the previous day every night: intrusions by source address
+(inside or outside your `SUBNET`), every host's security status (certificates, keys, scans, sysstat, repo), and resource
+use. The ISSO reads it with `chp-site review`, signs it with `chp-site review sign --approver "Name" --notes "..."`, and
+exports the evidence to this stick with `chp-site review export` (it also records the sign-off ledger's head here, in
+`review/heads.txt`, so later changes show). To let others sign, list them in **`REVIEW_DELEGATES`** in `site.conf`
+(comma separated; may be empty; separate from the AIDE and unexpire delegates). The administrator is alerted if a review
+waits more than 2 days for a sign-off. See `0.5.0-update1/UPDATE.md`.
+
 ### From 0.5.0 on: network intrusion detection at install
 
 With `SECURITY_ADDONS=yes`, a 0.5.0 install also turns on Suricata at each host's first boot (the same intrusion

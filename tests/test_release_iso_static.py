@@ -188,3 +188,16 @@ def test_review_packages_and_kit_key():                                         
         assert n in p, n
     t = (R.parent / "site-stick-kit" / "site.conf.template").read_text()
     assert "\nREVIEW_DELEGATES=\n" in t
+
+
+def test_update_0_5_0_update1_notes():                                       # R1 Task 12
+    u = (R / "UPDATE-0.5.0-update1.md.in").read_text()
+    for s in ("@REPO@", "chp-site security enable", "chp-site review sign", "REVIEW_DELEGATES", "ledger", "heads.txt",
+              "--refresh", "chp-site aide-accept", "sysstat", "chp-site review export", "chp-site review verify --stick",
+              "newest", "last seen"):
+        assert s in u, s
+    k = (R / "release-kit.sh").read_text()
+    for row in ("| `0.5.0/` |", "| `0.5.0-update1/` |", "| `site-stick-kit-0.5.0-update1/` |"):
+        assert row in k, row
+    s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
+    assert "### From 0.5.0 update 1 on: the daily security review" in s and "REVIEW_DELEGATES" in s

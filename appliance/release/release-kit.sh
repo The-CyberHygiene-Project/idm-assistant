@@ -62,6 +62,8 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `site-stick-kit-0.4.0-update1/` | the site-stick kit for 0.4.0 update 1 (guide section: network intrusion detection) | `site-stick-kit-0.4.0-update1/SITE-STICK.md` |
 | `0.5.0/` | release 0.5.0: the installer ISO with the optional security add-on (Wazuh, YARA and Suricata at install, `SECURITY_ADDONS=yes`), signed repo, key; fixes 0.4.0 update 1's weekly YARA false alarm | `0.5.0/VERIFY.md` |
 | `site-stick-kit-0.5.0/` | the site-stick kit for 0.5.0 | `site-stick-kit-0.5.0/SITE-STICK.md` |
+| `0.5.0-update1/` | package update: the security add-on, part 4 (the ISSO's daily security review: report, sign-off ledger, alerts) | `0.5.0-update1/UPDATE.md` |
+| `site-stick-kit-0.5.0-update1/` | the site-stick kit for 0.5.0 update 1 (guide section: the daily security review; `REVIEW_DELEGATES`) | `site-stick-kit-0.5.0-update1/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.
