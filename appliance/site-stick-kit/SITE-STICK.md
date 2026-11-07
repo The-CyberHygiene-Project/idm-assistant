@@ -123,6 +123,12 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.5.0 on: network intrusion detection at install
+
+With `SECURITY_ADDONS=yes`, a 0.5.0 install also turns on Suricata at each host's first boot (the same intrusion
+detection that 0.4.0 update 1 adds to existing hosts): nothing more to set on the stick. The ISO's repo also carries
+`chp-templates` 1.3.1 for `chp-site docs` (Rev 2 narratives for YARA and Suricata).
+
 ### From 0.4.0 update 1 on: network intrusion detection (Suricata)
 
 With the security add-on on, every host runs Suricata on its own network interface, with the ET Open rules and your
@@ -130,6 +136,11 @@ With the security add-on on, every host runs Suricata on its own network interfa
 straight away; medium ones go into the daily summary. Alerts are kept in `/var/log/suricata/eve.json` for
 `RETENTION_DAYS`. Each host sees only its own traffic, and Suricata needs about 500 MB of memory per host. New rules
 arrive as a small signed update each month. See `0.4.0-update1/UPDATE.md`.
+
+**Known issue in 0.4.0 update 1 (fixed in 0.5.0):** on hosts with both YARA and Suricata, the weekly YARA scan (Sunday
+03:30) reports `/usr/share/chp-suricata-rules/chp-suricata.rules` as a match, because ET Open's rules quote the attack
+patterns YARA looks for. It is a false alarm: the file is the signed rules package. Dismiss it. Installing 0.5.0, or its
+repo's `chp-site` 0.11.0-4, stops it.
 
 ### From 0.4.0 on: malware scanning at install
 
