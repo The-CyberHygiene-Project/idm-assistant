@@ -390,6 +390,38 @@ def _review(a):
                       operator=audit.operator(), confirm=ask)
         print(f"signed {len(out)} review(s); recorded in the ledger and the audit log")
         return 0
+    if a.action in ("export", "verify"):
+        from . import review_ledger as rl
+        from . import usbstick
+        if a.action == "export":
+            with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
+                r = rl.export(s, now=time.time())
+            print(f"exported {len(r['days'])} review(s); ledger head {r['head'][0]} written to the stick (review/heads.txt)"
+                  + ("" if not r["problems"] else f"; {len(r['problems'])} PROBLEM(S): see review/verify.txt"))
+            return 1 if r["problems"] else 0
+        chain = rl.verify(rl._path("/"))
+        problems = list(chain)
+        anchor = None
+        if a.stick:
+            with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
+                hp = s / "review" / "heads.txt"
+                heads = hp.read_text() if hp.exists() else ""
+            anchor = rl.verify_heads(rl._path("/"), heads) if heads else ["the stick has no review/heads.txt yet "
+                                                                           "(export once to anchor the ledger)"]
+            problems += anchor
+        if a.quiet:
+            for p in problems:
+                print(p)
+            return 1 if problems else 0
+        if not chain:
+            print("chain OK; kept reports match")
+        for p in problems:
+            print(f"PROBLEM: {p}")
+        if anchor is None:
+            print("stick anchor NOT checked (run with --stick and the site stick to check it)")
+        elif not anchor:
+            print(f"stick anchor OK ({len(heads.splitlines())} head{'s' if len(heads.splitlines()) != 1 else ''})")
+        return 1 if problems else 0
     raise SiteError(f"review {a.action}: not available")
 
 
@@ -457,10 +489,12 @@ def main(argv=None):
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
-    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "host-record"))
+    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
                     "sign: repeatable (default every built, unsigned day)")
     rv.add_argument("--approver"); rv.add_argument("--notes"); rv.add_argument("--site", default="/etc/chp")
+    rv.add_argument("--stick", nargs="?", const=True, help="export/verify: the pinned site stick (or a folder, for tests)")
+    rv.add_argument("--quiet", action="store_true", help="verify: print problems only (monitor 75)")
     rv.add_argument("--append", action="store_true", help="host-record: append to /var/log/chp-review.json (the timer)")
     a = ap.parse_args(argv)
     try:

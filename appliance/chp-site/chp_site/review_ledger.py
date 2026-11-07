@@ -121,3 +121,46 @@ def sign(*, site, approver, notes, days, root=Path("/"), now, operator, confirm,
         rec("review-sign", {"date": d, "approver": approver, "notes": notes, "entry": head(path)[1]})
         out.append(e)
     return out
+
+
+def verify_heads(path, heads_text):
+    """Every head the stick recorded must still be in the server's chain at the same position: catches the whole ledger
+    being rewritten, or its newest entries removed (spec §5, owner 2026-11-07: detect, don't prevent)."""
+    lines = _lines(path)
+    problems = []
+    for n, ln in enumerate(heads_text.splitlines(), 1):
+        f = ln.split()
+        if len(f) < 3 or not f[0].isdigit() or len(f[1]) != 64:
+            return [f"stick heads.txt line {n} is not '<count> <hash> <time>'"]
+        count, h = int(f[0]), f[1]
+        if count > len(lines):
+            problems.append(f"head {n} ({f[2]}): the stick saw {count} entries; the server has {len(lines)} "
+                            "(entries removed)")
+        elif count and entry_hash(lines[count - 1]) != h:
+            problems.append(f"head {n} ({f[2]}): entry {count} on the server is not the one the stick recorded "
+                            "(the ledger was rewritten)")
+    return problems
+
+
+def export(stick, *, root=Path("/"), now):
+    """Copy every kept review, the ledger and its check result to <stick>/review/, then append the ledger head."""
+    import shutil
+    from datetime import datetime, timezone
+    out = Path(stick) / "review"
+    out.mkdir(parents=True, exist_ok=True)
+    days = [d.isoformat() for d in st._days(root)]
+    for d in days:
+        dst = out / d
+        if not dst.exists():
+            shutil.copytree(st._dir(root) / d, dst)
+    src = _path(root)
+    if src.exists():
+        shutil.copyfile(src, out / "ledger.jsonl")
+    problems = verify(src, root=root)
+    (out / "verify.txt").write_text(("OK: chain and kept reports match\n" if not problems else
+                                     "PROBLEMS:\n" + "".join(f"- {p}\n" for p in problems)))
+    count, h = head(src)
+    stamp = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(out / "heads.txt", "a") as f:
+        f.write(f"{count} {h} {stamp}\n")
+    return {"days": days, "head": (count, h), "problems": problems}
