@@ -319,3 +319,10 @@ def test_cli_returns_1_when_a_scan_had_errors(monkeypatch):                     
     from chp_site import cli
     monkeypatch.setattr(y, "recent_scan", lambda run: {"files": 1, "matches": 0, "errors": 1})
     assert cli.main(["yara-scan", "--recent"]) == 1
+
+
+def test_full_scan_skips_the_suricata_rules_package():
+    # ISO 0.5.0 lab: ET Open's rules quote attack bytes, so YARA matched chp-suricata.rules (4 rules) in the weekly
+    # scan: a level-12 false alarm every Sunday on every host with both add-ons. The package is signed and AIDE-watched.
+    from chp_site import suricata_conf as sc
+    assert sc.RULES_DIR in y.FULL_SKIP

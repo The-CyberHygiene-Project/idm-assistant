@@ -55,7 +55,7 @@ case ${1:-} in
       check "$h: all rules loaded, 0 failed (suricata -T -v; the config logs to suricata.log only)" "$(X $h 'd=$(sudo -u suricata mktemp -d); sudo -u suricata suricata -T -v -c /etc/suricata/chp-suricata.yaml -l $d >/dev/null 2>&1; sudo rm -rf $d; sudo grep -o "[0-9]* rules successfully loaded, [0-9]* rules failed" /var/log/suricata/suricata.log | tail -1')" "52859 rules successfully loaded, 0 rules failed"
       check "$h: eve.json present, owned by suricata" "$(X $h 'sudo stat -c "%U %a" /var/log/suricata/eve.json')" "suricata 640"
       check "$h: logrotate file is ours (RETENTION_DAYS)" "$(X $h 'sudo grep -c -e "Managed by chp-security" -e "rotate 90" /etc/logrotate.d/suricata')" "2"
-      check "$h: logrotate accepts it" "$(X $h 'sudo logrotate -d /etc/logrotate.conf 2>&1 | grep -c -i "duplicate\|error"')" "0"
+      check "$h: logrotate accepts it" "$(X $h 'sudo logrotate -d /etc/logrotate.conf 2>&1 | grep -v "error opening state file" | grep -c -i "duplicate\|error"')" "0"   # a fresh host has no state file yet
       check "$h: 0 Suricata/Wazuh AVCs since enable" "$(X $h "sudo ausearch -m AVC -ts \"$T0\" 2>/dev/null | grep denied | grep -c -E 'suricata|ossec|wazuh'")" "0"
       check "$h: 0 fapolicyd denials since enable" "$(X $h "sudo ausearch -m FANOTIFY -ts \"$T0\" 2>/dev/null | grep -c 'type=FANOTIFY'")" "0"
       check "$h: 0 'No such tag' since enable" "$(X $h 'sudo awk -v t="$(sudo cat /root/s1-t0 | tr - /)" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "No such tag"')" "0"
@@ -102,7 +102,8 @@ case ${1:-} in
   fresh)
     for h in srv cli2; do
       X $h 'sudo date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" "+%F %T" | sudo tee /root/s1-t0 >/dev/null; sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16 | sudo tee /root/s1-keys-before >/dev/null'
-      check "$h: security step of first boot succeeded" "$(X $h 'sudo journalctl --no-pager -u chp-server-firstboot -u chp-client-firstboot | grep -c "Suricata watches" | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
+      m=$([[ $h == srv ]] && echo security.done || echo client-security.done)   # the journal keeps only the current boot
+      check "$h: security step of first boot done ($m)" "$(X $h "sudo test -e /var/lib/chp/firstboot/$m && echo yes")" "yes"
     done
     bash "$0" on || fails=$((fails+1))
     done_ fresh ;;

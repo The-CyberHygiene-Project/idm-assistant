@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.11.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 06 2026 The CyberHygiene Project - 0.11.0-4.chp
+- The weekly YARA scan skips /usr/share/chp-suricata-rules: ET Open's rules quote attack bytes, so YARA matched
+  chp-suricata.rules (ISO 0.5.0 lab), a level-12 false alarm every Sunday on hosts with both add-ons.
+
 * Fri Nov 06 2026 The CyberHygiene Project - 0.11.0-3.chp
 - Final-review fixes (S1): the alert forwarder groups repeats per Suricata signature, not only per rule, so a second
   high-severity signature from a host is not held back (I-2); security enable checks RETENTION_DAYS before changing

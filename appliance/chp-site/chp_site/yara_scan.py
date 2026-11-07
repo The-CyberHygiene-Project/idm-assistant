@@ -17,7 +17,8 @@ STATE = "/var/lib/chp/yara"
 WATCHED = ("/home", "/root", "/tmp", "/var/tmp", "/dev/shm", "/run/user", "/srv", "/data")
 NEVER = ("/var/ossec", "/srv/wazuh", "/data/wazuh", "/root/chp-onboard", "/root/chp-escrow-pending",
          "/var/lib/chp/repo")
-FULL_SKIP = ("/proc", "/sys", "/dev", "/run", RULES_DIR) + NEVER       # the rules file matches itself (Y1 spike)
+SURICATA_RULES_DIR = "/usr/share/chp-suricata-rules"  # = suricata_conf.RULES_DIR: ET Open quotes attack bytes (ISO 0.5.0 lab)
+FULL_SKIP = ("/proc", "/sys", "/dev", "/run", RULES_DIR, SURICATA_RULES_DIR) + NEVER   # rules files match (Y1 spike)
 REMOTE_FS = ("nfs", "nfs4", "cifs", "smb3", "sshfs", "fuse.sshfs", "9p")
 MAX_BYTES = 256 * 1024 * 1024        # Task 1 measures; files above it are not scanned
 TIMEOUT = 60                         # seconds, one-file scan (yara --timeout limits the whole run)
