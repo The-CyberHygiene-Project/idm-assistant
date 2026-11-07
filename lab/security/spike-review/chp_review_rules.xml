@@ -1,0 +1,8 @@
+<group name="chp,review,">
+  <rule id="100520" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="chp_review.host">\.+</field>
+    <description>CHP review host record: $(chp_review.host)</description>
+    <options>no_full_log</options>
+  </rule>
+</group>
