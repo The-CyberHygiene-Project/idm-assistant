@@ -351,8 +351,10 @@ def _review(a):
     import subprocess
     import time
     from . import review_host as rh
+    from . import review_sys as rs
     if a.action == "host-record":
-        rec = rh.host_record(host=socket.gethostname(), now=time.time(), run=subprocess.run)
+        rec = rh.host_record(host=socket.gethostname(), now=time.time(), run=subprocess.run,
+                             sys_summary=rs.today(subprocess.run))
         if a.append:
             rh.append(rec)
         else:
