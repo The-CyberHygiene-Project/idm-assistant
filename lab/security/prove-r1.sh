@@ -103,7 +103,8 @@ case ${1:-} in
     X srv "sudo cp /root/r1-report.bak $RD/$d/report.md"
     check "srv: restored: verify clean" "$(X srv 'sudo chp-site review verify --quiet; echo rc=$?')" "rc=0"
     done_ tamper ;;
-  export)
+  export)                  # the stick image outlives lab resets: clear its review/ (old heads = a "rewritten" ledger)
+    A "sudo virsh detach-disk iso5-srv sdz --live >/dev/null 2>&1; sudo bash /tmp/iso2/stick.sh clear-review $STICK"
     A "sudo virsh attach-disk iso5-srv $STICK sdz --targetbus usb --type disk --live >/dev/null && echo stick-attached"; sleep 6
     check "srv: export to the stick" "$(X srv 'sudo chp-site review export | grep -c "written to the stick"')" "1"
     check "srv: verify --stick OK" "$(X srv 'sudo chp-site review verify --stick | grep -c "stick anchor OK"')" "1"
