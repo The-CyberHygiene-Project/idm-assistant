@@ -139,7 +139,11 @@ def _status(hosts, recs, end):
             out.append(_item(name, f"key {k['file']}", st, det, immediate=st == rr.ATTENTION and k.get("expires") is not None
                              and k["expires"] - at <= 7 * DAY))
         sc = b.get("scans", {})
+        since = b.get("security_since")
         for key, every, owner in SCANS:
+            if key == "yara_full" and sc.get(key) is None and since is not None and at - since <= 8 * DAY:
+                out.append(_item(name, key, rr.OK, "first weekly scan not due yet", owner))   # as monitor 73
+                continue
             st, det = rr.fresh_state(sc.get(key), every, at)
             out.append(_item(name, key, st, det, owner))
         ok = sc.get("aide_ok")

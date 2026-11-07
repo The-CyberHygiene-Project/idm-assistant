@@ -118,3 +118,11 @@ def test_cli_prints_one_line(capsys, monkeypatch, tmp_path):
     assert cli.main(["review", "host-record"]) == 0
     out = capsys.readouterr().out
     assert out.count("\n") == 1 and json.loads(out)["chp_review"]["host"] == "h"
+
+
+def test_record_carries_when_the_add_on_was_enabled(tmp_path):
+    import os
+    r = lab_root(tmp_path); (r / "etc/chp").mkdir(parents=True); c = r / "etc/chp/security.conf"; c.write_text("ROLE=client\n")
+    os.utime(c, (1_799_000_000, 1_799_000_000))
+    assert body(rh.host_record(host="h", now=NOW, run=fake_run, root=r))["security_since"] == 1_799_000_000
+    assert body(rh.host_record(host="h", now=NOW, run=fake_run, root=tmp_path / "none"))["security_since"] is None

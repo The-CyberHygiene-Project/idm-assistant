@@ -128,6 +128,7 @@ def host_record(*, host, now, run, root=Path("/"), sys_summary=None):
                   "suricata_stats": _mtime(_p(root, "var/log/suricata/stats.log")),
                   "aide_check": aide_check, "aide_ok": aide_ok},
         "sys": sys_summary or {},
+        "security_since": _mtime(_p(root, "etc/chp/security.conf")),   # when the add-on was enabled (monitor 73's rule)
     }
     return {"chp_review": {"v": 1, "host": host, "body": json.dumps(body, sort_keys=True, separators=(",", ":"))}}
 

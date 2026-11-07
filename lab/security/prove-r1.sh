@@ -39,7 +39,7 @@ case ${1:-} in
       ssh -F "$F" -n aero "tar -C /data/chp-release/$REPO_V -czf - repo" 2>/dev/null | \
         ssh -F "$F" "$([[ $h == srv ]] && echo srv1 || echo client2)" \
           'sudo rm -rf /var/lib/chp/repo/* && sudo tar -xzf - -C /var/lib/chp/repo --strip-components=1' 2>/dev/null
-      X $h 'sudo sha256sum /var/ossec/etc/client.keys 2>/dev/null | cut -c1-16 | sudo tee /root/r1-keys-before >/dev/null; sudo ss -ltnup | sort | sudo tee /root/r1-ss-before >/dev/null; sudo dnf -q -y --refresh --enablerepo=chp upgrade >/dev/null 2>&1; rpm -q chp-site chp-security | tr "\n" " "; echo'
+      X $h 'sudo sha256sum /var/ossec/etc/client.keys 2>/dev/null | cut -c1-16 | sudo tee /root/r1-keys-before >/dev/null; sudo ss -ltnup | sed -E "s/pid=[0-9]+,//g; s/fd=[0-9]+//g" | sort | sudo tee /root/r1-ss-before >/dev/null; sudo dnf -q -y --refresh --enablerepo=chp upgrade >/dev/null 2>&1; rpm -q chp-site chp-security | tr "\n" " "; echo'
     done ;;
   enable)
     h=${2:?enable srv|cli2}; v=$(vm "$h")
@@ -51,7 +51,7 @@ case ${1:-} in
       check "$h: chp-site 0.12.0, chp-security 0.4.0, sysstat" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " chp-site chp-security sysstat')" "chp-site-0.12.0 chp-security-0.4.0 sysstat-12.5.4 "
       check "$h: sysstat and record timers active" "$(X $h 'systemctl is-active sysstat-collect.timer sysstat-summary.timer chp-review-record.timer | tr "\n" " "')" "active active active "
       check "$h: record log present 0640" "$(X $h 'sudo stat -c %a /var/log/chp-review.json')" "640"
-      check "$h: no new listener" "$(X $h 'sudo ss -ltnup | sort | diff /root/r1-ss-before - >/dev/null && echo same || echo changed')" "same"
+      check "$h: no new listener" "$(X $h 'sudo ss -ltnup | sed -E "s/pid=[0-9]+,//g; s/fd=[0-9]+//g" | sort | sudo diff /root/r1-ss-before - >/dev/null && echo same || echo changed')" "same"
       check "$h: 0 AVCs since enable" "$(X $h "sudo ausearch -m AVC -ts \"$T0\" 2>/dev/null | grep -c denied")" "0"
       check "$h: 0 fapolicyd denials since enable" "$(X $h "sudo ausearch -m FANOTIFY -ts \"$T0\" 2>/dev/null | grep -c 'type=FANOTIFY'")" "0"
       check "$h: agent keys unchanged" "$(X $h '[ "$(sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16)" = "$(sudo cat /root/r1-keys-before)" ] && echo same || echo changed')" "same"
@@ -77,7 +77,7 @@ case ${1:-} in
     check "report: YARA test file under iso5-cli2" "$(X srv "$J; print(any(i['kind']=='yara' and i['source']=='iso5-cli2' for i in d['intrusions']))\"")" "True"
     check "report: cli1 (no records, still 0.5.0) is STALE" "$(X srv "$J; print([s['state'] for s in d['status'] if s['host']=='iso5-cli1'])\"")" "['STALE']"
     check "report: srv and cli2 certs, keys, scans and repo OK" "$(X srv "$J; print(sorted({s['state'] for s in d['status'] if s['host']!='iso5-cli1' and s['item']!='record'}))\"")" "['OK']"
-    check "report: resources for srv and cli2" "$(X srv "$J; print(all(d['resources'][h] and 'cpu' in d['resources'][h] for h in ('iso5-srv','iso5-cli2')))\"")" "True"
+    check "report: resources for srv and cli2 (disk at least; CPU needs 2 sysstat samples)" "$(X srv "$J; print(all(d['resources'][h] and 'disk' in d['resources'][h] for h in ('iso5-srv','iso5-cli2')))\"")" "True"
     done_ build ;;
   sign)
     d=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1")

@@ -162,3 +162,13 @@ def test_html_has_no_external_references():
     h = rr.render_html(build(healthy([suri("203.0.113.9", "<script>x</script>", 1, 1, START + 5)])))
     assert "<script" not in h and "http://" not in h and "https://" not in h and "src=" not in h
     assert "&lt;script&gt;" in h                                   # alert text is escaped
+
+
+def test_weekly_scan_not_due_in_the_first_8_days():                 # as monitor 73 (lab finding, R1 Task 11)
+    late = END - 600
+    sc = {"yara_recent": late - 60, "yara_full": None, "suricata_stats": late - 30, "aide_check": late - 3600, "aide_ok": True}
+    d = build(healthy([record("ws1", late, scans=sc, security_since=late - 2 * D)]))
+    st = {s["item"]: s for s in d["status"] if s["host"] == "ws1"}
+    assert st["yara_full"]["state"] == "OK" and "not due" in st["yara_full"]["detail"]
+    d = build(healthy([record("ws1", late, scans=sc, security_since=late - 9 * D)]))
+    assert {s["item"]: s for s in d["status"] if s["host"] == "ws1"}["yara_full"]["state"] == "STALE"
