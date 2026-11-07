@@ -54,8 +54,8 @@ class Forwarder:
         if self.day_start is None:
             self.day_start = now
         r, ag, lvl, rid = _parts(a)
-        if not r:
-            return []                                   # not an alert (final review I4: never crash on odd lines)
+        if not r or rid == "100520":
+            return []                                   # not an alert; the hosts' review records are data (R1 review I5)
         if not (lvl >= self.level or rid in LIFECYCLE):
             if 7 <= lvl <= 9:
                 self.medium.append(ag.get("name", "?"))

@@ -68,9 +68,34 @@ def test_verify_reports_a_truncated_last_line(tmp_path):         # Review Focus 
     assert any("line 2" in x for x in rl.verify(p, root=tmp_path))
 
 
-def test_missing_ledger_is_empty_not_an_error(tmp_path):
+def test_a_ledger_never_started_is_empty_not_an_error(tmp_path):
     assert rl.read(ledger(tmp_path)) == [] and rl.head(ledger(tmp_path)) == (0, "0" * 64)
     assert rl.verify(ledger(tmp_path), root=tmp_path) == []
+
+
+def test_ledger_deleted_after_a_sign_off_fails_verify_and_sign_refuses(tmp_path):     # final review C1
+    built(tmp_path, date(2026, 11, 6), date(2026, 11, 7))
+    sign(tmp_path, days=[date(2026, 11, 6)])
+    ledger(tmp_path).unlink()
+    assert any("missing or shorter than its recorded head (1 entries)" in x for x in rl.verify(ledger(tmp_path), root=tmp_path))
+    with pytest.raises(SiteError, match="missing or shorter"):
+        sign(tmp_path, days=[date(2026, 11, 7)])
+    assert not ledger(tmp_path).exists()                                             # nothing silently restarted
+
+
+def test_newest_entries_removed_fail_against_the_recorded_head(tmp_path):
+    built(tmp_path, date(2026, 11, 6), date(2026, 11, 7))
+    sign(tmp_path, days=[date(2026, 11, 6)]); sign(tmp_path, days=[date(2026, 11, 7)])
+    p = ledger(tmp_path); p.write_text(p.read_text().splitlines()[0] + "\n")
+    assert any("missing or shorter" in x for x in rl.verify(p, root=tmp_path))
+
+
+def test_broken_ledger_messages_say_how_to_recover(tmp_path):                        # final review I2
+    built(tmp_path, date(2026, 11, 6))
+    sign(tmp_path, days=[date(2026, 11, 6)])
+    p = ledger(tmp_path); p.write_text(p.read_text() + "{")
+    msg = rl.verify(p, root=tmp_path)[0]
+    assert "review/ledger.jsonl" in msg and "chp-site review verify --stick" in msg
 
 
 def test_unlisted_name_cannot_sign(tmp_path):
@@ -144,3 +169,23 @@ def test_cli_sign_requires_approver_and_notes(capsys):
     assert cli.main(["review", "sign", "--notes", "ok"]) == 2
     assert "--approver" in capsys.readouterr().err
     assert cli.main(["review", "sign", "--approver", "Dana ISSO"]) == 2
+
+
+
+def test_signed_report_deleted_within_the_keep_window_fails_verify(tmp_path):        # final review I8
+    import shutil
+    built(tmp_path, date(2026, 11, 6))
+    sign(tmp_path, days=[date(2026, 11, 6)])
+    shutil.rmtree(tmp_path / "var/lib/chp/review/2026-11-06")
+    assert any("signed report for 2026-11-06 is missing" in x
+               for x in rl.verify(ledger(tmp_path), root=tmp_path, today=date(2026, 11, 8)))
+    assert rl.verify(ledger(tmp_path), root=tmp_path, today=date(2027, 11, 8)) == []   # pruned after a year: fine
+
+
+def test_every_report_file_is_covered_by_the_signed_hash(tmp_path):                 # final review I7
+    built(tmp_path, date(2026, 11, 6))
+    sign(tmp_path, days=[date(2026, 11, 6)])
+    for f, text in (("report.html", "<html>edited</html>"), ("data.json", '{"attention": []}')):
+        d = tmp_path / "var/lib/chp/review/2026-11-06"; old = (d / f).read_text(); (d / f).write_text(text)
+        assert any("no longer matches" in x for x in rl.verify(ledger(tmp_path), root=tmp_path)), f
+        (d / f).write_text(old)

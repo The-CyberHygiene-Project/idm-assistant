@@ -76,6 +76,7 @@ REVIEW_RULES = """<!-- Managed by chp-security (review spec §3): each host's st
 <group name="chp,review,">
   <rule id="100520" level="3">
     <decoded_as>json</decoded_as>
+    <location>/var/log/chp-review.json</location>
     <field name="chp_review.host">\\.+</field>
     <description>CHP review host record: $(chp_review.host)</description>
     <options>no_full_log</options>

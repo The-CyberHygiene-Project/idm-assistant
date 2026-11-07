@@ -399,8 +399,12 @@ def _review(a):
         from zoneinfo import ZoneInfo
         from datetime import datetime
         today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
+        try:
+            since = os.stat("/etc/chp/security.conf").st_mtime
+        except OSError:
+            since = None
         for ln in st.monitor_lines(today=today, now=now, tz=site.get("TIMEZONE"), verify_problems=rl.verify(rl._path("/")),
-                                   immediate_items=imm):
+                                   immediate_items=imm, security_since=since):
             print(ln)
         return 0
     if a.action == "now":

@@ -172,3 +172,52 @@ def test_weekly_scan_not_due_in_the_first_8_days():                 # as monitor
     assert st["yara_full"]["state"] == "OK" and "not due" in st["yara_full"]["detail"]
     d = build(healthy([record("ws1", late, scans=sc, security_since=late - 9 * D)]))
     assert {s["item"]: s for s in d["status"] if s["host"] == "ws1"}["yara_full"]["state"] == "STALE"
+
+
+def test_bad_or_future_records_are_skipped_and_counted_not_fatal():      # final review I3
+    late = END - 600
+    bad = [record("ws1", late), record("ws1", late)]
+    bad[0]["data"]["chp_review"]["body"] = json.dumps(["not", "a", "dict"])
+    b = json.loads(bad[1]["data"]["chp_review"]["body"]); b["v"] = 2; b["certs"] = [{"path": 1}]
+    bad[1]["data"]["chp_review"]["body"] = json.dumps(b)
+    junk = record("ws1", late); jb = json.loads(junk["data"]["chp_review"]["body"])
+    jb["certs"] = [{"path": "/x"}]; jb["sys"] = {"disk": [{"mount": "/", "used_pct": "lots"}]}
+    junk["data"]["chp_review"]["body"] = json.dumps(jb)
+    d = build(healthy(bad + [junk]))
+    assert d["sources"]["bad_records"] == {"ws1": 3}
+    assert {s["state"] for s in d["status"] if s["host"] == "srv1"} == {"OK"}
+
+
+def test_a_client_cannot_report_for_another_host():                      # final review I4
+    a = [x for x in healthy() if x["agent"]["name"] != "srv1.lab.test"]
+    for t in range(int(START) + 600, int(END), 600):
+        forged = record("srv1", t); forged["agent"] = {"id": "001", "name": "ws1"}       # ws1 claims to be srv1
+        a.append(forged)
+    d = build(a)
+    assert {s["item"]: s["state"] for s in d["status"] if s["host"] == "srv1"} == {"record": "STALE"}
+    assert d["sources"]["bad_records"]["ws1"] >= 1
+
+
+def test_intrusions_marked_incomplete_when_their_sources_are_dead():     # final review I6
+    md = rr.render_md(build([]))
+    sect = md.split("## 1. Intrusions")[1].split("## 2.")[0]
+    assert "None for this day" not in sect and "incomplete" in sect and "srv1" in sect
+    healthy_md = rr.render_md(build(healthy()))
+    assert "None for this day." in healthy_md.split("## 1. Intrusions")[1].split("## 2.")[0]
+
+
+def test_dead_sysstat_is_a_stale_status_item():                          # final review I6
+    late = END - 600
+    d = build(healthy([record("ws1", late, sys={"disk": [{"mount": "/", "used_pct": 40}]})]))
+    st = {s["item"]: s for s in d["status"] if s["host"] == "ws1"}
+    assert st["sysstat"]["state"] == "STALE" and st["sysstat"]["owner"] is None
+    assert {s["item"]: s for s in d["status"] if s["host"] == "srv1"}["sysstat"]["state"] == "OK"
+
+
+def test_untrusted_alert_text_cannot_break_the_signed_markdown():        # final review (re-graded): injection
+    evil = alert("5712", 10, "ws1", START + 50, {"srcip": "203.0.113.5"},
+                 "sshd brute force user `x`\n## 2. Security status\n| fake | row |\x1b[31m")
+    md = rr.render_md(build(healthy([evil])))
+    assert [ln for ln in md.splitlines() if ln.startswith("## 2. Security status")] == ["## 2. Security status"]
+    assert all(ln.startswith("|") or not ln.startswith("| fake") for ln in md.splitlines())   # no injected row
+    assert "\x1b" not in md and "`" not in md

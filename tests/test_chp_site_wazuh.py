@@ -177,3 +177,7 @@ def test_review_rule_stores_records_at_level_3():                          # man
     r = w.REVIEW_RULES
     assert 'rule id="100520" level="3"' in r and "<decoded_as>json</decoded_as>" in r
     assert '<field name="chp_review.host">' in r and "no_full_log" in r
+
+
+def test_review_rule_only_from_the_record_log():                             # final review I4
+    assert "<location>/var/log/chp-review.json</location>" in w.REVIEW_RULES

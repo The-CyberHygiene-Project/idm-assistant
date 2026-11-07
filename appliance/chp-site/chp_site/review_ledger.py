@@ -15,6 +15,10 @@ from .sitefile import SiteError
 
 LEDGER = st.REVIEW_DIR / "ledger.jsonl"
 GENESIS = "0" * 64
+RECOVER = ("restore review/ledger.jsonl from the site stick's copy (every chp-site review export writes one), then run "
+           "chp-site review verify --stick. An incomplete LAST line was never a completed sign-off (its audit record is "
+           "written only after the append): the ISSO may remove just that line, record why (chp-site writes no audit "
+           "record for it), and sign that day again")
 FIELDS = ("date", "report_sha256", "approver", "operator", "time", "notes", "prev")
 
 
@@ -35,8 +39,7 @@ def _lines(path):
     if lines and lines[-1] == "":
         lines.pop()
     elif lines:
-        raise SiteError(f"ledger {p}: line {len(lines)} is incomplete (no line end; an interrupted write?): "
-                        "do not sign until the ISSO has checked it")
+        raise SiteError(f"ledger {p}: line {len(lines)} is incomplete (no line end; an interrupted write?): {RECOVER}")
     return lines
 
 
@@ -47,14 +50,45 @@ def read(path):
         try:
             e = json.loads(ln)
         except ValueError:
-            raise SiteError(f"ledger {path}: line {n} is not a valid entry") from None
+            raise SiteError(f"ledger {path}: line {n} is not a valid entry: {RECOVER}") from None
         if not isinstance(e, dict) or set(e) != set(FIELDS):
-            raise SiteError(f"ledger {path}: line {n} has the wrong fields")
+            raise SiteError(f"ledger {path}: line {n} has the wrong fields: {RECOVER}")
         if e["prev"] != prev:
-            raise SiteError(f"ledger {path}: entry {n} does not follow entry {n - 1} (the chain is broken there)")
+            raise SiteError(f"ledger {path}: entry {n} does not follow entry {n - 1} (the chain is broken there): {RECOVER}")
         out.append(e)
         prev = entry_hash(ln)
+    _check_head(path)
     return out
+
+
+def _head_file(path):
+    return Path(path).with_name("ledger.head")
+
+
+def _check_head(path):
+    """The witness (final review C1): ledger.head records how long the ledger was after the last sign-off, so a ledger
+    deleted, emptied or cut short is reported, never mistaken for one that was never started."""
+    hf = _head_file(path)
+    if not hf.exists():
+        return
+    try:
+        count, h = hf.read_text().split()[:2]
+        count = int(count)
+    except ValueError:
+        raise SiteError(f"{hf} is unreadable: {RECOVER}") from None
+    lines = _lines(path)
+    if len(lines) < count or (count and entry_hash(lines[count - 1]) != h):
+        raise SiteError(f"ledger {path} is missing or shorter than its recorded head ({count} entries): {RECOVER}")
+
+
+def _write_head(path):
+    count, h = head(path)
+    hf = _head_file(path)
+    tmp = hf.with_name(hf.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(f"{count} {h}\n")
+    os.replace(tmp, hf)
 
 
 def head(path):
@@ -74,22 +108,34 @@ def append(path, *, date, report_sha256, approver, operator, notes, now):
         line = json.dumps(e, sort_keys=True, separators=(",", ":"))
         os.write(fd, (line + "\n").encode())
         os.fsync(fd)
+        _write_head(p)                                    # the witness, while still holding the lock
     finally:
         os.close(fd)
     os.chmod(p, 0o600)
     return e
 
 
-def verify(path, *, root=Path("/")):
-    """Problems found (empty = fine): the chain, then every entry whose report is still kept is re-hashed."""
+def verify(path, *, root=Path("/"), today=None, keep_days=365):
+    """Problems found (empty = fine): the chain and its recorded head; every signed report still inside the keep window
+    must exist (final review I8) and match what was signed."""
     try:
         entries = read(path)
     except SiteError as err:
         return [str(err)]
+    today = today or date.today()
     problems = []
     for n, e in enumerate(entries, 1):
         d = st._dir(root) / e["date"]
-        if (d / "report.md").exists() and st.report_sha256(d) != e["report_sha256"]:
+        if not d.exists():
+            if (today - date.fromisoformat(e["date"])).days <= keep_days:
+                problems.append(f"entry {n}: the signed report for {e['date']} is missing (it is inside the "
+                                f"{keep_days}-day keep window)")
+            continue
+        try:
+            same = st.report_sha256(d) == e["report_sha256"]
+        except OSError:
+            same = False
+        if not same:
             problems.append(f"entry {n}: the kept report for {e['date']} no longer matches the one that was signed")
     return problems
 

@@ -20,7 +20,9 @@ def test_day_is_written_0700_0600_and_frozen(tmp_path):
     assert oct(d.stat().st_mode & 0o777) == "0o700"
     assert {p.name: oct(p.stat().st_mode & 0o777) for p in d.iterdir()} == \
         {"report.md": "0o600", "report.html": "0o600", "data.json": "0o600"}
-    assert st.report_sha256(d) == hashlib.sha256(b"# review 2026-11-07\n").hexdigest()
+    files = b"".join(n.encode() + b"\n" + hashlib.sha256((d / n).read_bytes()).hexdigest().encode() + b"\n"
+                     for n in ("report.md", "report.html", "data.json"))
+    assert st.report_sha256(d) == hashlib.sha256(files).hexdigest()           # all three files (final review I7)
     with pytest.raises(SiteError, match="frozen"):
         st.write_day(date(2026, 11, 7), *day_files(date(2026, 11, 7)), root=tmp_path)
 
@@ -171,3 +173,15 @@ def test_monitor_alerts_on_a_ledger_problem_and_immediate_items(tmp_path):
                  immediate=[{"host": "srv1", "item": "cert /etc/step-ca/certs/root_ca.crt", "detail": "3 days left"}])
     assert any("ledger check failed: entry 2" in x for x in lines)
     assert any("srv1: cert /etc/step-ca/certs/root_ca.crt: 3 days left" in x for x in lines)
+
+
+def test_no_not_built_alert_before_the_first_possible_build(tmp_path):     # final review I9 (enable/upgrade day)
+    from datetime import datetime, timezone
+    at = datetime(TODAY.year, TODAY.month, TODAY.day, 9, 0, tzinfo=timezone.utc).timestamp()
+    enabled = at - 3600                                                     # enabled this morning: nothing built yet
+    lines = st.monitor_lines(root=tmp_path, today=TODAY, now=at, tz="UTC", verify_problems=[], immediate_items=[],
+                             security_since=enabled)
+    assert not any("not built" in x for x in lines)
+    lines = st.monitor_lines(root=tmp_path, today=TODAY, now=at, tz="UTC", verify_problems=[], immediate_items=[],
+                             security_since=enabled - 3 * 86400)            # enabled days ago and still nothing: alert
+    assert any("not built" in x for x in lines)

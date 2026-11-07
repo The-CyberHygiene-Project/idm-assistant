@@ -14,7 +14,8 @@ from pathlib import Path
 from .sitefile import SiteError
 
 REVIEW_DIR = Path("/var/lib/chp/review")
-KEEP = {"ledger.jsonl", "stick-heads.json"}
+KEEP = {"ledger.jsonl", "ledger.head"}
+REPORT_FILES = ("report.md", "report.html", "data.json")
 CATCH_UP = 31
 
 
@@ -60,7 +61,12 @@ def write_day(day, data, md, html, *, root=Path("/")):
 
 
 def report_sha256(day_dir):
-    return hashlib.sha256((Path(day_dir) / "report.md").read_bytes()).hexdigest()
+    """What a sign-off covers: the SHA-256 of a manifest of all three report files (name, then each file's SHA-256), so
+    the HTML the ISSO opens and the data monitor 75 reads are as protected as the Markdown (final review I7)."""
+    d = Path(day_dir)
+    manifest = b"".join(n.encode() + b"\n" + hashlib.sha256((d / n).read_bytes()).hexdigest().encode() + b"\n"
+                        for n in REPORT_FILES)
+    return hashlib.sha256(manifest).hexdigest()
 
 
 def missing_days(*, root=Path("/"), today):
@@ -150,7 +156,7 @@ def _signed(root):
     return out
 
 
-def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_items):
+def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_items, security_since=None):
     """Monitor 75's lines (spec §6): yesterday's review missing (after 01:00), a review unsigned for 2 days, the latest
     review's attention items (once per day), a ledger problem, and the 'at once' items."""
     from datetime import datetime
@@ -158,7 +164,11 @@ def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_
     lines, base = [], _dir(root)
     days = _days(root)
     yesterday = today - timedelta(days=1)
-    if yesterday not in days and datetime.fromtimestamp(now, ZoneInfo(tz or "UTC")).hour >= 1:
+    zone = ZoneInfo(tz or "UTC")
+    # final review I9: on the enable (or upgrade) day nothing can have been built for yesterday yet
+    too_new = (not days and security_since is not None
+               and yesterday < datetime.fromtimestamp(security_since, zone).date())
+    if yesterday not in days and not too_new and datetime.fromtimestamp(now, zone).hour >= 1:
         lines.append(f"ALERT the daily review for {yesterday} was not built (systemctl status chp-review-build)")
     signed = _signed(root)
     waiting = [d.isoformat() for d in days if d.isoformat() not in signed

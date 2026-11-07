@@ -43,7 +43,8 @@ def test_rewritten_ledger_fails_against_the_stick(tmp_path):
     e1 = json.loads(lines[0]); e1["notes"] = "changed"; l1 = json.dumps(e1, sort_keys=True, separators=(",", ":"))
     e2 = json.loads(lines[1]); e2["prev"] = rl.entry_hash(l1); l2 = json.dumps(e2, sort_keys=True, separators=(",", ":"))
     p.write_text(l1 + "\n" + l2 + "\n")
-    assert rl.verify(p, root=root) == []                                     # the chain alone cannot see it
+    p.with_name("ledger.head").write_text(f"2 {rl.entry_hash(l2)}\n")      # root rewrites the witness too
+    assert rl.verify(p, root=root) == []                                     # nothing on the server can see it
     assert any("head 1" in x for x in rl.verify_heads(p, (stick / "review/heads.txt").read_text()))
 
 

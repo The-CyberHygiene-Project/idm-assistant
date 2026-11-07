@@ -1,6 +1,6 @@
 Name:           chp-security
 Version:        0.4.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention, YARA and Suricata
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -27,7 +27,8 @@ Source18:       chp-review-record.service
 Source19:       chp-review-record.timer
 Source20:       chp-review-build.service
 Source21:       chp-review-build.timer
-Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules
+Source22:       chp-review.logrotate
+Requires:       chp-site >= 0.12.0, chp-base, yara, chp-yara-rules
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -62,6 +63,7 @@ install -Dm0644 %{SOURCE18} %{buildroot}%{_unitdir}/chp-review-record.service
 install -Dm0644 %{SOURCE19} %{buildroot}%{_unitdir}/chp-review-record.timer
 install -Dm0644 %{SOURCE20} %{buildroot}%{_unitdir}/chp-review-build.service
 install -Dm0644 %{SOURCE21} %{buildroot}%{_unitdir}/chp-review-build.timer
+install -Dm0644 %{SOURCE22} %{buildroot}%{_sysconfdir}/logrotate.d/chp-review
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/yara
 
 %post
@@ -94,9 +96,14 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_unitdir}/chp-review-record.timer
 %{_unitdir}/chp-review-build.service
 %{_unitdir}/chp-review-build.timer
+%config(noreplace) %{_sysconfdir}/logrotate.d/chp-review
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Sat Nov 07 2026 The CyberHygiene Project - 0.4.0-2.chp
+- Final-review fixes (R1): requires chp-site >= 0.12.0 (the review commands); /etc/logrotate.d/chp-review rotates
+  /var/log/chp-review.json daily (7 kept, copytruncate).
+
 * Sat Nov 07 2026 The CyberHygiene Project - 0.4.0-1.chp
 - Security bundle part 4 (Plan R1): the ISSO's daily security review. chp-review-record timer (every host, every
   10 minutes), chp-review-build timer (server, 00:20, catches up), monitor check 75-review.

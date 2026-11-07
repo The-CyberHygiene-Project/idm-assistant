@@ -169,3 +169,8 @@ def test_yara_matches_grouped_per_rule():                                    # d
 def test_host_records_never_appear_in_the_summary():
     rec = alert(rid="100520", level=3, host="ws1", desc="CHP review host record: ws1")
     assert "100520" not in wa.summarize([rec], 0, 0)
+
+
+def test_host_records_never_reach_the_hook_even_at_level_3():               # final review I5 (SECURITY_ALERT_LEVEL=3)
+    f = wa.Forwarder(level=3)
+    assert f.feed(alert(rid="100520", level=3, host="ws1", desc="CHP review host record: ws1"), now=0) == []

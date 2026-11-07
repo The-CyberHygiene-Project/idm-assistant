@@ -50,19 +50,61 @@ def _ip(s):
         return None
 
 
+def _num_or_none(x):
+    return x is None or (isinstance(x, (int, float)) and not isinstance(x, bool))
+
+
+def _valid(b):
+    """A version-1 record with the field types the report relies on (final review I3); anything else is skipped."""
+    try:
+        if not isinstance(b, dict) or b.get("v") != 1 or not isinstance(b.get("host"), str):
+            return False
+        if not isinstance(b.get("time"), (int, float)) or not isinstance(b.get("versions", {}), dict):
+            return False
+        for c in b.get("certs", []):
+            if not (isinstance(c["path"], str) and isinstance(c["not_before"], (int, float))
+                    and isinstance(c["not_after"], (int, float))):
+                return False
+        for k in b.get("keys", []):
+            if not (isinstance(k["file"], str) and _num_or_none(k.get("expires"))):
+                return False
+        sc = b.get("scans", {})
+        if not isinstance(sc, dict) or not all(_num_or_none(sc.get(x)) for x in
+                                                ("yara_recent", "yara_full", "suricata_stats", "aide_check")):
+            return False
+        s = b.get("sys", {})
+        if not isinstance(s, dict):
+            return False
+        for dk in s.get("disk", []):
+            if not (isinstance(dk["mount"], str) and isinstance(dk["used_pct"], int)):
+                return False
+        for part, keys in (("cpu", ("avg", "peak")), ("mem", ("avg_pct", "peak_pct"))):
+            if part in s and not all(isinstance(s[part].get(x), (int, float)) for x in keys):
+                return False
+        return _num_or_none(b.get("security_since"))
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
 def _records(alerts):
-    out = {}
+    """Each host's records, keyed by the Wazuh agent that DELIVERED them (final review I4: a client cannot speak for
+    another host); malformed, future-version or mismatched records are counted, never fatal."""
+    out, bad = {}, {}
     for a in alerts:
         if a.get("rule", {}).get("id") != RECORD_RULE:
             continue
+        sender = _short((a.get("agent") or {}).get("name"))
         try:
             b = json.loads(a["data"]["chp_review"]["body"])
         except (KeyError, TypeError, ValueError):
+            b = None
+        if not _valid(b) or _short(b["host"]) != sender:
+            bad[sender] = bad.get(sender, 0) + 1
             continue
-        out.setdefault(_short(b.get("host")), []).append(b)
+        out.setdefault(sender, []).append(b)
     for v in out.values():
         v.sort(key=lambda b: b.get("time", 0))
-    return out
+    return out, bad
 
 
 def _intrusions(alerts, site, ip_host):
@@ -150,6 +192,9 @@ def _status(hosts, recs, end):
         out.append(_item(name, "aide_ok", rr.OK if ok else (rr.STALE if ok is None else rr.ATTENTION),
                          {True: "accepted, no changes", False: "changes or mismatch to review"}.get(ok, "no result"),
                          "60-aide-result"))
+        has_sys = "cpu" in (b.get("sys") or {})                 # final review I6: a dead sysstat is not invisible
+        out.append(_item(name, "sysstat", rr.OK if has_sys else rr.STALE,
+                         f"{b['sys'].get('samples', '?')} samples" if has_sys else "no sysstat figures in the last record"))
     return out
 
 
@@ -185,19 +230,29 @@ def build(day, *, alerts, hosts, site, now, previous):
     from zoneinfo import ZoneInfo
     start, end = day_bounds(day, ZoneInfo(site.get("TIMEZONE") or "UTC"))
     day_alerts = [a for a in alerts if (w := _when(a)) is not None and start <= w < end]
-    recs = _records(day_alerts)
+    recs, bad = _records(day_alerts)
     ip_host = {h.ip: _short(h.hostname) for h in hosts}
     intrusions, routine = _intrusions(day_alerts, site, ip_host)
     status = _status(hosts, recs, end)
     resources = _resources(hosts, recs)
+    feeders = ("record", "suricata_stats", "yara_recent")
+    stale = sorted({s["host"] for s in status if s["item"] in feeders and s["state"] == rr.STALE})
     return {"day": day.isoformat(), "built": now, "intrusions": intrusions, "routine_counts": routine,
             "status": status, "resources": resources, "trend": _trend(resources, previous),
             "attention": [s for s in status if s["state"] != rr.OK and s["owner"] is None],
-            "sources": {"alerts": len(day_alerts), "records": {h: len(v) for h, v in recs.items()}}}
+            "intrusion_sources_stale": stale,
+            "sources": {"alerts": len(day_alerts), "records": {h: len(v) for h, v in recs.items()}, "bad_records": bad}}
 
 
 def _t(epoch):
     return "-" if epoch is None else datetime.fromtimestamp(epoch).strftime("%H:%M")
+
+
+def _cell(x):
+    """One table cell: untrusted alert text (signatures, descriptions, user names) must not break the signed report's
+    layout or a terminal: control characters (incl. ESC) become spaces, backticks are dropped (final review)."""
+    s = "".join(" " if (ord(ch) < 32 or ord(ch) == 127) else ch for ch in str(x))
+    return s.replace("`", "")
 
 
 def _rows(d):
@@ -214,7 +269,15 @@ def _rows(d):
         res.append([h, f"{r.get('cpu', {}).get('avg', '-')} / {r.get('cpu', {}).get('peak', '-')}",
                     f"{r.get('mem', {}).get('avg_pct', '-')} / {r.get('mem', {}).get('peak_pct', '-')}", disk,
                     f"{r.get('net', {}).get('rx_kbs_avg', '-')} / {r.get('net', {}).get('tx_kbs_avg', '-')}"])
-    return intr, stat, res
+    clean = lambda rows: [[_cell(c) for c in r] for r in rows]
+    return clean(intr), clean(stat), clean(res)
+
+
+def _empty(d, i):
+    if i == 0 and d.get("intrusion_sources_stale"):
+        return ("No alerts recorded, but this section is incomplete: sources STALE on "
+                + ", ".join(d["intrusion_sources_stale"]) + ".")
+    return "None for this day."
 
 
 SECTIONS = (("1. Intrusions", ["kind", "source", "inside/outside", "site host", "target", "signature", "count", "first",
@@ -228,10 +291,12 @@ def render_md(d):
            f"Built {datetime.fromtimestamp(d['built']).strftime('%Y-%m-%d %H:%M')}. "
            f"Needs attention: {len(d['attention'])}. Sources: {d['sources']['alerts']} alerts, "
            f"records {d['sources']['records'] or 'none'}.", ""]
-    for (title, head), rows in zip(SECTIONS, _rows(d)):
+    for i, ((title, head), rows) in enumerate(zip(SECTIONS, _rows(d))):
         out += [f"## {title}", ""]
+        if i == 0 and rows and d.get("intrusion_sources_stale"):
+            out += ["Incomplete: sources STALE on " + ", ".join(d["intrusion_sources_stale"]) + ".", ""]
         if not rows:
-            out += ["None for this day.", ""]
+            out += [_empty(d, i), ""]
             continue
         out += ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
         out += ["| " + " | ".join(c.replace("|", "\\|") for c in r) + " |" for r in rows] + [""]
@@ -247,10 +312,12 @@ def render_html(d):
            "<style>body{font-family:sans-serif;margin:1.5em}table{border-collapse:collapse}td,th{border:1px solid #999;"
            "padding:2px 6px}</style></head><body>", f"<h1>Daily security review {e(d['day'])}</h1>",
            f"<p>Needs attention: {len(d['attention'])}.</p>"]
-    for (title, head), rows in zip(SECTIONS, _rows(d)):
+    for i, ((title, head), rows) in enumerate(zip(SECTIONS, _rows(d))):
         out.append(f"<h2>{e(title)}</h2>")
+        if i == 0 and rows and d.get("intrusion_sources_stale"):
+            out.append("<p>Incomplete: sources STALE on " + e(", ".join(d["intrusion_sources_stale"])) + ".</p>")
         if not rows:
-            out.append("<p>None for this day.</p>")
+            out.append(f"<p>{e(_empty(d, i))}</p>")
             continue
         out.append("<table><tr>" + "".join(f"<th>{e(h)}</th>" for h in head) + "</tr>")
         out += ["<tr>" + "".join(f"<td>{e(c)}</td>" for c in r) + "</tr>" for r in rows]
