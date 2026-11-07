@@ -360,6 +360,19 @@ def _review(a):
         else:
             print(json.dumps(rec, separators=(",", ":")))
         return 0
+    from datetime import date
+    from . import review_store as st
+    if a.action == "show":
+        print(st.show(day=date.fromisoformat(a.date) if a.date else None), end="")
+        return 0
+    if a.action == "build":
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        alerts = wa.load_alerts("/var/ossec/logs/alerts", now - (st.CATCH_UP + 2) * 86400)
+        built = st.nightly(today=date.fromtimestamp(now), site=site, hosts=hosts, alerts=alerts, now=now)
+        print("built " + (", ".join(d.isoformat() for d in built) if built else "nothing (every day is built)"))
+        return 0
     raise SiteError(f"review {a.action}: not available")
 
 
@@ -427,7 +440,8 @@ def main(argv=None):
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
-    rv.add_argument("action", nargs="?", default="show", choices=("show", "host-record"))
+    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "host-record"))
+    rv.add_argument("--date", help="show: YYYY-MM-DD (default: the latest)"); rv.add_argument("--site", default="/etc/chp")
     rv.add_argument("--append", action="store_true", help="host-record: append to /var/log/chp-review.json (the timer)")
     a = ap.parse_args(argv)
     try:
