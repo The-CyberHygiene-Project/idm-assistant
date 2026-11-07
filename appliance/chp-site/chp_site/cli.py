@@ -345,6 +345,22 @@ def _yara_scan(a):
     return 0
 
 
+def _review(a):
+    import json
+    import socket
+    import subprocess
+    import time
+    from . import review_host as rh
+    if a.action == "host-record":
+        rec = rh.host_record(host=socket.gethostname(), now=time.time(), run=subprocess.run)
+        if a.append:
+            rh.append(rec)
+        else:
+            print(json.dumps(rec, separators=(",", ":")))
+        return 0
+    raise SiteError(f"review {a.action}: not available")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -408,6 +424,9 @@ def main(argv=None):
                                            "5 min), every local file system (--full), or one PATH; alert only")
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
+    rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
+    rv.add_argument("action", nargs="?", default="show", choices=("show", "host-record"))
+    rv.add_argument("--append", action="store_true", help="host-record: append to /var/log/chp-review.json (the timer)")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -419,7 +438,7 @@ def main(argv=None):
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
-         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan}[a.cmd](a)
+         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
