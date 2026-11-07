@@ -185,3 +185,36 @@ def test_dropping_now_alerts_over_the_recent_window(tmp_path):
 
 def test_too_few_packets_are_not_judged(tmp_path):
     assert "ALERT" not in run_suri(tmp_path, blocks=[(300, 500, 50)])
+
+
+def run_review(tmp_path, conf="ROLE=server\nALERT_LEVEL=10\nRETENTION_DAYS=90\nDATA_DIR=/srv/wazuh\n", out="OK all well",
+               rc=0):
+    b = tmp_path / "bin"; b.mkdir(exist_ok=True)
+    (b / "chp-site").write_text(f"#!/bin/bash\n[ \"$1 $2\" = 'review monitor' ] || exit 9\necho '{out}'\nexit {rc}\n")
+    (b / "chp-site").chmod(0o755)
+    c = tmp_path / "security.conf"
+    if conf is not None:
+        c.write_text(conf)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_SECURITY_CONF=str(c))
+    r = subprocess.run(["bash", str(M / "75-review.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_review_check_not_enabled_is_ok(tmp_path):
+    assert run_review(tmp_path, conf=None).startswith("OK")
+
+
+def test_review_check_is_server_only(tmp_path):
+    out = run_review(tmp_path, conf="ROLE=client\n", out="ALERT should not run")
+    assert out.startswith("OK") and "ALERT" not in out
+
+
+def test_review_check_passes_the_monitor_lines_through(tmp_path):
+    out = run_review(tmp_path, out="ALERT the daily review for 2026-11-07 was not built")
+    assert out.strip() == "ALERT the daily review for 2026-11-07 was not built"
+
+
+def test_review_check_alerts_when_chp_site_fails(tmp_path):
+    out = run_review(tmp_path, out="boom", rc=2)
+    assert "ALERT" in out and "chp-site review monitor failed" in out

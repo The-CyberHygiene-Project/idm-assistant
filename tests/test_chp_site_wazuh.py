@@ -160,3 +160,20 @@ def test_suricata_rule_ids_do_not_collide_with_yara():
     import re
     ids = lambda t: set(re.findall(r'rule id="(\d+)"', t))
     assert ids(w.SURICATA_RULES) == {"100510", "100511"} and not ids(w.SURICATA_RULES) & ids(w.YARA_RULES)
+
+
+from chp_site import review_host as _rh
+
+
+def test_both_roles_read_the_host_record_log_once():                       # R1 Task 1: the record travels as a JSON log
+    for out in (w.harden_manager(MGR), w.harden_agent(AGT, "192.0.2.10"), w.harden_manager(w.harden_manager(MGR))):
+        locs = [e for x in w.parse_conf(out) for e in x.findall("localfile") if e.findtext("location") == _rh.LOG]
+        assert len(locs) == 1 and locs[0].findtext("log_format") == "json"
+        assert not [e for x in w.parse_conf(out) for e in x.findall("localfile")
+                    if "review" in (e.findtext("command") or "")]                # not full_command (matches rule 530)
+
+
+def test_review_rule_stores_records_at_level_3():                          # manager log_alert_level is 3
+    r = w.REVIEW_RULES
+    assert 'rule id="100520" level="3"' in r and "<decoded_as>json</decoded_as>" in r
+    assert '<field name="chp_review.host">' in r and "no_full_log" in r

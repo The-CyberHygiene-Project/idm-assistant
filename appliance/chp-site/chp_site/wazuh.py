@@ -7,6 +7,7 @@ import ipaddress
 import secrets
 import xml.etree.ElementTree as ET
 
+from . import review_host as _rh
 from . import suricata_conf as _sc
 from . import yara_scan as _ys
 
@@ -69,6 +70,23 @@ def _json_log(blocks, location):
 
 def _yara_log(blocks):
     _json_log(blocks, _ys.LOG)
+
+
+REVIEW_RULES = """<!-- Managed by chp-security (review spec §3): each host's status record (/var/log/chp-review.json) -->
+<group name="chp,review,">
+  <rule id="100520" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="chp_review.host">\\.+</field>
+    <description>CHP review host record: $(chp_review.host)</description>
+    <options>no_full_log</options>
+  </rule>
+</group>
+"""
+# Level 3: the manager stores only alerts >= log_alert_level 3 (R1 spike); records never reach ALERT_HOOK (level < 10).
+
+
+def _review_log(blocks):
+    _json_log(blocks, _rh.LOG)                          # review spec §3: every host's record, as a JSON log (R1 spike)
 
 
 def _eve_log(blocks):
@@ -152,6 +170,7 @@ def harden_manager(text):
     _wodles_off(blocks)
     _yara_log(blocks)                                   # spec §10: YARA runs on a timer on every host
     _eve_log(blocks)
+    _review_log(blocks)
     return _render(blocks)
 
 
@@ -177,6 +196,7 @@ def harden_agent(text, server_ip):
     _wodles_off(blocks)
     _yara_log(blocks)                                   # spec §10: clients scan on a timer; the agent forwards the log
     _eve_log(blocks)
+    _review_log(blocks)
     return _render(blocks)
 
 

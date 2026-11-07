@@ -390,6 +390,26 @@ def _review(a):
                       operator=audit.operator(), confirm=ask)
         print(f"signed {len(out)} review(s); recorded in the ledger and the audit log")
         return 0
+    if a.action == "monitor":
+        from . import review_ledger as rl
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        imm = st.immediate(site=site, hosts=hosts, alerts=wa.load_alerts("/var/ossec/logs/alerts", now - 86400), now=now)
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
+        for ln in st.monitor_lines(today=today, now=now, tz=site.get("TIMEZONE"), verify_problems=rl.verify(rl._path("/")),
+                                   immediate_items=imm):
+            print(ln)
+        return 0
+    if a.action == "now":
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        for s in st.immediate(site=site, hosts=hosts, alerts=wa.load_alerts("/var/ossec/logs/alerts", now - 86400), now=now):
+            print(f"{s['host']}: {s['item']}: {s['detail']}")
+        return 0
     if a.action in ("export", "verify"):
         from . import review_ledger as rl
         from . import usbstick
@@ -489,7 +509,7 @@ def main(argv=None):
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
-    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "host-record"))
+    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
                     "sign: repeatable (default every built, unsigned day)")
     rv.add_argument("--approver"); rv.add_argument("--notes"); rv.add_argument("--site", default="/etc/chp")
