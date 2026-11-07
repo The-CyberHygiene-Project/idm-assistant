@@ -76,7 +76,7 @@ case ${1:-} in
     check "report: Suricata catch from the server, inside" "$(X srv "$J; print(any(i['kind']=='suricata' and i['source']=='192.168.100.50' and i['inside'] and i['source_host']=='iso5-srv' for i in d['intrusions']))\"")" "True"
     check "report: YARA test file under iso5-cli2" "$(X srv "$J; print(any(i['kind']=='yara' and i['source']=='iso5-cli2' for i in d['intrusions']))\"")" "True"
     check "report: cli1 (no records, still 0.5.0) is STALE" "$(X srv "$J; print([s['state'] for s in d['status'] if s['host']=='iso5-cli1'])\"")" "['STALE']"
-    check "report: srv and cli2 certs, keys, scans and repo OK" "$(X srv "$J; print(sorted({s['state'] for s in d['status'] if s['host']!='iso5-cli1' and s['item'] not in ('record','sysstat')}))\"")" "['OK']"
+    check "report: srv and cli2 certs, keys, scans and repo OK" "$(X srv "$J; print(sorted({s['state'] for s in d['status'] if s['host']!='iso5-cli1' and s['item']!='record' and s['item']!='sysstat'}))\"")" "['OK']"
     check "report: sysstat item present on srv and cli2 (STALE minutes after enable: < 2 samples)" "$(X srv "$J; print(sorted(s['host'] for s in d['status'] if s['item']=='sysstat'))\"")" "['iso5-cli2', 'iso5-srv']"
     check "report: client lenient (cli2 OK, last seen), server strict" "$(X srv "$J; r={s['host']:s['state'] for s in d['status'] if s['item']=='record'}; print(r['iso5-cli2'], r['iso5-srv'])\"")" "OK STALE"
     check "report: resources for srv and cli2 (disk at least; CPU needs 2 sysstat samples)" "$(X srv "$J; print(all(d['resources'][h] and 'disk' in d['resources'][h] for h in ('iso5-srv','iso5-cli2')))\"")" "True"
