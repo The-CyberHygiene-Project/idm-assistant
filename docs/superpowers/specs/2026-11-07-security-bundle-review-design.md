@@ -1,6 +1,6 @@
 # Security bundle part 4: the ISSO's daily security review (design)
 
-**Status:** design approved in conversation (owner, 2026-11-07); written spec awaiting owner review. **Frame:**
+**Status:** design approved in conversation and written spec approved (owner, 2026-11-07). **Frame:**
 `docs/superpowers/specs/2026-10-27-security-bundle-wazuh-design.md` (the bundle: optional add-on, signed repo, alerts
 through the Wazuh manager and `ALERT_HOOK`). Parts 2 and 3: `2026-11-01-security-bundle-yara-design.md`,
 `2026-11-04-security-bundle-suricata-design.md`. This part was planned on 10/27 as "metrics (Prometheus +
