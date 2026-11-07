@@ -221,3 +221,13 @@ def test_untrusted_alert_text_cannot_break_the_signed_markdown():        # final
     assert [ln for ln in md.splitlines() if ln.startswith("## 2. Security status")] == ["## 2. Security status"]
     assert all(ln.startswith("|") or not ln.startswith("| fake") for ln in md.splitlines())   # no injected row
     assert "\x1b" not in md and "`" not in md
+
+
+def test_a_client_switched_off_in_the_evening_is_ok_the_server_is_not():  # owner 2026-11-07: option C (final review I10)
+    six = datetime(2026, 11, 6, 18, 0, tzinfo=TZ).timestamp()
+    a = [x for x in healthy() if rr._when(x) <= six]                          # both hosts go quiet at 18:00
+    d = build(a)
+    st = {(s["host"], s["item"]): s for s in d["status"]}
+    assert st[("ws1", "record")]["state"] == "OK" and "last seen 18:00" in st[("ws1", "record")]["detail"]
+    assert st[("srv1", "record")]["state"] == "STALE"
+    assert ("ws1", "record") not in {(x["host"], x["item"]) for x in d["attention"]}

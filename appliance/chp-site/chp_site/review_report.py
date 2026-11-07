@@ -148,7 +148,7 @@ def _item(host, item, state, detail, owner=None, immediate=False, age=None):
             "source_age": age}
 
 
-def _status(hosts, recs, end):
+def _status(hosts, recs, end, tz=None):
     server = next((h for h in hosts if h.role == "server"), None)
     srv_repo = None
     if server is not None and recs.get(_short(server.hostname)):
@@ -161,8 +161,12 @@ def _status(hosts, recs, end):
             out.append(_item(name, "record", rr.STALE, "no record from this host for the day"))
             continue
         b, at = rs[-1], rs[-1].get("time", 0)
-        st, det = rr.fresh_state(at, RECORD_EVERY, end)
-        out.append(_item(name, "record", st, f"{len(rs)} records; {det}", age=end - at))
+        if h.role == "server":                  # owner 2026-11-07 (option C): the server is always on: strict at day end
+            st, det = rr.fresh_state(at, RECORD_EVERY, end)
+            det = f"{len(rs)} records; {det}"
+        else:                                   # clients are often workstations switched off at night: lenient
+            st, det = rr.OK, f"{len(rs)} records; last seen {datetime.fromtimestamp(at, tz).strftime('%H:%M')}"
+        out.append(_item(name, "record", st, det, age=end - at))
         repo = b.get("versions", {}).get("repo")
         if h is server:
             out.append(_item(name, "repo", rr.OK if repo else rr.STALE, f"repo {repo}" if repo else "no repo found"))
@@ -228,12 +232,13 @@ def _trend(resources, previous):
 
 def build(day, *, alerts, hosts, site, now, previous):
     from zoneinfo import ZoneInfo
-    start, end = day_bounds(day, ZoneInfo(site.get("TIMEZONE") or "UTC"))
+    zone = ZoneInfo(site.get("TIMEZONE") or "UTC")
+    start, end = day_bounds(day, zone)
     day_alerts = [a for a in alerts if (w := _when(a)) is not None and start <= w < end]
     recs, bad = _records(day_alerts)
     ip_host = {h.ip: _short(h.hostname) for h in hosts}
     intrusions, routine = _intrusions(day_alerts, site, ip_host)
-    status = _status(hosts, recs, end)
+    status = _status(hosts, recs, end, zone)
     resources = _resources(hosts, recs)
     feeders = ("record", "suricata_stats", "yara_recent")
     stale = sorted({s["host"] for s in status if s["item"] in feeders and s["state"] == rr.STALE})
