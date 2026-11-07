@@ -102,6 +102,7 @@ case ${1:-} in
     s=$(X cli2 'sudo grep "\"event\": \"summary\"" /var/log/chp-yara.json | tail -1')
     echo "summary: $s"
     check "cli2: full scan found the test file" "$(X cli2 "sudo grep 'eicar-full-$ts' /var/log/chp-yara.json | grep -c '\"event\": \"match\"'")" "1"
+    check "cli2: the test file is the ONLY match (no false alarm, e.g. the Suricata rules)" "$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['chp_yara']['matches'])" "$s" 2>/dev/null)" "1"
     check "cli2: summary over 1000 files, 0 errors" "$(python3 -c "import json,sys; d=json.loads(sys.argv[1])['chp_yara']; print(d['files']>1000 and d['errors']==0)" "$s" 2>/dev/null)" "True"
     check "cli2: last-full written" "$(X cli2 'sudo test -s /var/lib/chp/yara/last-full && echo yes')" "yes"
     check "cli2: monitor 73 OK" "$(X cli2 'sudo bash /usr/lib/chp/monitor.d/73-yara-scan.sh | cut -c1-2')" "OK"
