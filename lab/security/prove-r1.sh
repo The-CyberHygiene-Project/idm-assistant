@@ -81,12 +81,16 @@ case ${1:-} in
     done_ build ;;
   sign)
     d=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1")
-    check "srv: ISSO signs $d" "$(X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes 'R1 lab proof' --date $d | tail -1")" "signed 1 review(s); recorded in the ledger and the audit log"
+    check "srv: ISSO signs $d" "$(X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes 'R1 lab proof' --date $d | grep -o 'signed 1 review(s); recorded in the ledger and the audit log'")" "signed 1 review(s); recorded in the ledger and the audit log"
     check "srv: an unlisted name is refused" "$(X srv "echo yes | sudo chp-site review sign --approver 'Mallory' --notes x --date $d 2>&1 | grep -c refusing")" "1"
     check "srv: review verify clean" "$(X srv 'sudo chp-site review verify --quiet; echo rc=$?')" "rc=0"
-    check "srv: sign-off in the audit log" "$(X srv 'sudo ausearch -m USER -ts today 2>/dev/null | grep -c "review-sign" | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
+    check "srv: sign-off in the audit log" "$(X srv 'sudo grep -c "chp-site review-sign" /var/log/audit/audit.log | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
     done_ sign ;;
-  tamper)
+  tamper)                  # a chain protects every entry but the newest (that one: the stick anchor), so sign a 2nd day
+    X srv "${NIGHTLY/timedelta(days=1)/timedelta(days=2)}" >/dev/null
+    d2=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1")
+    X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes 'R1 second day' --date $d2 >/dev/null"
+    check "srv: two entries" "$(X srv "sudo cat $RD/ledger.jsonl | wc -l")" "2"
     X srv "sudo cp $RD/ledger.jsonl /root/r1-ledger.bak; sudo sed -i 's/R1 lab proof/R1 lab proof EDITED/' $RD/ledger.jsonl"
     check "srv: edited entry: verify fails" "$(X srv 'sudo chp-site review verify --quiet >/dev/null; echo rc=$?')" "rc=1"
     check "srv: edited entry: monitor 75 alerts" "$(X srv 'sudo bash /usr/lib/chp/monitor.d/75-review.sh | grep -c "ledger check failed"')" "1"
@@ -107,8 +111,9 @@ case ${1:-} in
     A "sudo virsh detach-disk iso5-srv sdz --live >/dev/null && echo stick-detached"
     done_ export ;;
   soon)
-    X srv 'd=$(mktemp -d); sudo openssl req -x509 -newkey rsa:3072 -nodes -keyout $d/k -out /etc/pki/ca-trust/source/anchors/chp-r1test.crt -days 5 -subj /CN=chp-r1-test >/dev/null 2>&1; sudo rm -rf $d; sudo systemctl start chp-review-record.service'
-    sleep 15
+    X srv 'd=$(mktemp -d); sudo openssl req -x509 -newkey rsa:3072 -nodes -keyout $d/k -out /etc/pki/ca-trust/source/anchors/chp-r1test.crt -not_before 20200101000000Z -not_after $(date -u -d "+5 days" +%Y%m%d%H%M%SZ) -subj /CN=chp-r1-test >/dev/null 2>&1; sudo rm -rf $d; sudo systemctl start chp-review-record.service'
+    sleep 15                 # a LONG-lived certificate (2020 to 5 days from now): the 7-day 'at once' rule
+    X srv 'sudo openssl x509 -in /etc/pki/ca-trust/source/anchors/chp-r1test.crt -noout -startdate -enddate | tr "\n" " "'
     check "srv: monitor 75 alerts at once (5 days left)" "$(X srv 'sudo bash /usr/lib/chp/monitor.d/75-review.sh | grep -c "chp-r1test.crt.*within 7 days"')" "1"
     X srv 'sudo rm -f /etc/pki/ca-trust/source/anchors/chp-r1test.crt; sudo systemctl start chp-review-record.service'
     sleep 15
