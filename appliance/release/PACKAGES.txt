@@ -24,3 +24,7 @@ hiredis epel
 hyperscan epel
 libnetfilter_queue rocky
 chp-suricata-rules ours
+sysstat rocky
+pcp-libs rocky
+pcp-conf rocky
+lm_sensors-libs rocky

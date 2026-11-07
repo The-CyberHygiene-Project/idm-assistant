@@ -72,7 +72,7 @@ def test_scan_services_have_time_limits():                                      
 
 
 def test_suricata_pieces_are_packaged():                                               # S1
-    assert "Version:        0.3.0" in SPEC and "Release:        3.chp%{?dist}" in SPEC
+    assert "Version:        0.4.0" in SPEC
     # S1 lab: NOT required here. suricata is EPEL-signed; `dnf upgrade` would pull it before chp-site's enable has
     # imported the EPEL key, and the whole upgrade fails its GPG check. security enable installs both instead.
     req = [ln for ln in SPEC.splitlines() if ln.startswith("Requires:")]
@@ -80,3 +80,18 @@ def test_suricata_pieces_are_packaged():                                        
     assert "74-suricata.sh" in SPEC and (D / "monitor.d" / "74-suricata.sh").exists()
     assert "74-suricata.sh" in (D / "build-rpm.sh").read_text()
     assert "logrotate" not in SPEC                    # rotation = EPEL's file, rewritten by enable with RETENTION_DAYS
+
+
+
+def test_review_pieces_are_packaged():                                                 # R1
+    assert "Version:        0.4.0" in SPEC and "Release:        1.chp%{?dist}" in SPEC
+    for f in ("chp-review-record.service", "chp-review-record.timer", "chp-review-build.service",
+              "chp-review-build.timer", "75-review.sh"):
+        assert f in SPEC, f
+        assert f in (D / "build-rpm.sh").read_text(), f
+    rec, rect = (D / "chp-review-record.service").read_text(), (D / "chp-review-record.timer").read_text()
+    assert "ExecStart=/usr/bin/chp-site review host-record --append" in rec and "Nice=19" in rec
+    assert "OnBootSec=2min" in rect and "OnUnitActiveSec=10min" in rect
+    b, bt = (D / "chp-review-build.service").read_text(), (D / "chp-review-build.timer").read_text()
+    assert "ExecStart=/usr/bin/chp-site review build" in b and "TimeoutStartSec=30min" in b
+    assert "OnCalendar=*-*-* 00:20:00" in bt and "Persistent=true" in bt

@@ -1,0 +1,9 @@
+[Unit]
+Description=CHP daily review: build yesterday's review (and any missed day) on the server (review spec §4)
+After=wazuh-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chp-site review build
+Nice=10
+TimeoutStartSec=30min

@@ -180,3 +180,11 @@ def test_iso_0_5_0_rows_and_guide():                                            
     assert "### From 0.5.0 on: network intrusion detection at install" in s
     # option B: 0.4.0-update1 sites are told about the weekly YARA false alarm, and that 0.5.0 fixes it
     assert "/usr/share/chp-suricata-rules/chp-suricata.rules" in s and "0.5.0" in s
+
+
+def test_review_packages_and_kit_key():                                           # R1
+    p = (R / "PACKAGES.txt").read_text().splitlines()
+    for n in ("sysstat rocky", "pcp-libs rocky", "pcp-conf rocky", "lm_sensors-libs rocky"):
+        assert n in p, n
+    t = (R.parent / "site-stick-kit" / "site.conf.template").read_text()
+    assert "\nREVIEW_DELEGATES=\n" in t
