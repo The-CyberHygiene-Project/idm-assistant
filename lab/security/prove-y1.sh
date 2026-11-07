@@ -45,7 +45,7 @@ case ${1:-} in
   yara-on)                 # cli1 has no lab-adapter sudo: it stays on 0.3.0 (mixed versions) and must stay Active
     for h in srv cli2; do
       check "$h: yara, rules, chp-security 0.2.0" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " yara chp-yara-rules chp-security')" \
-        "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-0.2.0 "
+        "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-${SEC_V:-0.3.0} "
       check "$h: weekly scan timer enabled" "$(X $h 'systemctl is-enabled chp-yara-fullscan.timer')" "enabled"
       check "$h: recent-files timer enabled (spec §10)" "$(X $h 'systemctl is-enabled chp-yara-recent.timer')" "enabled"
       check "$h: Wazuh FIM off (spec §10.1)" "$(X $h 'sudo grep -A1 "<syscheck>" /var/ossec/etc/ossec.conf | grep -c "<disabled>yes</disabled>"')" "1"
@@ -62,7 +62,7 @@ case ${1:-} in
   fresh)                   # ISO 0.4.0: YARA came up at first boot (no upgrade step), on every installed host
     for h in srv cli2; do
       check "$h: yara, rules, chp-security from the ISO" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " yara chp-yara-rules chp-security')" \
-        "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-0.2.0 "
+        "yara-4.5.2 chp-yara-rules-2026.10.29 chp-security-${SEC_V:-0.3.0} "
       check "$h: both YARA timers active" "$(X $h 'systemctl is-active chp-yara-recent.timer chp-yara-fullscan.timer | tr "\n" " "')" "active active "
       check "$h: YARA log present" "$(X $h 'sudo test -f /var/log/chp-yara.json && echo yes')" "yes"
       check "$h: Wazuh FIM off" "$(X $h 'sudo grep -A1 "<syscheck>" /var/ossec/etc/ossec.conf | grep -c "<disabled>yes</disabled>"')" "1"
@@ -102,6 +102,7 @@ case ${1:-} in
     s=$(X cli2 'sudo grep "\"event\": \"summary\"" /var/log/chp-yara.json | tail -1')
     echo "summary: $s"
     check "cli2: full scan found the test file" "$(X cli2 "sudo grep 'eicar-full-$ts' /var/log/chp-yara.json | grep -c '\"event\": \"match\"'")" "1"
+    check "cli2: the test file is the ONLY match (no false alarm, e.g. the Suricata rules)" "$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['chp_yara']['matches'])" "$s" 2>/dev/null)" "1"
     check "cli2: summary over 1000 files, 0 errors" "$(python3 -c "import json,sys; d=json.loads(sys.argv[1])['chp_yara']; print(d['files']>1000 and d['errors']==0)" "$s" 2>/dev/null)" "True"
     check "cli2: last-full written" "$(X cli2 'sudo test -s /var/lib/chp/yara/last-full && echo yes')" "yes"
     check "cli2: monitor 73 OK" "$(X cli2 'sudo bash /usr/lib/chp/monitor.d/73-yara-scan.sh | cut -c1-2')" "OK"

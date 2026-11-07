@@ -27,7 +27,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../.." && pwd)"; iso2="$
 S=~/idm-lab-secrets; R=$S/iso5-render; KEY=$S/iso2_chpadmin; DKEY=$S/iso5_diag_ecdsa; UKEY=$S/iso5_ops_ecdsa
 STICK=/data/libvirt/images/iso5-stick.img; PYZ="$top/appliance/chp-site/dist/chp-site.pyz"; D=iso5.lab.test
 SRV=iso5-srv; SIP=192.168.100.50; C1=iso5-cli1; C1IP=192.168.100.51; C2=iso5-cli2; C2IP=192.168.100.52; fails=0
-export CHP_REPO=${CHP_REPO:-0.8.0}; ISO=${ISO:-/var/lib/libvirt/images/chp-iso/0.4.0-rc1/cyberhygiene-lab-installer-el9.iso}
+export CHP_REPO=${CHP_REPO:-0.9.2}; ISO=${ISO:-/var/lib/libvirt/images/chp-iso/0.5.0-rc2/cyberhygiene-lab-installer-el9.iso}
 SECURITY_ADDONS=${SECURITY_ADDONS:-no}   # security bundle W2: the lab site's add-on setting for this run (yes|no)
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1: ${2:-}"; fails=1; }

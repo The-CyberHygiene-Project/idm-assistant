@@ -170,3 +170,13 @@ def test_suricata_rules_procedure_and_readme_rows():
 def test_kit_guide_has_the_suricata_section():
     s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
     assert "### From 0.4.0 update 1 on: network intrusion detection (Suricata)" in s
+
+
+def test_iso_0_5_0_rows_and_guide():                                              # ISO 0.5.0 (owner 2026-11-07)
+    k = (R / "release-kit.sh").read_text()
+    for row in ("| `0.5.0/` |", "| `site-stick-kit-0.5.0/` |"):
+        assert row in k, row
+    s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
+    assert "### From 0.5.0 on: network intrusion detection at install" in s
+    # option B: 0.4.0-update1 sites are told about the weekly YARA false alarm, and that 0.5.0 fixes it
+    assert "/usr/share/chp-suricata-rules/chp-suricata.rules" in s and "0.5.0" in s

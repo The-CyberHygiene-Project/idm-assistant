@@ -10,6 +10,7 @@
 #   catch       srv serves the S1 test body (SID 2017025, severity 1) on a high port; cli2 fetches it ->
 #               eve alert on both hosts, rule-100510 alerts on the manager, a hook line
 #   res         RSS, CPU and kernel drops of Suricata on both hosts
+#   fresh       ISO install (0.5.0): Suricata came up at first boot; t0 = boot time, then every `on` check
 #   reboot      cold reboot of cli2 then srv (final review I-3): Suricata back, rules loaded, eve read, no denials
 # cli1 has no lab-adapter sudo: it stays on 0.4.0 without Suricata and must stay Active (mixed versions).
 set -Eeuo pipefail
@@ -54,7 +55,7 @@ case ${1:-} in
       check "$h: all rules loaded, 0 failed (suricata -T -v; the config logs to suricata.log only)" "$(X $h 'd=$(sudo -u suricata mktemp -d); sudo -u suricata suricata -T -v -c /etc/suricata/chp-suricata.yaml -l $d >/dev/null 2>&1; sudo rm -rf $d; sudo grep -o "[0-9]* rules successfully loaded, [0-9]* rules failed" /var/log/suricata/suricata.log | tail -1')" "52859 rules successfully loaded, 0 rules failed"
       check "$h: eve.json present, owned by suricata" "$(X $h 'sudo stat -c "%U %a" /var/log/suricata/eve.json')" "suricata 640"
       check "$h: logrotate file is ours (RETENTION_DAYS)" "$(X $h 'sudo grep -c -e "Managed by chp-security" -e "rotate 90" /etc/logrotate.d/suricata')" "2"
-      check "$h: logrotate accepts it" "$(X $h 'sudo logrotate -d /etc/logrotate.conf 2>&1 | grep -c -i "duplicate\|error"')" "0"
+      check "$h: logrotate accepts it" "$(X $h 'sudo logrotate -d /etc/logrotate.conf 2>&1 | grep -v "error opening state file" | grep -c -i "duplicate\|error"')" "0"   # a fresh host has no state file yet
       check "$h: 0 Suricata/Wazuh AVCs since enable" "$(X $h "sudo ausearch -m AVC -ts \"$T0\" 2>/dev/null | grep denied | grep -c -E 'suricata|ossec|wazuh'")" "0"
       check "$h: 0 fapolicyd denials since enable" "$(X $h "sudo ausearch -m FANOTIFY -ts \"$T0\" 2>/dev/null | grep -c 'type=FANOTIFY'")" "0"
       check "$h: 0 'No such tag' since enable" "$(X $h 'sudo awk -v t="$(sudo cat /root/s1-t0 | tr - /)" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "No such tag"')" "0"
@@ -98,6 +99,14 @@ case ${1:-} in
       check "$h: monitor 74 OK" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
     done
     done_ res ;;
+  fresh)
+    for h in srv cli2; do
+      X $h 'sudo date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" "+%F %T" | sudo tee /root/s1-t0 >/dev/null; sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16 | sudo tee /root/s1-keys-before >/dev/null'
+      m=$([[ $h == srv ]] && echo security.done || echo client-security.done)   # the journal keeps only the current boot
+      check "$h: security step of first boot done ($m)" "$(X $h "sudo test -e /var/lib/chp/firstboot/$m && echo yes")" "yes"
+    done
+    bash "$0" on || fails=$((fails+1))
+    done_ fresh ;;
   reboot)
     for h in cli2 srv; do
       X $h 'sudo systemctl reboot' >/dev/null; sleep 30
