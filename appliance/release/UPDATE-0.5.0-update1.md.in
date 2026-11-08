@@ -66,11 +66,17 @@ copy and run `chp-site review verify --stick`; a half-written last line (power l
 
 The next daily check reports the update:
 - **added:** the `sysstat`, `pcp-libs`, `pcp-conf` and `lm_sensors-libs` files; `/usr/lib/chp/monitor.d/75-review.sh`;
-  the `chp-review-record` and `chp-review-build` units and `/etc/logrotate.d/chp-review`; the timer links under
-  `/etc/systemd/system/timers.target.wants/` (`sysstat-collect`, `sysstat-summary`, `chp-review-record`, and on the server
-  `chp-review-build`); on the server `/var/ossec/etc/rules/chp_review_rules.xml`;
+  the `chp-review-record` and `chp-review-build` units and `/etc/logrotate.d/chp-review`; the links
+  `/etc/systemd/system/timers.target.wants/chp-review-record.timer` (and on the server `chp-review-build.timer`),
+  `/etc/systemd/system/multi-user.target.wants/sysstat.service` and
+  `/etc/systemd/system/sysstat.service.wants/sysstat-collect.timer` and `sysstat-summary.timer`; the folders `/etc/pcp`
+  and `/var/log/sa`; on the server `/var/ossec/etc/rules/chp_review_rules.xml`;
 - **changed:** the upgraded `chp-site` and `chp-security` files; `/var/ossec/etc/ossec.conf` (rewritten by `security
-  enable`: it now reads `/var/log/chp-review.json`); `/etc/ld.so.cache`; the folders that hold all of these.
+  enable`: it now reads `/var/log/chp-review.json`); `/etc/suricata/chp-suricata.yaml` and `/etc/sysconfig/suricata`
+  (also rewritten by `security enable`: the content is the same, only the inode and the SELinux user change, because you
+  run it from a login shell); `/etc/ld.so.cache`; the folders that hold all of these.
+
+About 140 files are added and 45 to 50 changed on each host (lab figures).
 
 The reviews and the ledger live in `/var/lib/chp/review`, which AIDE does not watch: they are protected by the ledger's
 chain, its recorded head, monitor 75's check and the stick. Anything outside this list was not made by this update:

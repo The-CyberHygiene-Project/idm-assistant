@@ -261,7 +261,7 @@ def _cell(x):
 
 
 def _rows(d):
-    intr = [[i["kind"], str(i["source"]), "inside" if i["inside"] else ("outside" if i["inside"] is False else "?"),
+    intr = [[i["kind"], "?" if i["source"] is None else str(i["source"]), "inside" if i["inside"] else ("outside" if i["inside"] is False else "?"),
              i["source_host"] or "", str(i["target"]), str(i["signature"]), str(i["count"]), _t(i["first"]), _t(i["last"])]
             for i in d["intrusions"]]
     stat = [[s["host"], s["item"], s["state"], s["detail"], s["owner"] or ""] for s in d["status"]]
@@ -291,11 +291,16 @@ SECTIONS = (("1. Intrusions", ["kind", "source", "inside/outside", "site host", 
             ("3. Resources", ["host", "CPU % avg / peak", "memory % avg / peak", "disk peak", "net kB/s rx / tx"]))
 
 
+def _counts(by_host):
+    """'srv1 144, ws1 143' (not a Python dict) for the report header; 'none' when nothing arrived."""
+    return ", ".join(f"{h} {n}" for h, n in sorted(by_host.items())) if by_host else "none"
+
+
 def render_md(d):
     out = [f"# Daily security review {d['day']}", "",
            f"Built {datetime.fromtimestamp(d['built']).strftime('%Y-%m-%d %H:%M')}. "
            f"Needs attention: {len(d['attention'])}. Sources: {d['sources']['alerts']} alerts, "
-           f"records {d['sources']['records'] or 'none'}.", ""]
+           f"records {_counts(d['sources']['records'])}.", ""]
     for i, ((title, head), rows) in enumerate(zip(SECTIONS, _rows(d))):
         out += [f"## {title}", ""]
         if i == 0 and rows and d.get("intrusion_sources_stale"):

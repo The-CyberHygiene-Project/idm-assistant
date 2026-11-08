@@ -231,3 +231,15 @@ def test_a_client_switched_off_in_the_evening_is_ok_the_server_is_not():  # owne
     assert st[("ws1", "record")]["state"] == "OK" and "last seen 18:00" in st[("ws1", "record")]["detail"]
     assert st[("srv1", "record")]["state"] == "STALE"
     assert ("ws1", "record") not in {(x["host"], x["item"]) for x in d["attention"]}
+
+
+def test_report_text_has_no_python_literals():                            # quiet day 2026-11-08 (display)
+    noaddr = alert("80710", 10, "ws1", START + 50, desc="Auditd: Device enables promiscuous mode.")
+    d = build(healthy([noaddr]))
+    md, html = rr.render_md(d), rr.render_html(d)
+    head = md.splitlines()[2]
+    assert "{" not in head and "'" not in head, head
+    assert "records srv1 " in head and "ws1 " in head, head
+    row = [ln for ln in md.splitlines() if "promiscuous" in ln][0]
+    assert "None" not in row and "| ? |" in row, row
+    assert "None" not in html
