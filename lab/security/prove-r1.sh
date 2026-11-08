@@ -66,9 +66,10 @@ case ${1:-} in
   build)
     bash "$here/prove-s1.sh" catch | tail -1
     X cli2 "printf '%s\\n' 'X5O!P%@AP[4\\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*' > /tmp/r1-eicar.txt"
-    n=0; for _ in $(seq 72); do n=$(X srv 'sudo grep -c "r1-eicar" /var/ossec/logs/alerts/alerts.json'); [[ ${n:-0} -ge 1 ]] && break; sleep 5; done
+    n=0; for _ in $(seq 72); do n=$(X srv 'sudo grep -c "YARA match.*r1-eic[a]r" /var/ossec/logs/alerts/alerts.json'); [[ ${n:-0} -ge 1 ]] && break; sleep 5; done
     X cli2 'rm -f /tmp/r1-eicar.txt'
     check "srv: YARA match for the test file reached the manager" "$([[ ${n:-0} -ge 1 ]] && echo yes)" "yes"
+    # [a]: the poll's own sudo command is logged as an alert too; the bracket keeps it from matching itself
     X srv "$NIGHTLY"
     d=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1"); echo "report day: $d"
     check "srv: today's report built (0600 files)" "$(X srv "sudo stat -c %a $RD/$d/report.md $RD/$d/report.html $RD/$d/data.json | sort -u")" "600"
