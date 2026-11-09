@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.12.0
-Release:        3.chp%{?dist}
+Version:        0.13.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,12 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Mon Nov 09 2026 The CyberHygiene Project - 0.13.0-1.chp
+- 0.6.0 disk layout: sized layouts for servers (>= 900 GB) and workstations (>= 240 GB), /data and /backup volumes,
+  DISK_NOTE line in the escrow file and on the console for servers under 1.9 TB.
+- Sign-off fixes: review sign needs a terminal; --date must be YYYY-MM-DD; --notes is at most 1000 characters with no
+  control characters.
+
 * Sun Nov 08 2026 The CyberHygiene Project - 0.12.0-3.chp
 - Review report: host record counts and unknown alert sources shown as plain text (quiet-day finding)
 

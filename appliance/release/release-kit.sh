@@ -28,7 +28,8 @@ RPM=$(tar tzf "$TAR" | grep -E '^(\./)?repo/chp-site-.*\.noarch\.rpm$' | head -1
 (cd "$w" && tar xzf "$TAR" "$RPM" && tar xf "$RPM")
 cp "$w/usr/share/chp-site/chp-site.pyz" "$P/"
 cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$kit/profile.ini.template" "$P/"
-(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz > SHA256SUMS)
+mkdir -p "$P/runbooks" && cp "$top"/docs/runbooks/*.md "$P/runbooks/"      # 0.6.0: grow a volume, move /backup (the guide points here)
+(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz runbooks/*.md > SHA256SUMS)
 echo "== signing SHA256SUMS (PIN dialog, then touch the key)"; say "Kit signing now. Watch for the PIN dialog." 2>/dev/null || true
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
 echo "== checks"

@@ -72,7 +72,7 @@ def test_scan_services_have_time_limits():                                      
 
 
 def test_suricata_pieces_are_packaged():                                               # S1
-    assert "Version:        0.4.0" in SPEC
+    assert "Version:        0.4.1" in SPEC
     # S1 lab: NOT required here. suricata is EPEL-signed; `dnf upgrade` would pull it before chp-site's enable has
     # imported the EPEL key, and the whole upgrade fails its GPG check. security enable installs both instead.
     req = [ln for ln in SPEC.splitlines() if ln.startswith("Requires:")]
@@ -84,7 +84,7 @@ def test_suricata_pieces_are_packaged():                                        
 
 
 def test_review_pieces_are_packaged():                                                 # R1
-    assert "Version:        0.4.0" in SPEC and "Release:        2.chp%{?dist}" in SPEC
+    assert "Version:        0.4.1" in SPEC and "Release:        1.chp%{?dist}" in SPEC
     for f in ("chp-review-record.service", "chp-review-record.timer", "chp-review-build.service",
               "chp-review-build.timer", "75-review.sh"):
         assert f in SPEC, f
@@ -103,3 +103,12 @@ def test_review_requires_its_chp_site_and_rotates_its_log():               # fin
     assert "/var/log/chp-review.json" in lr and "copytruncate" in lr and "missingok" in lr and "rotate 7" in lr
     assert "chp-review.logrotate" in SPEC and "%{_sysconfdir}/logrotate.d/chp-review" in SPEC
     assert "chp-review.logrotate" in (D / "build-rpm.sh").read_text()
+
+
+def test_yara_log_rotates():                                               # 0.6.0 disk sizing: the log must not grow unbounded
+    assert "Source23:       chp-yara.logrotate" in SPEC
+    assert "%{_sysconfdir}/logrotate.d/chp-yara" in SPEC
+    assert "%config(noreplace) %{_sysconfdir}/logrotate.d/chp-yara" in SPEC
+    lr = (D / "chp-yara.logrotate").read_text()
+    assert "/var/log/chp-yara.json" in lr and "copytruncate" in lr and "missingok" in lr and "rotate 7" in lr
+    assert "chp-yara.logrotate" in (D / "build-rpm.sh").read_text()
