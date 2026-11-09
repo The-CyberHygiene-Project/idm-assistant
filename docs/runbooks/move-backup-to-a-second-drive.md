@@ -7,6 +7,11 @@ group `chp` so you can grow other volumes.
 **Time:** about 30 minutes plus the copy time. **Reboot:** one, at the end, to prove the new mount survives.
 **Who:** the administrator at the server, plus the ISSO for the last step (the AIDE accept).
 
+**Why `nofail`, and why `chattr +i`:** a dead backup drive must not stop the identity server from booting, so the
+mount is marked `nofail` and the server keeps running. Then `/backup` would be an empty folder on `/`, and backups could
+silently fill the system disk. So the empty folder is made immutable (step 9): while the drive is absent, writes to
+`/backup` fail loudly instead.
+
 **What changes:** a new LUKS2 drive appears, mounted on `/backup`. `/etc/fstab` and `/etc/crypttab` change (AIDE
 watches both, so it raises an alert until the ISSO accepts them). The logical volume `chp/backup` is removed.
 
@@ -72,10 +77,10 @@ All commands as root on the server (`su -`).
 
 6. Open it, make the file system, mount it somewhere temporary:
 
-       cryptsetup open --key-file /run/bk.key $DEV chp-backup
-       mkfs.xfs -L backup /dev/mapper/chp-backup
+       cryptsetup open --key-file /run/bk.key $DEV backupdrive
+       mkfs.xfs -L backup /dev/mapper/backupdrive
        mkdir -p /mnt/newbackup
-       mount -o nodev,nosuid,noexec /dev/mapper/chp-backup /mnt/newbackup
+       mount -o nodev,nosuid,noexec /dev/mapper/backupdrive /mnt/newbackup
 
 7. Copy. `-aHAX` keeps permissions, owners, hard links, ACLs and extended attributes (SELinux labels):
 
@@ -90,25 +95,40 @@ All commands as root on the server (`su -`).
 8. Switch the mount. Write the UUIDs into `/etc/crypttab` and `/etc/fstab` (UUIDs, never `sdX`; the LUKS UUID is the one
    of the drive itself, the XFS UUID the one of the file system inside):
 
-       LUKS_UUID=$(cryptsetup luksUUID $DEV); XFS_UUID=$(blkid -s UUID -o value /dev/mapper/chp-backup)
-       echo "chp-backup UUID=$LUKS_UUID none luks" >> /etc/crypttab
+       LUKS_UUID=$(cryptsetup luksUUID $DEV); XFS_UUID=$(blkid -s UUID -o value /dev/mapper/backupdrive)
+       echo "backupdrive UUID=$LUKS_UUID none luks,nofail" >> /etc/crypttab
        sed -i.bak '\# /backup #d' /etc/fstab
-       echo "UUID=$XFS_UUID /backup xfs nodev,nosuid,noexec 0 0" >> /etc/fstab
+       echo "UUID=$XFS_UUID /backup xfs nodev,nosuid,noexec,nofail,x-systemd.device-timeout=30 0 0" >> /etc/fstab
        cat /etc/crypttab /etc/fstab
 
-   Check that `/etc/fstab` has exactly one `/backup` line and `/etc/crypttab` one `chp-backup` line. (`/etc/fstab.bak`
-   is the old copy.) There is deliberately no `nofail`: if the drive is missing the host stops in emergency mode and
-   you notice, instead of backups landing silently on the system disk.
+   Check that `/etc/fstab` has exactly one `/backup` line and `/etc/crypttab` one `backupdrive` line. (`/etc/fstab.bak`
+   is the old copy.) Both lines say `nofail`: if the drive is dead or missing, the server still boots (see the note at
+   the top). The name `backupdrive` is deliberately not `chp-backup`: that is already the old volume's name.
 
 9. Move the mount, set the SELinux labels, and check:
 
+   First, with writers still stopped (step 1), copy once more and verify, so nothing written since step 7 is lost:
+
+       rsync -aHAX --delete /backup/ /mnt/newbackup/
+       diff -rq /backup /mnt/newbackup && echo SAME      # must print SAME
+
+   Then switch. The `chattr +i` goes on the empty folder underneath, so it is done after the old volume is unmounted
+   and before the new drive is mounted:
+
        umount /mnt/newbackup && rmdir /mnt/newbackup
        umount /backup
+       chattr +i /backup              # nothing is mounted on it now; this is the empty folder on /
+       lsattr -d /backup              # must show the i flag
        systemctl daemon-reload
        mount /backup
        restorecon -R /backup
-       findmnt /backup                # SOURCE /dev/mapper/chp-backup, OPTIONS rw,nosuid,nodev,noexec
+       findmnt /backup                # SOURCE /dev/mapper/backupdrive, OPTIONS rw,nosuid,nodev,noexec,...
        ls -ldZ /backup                # the SELinux label must not be unlabeled_t
+       touch /backup/.probe && rm /backup/.probe     # works: the drive is mounted
+
+   `findmnt /backup` must show the `backupdrive` source. If it shows nothing, the new drive is not mounted: stop and
+   read `journalctl -b -u systemd-cryptsetup@backupdrive`. (The `chattr +i` does not block writes to the mounted drive;
+   it only protects the empty folder.)
 
 10. Remove the old volume, which gives its space back to the volume group:
 
@@ -123,9 +143,13 @@ All commands as root on the server (`su -`).
 
 12. Reboot once to prove it:
 
+        systemctl enable clevis-luks-askpass.path
+        systemctl is-enabled clevis-luks-askpass.path     # must print: enabled
         systemctl reboot
 
-    Nothing needs typing at the console (the TPM unlocks both disks). After the boot, log in and run
+    The `clevis-luks-askpass.path` unit is what lets the TPM unlock a drive that is not the root disk. Nothing in the
+    installer enables it, so without the `enable` the reboot stops and asks for the passphrase. With it, nothing needs
+    typing at the console (the TPM unlocks both disks). After the boot, log in and run
     `findmnt /backup`, then read the monitor output: the only new alert should be the AIDE change.
 
 13. **ISSO: accept the AIDE change.** `/etc/fstab` and `/etc/crypttab` changed, so AIDE alerts. With the site stick
@@ -143,9 +167,10 @@ All commands as root on the server (`su -`).
 - **Step 5 fails** ("TPM" errors): the drive is encrypted but not TPM-bound. Fix the cause (Secure Boot, TPM
   enabled) and run step 5 again; nothing else depends on it yet.
 - **Step 7 copy differs**: do not go on. The old `/backup` is still in place and still the live one.
-- **After the reboot the host stops in emergency mode**: log in with the root console password, read
-  `journalctl -b -u systemd-cryptsetup@chp-backup`. If the TPM will not unlock it, type the recovery passphrase from
-  the stick: `cryptsetup open /dev/disk/by-uuid/<LUKS_UUID> chp-backup`, then `mount /backup`, and fix the
+- **After the reboot `findmnt /backup` shows nothing** (the host still boots, because of `nofail`; writes to `/backup`
+  now fail, by design): log in, read
+  `journalctl -b -u systemd-cryptsetup@backupdrive`. If the TPM will not unlock it, type the recovery passphrase from
+  the stick: `cryptsetup open /dev/disk/by-uuid/<LUKS_UUID> backupdrive`, then `mount /backup`, and fix the
   TPM binding with step 5 again (use the passphrase from the stick as the key file).
-- **To undo before step 10:** restore the old lines (`mv /etc/fstab.bak /etc/fstab`, delete the `chp-backup` line in
+- **To undo before step 10:** restore the old lines (`mv /etc/fstab.bak /etc/fstab`, delete the `backupdrive` line in
   `/etc/crypttab`), `systemctl daemon-reload`, `umount /backup`, `mount /backup`. The old volume is untouched.
