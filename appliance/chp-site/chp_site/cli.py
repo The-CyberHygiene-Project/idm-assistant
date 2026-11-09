@@ -345,6 +345,110 @@ def _yara_scan(a):
     return 0
 
 
+def _review(a):
+    import json
+    import socket
+    import subprocess
+    import time
+    from . import review_host as rh
+    from . import review_sys as rs
+    if a.action == "host-record":
+        rec = rh.host_record(host=socket.gethostname(), now=time.time(), run=subprocess.run,
+                             sys_summary=rs.today(subprocess.run))
+        if a.append:
+            rh.append(rec)
+        else:
+            print(json.dumps(rec, separators=(",", ":")))
+        return 0
+    from datetime import date
+    from . import review_store as st
+    if a.action == "show":
+        print(st.show(day=date.fromisoformat(a.date_list[-1]) if a.date_list else None), end="")
+        return 0
+    if a.action == "build":
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        alerts = wa.load_alerts("/var/ossec/logs/alerts", now - (st.CATCH_UP + 2) * 86400)
+        built = st.nightly(today=date.fromtimestamp(now), site=site, hosts=hosts, alerts=alerts, now=now)
+        print("built " + (", ".join(d.isoformat() for d in built) if built else "nothing (every day is built)"))
+        return 0
+    if a.action == "sign":
+        from . import audit
+        from . import review_ledger as rl
+        if not a.approver or not a.notes:
+            raise SiteError("review sign needs --approver \"Name\" and --notes \"...\" (the ISSO or a REVIEW_DELEGATES name)")
+
+        def ask(text):
+            try:
+                return input(f"{text} Type yes to sign: ").strip() == "yes"
+            except EOFError:                                # no terminal: never a yes
+                return False
+        site, _hosts = _load(a.site)
+        days = [date.fromisoformat(d) for d in a.date_list] if a.date_list else None
+        out = rl.sign(site=site, approver=a.approver, notes=a.notes, days=days, now=time.time(),
+                      operator=audit.operator(), confirm=ask)
+        print(f"signed {len(out)} review(s); recorded in the ledger and the audit log")
+        return 0
+    if a.action == "monitor":
+        from . import review_ledger as rl
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        imm = st.immediate(site=site, hosts=hosts, alerts=wa.load_alerts("/var/ossec/logs/alerts", now - 86400), now=now)
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
+        try:
+            since = os.stat("/etc/chp/security.conf").st_mtime
+        except OSError:
+            since = None
+        for ln in st.monitor_lines(today=today, now=now, tz=site.get("TIMEZONE"), verify_problems=rl.verify(rl._path("/")),
+                                   immediate_items=imm, security_since=since):
+            print(ln)
+        return 0
+    if a.action == "now":
+        from . import wazuh_alerts as wa
+        site, hosts = _load(a.site)
+        now = time.time()
+        for s in st.immediate(site=site, hosts=hosts, alerts=wa.load_alerts("/var/ossec/logs/alerts", now - 86400), now=now):
+            print(f"{s['host']}: {s['item']}: {s['detail']}")
+        return 0
+    if a.action in ("export", "verify"):
+        from . import review_ledger as rl
+        from . import usbstick
+        if a.action == "export":
+            with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
+                r = rl.export(s, now=time.time())
+            print(f"exported {len(r['days'])} review(s); ledger head {r['head'][0]} written to the stick (review/heads.txt)"
+                  + ("" if not r["problems"] else f"; {len(r['problems'])} PROBLEM(S): see review/verify.txt"))
+            return 1 if r["problems"] else 0
+        chain = rl.verify(rl._path("/"))
+        problems = list(chain)
+        anchor = None
+        if a.stick:
+            with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
+                hp = s / "review" / "heads.txt"
+                heads = hp.read_text() if hp.exists() else ""
+            anchor = rl.verify_heads(rl._path("/"), heads) if heads else ["the stick has no review/heads.txt yet "
+                                                                           "(export once to anchor the ledger)"]
+            problems += anchor
+        if a.quiet:
+            for p in problems:
+                print(p)
+            return 1 if problems else 0
+        if not chain:
+            print("chain OK; kept reports match")
+        for p in problems:
+            print(f"PROBLEM: {p}")
+        if anchor is None:
+            print("stick anchor NOT checked (run with --stick and the site stick to check it)")
+        elif not anchor:
+            print(f"stick anchor OK ({len(heads.splitlines())} head{'s' if len(heads.splitlines()) != 1 else ''})")
+        return 1 if problems else 0
+    raise SiteError(f"review {a.action}: not available")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -408,6 +512,14 @@ def main(argv=None):
                                            "5 min), every local file system (--full), or one PATH; alert only")
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
+    rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
+    rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
+    rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
+                    "sign: repeatable (default every built, unsigned day)")
+    rv.add_argument("--approver"); rv.add_argument("--notes"); rv.add_argument("--site", default="/etc/chp")
+    rv.add_argument("--stick", nargs="?", const=True, help="export/verify: the pinned site stick (or a folder, for tests)")
+    rv.add_argument("--quiet", action="store_true", help="verify: print problems only (monitor 75)")
+    rv.add_argument("--append", action="store_true", help="host-record: append to /var/log/chp-review.json (the timer)")
     a = ap.parse_args(argv)
     try:
         rc = {"validate": _validate, "pre": _pre, "verify-repo": _verify_repo, "export-client": _export, "get": _get, "render": _render_cmd,
@@ -419,7 +531,7 @@ def main(argv=None):
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
-         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan}[a.cmd](a)
+         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

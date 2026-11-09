@@ -36,6 +36,10 @@ UNEXPIRE_DELEGATES=
 # Separate from UNEXPIRE_DELEGATES on purpose: blessing file changes is a different trust decision.
 BASELINE_DELEGATES=
 
+# Other people allowed to sign the daily security review, comma separated (security add-on). May be left empty.
+# Separate from the lists above on purpose: reviewing the day's security is a different duty.
+REVIEW_DELEGATES=
+
 # The admin workstation's PUBLIC SSH key for the break-glass account chpadmin (the whole line of the .pub file).
 # Must be ECDSA or RSA of at least 3072 bits; ed25519 is REFUSED (FIPS). Make one:  ssh-keygen -t ecdsa -b 384
 ADMIN_SSH_PUBKEY=

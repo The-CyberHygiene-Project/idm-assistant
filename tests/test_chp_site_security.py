@@ -32,7 +32,7 @@ IP_ADDR = ("1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever\n"
            "2: enp1s0    inet 192.0.2.10/24 brd 192.0.2.255 scope global enp1s0\\       valid_lft forever\n"
            "3: enp2s0    inet 192.0.2.21/24 brd 192.0.2.255 scope global enp2s0\\       valid_lft forever\n")
 SITE = {"ALERT_HOOK": "", "SUBNET": ipaddress.IPv4Network("192.0.2.0/24")}
-INSTALL = ["chp-security", "yara", "chp-yara-rules", "suricata", "chp-suricata-rules"]
+INSTALL = ["chp-security", "yara", "chp-yara-rules", "suricata", "chp-suricata-rules", "sysstat"]
 
 
 def hosts():
@@ -304,7 +304,8 @@ def test_client_enable_starts_the_weekly_scan_but_writes_no_rules(tmp_path):
     (s / "wazuh/ws1.key").write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
     r, _, run, _ = enable(tmp_path, "client", stick=s)
     en = [c for c in run.calls if c[:3] == ["systemctl", "enable", "--now"]][0]
-    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]
+    assert en[3:] == ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer", "sysstat-collect.timer",
+                      "sysstat-summary.timer", "chp-review-record.timer"]
     assert not (r / "var/ossec/etc/rules/chp_yara_rules.xml").exists()
 
 
@@ -447,3 +448,24 @@ def test_chp_site_ships_the_pinned_epel_key():
     spec = (top / "appliance/chp-site/chp-site.spec").read_text()
     assert "RPM-GPG-KEY-EPEL-9" in spec and "RPM-GPG-KEY-EPEL-9" in (top / "appliance/chp-site/build-rpm.sh").read_text()
     assert f"{sec.EPEL_FPR} epel9 RPM-GPG-KEY-EPEL-9" in (top / "appliance/release/trusted-keys.txt").read_text()
+
+
+
+# --- the daily review (R1, review spec §2-§4) ------------------------------------------------------------------------
+
+def test_every_host_collects_sysstat_and_sends_its_record(tmp_path):
+    s = tmp_path / "stick"; (s / "wazuh").mkdir(parents=True)
+    (s / "wazuh/ws1.key").write_text("001 ws1 192.0.2.21 " + "ab" * 32 + "\n")
+    r, _, run, _ = enable(tmp_path, "client", stick=s)
+    en = _units(run)
+    assert {"sysstat-collect.timer", "sysstat-summary.timer", "chp-review-record.timer"} <= set(en)
+    assert "chp-review-build.timer" not in en                                    # the build runs on the server only
+    log = r / "var/log/chp-review.json"
+    assert log.exists() and oct(log.stat().st_mode & 0o777) == "0o640"
+
+
+def test_server_builds_the_review_and_stores_the_records(tmp_path):
+    r, _, run, _ = enable(tmp_path, "server")
+    assert "chp-review-build.timer" in _units(run) and "chp-review-record.timer" in _units(run)
+    x = r / "var/ossec/etc/rules/chp_review_rules.xml"
+    assert x.read_text() == w.REVIEW_RULES and oct(x.stat().st_mode & 0o777) == "0o640"

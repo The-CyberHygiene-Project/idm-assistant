@@ -5,6 +5,7 @@
 #   stick.sh list IMG            file list; escrow values MASKED (safe for logs)
 #   stick.sh escrow IMG NAME     print escrow/NAME raw on stdout (for the proof's expect; never logged)
 #   stick.sh has IMG PATH        exit 0 if PATH exists on the stick
+#   stick.sh clear-review IMG    remove ONLY review/ (the daily-review evidence; a reset lab has a new ledger)
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 cmd=$1; img=$2; shift 2
@@ -28,5 +29,7 @@ case $cmd in
     mount -o loop,ro "$img" "$m"; cat "$m/escrow/$1" ;;
   has)
     mount -o loop,ro "$img" "$m"; [[ -e "$m/$1" ]] ;;
+  clear-review)
+    mount -o loop "$img" "$m"; rm -rf -- "$m/review"; sync; echo "cleared review/ on $img" ;;
   *) echo "usage: stick.sh make|add|list|escrow|has ..."; exit 2 ;;
 esac

@@ -1,6 +1,6 @@
 Name:           chp-security
-Version:        0.3.0
-Release:        3.chp%{?dist}
+Version:        0.4.0
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene security add-on: Wazuh monitor checks, alert forwarder, retention, YARA and Suricata
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -22,7 +22,13 @@ Source13:       73-yara-scan.sh
 Source14:       chp-yara-recent.service
 Source15:       chp-yara-recent.timer
 Source16:       74-suricata.sh
-Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules
+Source17:       75-review.sh
+Source18:       chp-review-record.service
+Source19:       chp-review-record.timer
+Source20:       chp-review-build.service
+Source21:       chp-review-build.timer
+Source22:       chp-review.logrotate
+Requires:       chp-site >= 0.12.0, chp-base, yara, chp-yara-rules
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -52,14 +58,20 @@ install -Dm0644 %{SOURCE14} %{buildroot}%{_unitdir}/chp-yara-recent.service
 install -Dm0644 %{SOURCE15} %{buildroot}%{_unitdir}/chp-yara-recent.timer
 install -Dm0755 %{SOURCE13} %{buildroot}%{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
 install -Dm0755 %{SOURCE16} %{buildroot}%{_prefix}/lib/chp/monitor.d/74-suricata.sh
+install -Dm0755 %{SOURCE17} %{buildroot}%{_prefix}/lib/chp/monitor.d/75-review.sh
+install -Dm0644 %{SOURCE18} %{buildroot}%{_unitdir}/chp-review-record.service
+install -Dm0644 %{SOURCE19} %{buildroot}%{_unitdir}/chp-review-record.timer
+install -Dm0644 %{SOURCE20} %{buildroot}%{_unitdir}/chp-review-build.service
+install -Dm0644 %{SOURCE21} %{buildroot}%{_unitdir}/chp-review-build.timer
+install -Dm0644 %{SOURCE22} %{buildroot}%{_sysconfdir}/logrotate.d/chp-review
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/yara
 
 %post
-%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
+%systemd_post chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer chp-review-record.timer chp-review-build.timer
 systemctl daemon-reload >/dev/null 2>&1 || :
 
 %preun
-%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer
+%systemd_preun chp-wazuh-alerts.service chp-wazuh-retention.timer chp-yara-fullscan.timer chp-yara-recent.timer chp-review-record.timer chp-review-build.timer
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -79,9 +91,23 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_unitdir}/chp-yara-recent.timer
 %{_prefix}/lib/chp/monitor.d/73-yara-scan.sh
 %{_prefix}/lib/chp/monitor.d/74-suricata.sh
+%{_prefix}/lib/chp/monitor.d/75-review.sh
+%{_unitdir}/chp-review-record.service
+%{_unitdir}/chp-review-record.timer
+%{_unitdir}/chp-review-build.service
+%{_unitdir}/chp-review-build.timer
+%config(noreplace) %{_sysconfdir}/logrotate.d/chp-review
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/yara
 
 %changelog
+* Sat Nov 07 2026 The CyberHygiene Project - 0.4.0-2.chp
+- Final-review fixes (R1): requires chp-site >= 0.12.0 (the review commands); /etc/logrotate.d/chp-review rotates
+  /var/log/chp-review.json daily (7 kept, copytruncate).
+
+* Sat Nov 07 2026 The CyberHygiene Project - 0.4.0-1.chp
+- Security bundle part 4 (Plan R1): the ISSO's daily security review. chp-review-record timer (every host, every
+  10 minutes), chp-review-build timer (server, 00:20, catches up), monitor check 75-review.
+
 * Fri Nov 06 2026 The CyberHygiene Project - 0.3.0-3.chp
 - Final-review fix (S1 I-1): monitor 74 judges drops only within the current Suricata run and over the last 15+
   minutes (a restart or a past burst no longer gives false alerts); under 1000 packets is not judged.

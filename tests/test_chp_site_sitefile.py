@@ -177,3 +177,10 @@ def test_security_keys_parse():
 def test_security_keys_refuse_bad_values(line, msg):
     with pytest.raises(SiteError, match=msg):
         parse_site(GOOD + line + "\n")
+
+
+def test_review_delegates_parsed_and_optional():                  # review spec §5
+    assert parse_site(GOOD)["REVIEW_DELEGATES"] == []
+    assert parse_site(GOOD + "REVIEW_DELEGATES=Deputy One, Second Reviewer\n")["REVIEW_DELEGATES"] == ["Deputy One", "Second Reviewer"]
+    with pytest.raises(SiteError, match="REVIEW_DELEGATES: bad name"):
+        parse_site(GOOD + "REVIEW_DELEGATES=ok, " + "x" * 65 + "\n")      # as BASELINE_DELEGATES: names of 64 at most

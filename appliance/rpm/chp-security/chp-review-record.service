@@ -1,0 +1,10 @@
+[Unit]
+Description=CHP daily review: this host's status record (review spec §3)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chp-site review host-record --append
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=5min

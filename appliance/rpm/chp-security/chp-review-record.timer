@@ -1,0 +1,9 @@
+[Unit]
+Description=CHP daily review: status record every 10 minutes (review spec §3)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

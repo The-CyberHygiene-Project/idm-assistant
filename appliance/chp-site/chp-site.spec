@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.11.0
-Release:        4.chp%{?dist}
+Version:        0.12.0
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,22 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sun Nov 08 2026 The CyberHygiene Project - 0.12.0-3.chp
+- Review report: host record counts and unknown alert sources shown as plain text (quiet-day finding)
+
+* Sat Nov 07 2026 The CyberHygiene Project - 0.12.0-2.chp
+- Final-review fixes (R1): ledger.head witness (a deleted or shortened ledger is reported, sign refuses); recovery
+  steps in every ledger error; the signed hash covers report.md, report.html and data.json; a signed report missing
+  within the year fails verify; bad or forged host records are skipped and counted (keyed by the delivering agent);
+  Intrusions marked incomplete when its sources are STALE; a sysstat status item; untrusted text cleaned in report
+  cells; host records never reach ALERT_HOOK; rule 100520 only from /var/log/chp-review.json; no 'not built' alert on
+  the enable day; a never-run weekly YARA scan is OK for 8 days after enable.
+
+* Sat Nov 07 2026 The CyberHygiene Project - 0.12.0-1.chp
+- Security bundle part 4 (Plan R1): chp-site review (host-record, build, show, sign, export, verify, now, monitor);
+  REVIEW_DELEGATES site key; security enable installs sysstat and the review timers; the forwarder groups YARA matches
+  per rule.
+
 * Fri Nov 06 2026 The CyberHygiene Project - 0.11.0-4.chp
 - The weekly YARA scan skips /usr/share/chp-suricata-rules: ET Open's rules quote attack bytes, so YARA matched
   chp-suricata.rules (ISO 0.5.0 lab), a level-12 false alarm every Sunday on hosts with both add-ons.

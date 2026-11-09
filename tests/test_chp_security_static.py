@@ -5,7 +5,7 @@ SPEC = (D / "chp-security.spec").read_text()
 
 
 def test_spec_requires_and_files():
-    assert "Requires:       chp-site >= 0.11.0, chp-base" in SPEC                      # 0.3.0: + suricata (S1)
+    assert "Requires:       chp-site >= 0.12.0, chp-base" in SPEC                      # 0.3.0: + suricata (S1)
     for f in ("70-wazuh-service.sh", "71-wazuh-agents.sh", "72-wazuh-disk.sh", "chp-wazuh-alerts.service",
               "chp-wazuh-retention.timer", "wazuh-retention"):
         assert f in SPEC, f
@@ -46,7 +46,7 @@ def test_aide_checks_wazuh_shared_files_by_content_not_timestamps():
 
 
 def test_yara_pieces_are_packaged():
-    assert "Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules" in SPEC
+    assert "Requires:       chp-site >= 0.12.0, chp-base, yara, chp-yara-rules" in SPEC
     for f in ("chp-yara-fullscan.service", "chp-yara-fullscan.timer", "73-yara-scan.sh"):
         assert f in SPEC, f
     assert "active-response/bin" not in SPEC                                  # spec §10: no Wazuh trigger, no wrapper
@@ -72,11 +72,34 @@ def test_scan_services_have_time_limits():                                      
 
 
 def test_suricata_pieces_are_packaged():                                               # S1
-    assert "Version:        0.3.0" in SPEC and "Release:        3.chp%{?dist}" in SPEC
+    assert "Version:        0.4.0" in SPEC
     # S1 lab: NOT required here. suricata is EPEL-signed; `dnf upgrade` would pull it before chp-site's enable has
     # imported the EPEL key, and the whole upgrade fails its GPG check. security enable installs both instead.
     req = [ln for ln in SPEC.splitlines() if ln.startswith("Requires:")]
-    assert req == ["Requires:       chp-site >= 0.11.0, chp-base, yara, chp-yara-rules"]
+    assert req == ["Requires:       chp-site >= 0.12.0, chp-base, yara, chp-yara-rules"]
     assert "74-suricata.sh" in SPEC and (D / "monitor.d" / "74-suricata.sh").exists()
     assert "74-suricata.sh" in (D / "build-rpm.sh").read_text()
-    assert "logrotate" not in SPEC                    # rotation = EPEL's file, rewritten by enable with RETENTION_DAYS
+    assert "logrotate.d/suricata" not in SPEC         # Suricata rotation = EPEL's file, rewritten by enable (RETENTION_DAYS)
+
+
+
+def test_review_pieces_are_packaged():                                                 # R1
+    assert "Version:        0.4.0" in SPEC and "Release:        2.chp%{?dist}" in SPEC
+    for f in ("chp-review-record.service", "chp-review-record.timer", "chp-review-build.service",
+              "chp-review-build.timer", "75-review.sh"):
+        assert f in SPEC, f
+        assert f in (D / "build-rpm.sh").read_text(), f
+    rec, rect = (D / "chp-review-record.service").read_text(), (D / "chp-review-record.timer").read_text()
+    assert "ExecStart=/usr/bin/chp-site review host-record --append" in rec and "Nice=19" in rec
+    assert "OnBootSec=2min" in rect and "OnUnitActiveSec=10min" in rect
+    b, bt = (D / "chp-review-build.service").read_text(), (D / "chp-review-build.timer").read_text()
+    assert "ExecStart=/usr/bin/chp-site review build" in b and "TimeoutStartSec=30min" in b
+    assert "OnCalendar=*-*-* 00:20:00" in bt and "Persistent=true" in bt
+
+
+def test_review_requires_its_chp_site_and_rotates_its_log():               # final review I12, I11
+    assert "Requires:       chp-site >= 0.12.0," in SPEC
+    lr = (D / "chp-review.logrotate").read_text()
+    assert "/var/log/chp-review.json" in lr and "copytruncate" in lr and "missingok" in lr and "rotate 7" in lr
+    assert "chp-review.logrotate" in SPEC and "%{_sysconfdir}/logrotate.d/chp-review" in SPEC
+    assert "chp-review.logrotate" in (D / "build-rpm.sh").read_text()

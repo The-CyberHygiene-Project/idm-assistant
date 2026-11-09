@@ -1,0 +1,94 @@
+# Package update @VERSION@ (signed repo @REPO@): the security add-on, part 4 (the ISSO's daily security review). No reinstall.
+
+Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
+
+## What it adds
+
+- **A daily security review, built on the server every night** (shortly after midnight, catching up after downtime) for
+  the previous day, in this order:
+  1. **Intrusions:** every Suricata and YARA alert, and Wazuh alerts at level 7 and above, grouped by **source address**
+     and marked **inside** or **outside** your `SUBNET` (named when it is one of your hosts). A YARA match's source is the
+     host it was found on.
+  2. **Security status of every host:** certificates and signing keys (expiry judged against each one's lifetime), the
+     scans (YARA, Suricata, AIDE), sysstat, and the installed repo compared with the server's. Each item is **OK**,
+     **ATTENTION** or **STALE**; a section whose sources have stopped says so instead of looking clean.
+  3. **Resources:** CPU, memory, disk and network per host (sysstat, from Rocky).
+- Reports are kept for **one year** in `/var/lib/chp/review/<date>/` (root only) and are **never rebuilt**.
+- **The ISSO signs each day:** `chp-site review sign` records the reviewer, the time and notes in a **hash-chained ledger**
+  that is kept **forever**, and in the audit log. A day can be signed by the ISSO (`ISSO_NAME`) or anyone listed in the new,
+  optional site key **`REVIEW_DELEGATES`**.
+- **Evidence for an assessor:** `chp-site review export` copies the reports, the ledger and its check result to the site
+  stick and records the ledger's head on the stick (`review/heads.txt`). `chp-site review verify --stick` then shows
+  whether anything has been changed or removed since.
+- **The administrator is alerted** (monitor check 75, through `ALERT_HOOK`) when yesterday's review was not built, a review
+  has waited **more than 2 days** for a sign-off, the ledger check fails, a review lists items needing attention (once),
+  or a long-lived certificate or signing key is within **7 days** of expiry. Problems the existing checks already watch
+  (the Kanidm certificate, the scans, AIDE) are shown in the review but not alerted twice.
+- **Workstations switched off at night are fine:** a client that reported during the day shows "last seen HH:MM"; only a
+  client silent all day is STALE. The server must report until midnight.
+- Each host sends a small status record (about 2 KB) every 10 minutes through its existing Wazuh agent: **no new network
+  service or port**. `sysstat` and three Rocky library packages (`pcp-libs`, `pcp-conf`, `lm_sensors-libs`) are added,
+  all signed by Rocky.
+- **Also:** alerts for two different YARA rules on one host within 15 minutes now both reach `ALERT_HOOK`.
+
+## Apply it
+
+1. **Check this folder** as `0.5.0/VERIFY.md` describes: `SHA256SUMS.asc` against the project key, then
+   `shasum -a 256 -c SHA256SUMS`.
+2. **Every host:** unpack the repo over the local repo as root and upgrade. The `--refresh` matters.
+
+       rm -rf /var/lib/chp/repo/*
+       tar -xzf chp-repo-@REPO@.tar.gz -C /var/lib/chp/repo --strip-components=1
+       dnf --refresh --enablerepo=chp upgrade
+
+3. **Turn the review on, server first,** with the site stick plugged in, as root:
+
+       chp-site security enable
+
+   Then each client, one at a time, with the stick. The first review appears the morning after the server is enabled.
+4. **Optional:** to let others sign, add `REVIEW_DELEGATES=Name One, Name Two` to `site.conf` on the stick (see the
+   site-stick guide), then run `chp-site security enable` on the server again.
+
+## The ISSO's daily routine
+
+    chp-site review                       # show the latest review (or: --date YYYY-MM-DD)
+    chp-site review sign --approver "Your Name" --notes "Reviewed; nothing to act on"
+    chp-site review export                # with the site stick: copies the evidence and records the ledger head
+
+`sign` with no `--date` signs every built, unsigned day (after a weekend, for example), each as its own entry, after
+showing each summary and asking for `yes`. **Export after signing:** the chain protects every entry except the **newest**
+one until an export has recorded the ledger's head on the stick.
+
+If `verify` or `sign` reports a damaged ledger, follow the steps it prints: restore `review/ledger.jsonl` from the stick's
+copy and run `chp-site review verify --stick`; a half-written last line (power loss) was never a completed sign-off.
+
+## Expect one AIDE alert, then accept it
+
+The next daily check reports the update:
+- **added:** the `sysstat`, `pcp-libs`, `pcp-conf` and `lm_sensors-libs` files; `/usr/lib/chp/monitor.d/75-review.sh`;
+  the `chp-review-record` and `chp-review-build` units and `/etc/logrotate.d/chp-review`; the links
+  `/etc/systemd/system/timers.target.wants/chp-review-record.timer` (and on the server `chp-review-build.timer`),
+  `/etc/systemd/system/multi-user.target.wants/sysstat.service` and
+  `/etc/systemd/system/sysstat.service.wants/sysstat-collect.timer` and `sysstat-summary.timer`; the folders `/etc/pcp`
+  and `/var/log/sa`; on the server `/var/ossec/etc/rules/chp_review_rules.xml`;
+- **changed:** the upgraded `chp-site` and `chp-security` files; `/var/ossec/etc/ossec.conf` (rewritten by `security
+  enable`: it now reads `/var/log/chp-review.json`); `/etc/suricata/chp-suricata.yaml` and `/etc/sysconfig/suricata`
+  (also rewritten by `security enable`: the content is the same, only the inode and the SELinux user change, because you
+  run it from a login shell); `/etc/ld.so.cache`; the folders that hold all of these.
+
+About 140 files are added and 45 to 50 changed on each host (lab figures).
+
+The reviews and the ledger live in `/var/lib/chp/review`, which AIDE does not watch: they are protected by the ledger's
+chain, its recorded head, monitor 75's check and the stick. Anything outside this list was not made by this update:
+investigate it before accepting. Accept as the ISSO or a named delegate:
+
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: daily security review added"
+
+## Known limits
+
+- **The newest sign-off** is protected by the stick only after the next export (see above).
+- **Root on the server** can still rewrite the whole ledger and its recorded head; the stick's copy of the head is what
+  catches it, so keep the stick safe and export regularly.
+- **Clients switched off** are judged leniently (see above); the server is not.
+- **Resource figures** need two sysstat samples, so the first 10 minutes after enable show disk use only.
+- **Proved on VMs only.**

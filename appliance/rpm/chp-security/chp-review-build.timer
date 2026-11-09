@@ -1,0 +1,9 @@
+[Unit]
+Description=CHP daily review: build shortly after midnight, catching up after downtime (review spec §4)
+
+[Timer]
+OnCalendar=*-*-* 00:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

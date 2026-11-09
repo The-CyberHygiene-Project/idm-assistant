@@ -29,11 +29,14 @@ def _parts(a):
 
 
 def _signature(a):
-    """Suricata's signature ID when the alert carries one, so separate signatures under one CHP rule (100510) are not
-    grouped together (S1 final review I-2); '' for everything else."""
+    """What separates alerts under one CHP rule: Suricata's signature ID (100510; S1 final review I-2) or the YARA rules
+    matched (100501; R1); '' for everything else."""
     d = a.get("data") if isinstance(a, dict) and isinstance(a.get("data"), dict) else {}
     s = d.get("alert") if isinstance(d.get("alert"), dict) else {}
-    return str(s.get("signature_id", ""))
+    if s.get("signature_id") not in (None, ""):
+        return str(s["signature_id"])
+    y = d.get("chp_yara") if isinstance(d.get("chp_yara"), dict) else {}
+    return str(y.get("rules", ""))
 
 
 def line(a):
@@ -51,8 +54,8 @@ class Forwarder:
         if self.day_start is None:
             self.day_start = now
         r, ag, lvl, rid = _parts(a)
-        if not r:
-            return []                                   # not an alert (final review I4: never crash on odd lines)
+        if not r or rid == "100520":
+            return []                                   # not an alert; the hosts' review records are data (R1 review I5)
         if not (lvl >= self.level or rid in LIFECYCLE):
             if 7 <= lvl <= 9:
                 self.medium.append(ag.get("name", "?"))
@@ -158,6 +161,8 @@ def summarize(alerts, since_epoch, min_level):
     c = Counter()
     for a in alerts:
         r = a.get("rule", {})
+        if str(r.get("id")) == "100520":
+            continue                                    # the hosts' review records are data, not alerts
         if int(r.get("level", 0) or 0) >= min_level and _epoch(a.get("timestamp")) >= since_epoch:
             c[(a.get("agent", {}).get("name", "?"), str(r.get("id", "?")), int(r.get("level", 0)),
                r.get("description", "?"))] += 1

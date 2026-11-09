@@ -1,0 +1,83 @@
+{"sysstat": {
+	"hosts": [
+		{
+			"nodename": "iso5-cli2.iso5.lab.test",
+			"sysname": "Linux",
+			"release": "5.14.0-687.10.1.el9_8.0.1.x86_64",
+			"machine": "x86_64",
+			"number-of-cpus": 2,
+			"file-date": "2026-11-07",
+			"file-utc-time": "18:55:42",
+			"timezone": "MST",
+			"statistics": [
+				{
+					"timestamp": {"date": "2026-11-07", "time": "18:55:44", "utc": 1, "interval": 2},
+					"cpu-load": [
+						{"cpu": "all", "user": 4.90, "nice": 0.00, "system": 4.64, "iowait": 0.00, "steal": 0.52, "idle": 89.95}
+					],
+					"memory": {"memfree": 1877080, "avail": 2810988, "memused": 797852, "memused-percent": 20.27, "buffers": 4816, "cached": 1105168, "commit": 1334268, "commit-percent": 10.84, "active": 864784, "inactive": 898844, "dirty": 1164},
+					"network": {
+						"net-dev": [
+							{"iface": "lo", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00},
+							{"iface": "enp1s0", "rxpck": 358.00, "txpck": 386.50, "rxkB": 23.07, "txkB": 299.57, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00}
+						]
+					}
+				},
+				{
+					"timestamp": {"date": "2026-11-07", "time": "18:55:46", "utc": 1, "interval": 2},
+					"cpu-load": [
+						{"cpu": "all", "user": 1.77, "nice": 0.00, "system": 2.53, "iowait": 0.00, "steal": 0.00, "idle": 95.70}
+					],
+					"memory": {"memfree": 1877080, "avail": 2810992, "memused": 797848, "memused-percent": 20.27, "buffers": 4816, "cached": 1105172, "commit": 1333264, "commit-percent": 10.83, "active": 863800, "inactive": 898848, "dirty": 1172},
+					"network": {
+						"net-dev": [
+							{"iface": "lo", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00},
+							{"iface": "enp1s0", "rxpck": 124.00, "txpck": 146.00, "rxkB": 7.99, "txkB": 102.45, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00}
+						]
+					}
+				},
+				{
+					"timestamp": {"date": "2026-11-07", "time": "18:55:48", "utc": 1, "interval": 2},
+					"cpu-load": [
+						{"cpu": "all", "user": 0.25, "nice": 0.00, "system": 0.25, "iowait": 0.00, "steal": 0.00, "idle": 99.49}
+					],
+					"memory": {"memfree": 1874180, "avail": 2808092, "memused": 800748, "memused-percent": 20.34, "buffers": 4816, "cached": 1105172, "commit": 1333264, "commit-percent": 10.83, "active": 864960, "inactive": 898848, "dirty": 1132},
+					"network": {
+						"net-dev": [
+							{"iface": "lo", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00},
+							{"iface": "enp1s0", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00}
+						]
+					}
+				},
+				{
+					"timestamp": {"date": "2026-11-07", "time": "18:55:50", "utc": 1, "interval": 2},
+					"cpu-load": [
+						{"cpu": "all", "user": 0.00, "nice": 0.00, "system": 0.51, "iowait": 0.00, "steal": 0.00, "idle": 99.49}
+					],
+					"memory": {"memfree": 1874180, "avail": 2808092, "memused": 800744, "memused-percent": 20.34, "buffers": 4816, "cached": 1105176, "commit": 1333256, "commit-percent": 10.83, "active": 864960, "inactive": 898848, "dirty": 1140},
+					"network": {
+						"net-dev": [
+							{"iface": "lo", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00},
+							{"iface": "enp1s0", "rxpck": 1.00, "txpck": 1.00, "rxkB": 0.11, "txkB": 0.21, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00}
+						]
+					}
+				},
+				{
+					"timestamp": {"date": "2026-11-07", "time": "18:55:52", "utc": 1, "interval": 2},
+					"cpu-load": [
+						{"cpu": "all", "user": 0.50, "nice": 0.00, "system": 0.25, "iowait": 0.00, "steal": 0.00, "idle": 99.25}
+					],
+					"memory": {"memfree": 1874180, "avail": 2808096, "memused": 800744, "memused-percent": 20.34, "buffers": 4816, "cached": 1105176, "commit": 1333256, "commit-percent": 10.83, "active": 864960, "inactive": 898852, "dirty": 1136},
+					"network": {
+						"net-dev": [
+							{"iface": "lo", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00},
+							{"iface": "enp1s0", "rxpck": 0.00, "txpck": 0.00, "rxkB": 0.00, "txkB": 0.00, "rxcmp": 0.00, "txcmp": 0.00, "rxmcst": 0.00, "ifutil-percent": 0.00}
+						]
+					}
+				}
+			],
+			"restarts": [
+			]
+		}
+	]
+}}

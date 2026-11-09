@@ -22,6 +22,7 @@ KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH"
 EPEL_KEYFILE = "etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9"
 EPEL_FPR = "FF8AD1344597106ECE813B918A3872BF3228467C"   # = appliance/release/trusted-keys.txt epel9 (suricata, S1)
 OSSEC = "var/ossec"
+REVIEW_UNITS = ("sysstat-collect.timer", "sysstat-summary.timer", "chp-review-record.timer")   # every host (review §3)
 
 
 def _p(root, rel):
@@ -157,8 +158,8 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
     d = _data_dir(root, data_is_mount, run); done.append(f"data directory {d} bind-mounted at /var/ossec")
     pkg = "wazuh-manager" if role == "server" else "wazuh-agent"
     run(["dnf", "--enablerepo=chp", "install", "-y", pkg, "chp-security", "yara", "chp-yara-rules", "suricata",
-         "chp-suricata-rules"], check=True)
-    done.append(f"{pkg}, YARA, Suricata and their rules installed")
+         "chp-suricata-rules", "sysstat"], check=True)
+    done.append(f"{pkg}, YARA, Suricata, their rules and sysstat installed")
     conf = _p(root, f"{OSSEC}/etc/ossec.conf")
     keys = _p(root, f"{OSSEC}/etc/client.keys")
     if role == "server":
@@ -167,6 +168,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         _p(root, f"{OSSEC}/etc/rules").mkdir(parents=True, exist_ok=True)
         _write(_p(root, f"{OSSEC}/etc/rules/chp_yara_rules.xml"), w.YARA_RULES, 0o640, group_wazuh)
         _write(_p(root, f"{OSSEC}/etc/rules/chp_suricata_rules.xml"), w.SURICATA_RULES, 0o640, group_wazuh)
+        _write(_p(root, f"{OSSEC}/etc/rules/chp_review_rules.xml"), w.REVIEW_RULES, 0o640, group_wazuh)
         if not keys.exists() or not keys.read_text().strip():
             lines = w.client_keys(hosts)
             _write(keys, "".join(v + "\n" for v in lines.values()), 0o640, group_wazuh)
@@ -195,7 +197,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
             run(["firewall-cmd", "-q", "--reload"], check=True)
         done.append(f"firewall: 1514/tcp from {len(w.rich_rules(hosts))} clients")
         units = ["wazuh-manager", "chp-wazuh-alerts", "chp-wazuh-retention.timer", "chp-yara-fullscan.timer",
-                 "chp-yara-recent.timer"]                                    # spec §10: every host
+                 "chp-yara-recent.timer", *REVIEW_UNITS, "chp-review-build.timer"]   # spec §10; review spec §3-§4
     else:
         server = next(h for h in hosts if h.role == "server")
         _write(conf, w.harden_agent(conf.read_text(), server.ip), 0o640, group_wazuh)
@@ -204,7 +206,7 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         if w.LOCAL_INTERNAL_AGENT.strip() not in cur:
             _write(lio, cur + w.LOCAL_INTERNAL_AGENT, 0o640, group_wazuh)
         _write(keys, agent_line, 0o640, group_wazuh)
-        units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer"]   # spec §10
+        units = ["wazuh-agent", "chp-yara-fullscan.timer", "chp-yara-recent.timer", *REVIEW_UNITS]   # spec §10; review §3
     days = _conf(root, role, d, site.get("SECURITY_ALERT_LEVEL", 10))
     _write(_p(root, sc.CONF.lstrip("/")), sc.config_text(iface, home), 0o640, group_suricata)
     _write(_p(root, sc.DROPIN.lstrip("/")), sc.dropin_text(iface), 0o644)
@@ -216,6 +218,12 @@ def _enable(role, host, site, hosts, *, stick, pending, key_file, run, root, dat
         fd = os.open(eve, os.O_WRONLY | os.O_CREAT, 0o640); os.close(fd)
     os.chmod(eve, 0o640); own_suricata(eve)
     done.append(f"Suricata watches {iface} (HOME_NET {home}); logs kept {days} days")
+    for lg in ("var/log/chp-review.json",):            # review spec §3: the record log exists before Wazuh reads it
+        lp = _p(root, lg)
+        lp.parent.mkdir(parents=True, exist_ok=True)
+        if not lp.exists():
+            fd = os.open(lp, os.O_WRONLY | os.O_CREAT, 0o640); os.close(fd)
+        os.chmod(lp, 0o640)
     ylog = _p(root, "var/log/chp-yara.json")              # Y1 lab: Wazuh reads a log that appears later from its end
     ylog.parent.mkdir(parents=True, exist_ok=True)
     if not ylog.exists():

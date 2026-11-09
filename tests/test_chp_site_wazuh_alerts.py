@@ -151,3 +151,26 @@ def test_odd_signature_ids_never_break_grouping():
     f = wa.Forwarder(level=10)
     a = suri(2017025, "x"); a["data"]["alert"] = "not a dict"
     assert f.feed(a, now=0) and f.feed(a, now=1) == []
+
+
+def yara(rules, host="ws1"):
+    a = alert(rid="100501", level=12, host=host, desc=f"YARA match: {rules} in /tmp/x")
+    a["data"] = {"chp_yara": {"event": "match", "rules": rules, "file": "/tmp/x"}}
+    return a
+
+
+def test_yara_matches_grouped_per_rule():                                    # deferred from part 3 (owner)
+    f = wa.Forwarder(level=10)
+    assert f.feed(yara("SUSP_Just_EICAR"), now=0)
+    assert f.feed(yara("APT_Real_Malware"), now=60)                         # a different rule is not held back
+    assert f.feed(yara("SUSP_Just_EICAR"), now=120) == []
+
+
+def test_host_records_never_appear_in_the_summary():
+    rec = alert(rid="100520", level=3, host="ws1", desc="CHP review host record: ws1")
+    assert "100520" not in wa.summarize([rec], 0, 0)
+
+
+def test_host_records_never_reach_the_hook_even_at_level_3():               # final review I5 (SECURITY_ALERT_LEVEL=3)
+    f = wa.Forwarder(level=3)
+    assert f.feed(alert(rid="100520", level=3, host="ws1", desc="CHP review host record: ws1"), now=0) == []
