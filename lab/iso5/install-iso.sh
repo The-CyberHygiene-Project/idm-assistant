@@ -11,9 +11,18 @@ name=$1 mac=$2 entry=$3 stick=$4 ndisks=$5 iso=$6 expect_stop=${7:-} keep=${8:-}
 [[ $name == iso5-* ]] || { echo "refusing: only iso5-* lab VMs are managed here"; exit 1; }
 log=/var/log/libvirt/qemu/$name-install.log
 rm_vm() { virsh destroy "$1" >/dev/null 2>&1 || true; virsh undefine "$1" --nvram --snapshots-metadata >/dev/null 2>&1 || true; rm -f /data/libvirt/images/"$1"-[0-9].qcow2; }
+# DISK_GB > 120 (the 0.6.0 sparse-disk layout): a size guard (limit GUARD_GB, default 50 GB actual) must be running
+if (( ${DISK_GB:-120} > 120 )); then
+  [[ $ndisks == 1 ]] || { echo "DISK_GB > 120 supports one disk only"; exit 1; }
+  systemctl stop "size-guard-$name" >/dev/null 2>&1 || true; systemctl reset-failed "size-guard-$name" >/dev/null 2>&1 || true
+fi
 if virsh dominfo "$name" >/dev/null 2>&1; then rm_vm "$name"; fi
 rm -f "$log"
-disks=(); for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=120,format=qcow2"); done
+if (( ${DISK_GB:-120} > 120 )); then
+  systemd-run --quiet --unit="size-guard-$name" bash /tmp/iso2/size-guard.sh "$name" "${GUARD_GB:-50}"
+  sleep 1; systemctl is-active --quiet "size-guard-$name" || { echo "size guard not active; refusing to install"; exit 1; }
+fi
+disks=(); for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=${DISK_GB:-120},format=qcow2"); done
 virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osinfo detect=on,name=rhel9-unknown \
   --machine q35 --features smm.state=on \
   --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes,firmware.feature1.name=enrolled-keys,firmware.feature1.enabled=yes \

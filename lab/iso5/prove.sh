@@ -124,7 +124,7 @@ case ${1:-} in
     check "row 37: no escrow written for the refused install" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK escrow/iso5-srv.txt && echo yes || echo no")" "no"
     A "sudo rm -rf $TR" ;;
   server)
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO '' --keep-stick")
+    out=$(A "sudo DISK_GB=${DISK_GB:-120} bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/server.ks"* && $out == *"INSTALLED and started $SRV"* ]] \
       && pass "$SRV: installed from the ISO (menu entry chosen, nothing typed)" || { fail "$SRV: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $SRV $STICK $SRV")
