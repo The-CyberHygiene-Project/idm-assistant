@@ -201,3 +201,20 @@ def test_pre_network_repo_writes_no_repo_dir(tmp_path):
     run_pre("client", s, out, "http://192.0.2.1/chp", facts(CLI_MAC), hasher=lambda pw: "$6$x$" + str(len(pw)),
             secret=lambda n: "S" * n)
     assert not (out / "repo-dir").exists()
+
+
+def test_second_disk_is_never_in_the_kickstart(tmp_path):
+    two = [("vda", 120 * G, "virtio", False, "disk"), ("vdb", 500 * G, "virtio", False, "disk")]
+    s = stick(tmp_path); (s / "tokens").mkdir(); (s / "tokens" / "iso2-cli.token").write_text(TOKEN + "\n")
+    h, s, out = run(tmp_path, "client", ["52:54:00:c4:02:31"], stick_dir=s, facts=facts(["52:54:00:c4:02:31"], two))
+    ks = (out / "disk.ks").read_text()
+    assert "vda" in ks and "vdb" not in ks
+
+
+def test_disk_note_written_below_recommended(tmp_path):
+    h, s, out = run(tmp_path, "server", ["52:54:00:c4:02:30"])
+    assert "smaller than the recommended 2 TB" in (out / "disk-note").read_text()
+    (tmp_path / "b").mkdir()
+    big = [("vda", 2_000_398_934_016, "nvme", False, "disk")]
+    h, s, out = run(tmp_path / "b", "server", ["52:54:00:c4:02:30"], facts=facts(["52:54:00:c4:02:30"], big))
+    assert not (out / "disk-note").exists()

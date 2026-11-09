@@ -5,6 +5,7 @@
 import hashlib
 import os
 
+from .layout import plan
 from .hosts import server_of
 from .sitevars import ANCHOR, values
 
@@ -40,22 +41,21 @@ def boot_ks(grub_hash):
     return f'bootloader --append="fips=1" --iscrypted --password={grub_hash}\n'
 
 
-def disk_ks(disk, passphrase):
+def disk_ks(disk, size_bytes, role, passphrase):
     vg = "chp"
-    return (f"ignoredisk --only-use={disk}\n"
-            f"clearpart --all --initlabel --drives={disk}\n"
-            "part /boot/efi --fstype=efi --size=1024\n"
-            "part /boot --fstype=xfs --size=2048\n"
-            f"part pv.01 --size=1 --grow --encrypted --luks-version=luks2 --passphrase={passphrase}\n"
-            f"volgroup {vg} pv.01\n"
-            f"logvol swap           --vgname={vg} --name=swap          --size=8192\n"
-            f"logvol /home          --vgname={vg} --name=home          --fstype=xfs --size=10240\n"
-            f"logvol /tmp           --vgname={vg} --name=tmp           --fstype=xfs --size=4096\n"
-            f"logvol /var           --vgname={vg} --name=var           --fstype=xfs --size=20480\n"
-            f"logvol /var/tmp       --vgname={vg} --name=var_tmp       --fstype=xfs --size=4096\n"
-            f"logvol /var/log       --vgname={vg} --name=var_log       --fstype=xfs --size=8192\n"
-            f"logvol /var/log/audit --vgname={vg} --name=var_log_audit --fstype=xfs --size=8192\n"
-            f"logvol /              --vgname={vg} --name=root          --fstype=xfs --size=20480 --grow\n")
+    vols, grow = plan(role, size_bytes)
+    s = (f"ignoredisk --only-use={disk}\n"
+         f"clearpart --all --initlabel --drives={disk}\n"
+         "part /boot/efi --fstype=efi --size=1024\n"
+         "part /boot --fstype=xfs --size=2048\n"
+         f"part pv.01 --size=1 --grow --encrypted --luks-version=luks2 --passphrase={passphrase}\n"
+         f"volgroup {vg} pv.01\n")
+    for v in vols:
+        fs = "" if v.mount == "swap" else "--fstype=xfs "
+        s += (f"logvol {v.mount:<14} --vgname={vg} --name={v.name:<13} {fs}--size={v.mib}"
+              + (" --grow" if grow and v.mount == "/" else "")
+              + (f' --fsoptions="{v.fsoptions}"' if v.fsoptions else "") + "\n")
+    return s
 
 
 def repo_ks(url):

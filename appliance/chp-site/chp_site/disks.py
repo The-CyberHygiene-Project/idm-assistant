@@ -40,4 +40,4 @@ def choose_disk(disks, wanted, min_bytes=100_000_000_000):
         d = cands[0]
     if d.size < min_bytes:
         raise SiteError(f"install disk {d.name} is {d.size // 10**9} GB; at least 100 GB are required")
-    return d.name
+    return d
