@@ -20,7 +20,7 @@ if virsh dominfo "$name" >/dev/null 2>&1; then rm_vm "$name"; fi
 rm -f "$log"
 if (( ${DISK_GB:-120} > 120 )); then
   systemd-run --quiet --unit="size-guard-$name" bash /tmp/iso2/size-guard.sh "$name" "${GUARD_GB:-50}"
-  sleep 1; systemctl is-active --quiet "size-guard-$name" || { echo "size guard not active; refusing to install"; exit 1; }
+  systemctl is-active --quiet "size-guard-$name" || { echo "size guard not active; refusing to install"; exit 1; }
 fi
 disks=(); for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=${DISK_GB:-120},format=qcow2"); done
 virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osinfo detect=on,name=rhel9-unknown \
@@ -30,6 +30,11 @@ virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osi
   "${disks[@]}" --disk "path=$stick,format=raw,bus=usb,removable=on" --cdrom "$iso" \
   --network "bridge=br-lab,mac=$mac" --graphics none --serial "pty,log.file=$log" \
   --noautoconsole --noreboot --wait 0 >"/tmp/iso2/$name-virt-install.out" 2>&1
+if (( ${DISK_GB:-120} > 120 )); then   # the guard must have MEASURED the new image once (heartbeat), else refuse
+  for _ in $(seq 40); do [[ $(cat "/run/size-guard-$name.beat" 2>/dev/null) =~ ^[0-9]+$ ]] && break; sleep 3; done
+  [[ $(cat "/run/size-guard-$name.beat" 2>/dev/null) =~ ^[0-9]+$ ]] && systemctl is-active --quiet "size-guard-$name" \
+    || { virsh destroy "$name" >/dev/null 2>&1 || true; echo "size guard has not measured the image; refusing (VM destroyed)"; exit 1; }
+fi
 # Our menu on the serial console (OVMF mirrors grub there), then the keyboard: ENTRY x Down, Enter.
 for _ in $(seq 60); do grep -q "Boot from the local disk" "$log" 2>/dev/null && break; sleep 2; done
 grep -q "Boot from the local disk" "$log" || { echo "MENU NOT SEEN in $log"; exit 1; }

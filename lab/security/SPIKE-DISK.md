@@ -2,13 +2,13 @@
 
 Run 2026-11-09 on `aero` with the released 0.5.0 ISO (rc2, sha256 `32b6d4b6...aba21`, checked on aero), server
 install through the existing `lab/iso5/prove.sh server` stage, one disk of `DISK_GB=1863` (about 2.0 TB virtual,
-sparse qcow2), `size-guard.sh` at the 50 GB owner limit. iso5-cli1 and iso5-cli2 were not touched.
+sparse qcow2), `size-guard.sh` at the 50 GB owner limit (the first version, before the fail-closed fixes below). iso5-cli1 and iso5-cli2 were not touched.
 
 ## Result in one line
 
 A 2 TB sparse disk installs and runs in about 10 GB of real space on aero. The guard never tripped.
 
-## Size of the image file on aero (actual allocation, `du -B1M`)
+## Size of the image file on aero (actual allocation, `sudo du -B1M FILE`; the guard itself uses `du -B1G`, which rounds UP to whole GB)
 
 | Point | Site add-ons off | Site add-ons on (Wazuh + Suricata + YARA) |
 |---|---|---|
@@ -25,14 +25,31 @@ var 20 GB, var_log 8 GB, var_log_audit 8 GB, var_tmp 4 GB, swap 8 GB.
 
 ## Size guard
 
-`lab/iso5/size-guard.sh NAME LIMIT_GB`, started by `install-iso.sh` as `systemd-run --unit=size-guard-NAME` when
-`DISK_GB` is above 120 (limit `GUARD_GB`, default 50). `install-iso.sh` refuses to install when the unit is not
-active, and refuses `DISK_GB` above 120 with more than one disk. Self-test on a scratch image
-(`iso5-guardtest-1.qcow2`, 2 TB virtual, limit 1 GB, 2.5 GB written with `qemu-io`): the guard stopped the VM name and
-printed `SIZE-GUARD STOP iso5-guardtest 3 GB (limit 1 GB)` within 8 s of the write. The image was deleted afterwards.
-(`qemu-io` refuses one write above 2 GiB, so the test wrote 1500M + 1000M. The first attempt, a single 2G write,
-was rejected by qemu-io and the guard correctly did nothing.) The guard unit stays running until
-`systemctl stop size-guard-NAME`; it was stopped at the end of this spike.
+`lab/iso5/size-guard.sh NAME LIMIT_GB` runs on aero as root and **fails closed**. Every 10 s it measures the actual
+allocation with `du -B1G` (rounded up, so it can read up to 1 GB high), writes it to the heartbeat file
+`/run/size-guard-NAME.beat`, and acts:
+
+| Situation | What it does | Exit |
+|---|---|---|
+| allocation over the limit | `virsh destroy`, prints `SIZE-GUARD STOP NAME <GB> GB` and `qemu-img snapshot -l` | 1 |
+| the destroy did not work | prints `SIZE-GUARD DESTROY FAILED NAME` | 2 |
+| `du` fails or is unparseable 3 times in a row | warns on stderr each time, then destroys the VM, prints `SIZE-GUARD STOP NAME (cannot measure...)` | 3 |
+| no image after 120 s | one `SIZE-GUARD WARNING` on stderr (wrong name or path), keeps waiting | - |
+
+Messages go to `journalctl -u size-guard-NAME`. `install-iso.sh` starts it as `systemd-run --unit=size-guard-NAME`
+when `DISK_GB` is above 120 (limit `GUARD_GB`, default 50), then, after `virt-install` has created the disk, waits up
+to 2 minutes for the heartbeat file to hold a number; if it never does (or the unit died) it destroys the VM and
+refuses. It also refuses `DISK_GB` above 120 with more than one disk. **Installs with `DISK_GB` of 120 or less get no
+guard, by design.** Staging: `prove.sh prep` copies `size-guard.sh` to `aero:/tmp/iso2/` with the other helpers
+(added to its copy list in this task). Stop the unit with `systemctl stop size-guard-NAME` when done.
+
+Tests (all VM-less; `virsh` replaced by a stub on `PATH`, directories overridden with `IMG_DIR`/`BEAT_DIR`/`POLL_S`):
+the **trip path** (real 2 TB qcow2, limit 1 GB, 2.5 GB written with `qemu-io`) printed
+`SIZE-GUARD STOP iso5-t 2 GB (limit 1 GB)` and exited 1; a failing `du` gave three warnings then STOP, exit 3;
+a destroy that fails gave `SIZE-GUARD DESTROY FAILED`, exit 2 (both on over-limit and on cannot-measure); a missing
+image gave the one-time warning after 120 s of polling. These prove the polling and trip logic; **they do not prove
+that a real `virsh destroy` stops a running VM** (that was never exercised, because the real install never tripped).
+The first spike run used the earlier, fail-open version of the script.
 
 ## Mount options (`findmnt -s`, the fstab)
 
@@ -77,6 +94,6 @@ host stopping. These figures were read from the config; the volume was not fille
 
 ## Files changed in this task
 
-`lab/iso5/size-guard.sh` (new), `lab/iso5/install-iso.sh` (`DISK_GB`, guard start), `lab/security/SPIKE-DISK.md`,
-and one line in `lab/iso5/prove.sh` that passes `DISK_GB` through to `install-iso.sh` (needed so the unchanged
-`server` stage can use it; default stays 120).
+`lab/iso5/size-guard.sh` (new, then made fail-closed), `lab/iso5/install-iso.sh` (`DISK_GB`, guard start, heartbeat check), `lab/security/SPIKE-DISK.md`,
+and `lab/iso5/prove.sh`: `DISK_GB` passed through to `install-iso.sh` (default 120) and `size-guard.sh` added to the
+prep copy list.

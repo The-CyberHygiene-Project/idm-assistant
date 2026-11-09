@@ -103,7 +103,7 @@ case ${1:-} in
       scp -q "$R/../iso5-$r.ks" "aero:/tmp/iso2/$r.ks"; rm -f "$R/../iso5-$r.ks"
     done
     scp -q "$PYZ" "$iso2/stick.sh" "$iso2/install.sh" "$iso2/unlock.sh" "$iso2/luks-send.exp" "$iso3/rootrun.exp" "$iso3/rs.sh" \
-      "$top/lab/iso4/rsx.sh" "$top/lab/iso4/ssh-ki.exp" "$here/install-iso.sh" "$top/lab/srv1/totp.py" "$top/lab/host/console-login.exp" "$KEY" aero:/tmp/iso2/
+      "$top/lab/iso4/rsx.sh" "$top/lab/iso4/ssh-ki.exp" "$here/install-iso.sh" "$here/size-guard.sh" "$top/lab/srv1/totp.py" "$top/lab/host/console-login.exp" "$KEY" aero:/tmp/iso2/
     scp -q "$UKEY" aero:/tmp/iso2/ops_key; A 'chmod 600 /tmp/iso2/ops_key /tmp/iso2/iso2_chpadmin'
     # the lab users' POSIX password: made on aero, root-only, never printed
     A "sudo sh -c 'umask 077; python3 -c \"import secrets; print(secrets.token_urlsafe(24))\" > /tmp/iso2/ops.pw'"
