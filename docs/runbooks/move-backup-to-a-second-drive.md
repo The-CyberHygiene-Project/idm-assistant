@@ -135,7 +135,7 @@ All commands as root on the server (`su -`).
         lvremove chp/backup            # answer y
         vgs chp                        # VFree is now about 600 GB larger
 
-    The old `/backup` copy is gone with it. Do this only after step 7 said `SAME`.
+    The old `/backup` copy is gone with it. Do this only after step 7 and step 9 both said `SAME`.
 
 11. Shred the temporary key file and clear the variable:
 
@@ -172,5 +172,12 @@ All commands as root on the server (`su -`).
   `journalctl -b -u systemd-cryptsetup@backupdrive`. If the TPM will not unlock it, type the recovery passphrase from
   the stick: `cryptsetup open /dev/disk/by-uuid/<LUKS_UUID> backupdrive`, then `mount /backup`, and fix the
   TPM binding with step 5 again (use the passphrase from the stick as the key file).
-- **To undo before step 10:** restore the old lines (`mv /etc/fstab.bak /etc/fstab`, delete the `backupdrive` line in
-  `/etc/crypttab`), `systemctl daemon-reload`, `umount /backup`, `mount /backup`. The old volume is untouched.
+- **To undo before step 10** (the old volume is untouched): restore the old lines (`mv /etc/fstab.bak /etc/fstab`,
+  delete the `backupdrive` line in `/etc/crypttab`), then:
+
+      umount /backup                 # the new drive, if step 9 mounted it
+      chattr -i /backup              # remove the immutable flag, or the old volume cannot be used as before
+      systemctl daemon-reload
+      mount /backup                  # the old chp/backup volume again
+
+  Anyone who abandons the move after step 9 must run `chattr -i /backup` once the drive is unmounted.

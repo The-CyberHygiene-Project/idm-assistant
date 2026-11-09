@@ -175,6 +175,9 @@ volume later, online, with one command: see `runbooks/grow-a-volume.md` in this 
 Add a separate drive in the spare bay, then move `/backup` to it with `runbooks/move-backup-to-a-second-drive.md`
 (it encrypts the drive, binds it to the TPM, puts its recovery passphrase on this stick, and returns the space to the
 volume group). Do this soon after the install. The project does not install backup software or set a schedule.
+The new mount is marked `nofail`, so a dead backup drive does not stop the server booting. The runbook also makes the
+empty `/backup` folder immutable and enables `clevis-luks-askpass.path` (so the TPM unlocks the drive at boot). While the
+drive is missing, writes to `/backup` then fail loudly instead of filling `/`.
 
 If the second drive is already in the machine **at install time**, the installer will not guess which disk to erase.
 Put the install disk in the **fifth column of `hosts`** (`disk`, see §3) by its `/dev/disk/by-id/...` name. The other
