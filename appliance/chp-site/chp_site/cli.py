@@ -345,6 +345,14 @@ def _yara_scan(a):
     return 0
 
 
+def _day(text):
+    from datetime import date
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise SiteError("--date must be YYYY-MM-DD") from None
+
+
 def _review(a):
     import json
     import socket
@@ -363,14 +371,17 @@ def _review(a):
     from datetime import date
     from . import review_store as st
     if a.action == "show":
-        print(st.show(day=date.fromisoformat(a.date_list[-1]) if a.date_list else None), end="")
+        print(st.show(day=_day(a.date_list[-1]) if a.date_list else None), end="")
         return 0
     if a.action == "build":
         from . import wazuh_alerts as wa
         site, hosts = _load(a.site)
         now = time.time()
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
         alerts = wa.load_alerts("/var/ossec/logs/alerts", now - (st.CATCH_UP + 2) * 86400)
-        built = st.nightly(today=date.fromtimestamp(now), site=site, hosts=hosts, alerts=alerts, now=now)
+        built = st.nightly(today=today, site=site, hosts=hosts, alerts=alerts, now=now)
         print("built " + (", ".join(d.isoformat() for d in built) if built else "nothing (every day is built)"))
         return 0
     if a.action == "sign":
@@ -378,6 +389,11 @@ def _review(a):
         from . import review_ledger as rl
         if not a.approver or not a.notes:
             raise SiteError("review sign needs --approver \"Name\" and --notes \"...\" (the ISSO or a REVIEW_DELEGATES name)")
+        if len(a.notes) > 1000 or any(ord(c) < 32 or ord(c) == 127 for c in a.notes):
+            raise SiteError("--notes: at most 1000 characters, no control characters")
+        days = [_day(d) for d in a.date_list] if a.date_list else None
+        if not sys.stdin.isatty():
+            raise SiteError("review sign needs a terminal: the reviewer must read the summary and type yes")
 
         def ask(text):
             try:
@@ -385,7 +401,6 @@ def _review(a):
             except EOFError:                                # no terminal: never a yes
                 return False
         site, _hosts = _load(a.site)
-        days = [date.fromisoformat(d) for d in a.date_list] if a.date_list else None
         out = rl.sign(site=site, approver=a.approver, notes=a.notes, days=days, now=time.time(),
                       operator=audit.operator(), confirm=ask)
         print(f"signed {len(out)} review(s); recorded in the ledger and the audit log")
