@@ -242,14 +242,16 @@ def test_notes_of_1000_characters_are_fine(monkeypatch):
     assert rc == 0 and len(got) == 1
 
 
-def test_build_uses_the_site_timezone(monkeypatch):
+@pytest.mark.parametrize("tz, want", [("Pacific/Kiritimati", date(2026, 11, 9)), ("Pacific/Pago_Pago", date(2026, 11, 8))])
+def test_build_uses_the_site_timezone(monkeypatch, tz, want):
+    # the same instant gives different dates in these two zones; the old host-zone code gave one date for both
     from datetime import datetime, timezone
     from chp_site import cli
     seen = {}
     now = datetime(2026, 11, 9, 6, 30, tzinfo=timezone.utc).timestamp()
     monkeypatch.setattr(st, "nightly", lambda **kw: seen.update(kw) or [])
-    monkeypatch.setattr(cli, "_load", lambda site: ({"TIMEZONE": "America/Denver"}, []))
+    monkeypatch.setattr(cli, "_load", lambda site: ({"TIMEZONE": tz}, []))
     monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: [])
     monkeypatch.setattr("time.time", lambda: now)
     assert cli.main(["review", "build"]) == 0
-    assert seen["today"] == date(2026, 11, 8)
+    assert seen["today"] == want
