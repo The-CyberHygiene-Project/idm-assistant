@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -15,6 +15,7 @@ Source5:        10-restorecon.sh
 Source6:        20-clock.sh
 Source7:        LICENSE
 Source8:        05-firstboot.sh
+Source9:        76-disk-space.sh
 Requires:       mokutil
 Requires:       chp-site, clevis, clevis-luks, clevis-dracut, clevis-systemd, tpm2-tools, cryptsetup, policycoreutils, chrony, util-linux
 BuildRequires:  systemd-rpm-macros
@@ -33,7 +34,9 @@ install -Dm0644 %{SOURCE4} %{buildroot}%{_unitdir}/chp-monitor.timer
 install -Dm0755 %{SOURCE8} %{buildroot}%{_prefix}/lib/chp/monitor.d/05-firstboot.sh
 install -Dm0755 %{SOURCE5} %{buildroot}%{_prefix}/lib/chp/monitor.d/10-restorecon.sh
 install -Dm0755 %{SOURCE6} %{buildroot}%{_prefix}/lib/chp/monitor.d/20-clock.sh
+install -Dm0755 %{SOURCE9} %{buildroot}%{_prefix}/lib/chp/monitor.d/76-disk-space.sh
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/firstboot
+install -dm0700 %{buildroot}%{_sharedstatedir}/chp/monitor
 install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
 %post
@@ -54,9 +57,14 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/05-firstboot.sh
 %{_prefix}/lib/chp/monitor.d/10-restorecon.sh
 %{_prefix}/lib/chp/monitor.d/20-clock.sh
+%{_prefix}/lib/chp/monitor.d/76-disk-space.sh
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/firstboot
+%dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Mon Nov 09 2026 The CyberHygiene Project - 0.1.0-4.chp
+- Monitor check 76: any XFS file system at or above 85% full (alerts once per crossing, again after 24 h).
+
 * Wed Sep 30 2026 The CyberHygiene Project - 0.1.0-3.chp
 - Secure Boot gate before the TPM binding; monitor check for a failed first boot / TPM binding / leftover one-time key.
 
