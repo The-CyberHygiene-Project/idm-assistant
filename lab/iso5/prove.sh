@@ -160,8 +160,9 @@ case ${1:-} in
     check "server: listeners" "$(Rv 'ss -ltn | awk "{print \$4}" | grep -E ":(1514|1515|55000)$" | sort | tr "\n" " "')" "0.0.0.0:1514 127.0.0.1:55000 "
     check "server: update_check off" "$(Rv 'grep -c "<update_check>no</update_check>" /var/ossec/etc/ossec.conf')" "1"
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      wz=/srv/wazuh; [[ $1 == "$SRV" ]] && wz=/wazuh   # 0.6.0: the server has /data (its own LV), so Wazuh's data lives at /data/wazuh
       check "$1: no 'No such tag' warnings" "$(Rh "$1" "$2" 'for t in wazuh-analysisd wazuh-agentd wazuh-modulesd; do [ -x /var/ossec/bin/$t ] && /var/ossec/bin/$t -t 2>&1; done | grep -c "No such tag"')" "0"
-      check "$1: data bind-mounted" "$(Rh "$1" "$2" 'findmnt -no SOURCE /var/ossec | sed "s/.*\[//; s/\]//"')" "/srv/wazuh"
+      check "$1: data bind-mounted" "$(Rh "$1" "$2" 'findmnt -no SOURCE /var/ossec | sed "s/.*\[//; s/\]//"')" "$wz"
       want=1; [[ $1 == "$SRV" ]] && want=2   # the server also runs client-enrol for itself (its step does nothing)
       check "$1: security step done" "$(Rh "$1" "$2" 'ls /var/lib/chp/firstboot/security.done /var/lib/chp/firstboot/client-security.done 2>/dev/null | wc -l')" "$want"
       check "$1: 0 Wazuh SELinux denials" "$(Rh "$1" "$2" 'ausearch -m AVC --input-logs 2>/dev/null | grep denied | grep -v kanidm_unixd | grep -c denied')" "0"
@@ -214,7 +215,7 @@ case ${1:-} in
     fi ;;
   client1|client2)
     if [[ $1 == client1 ]]; then VM=$C1; IP=$C1IP; MAC=52:54:00:c4:05:51; else VM=$C2; IP=$C2IP; MAC=52:54:00:c4:05:52; fi
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")
+    out=$(A "sudo DISK_GB=${DISK_GB:-120} bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/client.ks"* && $out == *"INSTALLED and started $VM"* ]] \
       && pass "$VM: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)" || { fail "$VM: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $VM $STICK $VM")
