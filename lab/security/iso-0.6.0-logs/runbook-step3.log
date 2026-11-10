@@ -1,0 +1,227 @@
+# runbook steps 1-2
+
++ df -h /backup
+Filesystem              Size  Used Avail Use% Mounted on
+/dev/mapper/chp-backup  600G  4.3G  596G   1% /backup
++ lsof +D /backup
++ head
++ lsblk -d -o NAME,SIZE,MODEL,SERIAL
+NAME  SIZE MODEL SERIAL
+vda   1.8T       
+vdb   100G       LABBKP0001
++ ls -l /dev/disk/by-id/
++ grep -v part
+total 0
+lrwxrwxrwx. 1 root root  9 Nov  9 18:52 virtio-LABBKP0001 -> ../../vdb
++ D=/dev/disk/by-id/virtio-LABBKP0001
++ lsblk /dev/disk/by-id/virtio-LABBKP0001
+NAME MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+vdb  252:16   0  100G  0 disk 
+stick passphrase matches the one shown (40 chars)
+BACKUP_DRIVE_SERIAL=LABBKP0001
+BACKUP_DRIVE_LUKS_PASSPHRASE=<masked>
+WRITTEN=2026-11-09
+
++ D=/dev/disk/by-id/virtio-LABBKP0001
++ install -m 0600 /dev/null /run/bk.key
++ printf %s <P>
++ cryptsetup luksFormat --type luks2 -q --key-file /run/bk.key /dev/disk/by-id/virtio-LABBKP0001
+++ readlink -f /dev/disk/by-id/virtio-LABBKP0001
++ DEV=/dev/vdb
++ mokutil --sb-state
+SecureBoot enabled
++ clevis luks bind -y -k /run/bk.key -d /dev/vdb tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}'
++ clevis luks list -d /dev/vdb
+1: tpm2 '{"hash":"sha256","key":"ecc","pcr_bank":"sha256","pcr_ids":"7"}'
++ cryptsetup open --key-file /run/bk.key /dev/vdb backupdrive
++ mkfs.xfs -L backup /dev/mapper/backupdrive
+meta-data=/dev/mapper/backupdrive isize=512    agcount=4, agsize=6552576 blks
+         =                       sectsz=512   attr=2, projid32bit=1
+         =                       crc=1        finobt=1, sparse=1, rmapbt=0
+         =                       reflink=1    bigtime=1 inobtcount=1 nrext64=0
+data     =                       bsize=4096   blocks=26210304, imaxpct=25
+         =                       sunit=0      swidth=0 blks
+naming   =version 2              bsize=4096   ascii-ci=0, ftype=1
+log      =internal log           bsize=4096   blocks=16384, version=2
+         =                       sectsz=512   sunit=0 blks, lazy-count=1
+realtime =none                   extsz=4096   blocks=0, rtextents=0
++ mkdir -p /mnt/newbackup
++ mount -o nodev,nosuid,noexec /dev/mapper/backupdrive /mnt/newbackup
++ grep -E 'regular files transferred|Total transferred'
++ rsync -aHAX --info=stats2 /backup/ /mnt/newbackup/
+Number of regular files transferred: 0
+Total transferred file size: 0 bytes
++ rsync -aHAX --info=stats2 /backup/ /mnt/newbackup/
++ grep -E 'regular files transferred|Total transferred'
+Number of regular files transferred: 0
+Total transferred file size: 0 bytes
++ diff -rq /backup /mnt/newbackup
+SAME
++ echo SAME
+
++ mkdir -p /backup/lab-test
++ head -c 50M /dev/urandom
++ ln /backup/lab-test/a.bin /backup/lab-test/a.hard
++ echo hi
++ setfattr -n user.lab -v 1 /backup/lab-test/b.txt
++ ls -lZ /backup/lab-test
+total 102404
+-rw-r--r--. 2 root root unconfined_u:object_r:default_t:s0 52428800 Nov  9 18:53 a.bin
+-rw-r--r--. 2 root root unconfined_u:object_r:default_t:s0 52428800 Nov  9 18:53 a.hard
+-rw-r--r--. 1 root root unconfined_u:object_r:default_t:s0        3 Nov  9 18:53 b.txt
++ rsync -aHAX --info=stats2 /backup/ /mnt/newbackup/
++ grep -E 'regular files transferred|Total transferred'
+Number of regular files transferred: 2
+Total transferred file size: 52,428,803 bytes
++ rsync -aHAX --info=stats2 /backup/ /mnt/newbackup/
++ grep -E 'regular files transferred|Total transferred'
+Number of regular files transferred: 0
+Total transferred file size: 0 bytes
++ diff -rq /backup /mnt/newbackup
+SAME
++ echo SAME
++ getfattr -n user.lab /mnt/newbackup/lab-test/b.txt
+# file: mnt/newbackup/lab-test/b.txt
+user.lab="1"
+
+getfattr: Removing leading '/' from absolute path names
++ stat -c '%i %h' /mnt/newbackup/lab-test/a.bin /mnt/newbackup/lab-test/a.hard
+132 2
+132 2
+
++ D=/dev/disk/by-id/virtio-LABBKP0001
+++ readlink -f /dev/disk/by-id/virtio-LABBKP0001
++ DEV=/dev/vdb
+++ cryptsetup luksUUID /dev/vdb
++ LUKS_UUID=f885718b-31f4-4f04-84fd-467dbb7fc7da
+++ blkid -s UUID -o value /dev/mapper/backupdrive
++ XFS_UUID=35177cdb-493d-47d3-8ffc-1c9053e73250
++ echo 'backupdrive UUID=f885718b-31f4-4f04-84fd-467dbb7fc7da none luks,nofail'
++ sed -i.bak '\# /backup #d' /etc/fstab
++ echo 'UUID=35177cdb-493d-47d3-8ffc-1c9053e73250 /backup xfs nodev,nosuid,noexec,nofail,x-systemd.device-timeout=30 0 0'
++ cat /etc/crypttab /etc/fstab
+luks-45188d18-4b35-4c16-9a9d-658ea5077b96 UUID=45188d18-4b35-4c16-9a9d-658ea5077b96 none discard
+backupdrive UUID=f885718b-31f4-4f04-84fd-467dbb7fc7da none luks,nofail
+
+#
+# /etc/fstab
+# Created by anaconda on Mon Nov  9 23:01:07 2026
+#
+# Accessible filesystems, by reference, are maintained under '/dev/disk/'.
+# See man pages fstab(5), findfs(8), mount(8) and/or blkid(8) for more info.
+#
+# After editing this file, run 'systemctl daemon-reload' to update systemd
+# units generated from this file.
+#
+/dev/mapper/chp-root    /                       xfs     defaults,x-systemd.device-timeout=0 0 0
+UUID=7f3c7809-6196-47eb-9acb-453e572c519d /boot                   xfs     defaults        0 0
+UUID=0AA5-FC63          /boot/efi               vfat    defaults,uid=0,gid=0,umask=077,shortname=winnt 0 2
+/dev/mapper/chp-data    /data                   xfs     nodev,nosuid,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-home    /home                   xfs     defaults,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-tmp     /tmp                    xfs     defaults,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-var     /var                    xfs     defaults,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-var_log /var/log                xfs     defaults,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-var_log_audit /var/log/audit          xfs     defaults,nodev,noexec,nosuid,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-var_tmp /var/tmp                xfs     defaults,x-systemd.device-timeout=0 0 0
+/dev/mapper/chp-swap    none                    swap    defaults,x-systemd.device-timeout=0 0 0
+/data/wazuh /var/ossec none bind 0 0
+UUID=35177cdb-493d-47d3-8ffc-1c9053e73250 /backup xfs nodev,nosuid,noexec,nofail,x-systemd.device-timeout=30 0 0
++ grep -c ' /backup ' /etc/fstab
+1
++ grep -c backupdrive /etc/crypttab
+1
++ rsync -aHAX --delete /backup/ /mnt/newbackup/
++ diff -rq /backup /mnt/newbackup
+SAME
++ echo SAME
++ umount /mnt/newbackup
++ rmdir /mnt/newbackup
++ umount /backup
++ chattr +i /backup
++ lsattr -d /backup
+----i----------------- /backup
++ systemctl daemon-reload
++ mount /backup
++ restorecon -R /backup
++ findmnt /backup
+TARGET  SOURCE                  FSTYPE OPTIONS
+/backup /dev/mapper/backupdrive xfs    rw,nosuid,nodev,noexec,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
++ ls -ldZ /backup
+drwxr-xr-x. 3 root root system_u:object_r:default_t:s0 22 Nov  9 18:53 /backup
++ touch /backup/.probe
++ rm /backup/.probe
+PROBE-OK
++ echo PROBE-OK
++ lvremove -y chp/backup
+  Logical volume "backup" successfully removed.
++ vgs chp
+  VG  #PV #LV #SN Attr   VSize  VFree  
+  chp   1   9   0 wz--n- <1.82t 942.98g
++ shred -u /run/bk.key
++ unset P
++ ls /run/bk.key
+ls: cannot access '/run/bk.key': No such file or directory
+
+enabled
+# after reboot
+
+up 0 minutes
+TARGET  SOURCE                  FSTYPE OPTIONS
+/backup /dev/mapper/backupdrive xfs    rw,nosuid,nodev,noexec,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+NAME          TYPE  MOUNTPOINTS
+vdb           disk  
+└─backupdrive crypt /backup
+Starting Cryptography Setup for backupdrive...
+Running in FIPS mode.
+Set cipher aes, mode xts-plain64, key size 512 bits for device /dev/disk/by-uuid/f885718b-31f4-4f04-84fd-467dbb7fc7da.
+Failed to activate with specified passphrase. (Passphrase incorrect?)
+Set cipher aes, mode xts-plain64, key size 512 bits for device /dev/disk/by-uuid/f885718b-31f4-4f04-84fd-467dbb7fc7da.
+Finished Cryptography Setup for backupdrive.
+  VG  #PV #LV #SN Attr   VSize  VFree  
+  chp   1   9   0 wz--n- <1.82t 942.98g
+total 102404
+drwxr-xr-x. 2 root root       46 Nov  9 18:53 .
+drwxr-xr-x. 3 root root       22 Nov  9 18:53 ..
+-rw-r--r--. 2 root root 52428800 Nov  9 18:53 a.bin
+-rw-r--r--. 2 root root 52428800 Nov  9 18:53 a.hard
+-rw-r--r--. 1 root root        3 Nov  9 18:53 b.txt
+---------------------- /backup
+# monitor after reboot (step 12: only new alert should be AIDE)
+
+rc=1
+the 5-minute YARA scan has not succeeded for 102 minutes (journalctl -u chp-yara-recent)
+
+OK no XFS file system at or above 85% (or already alerted)
+# step 13 (AIDE)
+
+started-rc=0
+Starting CHP daily AIDE file integrity check (core 0.2.0)...
+check: exit 5 added=9 removed=0 changed=6 db_match=yes
+chp-aide-check.service: Deactivated successfully.
+Finished CHP daily AIDE file integrity check (core 0.2.0).
+chp-aide-check.service: Consumed 32.682s CPU time.
+# step 13: aide-accept, answered no (listing only)
+
+no
+no
+AIDE changes since the baseline: 9 added, 0 removed, 6 changed
+
+Explained by signed package updates: 0 paths in 0 packages
+
+NOT explained: 15 paths (review every one)
+  added    /etc/fstab.bak
+  added    /etc/lvm/archive/chp_00001-148857732.vg
+  added    /etc/sudoers.d/99-lab-adapter
+  added    /root/chp-scan
+  added    /root/chp-scan/iso5-srv.xml
+  added    /root/chp-scan/tailoring.xml
+  added    /var/lib/ssh-ca/keys/lab01.pub
+  added    /var/lib/ssh-ca/keys/lab02.pub
+  added    /var/lib/ssh-ca/keys/lab06.pub
+  changed  /etc/crypttab
+  changed  /etc/fstab
+  changed  /etc/lvm/backup/chp
+  changed  /etc/sudoers.d
+  changed  /root
+  changed  /var/lib/ssh-ca/keys
+Type ACCEPT to make this the new baseline: chp-site: not accepted; nothing was changed

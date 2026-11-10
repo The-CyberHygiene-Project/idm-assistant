@@ -12,8 +12,8 @@ mount is marked `nofail` and the server keeps running. Then `/backup` would be a
 silently fill the system disk. So the empty folder is made immutable (step 9): while the drive is absent, writes to
 `/backup` fail loudly instead.
 
-**What changes:** a new LUKS2 drive appears, mounted on `/backup`. `/etc/fstab` and `/etc/crypttab` change (AIDE
-watches both, so it raises an alert until the ISSO accepts them). The logical volume `chp/backup` is removed.
+**What changes:** a new LUKS2 drive appears, mounted on `/backup`. `/etc/fstab`, `/etc/crypttab` and the LVM
+records under `/etc/lvm` change (AIDE watches them, so it raises an alert until the ISSO accepts them). The logical volume `chp/backup` is removed.
 
 **What you need:**
 - the new drive, empty or one you are happy to erase, installed in the bay;
@@ -150,14 +150,19 @@ All commands as root on the server (`su -`).
     The `clevis-luks-askpass.path` unit is what lets the TPM unlock a drive that is not the root disk. Nothing in the
     installer enables it, so without the `enable` the reboot stops and asks for the passphrase. With it, nothing needs
     typing at the console (the TPM unlocks both disks). After the boot, log in and run
-    `findmnt /backup`, then read the monitor output: the only new alert should be the AIDE change.
+    `findmnt /backup`, then read the monitor output: the only new alert should be the AIDE change. The journal for
+    `systemd-cryptsetup@backupdrive` shows one "Failed to activate with specified passphrase" line followed by
+    "Finished Cryptography Setup": the first try uses an empty passphrase, then the TPM unlocks it. That is normal.
 
 13. **ISSO: accept the AIDE change.** `/etc/fstab` and `/etc/crypttab` changed, so AIDE alerts. With the site stick
     plugged in, as the ISSO or a `BASELINE_DELEGATES` person:
 
         chp-site aide-accept --approver "Name" --reason "backup moved to second drive (runbook move-backup-to-a-second-drive)"
 
-    It shows what changed. It must list only `/etc/fstab` and `/etc/crypttab`. If it lists anything else, say **no** and investigate.
+    It shows what changed. The move itself explains exactly these paths: `/etc/fstab`, `/etc/crypttab`,
+    `/etc/fstab.bak` (the old copy from step 8; delete it first if you no longer need to undo), `/etc/lvm/backup/chp`
+    and a new file under `/etc/lvm/archive/` (LVM records every volume change; `lvremove` in step 10 made them). Anything
+    else on the list is not from this move: say **no** and investigate.
 
 14. Put the site stick back in its safe. The new drive's recovery passphrase is only on it. Keep your offline second
     copy of the stick up to date (it needs the new `escrow/<hostname>-backup-drive.txt` too).
