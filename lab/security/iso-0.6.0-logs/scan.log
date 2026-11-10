@@ -1,0 +1,9 @@
+PASS iso5-srv: oscap evaluated (oscap-rc=2: 0 = all selected rules pass, 2 = some fail)
+iso5-srv: 2 failing, 108 passing
+PASS iso5-cli1: oscap evaluated (oscap-rc=2: 0 = all selected rules pass, 2 = some fail)
+iso5-cli1: 2 failing, 108 passing
+PASS iso5-cli2: oscap evaluated (oscap-rc=2: 0 = all selected rules pass, 2 = some fail)
+iso5-cli2: 2 failing, 108 passing
+PASS scan results hold no secrets
+stage scan: ALL PASS
+lab/iso5/prove.sh scan  2.10s user 0.20s system 5% cpu 41.033 total

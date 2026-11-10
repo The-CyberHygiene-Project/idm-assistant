@@ -1,0 +1,7 @@
+summary: {"chp_yara": {"errors": 0, "event": "summary", "files": 112185, "matches": 1, "seconds": 67}}
+PASS cli2: full scan found the test file
+PASS cli2: the test file is the ONLY match (no false alarm, e.g. the Suricata rules)
+PASS cli2: summary over 1000 files, 0 errors
+PASS cli2: last-full written
+PASS cli2: monitor 73 OK
+stage full: ALL PASS
