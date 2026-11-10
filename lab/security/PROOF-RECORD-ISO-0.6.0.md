@@ -30,7 +30,7 @@ tripped. Raw logs of every stage below are in `lab/security/iso-0.6.0-logs/`.
 `findmnt`: `/data` = `rw,nosuid,nodev,...` and `/backup` = `rw,nosuid,nodev,noexec,...`, both on their own LVs;
 `/var/ossec` is the bind mount of `chp-data[/wazuh]`. `lvextend -r -L +5G chp/var`, online: `/var` 102,336 M -> 107,456 M
 (+5 GiB), VFree 342.98 -> 337.98 GiB; the `MainPID` and start time of kanidmd, sshd and chronyd and the start time of the
-Wazuh manager were identical before and after, 0 failed units. Image after the extension: 14 GB (limit 50).
+Wazuh manager were identical before and after, the failed-unit count printed at the end of `step1-lvextend.log` is `0`. Image after the extension: 14 GB (limit 50).
 Log: `iso-0.6.0-logs/step1-lvextend.log`.
 
 ### Step 2: check 76 catch (cli2)
@@ -64,6 +64,8 @@ item present, records from three hosts), and the new sign-off checks. The `repo`
 | `export` | ALL PASS: to the stick, `verify --stick` OK; an emptied ledger fails against the stick |
 | `soon`, `res` | ALL PASS; record about 2.3 KB (srv) / 1.8 KB (cli2), about 0.4 s CPU per run |
 
+**Log note:** `iso-0.6.0-logs/r1-sign.log` is the run with the wrong check (6 of 7 PASS, 1 FAIL). The re-run of the `sign` stage after the script fix was **not logged** (the output was not captured), and `tamper`, `export` and the later stages ran after the first run, not after a re-run. Indirect evidence that the sign-off itself worked and the refused attempts signed nothing: in `r1-sign.log` the sign, refusal, piped-yes, bad-date, verify and audit-log checks all PASS; `r1-tamper.log` then reports exactly two ledger entries after the two real sign-offs. The fixed ledger-count line itself was not re-proved.
+
 One check of mine was wrong, not the product: "the refused attempts signed nothing" redirected `ledger.jsonl` from a
 non-root shell (Permission denied). It is fixed in the script (`sudo cat | wc -l`); the point itself is shown by the
 `tamper` stage counting exactly 2 entries after the two real sign-offs. The Mac-side `yes` stand-in for a terminal is
@@ -88,7 +90,7 @@ was attached to the running server (the guard counted it, 1 GB). Steps 1-12 were
 - Step 10: `lvremove chp/backup`; `vgs chp` VFree **342.98 -> 942.98 GiB (+600 GiB)**.
 - Step 11: the key file shredded.
 - Step 12: `clevis-luks-askpass.path` enabled; **reboot with nobody typing**: the VM came back by itself, `/backup` was
-  mounted from `backupdrive` (vdb, TPM unlock), `/backup/lab-test` intact, 0 failed units, 76 OK. The monitor's only
+  mounted from `backupdrive` (vdb, TPM unlock), `/backup/lab-test` intact, `systemctl list-units --state=failed` printed nothing (`runbook-step3.log`, "after reboot"), 76 OK. The monitor's only
   alert was the AIDE change.
 - Step 13: `chp-site aide-accept` (answered **no**, to leave the lab untouched) listed 15 paths. Beyond the lab's own
   (`99-lab-adapter`, `/root/chp-scan`, the fixture SSH keys) these were the move's:
