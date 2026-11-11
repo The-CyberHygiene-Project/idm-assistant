@@ -1,0 +1,29 @@
+PASS agents Active (2)
+PASS pending wazuh folder empty after export
+PASS server: default API logins refused
+PASS server: listeners
+PASS server: update_check off
+PASS iso5-srv: no 'No such tag' warnings
+PASS iso5-srv: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-srv: security step done
+PASS iso5-srv: 0 Wazuh SELinux denials
+PASS iso5-srv: 0 fapolicyd denials
+PASS iso5-srv: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: no 'No such tag' warnings
+PASS iso5-cli1: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli1: security step done
+PASS iso5-cli1: 0 Wazuh SELinux denials
+PASS iso5-cli1: 0 fapolicyd denials
+PASS iso5-cli1: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli2: no 'No such tag' warnings
+PASS iso5-cli2: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli2: security step done
+PASS iso5-cli2: 0 Wazuh SELinux denials
+PASS iso5-cli2: 0 fapolicyd denials
+PASS iso5-cli2: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: staged agent.key shredded
+PASS iso5-cli1: agent upgrade module off
+PASS iso5-cli2: staged agent.key shredded
+PASS iso5-cli2: agent upgrade module off
+PASS USBGuard allow events only from export-client (server)
+stage iso5-cli2: ALL PASS

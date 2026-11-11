@@ -1,0 +1,2 @@
+PASS lab hook set
+stage hook: ALL PASS

@@ -1,0 +1,8 @@
+PASS srv: ISSO signs 2026-11-11
+PASS srv: an unlisted name is refused
+PASS srv: piped yes is refused (sign-off fix: needs a terminal)
+PASS srv: bad --date: plain error, no traceback
+PASS srv: the refused attempts signed nothing
+PASS srv: review verify clean
+PASS srv: sign-off in the audit log
+stage sign: ALL PASS

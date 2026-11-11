@@ -1,0 +1,24 @@
+
+OK   volume ID CHP-LAB-EL9
+OK   boot records: El Torito EFI + GPT partition -> /images/efiboot.img
+OK   no appended EFI partition
+OK   GPT partition 2 (USB UEFI boot) == /images/efiboot.img
+OK   present: /chp/repodata/repomd.xml.asc
+OK   present: /chp/chp-site.pyz
+OK   present: /chp/ks/server.ks
+OK   present: /chp/ks/client.ks
+OK   present: /NOTICE.txt
+OK   unchanged from the DVD: EFI/BOOT/BOOTX64.EFI
+OK   unchanged from the DVD: EFI/BOOT/grubx64.efi
+OK   unchanged from the DVD: EFI/BOOT/mmx64.efi
+OK   unchanged from the DVD: images/pxeboot/vmlinuz
+OK   unchanged from the DVD: images/pxeboot/initrd.img
+OK   efiboot.img unchanged: EFI/BOOT/BOOTX64.EFI
+OK   efiboot.img unchanged: EFI/BOOT/grubx64.efi
+OK   efiboot.img unchanged: EFI/BOOT/mmx64.efi
+OK   efiboot.img grub.cfg == ISO grub.cfg (USB boot shows our menu)
+OK   menu is ours
+OK   repo on the ISO verifies
+OK   chp-site verify-repo accepts it
+ISO OK
+0cb27c1497acdd245af74508ab16a8d9f75a57dd10089372ac2ef9a68067cac0  /var/lib/libvirt/images/chp-iso/0.6.0-rc2/cyberhygiene-lab-installer-el9.iso

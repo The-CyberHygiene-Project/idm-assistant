@@ -1,4 +1,6 @@
-# Proof record: ISO 0.6.0-rc1 (sized disks, /data and /backup volumes, check 76, sign-off fixes) on the iso5 lab
+# Proof record: ISO 0.6.0 (sized disks, /data and /backup volumes, check 76, sign-off fixes) on the iso5 lab
+
+**The release candidate is rc2** (sha256 `0cb27c1497acdd245af74508ab16a8d9f75a57dd10089372ac2ef9a68067cac0`; see "ISO 0.6.0-rc2" at the end). rc1 (below, with its 36 h quiet day) was proved first; rc2 differs from it only in `chp-site` 0.13.0-2 and was re-proved on a fresh install (no second quiet day).
 
 ISO **0.6.0-rc1** = the Rocky 9.8 DVD boot chain + signed repo **0.11.0** (`check-iso.sh`: ISO OK; sha256
 `e860c6f6fa9f18a2eceea3414716da5d101e5275693b99e33e112deead250dbb`). Repo 0.11.0 differs from 0.10.0 in three packages:
@@ -149,3 +151,61 @@ srv and cli2 at golden plus a lab `ALERT_HOOK` each; cli1 untouched since instal
   reinstalled at 512. `wazuh-on` expected `/srv/wazuh`; on the sized server it is `/data/wazuh` (by design). The check now
   derives the expectation on each host by `wazuh.py`'s rule (`7b81a11`).
 - Image sizes after first boot: srv 11 GB, cli1 9, cli2 9 (virtual 1863 / 120 / 512 GiB). No `DISK_NOTE` in any escrow file.
+
+## ISO 0.6.0-rc2 (chp-site 0.13.0-2) - the release candidate
+
+**What changed vs rc1:** one package. The rc1 quiet day showed that the daily review marked the healthy 24 h Kanidm
+certificate ATTENTION below half its life (it is renewed at 8 h left, so ATTENTION showed for about 4 of every 16 h).
+`chp-site` 0.13.0-2 (`3e72f90`) flags a short-lived certificate (under 90 days) ATTENTION only below **30 %** of its
+lifetime (immediate below 25 %); certificates of 90 days or more are unchanged. Repo 0.11.0 was re-signed by the owner with
+that package (`REPO OK: 28 packages`; the rc1-signed copy stays at `/data/chp-release/0.11.0/repo-superseded-chp-site-0.13.0-1`,
+never published). `chp-base` 0.1.0-4 and `chp-security` 0.4.1-1 are the same as rc1.
+
+**ISO:** `build-iso.sh 0.11.0 0.6.0-rc2` (after `appliance/iso/push.sh`), `check-iso.sh ISO DVD` = **ISO OK**;
+sha256 **`0cb27c1497acdd245af74508ab16a8d9f75a57dd10089372ac2ef9a68067cac0`** (`rc2-build-iso.log`, `rc2-check-iso.log`).
+The lab installs boot this ISO and read the repo from it, so there is no separate lab copy of 0.11.0 under
+`/data/lab-inputs/chp/` to replace (that directory only serves the `negrepo` stage and has no 0.11.0).
+
+All three hosts were reinstalled from nothing from rc2 (2026-11-11, `SECURITY_ADDONS=yes`): server 1863 GiB sparse,
+cli2 512, cli1 120; the size guards (50 GB) were active the whole time and never tripped (0 `SIZE-GUARD` lines), then
+stopped at the end (`rc2-guards-stopped.log`: both `inactive`).
+
+| Gate / proof | Result | Log (`iso-0.6.0-logs/`) |
+|---|---|---|
+| Install stages: prep, server, firstboot, export, client1, client2 | ALL PASS | `rc2-install-chain.log` |
+| `wazuh-on` | first run **FAIL**: agents Active 1 of 2 (cli2 still reconnecting after its first boot, the same race noted for rc1 and 0.5.0); re-run a minute later: **ALL PASS** | `rc2-install-chain.log`, `rc2-wazuh-on-rerun.log` |
+| Layouts | srv: `/` 90, swap 29, `/backup` 600, `/data` 350, audit 30, `/var/log` 50, `/var/tmp` 15, `/var` 100, `/tmp` 15, `/home` 238, VFree **342.98 GiB**; cli2: VFree **303.98 GiB**, no `/data` or `/backup`; cli1 120 GiB: VFree 0, same as rc1. `/data` `rw,nosuid,nodev`, `/backup` `rw,nosuid,nodev,noexec`. No `DISK_NOTE` in any escrow file (0 x3) | `rc2-layouts.log` |
+| Image sizes (`du -B1G`, after the proofs) | srv 14, cli2 11, cli1 9 GB (limit 50) | `rc2-guards-stopped.log` |
+| Installed packages | `chp-site-0.13.0-2`, `chp-base-0.1.0-4`, `chp-security-0.4.1-1` on srv and cli2; cli1 `chp-site-0.13.0-2` (root console) | `rc2-layouts.log` |
+| **Gate 3:** CUI scan | **108 pass / 2 fail on every host**, the two accepted AIDE rules; `deviations.py --decisions decisions.tsv` rc 0, "Gate 3: MET"; no change from rc1 | `rc2-scan.log`, `rc2-deviations.log` |
+| adapter, nvram, snapspike, fixtures, golden | ALL PASS (golden: reset + 0 findings on both hosts) | `rc2-adapter.log`, `rc2-nvram.log`, `rc2-snapspike.log`, `rc2-fixtures.log`, `rc2-golden.log` |
+| **Gate 2:** regression (`lab/iso5/regression-2026-11-11.md`) | **33/33** (11 scenarios x 3 runs, all GREEN); model `devstral-small-2-2512`: 33/33 valid, **33/33 agreeing** | `rc2-regress.log` |
+| **Gate 2:** row 36 | **3/3**; token label `var_auth_t` afterwards | `rc2-row36.log` |
+| Review proofs (`prove-r1.sh`) `on`, `build`, `sign`, `tamper`, `export` | **ALL PASS** (the sign-off from a scripted pty as in rc1, not a human; piped `yes` refused; exactly two ledger entries after the two sign-offs; edited entry and report fail `verify`, monitor 75 alerts; stick export verifies) | `rc2-r1-on.log`, `rc2-r1-build.log`, `rc2-r1-sign.log`, `rc2-r1-tamper.log`, `rc2-r1-export.log`, `rc2-s1-hook.log` |
+
+**How the review proofs were run (honest account):** the `prove-r1.sh` before-files (`/root/r1-t0`, `r1-keys-before`,
+`r1-ss-before`, normally made by the `repo`/`enable` stages, which do not apply to a security-on install) were gone
+with the reinstall; the first `on`/`build`/`sign`/`tamper` pass therefore failed on missing files (and `build` also on
+the missing lab hook). They were made by hand from the boot state of each host (`uptime -s`, client key hash, listener list), the lab hook was set
+(`prove-s1.sh hook`), and the review store on srv (which that first pass had polluted with an empty-data report) was emptied. The whole chain was then re-run
+and passed; the logs under `rc2-r1-*` are that clean second run (the first failing pass was overwritten and is not kept).
+`soon` and `res` were not re-run (not in the rc2 scope).
+
+### The fix itself: the Kanidm certificate row
+
+The review's status row on srv (`rc2-cert-row.log`, from the built report's `data.json`):
+
+    item cert /etc/pki/kanidm/chain.pem, owner 30-kanidm-cert, state OK, detail "23 h left of 24 h"
+
+The certificate was fresh (23 h left), so this sample is **not** in the old false-ATTENTION window (12 h to 7.2 h left)
+and cannot show the fix by itself; renewal is not stuck (it is a fresh certificate on a freshly reverted lab). The rule
+as installed on srv (`chp_site.review_rules.cert_state`, called with a 24 h lifetime) gives: 23 h OK, 12 h OK, **10 h OK**
+(this was ATTENTION in rc1's quiet-day report), 8 h OK, 7.5 h OK, 7.2 h OK, 6 h ATTENTION (not immediate), expired
+ATTENTION (immediate). So the healthy cycle (renewal at 8 h left) never flags, and a certificate that fails to renew
+is still flagged once it is under 7.2 h. This is evidence of the rule on the installed package, not of a live 10 h
+sample; the unit tests in the repo cover the same boundaries.
+
+### Not repeated, by ruling
+No second quiet day, and not re-run: the backup-drive runbook, the layout `lvextend` proof, the check 76 catch and the
+forced YARA scan (none touch `chp-site`'s certificate rule; `chp-base` and `chp-security` are unchanged from rc1).
+

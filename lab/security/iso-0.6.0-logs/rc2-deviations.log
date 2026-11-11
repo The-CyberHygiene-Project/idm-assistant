@@ -1,0 +1,14 @@
+# CUI scan deviations (iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test)
+
+## Failures
+
+| rule | severity | hosts | decision | decided by | reason | title |
+|---|---|---|---|---|---|---|
+| xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking | medium | iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): chp-aide-check.timer daily + 61-aide-stale; the OVAL test accepts only a cron line | Configure Periodic Execution of AIDE |
+| xccdf_org.ssgproject.content_rule_aide_scan_notification | medium | iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): monitor -> journal + ALERT_HOOK (no MTA on the appliance); the OVAL test accepts only /bin/mail on the cron line | Configure Notification of Post-AIDE Scan Details |
+
+## Not evaluated
+
+
+**Gate 3: MET** (2 failing rules)
+deviations rc=0

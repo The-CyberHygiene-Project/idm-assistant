@@ -1,0 +1,21 @@
+
+---
+2026-11-11
+{'detail': '23 h left of 24 h', 'host': 'iso5-srv', 'immediate': False, 'item': 'cert /etc/pki/kanidm/chain.pem', 'owner': '30-kanidm-cert', 'source_age': None, 'state': 'OK'}
+{'detail': '3649 days left', 'host': 'iso5-srv', 'immediate': False, 'item': 'cert /etc/step-ca/certs/intermediate_ca.crt', 'owner': None, 'source_age': None, 'state': 'OK'}
+{'detail': '3649 days left', 'host': 'iso5-srv', 'immediate': False, 'item': 'cert /etc/step-ca/certs/root_ca.crt', 'owner': None, 'source_age': None, 'state': 'OK'}
+{'detail': '3649 days left', 'host': 'iso5-srv', 'immediate': False, 'item': 'cert /etc/pki/ca-trust/source/anchors/chp-root.crt', 'owner': None, 'source_age': None, 'state': 'OK'}
+{'detail': '3649 days left', 'host': 'iso5-cli1', 'immediate': False, 'item': 'cert /etc/pki/ca-trust/source/anchors/chp-root.crt', 'owner': None, 'source_age': None, 'state': 'OK'}
+{'detail': '3649 days left', 'host': 'iso5-cli2', 'immediate': False, 'item': 'cert /etc/pki/ca-trust/source/anchors/chp-root.crt', 'owner': None, 'source_age': None, 'state': 'OK'}
+2026-11-12
+---
+Could not open file or uri for loading certificate from /etc/kanidm/server.pem: No such file or directory
+Wed Nov 11 04:18:38 PM UTC 2026
+left 23 h of 24: ('OK', False, '23 h left of 24 h')
+left 12 h of 24: ('OK', False, '12 h left of 24 h')
+left 10 h of 24: ('OK', False, '10 h left of 24 h')
+left 8 h of 24: ('OK', False, '8 h left of 24 h')
+left 7.5 h of 24: ('OK', False, '7 h left of 24 h')
+left 7.2 h of 24: ('OK', False, '7 h left of 24 h')
+left 6 h of 24: ('ATTENTION', False, '6 h left of 24 h')
+left 0 h of 24: ('ATTENTION', True, 'expired 0 h ago')

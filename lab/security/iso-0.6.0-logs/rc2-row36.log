@@ -1,0 +1,57 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+Domain snapshot golden reverted
+
+Domain snapshot golden reverted
+
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+iso5-srv: clock synced 17:41:36
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+iso5-cli2: clock synced 17:41:47
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+[32m[32m✔[0m [1mProvisioner[0m[1m:[0m acme (ACME)
+Using Standalone Mode HTTP challenge to validate idm.iso5.lab.test . done!
+Waiting for Order to be 'ready' for finalization .. done!
+Finalizing Order .. done!
+[32m[32m✔[0m [1mCertificate[0m[1m:[0m /etc/pki/kanidm/chain.pem
+[32m[32m✔[0m [1mPrivate Key[0m[1m:[0m /etc/pki/kanidm/key.pem
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+client2: Kanidm TLS ok
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+success
+reset: golden, clocks synced, fresh certificate served
+PASS row 36 run 1: gdm-password accepts lab01 (password + GA code)
+PASS row 36 run 2: gdm-password accepts lab01 (password + GA code)
+PASS row 36 run 3: gdm-password accepts lab01 (password + GA code)
+PASS row 36: GA token label after the logins
+stage row36: ALL PASS
+ROW36-DONE
