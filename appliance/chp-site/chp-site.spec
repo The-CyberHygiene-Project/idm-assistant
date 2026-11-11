@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.13.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Wed Nov 11 2026 The CyberHygiene Project - 0.13.0-2.chp
+- Daily review: a short-lived certificate is ATTENTION below 30 % of its lifetime left (was half), so a healthy
+  24-hour Kanidm certificate no longer shows ATTENTION before its renewal point.
+
 * Mon Nov 09 2026 The CyberHygiene Project - 0.13.0-1.chp
 - 0.6.0 disk layout: sized layouts for servers (>= 900 GB) and workstations (>= 240 GB), /data and /backup volumes,
   DISK_NOTE line in the escrow file and on the console for servers under 1.9 TB.

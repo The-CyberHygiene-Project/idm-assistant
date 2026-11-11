@@ -147,7 +147,9 @@ Repeats are grouped as the forwarder already groups them, so a standing problem 
   hours** and is renewed by `cert-renew-kanidm.timer` every 15 minutes; the step-ca root and intermediate last 10
   years. So the rule depends on the lifetime:
   - lifetime under 90 days (renewed automatically): **ATTENTION** when less than half its lifetime is left (renewal
-    has stopped), **immediate alert** when less than a quarter is left; the renewal timer's last result is shown too;
+    has stopped), **immediate alert** when less than a quarter is left; the renewal timer's last result is shown too
+    *(changed 2026-11-11, ISO 0.6.0: 30 %, below the Kanidm renewal point, which is 8 h of 24 h; at half, a healthy
+    certificate showed ATTENTION about 4 h of every 16 h)*;
   - lifetime of 90 days or more: **ATTENTION** at 30 days left, **immediate alert** at 7 days.
   The builder finds every certificate the appliance relies on (Kanidm, step-ca, the trust anchor, any others) rather
   than a fixed list.
