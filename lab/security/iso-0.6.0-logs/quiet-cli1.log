@@ -1,0 +1,16 @@
+# cli1 (read-only; no lab-adapter sudo, chpadmin only)
+
+iso5-cli1
+2026-11-11T07:27:06-0700
+--- failed units: systemctl list-units --state=failed --no-legend
+(end)
+--- journalctl -t chp-monitor --since 2026-11-09 18:59 | AIDE lines / % full lines
+102
+0
+--- other distinct lines
+--- AIDE summaries
+     89 3 added, 0 removed, 1 changed (/var/log/aide/check-20261110T112917Z.log): review, then chp-site aide-accept
+     13 3 added, 0 removed, 1 changed (/var/log/aide/check-20261111T110417Z.log): review, then chp-site aide-accept
+--- df
+/dev/mapper/chp-var    20416M  919M    19498M   5% /var
+ls: cannot open directory '/var/log/aide': Permission denied

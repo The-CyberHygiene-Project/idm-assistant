@@ -50,8 +50,8 @@ the hook log cleared before the 90 % run. Logs: `step2-check76*.log`.
 
 ### Step 4: review proofs on the fresh install (srv + cli2, cli1 as a third reporting host)
 
-`prove-r1.sh` was updated for 0.6.0 (committed): the expected versions, the sign-off through a real terminal
-(`ssh -tt`, the reviewer types `yes`), cli1 now reports like the others (installed with the review: all items OK, sysstat
+`prove-r1.sh` was updated for 0.6.0 (committed): the expected versions, the sign-off through a scripted pty
+(`ssh -tt` with a piped `yes`, not a human at a keyboard), cli1 now reports like the others (installed with the review: all items OK, sysstat
 item present, records from three hosts), and the new sign-off checks. The `repo` and `enable` stages do not apply
 (security was on from the install); their before-files were made from the boot state.
 
@@ -68,7 +68,7 @@ item present, records from three hosts), and the new sign-off checks. The `repo`
 
 One check of mine was wrong, not the product: "the refused attempts signed nothing" redirected `ledger.jsonl` from a
 non-root shell (Permission denied). It is fixed in the script (`sudo cat | wc -l`); the point itself is shown by the
-`tamper` stage counting exactly 2 entries after the two real sign-offs. 
+`tamper` stage counting exactly 2 entries after the two real sign-offs.
 
 ### Step 3: the backup-drive runbook (`docs/runbooks/move-backup-to-a-second-drive.md`), followed on srv
 
@@ -115,24 +115,26 @@ srv and cli2 at golden plus a lab `ALERT_HOOK` each; cli1 untouched since instal
   cli1 34 / cli2 33 / srv 35 (it includes the afternoon's proofs: promiscuous-mode and listening-port alerts from the
   Suricata and `ss` work); 2026-11-10: 413 alerts, records 135 / 138 / 136, four low-level Wazuh items (RBAC auditd
   at 03:31 to 04:30 around the AIDE checks, one listening-port change at 10:58). All three hosts report in the
-  status table, certificates and keys OK. The three `aide_ok` rows read ATTENTION on 11-10 ("changes or mismatch to
+  status table; keys and the CA certificates OK. The one exception on 11-10 is `iso5-srv` `/etc/pki/kanidm/chain.pem`, **ATTENTION, "10 h left of 24 h"**, owned by monitor 30 and therefore not counted: the Kanidm certificate lives 24 h and is renewed 8 h before expiry (monitor 30 alerts below 4 h), but the report marks a certificate under 90 days ATTENTION when less than half its life is left (`review_rules.py` `cert_state`, 12 h here), so a healthy certificate shows ATTENTION for the 4 h between 12 h and 8 h left, and the 00:20 build fell in that window. Renewal was working (the certificate now served was issued 09:53Z on 11-11, 16 h after the previous one; `cert-renew-kanidm.timer` runs every 15 min). Noted as an observation for review: the report's half-life threshold is higher than the 8 h renewal point. The three `aide_ok` rows read ATTENTION on 11-10 ("changes or mismatch to
   review") but are not counted in "Needs attention", because that item is watched by monitor 60 (a row with an owner
   is excluded by design, `review_report.py` line 247). No monitor 75 "not built" alarm.
-- **Hook lines since T0** (srv 111, cli2 110, both with the hook; cli1 has no hook, its monitor journal has 102 AIDE
-  lines): srv = 2 YARA lines from the revert at 18:59 (explained above), 1 daily summary ("5 medium alerts (levels 7-9) on
+- **Hook lines since T0** (recounted from the hook logs at 07:27 on 11-11, `quiet-hooks-recount.log`: srv 111 = 2 + 1 +
+  108 AIDE, cli2 110 = 2 + 108 AIDE; the first capture, `quiet-check.log` at 07:23, showed 107 AIDE lines per host and the
+  count grows by one every 15 min; cli1 has no hook, its monitor journal, `quiet-cli1.log`, has 102 AIDE lines): srv = 2 YARA lines from the revert at 18:59 (explained above), 1 daily summary ("5 medium alerts (levels 7-9) on
   3 hosts in the last 24 h"), and 108 AIDE repeats; cli2 = the same 2 YARA lines and 108 AIDE repeats. AIDE repeats are
   monitor 60 every 15 minutes until accepted (existing behaviour), for two checks (11-10 and 11-11). The AIDE
   changes are lab-only (`quiet-aide-paths.log`): `99-lab-adapter`, `/root/chp-scan`, `lab-hook`, the three fixture SSH
   keys, `/etc/chp/site.conf` (the hook setting) and their parent directories; srv 8 added / 6 changed, cli2 5 / 5. cli1's
-  3 added / 1 changed could not be listed (no lab-adapter sudo there): it holds the scan files under `/root` and its
-  parent directory. Nothing from the new volumes, `/data`, `/backup` or check 76.
+  3 added / 1 changed (`quiet-cli1.log`) could not be listed (no lab-adapter sudo there; its journal and failed units
+  are in that log: 0 "% full" lines, no failed units): probably the scan files under `/root` and a parent directory. The
+  hook lines are monitor 60's channel for the `aide_ok` rows that the review does not count. Nothing from the new volumes, `/data`, `/backup` or check 76.
 - **No false check-76 alerts:** no "% full" line in the `chp-monitor` journal of srv or cli2 since T0 (0), none in the
   hook logs, none in cli1's journal; the state file `/var/lib/chp/monitor/76-disk.state` is empty on both. Mounts at
   the end: srv `/var` 2 %, `/data` 2 %, `/backup` 1 %; cli2 `/var` 5 %. VFree unchanged (342.98 / 303.98 GiB).
 - **The 24-hour repeat of check 76** is proved by the unit test `tests/test_chp_base_disk_check.py::test_76_repeats_after_24h`
   (the clock is injected with `CHP_NOW`); the quiet day could not show it, because nothing crossed the limit.
 - **Image sizes (`du -B1G`, aero):** at T0 srv 14, cli2 11, cli1 9; at the end srv 14, cli2 12, cli1 9 (limit 50).
-  Both guards were active at the end and their journal has no `SIZE-GUARD` line (0), so neither tripped. They were then
+  Both guards were active at the end and their journal has no `SIZE-GUARD` line (0), so neither tripped. The "Stopped"/"Started" lines in the srv guard's journal (`quiet-guards-journal.log`) are all before T0 and come from the install phase, not from the guard acting: started 11-09 12:58, restarted 13:17:44 and stopped 13:34:55, started again 15:58:13 (for the server install), and the cli2 guard started 16:44:34; nothing between T0 and my stop at 11-11 07:24:25. Their timing follows Task 6's reinstall steps; I did not watch them live. They were then
   stopped (`quiet-guards-stopped.log`: both `inactive`).
 - **Suricata:** RSS 531 MB on srv and cli2, up the whole time, 0 restarts. **YARA:** 0 match lines in `chp-yara.json`
   on both; the weekly scan is not due yet (first Sunday scan: "not due" in the report). **Failed units:** the command

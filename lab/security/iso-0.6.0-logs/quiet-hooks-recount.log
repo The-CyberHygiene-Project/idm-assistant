@@ -1,0 +1,13 @@
+== srv1
+
+108
+111
+18:59:12 the 5-minute YARA scan has not succeeded for 107 minutes (journalctl -u chp-yara-recent)
+18:59:57 the 5-minute YARA scan has not succeeded for 108 minutes (journalctl -u chp-yara-recent)
+18:59:03 5 medium alerts (levels 7-9) on 3 hosts in the last 24 h; run chp-site alerts
+== client2
+
+108
+110
+18:59:14 the 5-minute YARA scan has not succeeded for 107 minutes (journalctl -u chp-yara-recent)
+18:59:59 the 5-minute YARA scan has not succeeded for 108 minutes (journalctl -u chp-yara-recent)
