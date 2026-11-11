@@ -65,6 +65,8 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `site-stick-kit-0.5.0/` | the site-stick kit for 0.5.0 | `site-stick-kit-0.5.0/SITE-STICK.md` |
 | `0.5.0-update1/` | package update: the security add-on, part 4 (the ISSO's daily security review: report, sign-off ledger, alerts) | `0.5.0-update1/UPDATE.md` |
 | `site-stick-kit-0.5.0-update1/` | the site-stick kit for 0.5.0 update 1 (guide section: the daily security review; `REVIEW_DELEGATES`) | `site-stick-kit-0.5.0-update1/SITE-STICK.md` |
+| `0.6.0/` | release 0.6.0: the installer ISO with the disk layout sized by the disk and the role (server and workstation), monitor check 76 (disk space), the daily-review sign-off fixes, and the short-lived certificate rule (Kanidm's 24 h certificate is no longer flagged); signed repo, key | `0.6.0/VERIFY.md` |
+| `site-stick-kit-0.6.0/` | the site-stick kit for 0.6.0 (guide section: disks, the layout and the backup drive; `runbooks/`) | `site-stick-kit-0.6.0/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.

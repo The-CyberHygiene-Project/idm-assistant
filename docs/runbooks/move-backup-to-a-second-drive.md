@@ -1,7 +1,7 @@
 # Runbook: move /backup to a second drive
 
-For an ISO 0.6.0 or later server on the recommended 2 TB disk. On it, `/backup` is a volume (about 600 GB) on the
-system disk. This moves it to its own encrypted drive in the spare bay, then gives the 600 GB back to the volume
+For any server installed with 0.6.0 on a disk of 900 GB or more: it has `chp/backup`. On it, `/backup` is a volume (600 GB
+on a 2 TB disk) on the system disk. This moves it to its own encrypted drive in the spare bay, then gives that space back to the volume
 group `chp` so you can grow other volumes.
 
 **Time:** about 30 minutes plus the copy time. **Reboot:** one, at the end, to prove the new mount survives.
@@ -26,12 +26,15 @@ records under `/etc/lvm` change (AIDE watches them, so it raises an alert until 
 
 All commands as root on the server (`su -`).
 
-1. Stop whatever writes to `/backup`, and check what is there:
+1. Check this is the right kind of server, stop whatever writes to `/backup`, and check what is there:
 
+       findmnt -no SOURCE /backup     # must print /dev/mapper/chp-backup; anything else: STOP
        df -h /backup
-       lsof +D /backup 2>/dev/null | head
+       fuser -vm /backup
 
-   If `lsof` lists anything, stop that job first. Nothing of the project's own writes there.
+   If `findmnt` prints anything but `/dev/mapper/chp-backup`, stop: this server is a legacy install (its `/backup` is a
+   folder on `/`) and this runbook does not apply. If `fuser` lists a process, stop that job first. Nothing of the
+   project's own writes there.
 
 2. Find the new drive and set a short name for it. `lsblk` shows every disk; the new one has no partitions and no mount:
 
@@ -41,7 +44,12 @@ All commands as root on the server (`su -`).
    Pick its `/dev/disk/by-id/...` name (not the `-part` ones) and set it:
 
        D=/dev/disk/by-id/PUT-THE-NAME-HERE
-       lsblk $D                       # must show NO partitions and NO mountpoints; if it does, stop
+       [ "$(lsblk -no NAME "$D" | wc -l)" = 1 ] && [ -z "$(lsblk -no MOUNTPOINTS "$D" | tr -d '[:space:]')" ] \
+         && echo "OK: empty, unmounted" || echo "REFUSE: has partitions or is mounted"
+
+   If it prints `REFUSE`, stop. Do not go on with that drive: it holds partitions or something is mounted from it. Check
+   you named the right disk (serial number); if the drive is meant to be wiped, wipe it deliberately (`wipefs -a`) and
+   run this check again. Step 4 erases whatever it finds.
 
 3. Make the recovery passphrase and show it. It is kept only on the site stick, never on this server:
 
@@ -62,8 +70,10 @@ All commands as root on the server (`su -`).
 4. Write the passphrase to a temporary file in memory, then encrypt the drive (LUKS2, as the system disk is):
 
        install -m 0600 /dev/null /run/bk.key; printf '%s' "$P" > /run/bk.key
-       cryptsetup luksFormat --type luks2 -q --key-file /run/bk.key $D
+       cryptsetup luksFormat --type luks2 --key-file /run/bk.key $D
        DEV=$(readlink -f $D)
+
+   `cryptsetup` asks you to type uppercase `YES`: that is the last chance to stop before the drive is erased.
 
 5. Bind it to the TPM, the way first boot binds the system disk (PCR 7, so it needs Secure Boot on). This lets the
    drive unlock by itself at every boot:
@@ -176,12 +186,16 @@ All commands as root on the server (`su -`).
   now fail, by design): log in, read
   `journalctl -b -u systemd-cryptsetup@backupdrive`. If the TPM will not unlock it, type the recovery passphrase from
   the stick: `cryptsetup open /dev/disk/by-uuid/<LUKS_UUID> backupdrive`, then `mount /backup`, and fix the
-  TPM binding with step 5 again (use the passphrase from the stick as the key file).
+  TPM binding: run step 5's `clevis luks bind`, but leave out `-k /run/bk.key` so that clevis asks for the existing
+  passphrase, and type the one from the stick. (If you prefer a key file: `install -m 0600 /dev/null /run/bk.key;
+  printf '%s' '<passphrase>' > /run/bk.key`, use `-k /run/bk.key`, then `shred -u /run/bk.key`. Never make it with
+  `echo`: its trailing newline makes it the wrong key.)
 - **To undo before step 10** (the old volume is untouched): restore the old lines (`mv /etc/fstab.bak /etc/fstab`,
   delete the `backupdrive` line in `/etc/crypttab`), then:
 
       umount /backup                 # the new drive, if step 9 mounted it
       chattr -i /backup              # remove the immutable flag, or the old volume cannot be used as before
+      cryptsetup close backupdrive   # close the new drive's mapping
       systemctl daemon-reload
       mount /backup                  # the old chp/backup volume again
 

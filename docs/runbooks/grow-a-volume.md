@@ -41,7 +41,7 @@ you need plus some headroom, not by everything that is free.
 
    `df` shows the larger size. `vgs` shows `VFree` down by the amount you added.
 
-5. Within ten minutes monitor check 76 clears by itself when the volume is back under 85 %. Nothing to acknowledge.
+5. Within 15 minutes (the monitor runs every 15 minutes) monitor check 76 clears by itself when the volume is back under 85 %. Nothing to acknowledge.
 
 ## If something goes wrong
 

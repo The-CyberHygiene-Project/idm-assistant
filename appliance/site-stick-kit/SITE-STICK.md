@@ -140,10 +140,13 @@ the daily-review sign-off (chp-site 0.13.0): signing needs a terminal (piped inp
 - **Workstation: any disk of 240 GB or more.** Workstations keep their working data on the server, not locally.
 - **Smaller disks still work.** The minimum is still 100 GB. A server under 900 GB and a workstation under 240 GB get
   the same layout as before 0.6.0 (this is what lab VMs get). Then `/data` and `/backup` are plain folders on `/`.
-- A server disk under 1.9 TB works, and the installer says so: the escrow file has a `DISK_NOTE` line, and the
-  install-complete screen shows it. It is a note, not a stop.
+- A server disk under 1.9 TB works, and the installer says so: the note is printed on the console during the
+  first stage of the install, and written as a `DISK_NOTE` line in the host's escrow file on the site stick. It is a
+  note, not a stop. (The install-complete screen does not show it.)
 
-**The layout** (sizes in GiB, rounded down; the volumes are in the encrypted volume group `chp`).
+**The layout** (sizes in GiB, rounded down; the volumes are in the encrypted volume group `chp`). The columns assume
+real disk sizes in bytes: a 2 TB disk is 2,000,398,934,016 bytes, a 1 TB disk 1,000,204,886,016 and a 512 GB disk
+512,110,190,592. Your disk's exact size moves the last three server rows and the free space by a few GiB.
 
 | Volume | Server 2 TB | Server 1 TB | Workstation 512 GB |
 |---|---|---|---|
@@ -156,8 +159,8 @@ the daily-review sign-off (chp-site 0.13.0): signing needs a terminal (piped inp
 | swap | 29 | 29 | 8 |
 | `/home` | 238 | 93 | 92 |
 | `/data` | 350 | 137 | none |
-| `/backup` | 599 | 234 | none |
-| **left free in the volume group** | **343** | **135** | **277** |
+| `/backup` | 600 | 234 | none |
+| **left free in the volume group** | **342** | **135** | **277** |
 
 How other disk sizes are worked out: on a server the `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/tmp`, `/tmp` and swap
 volumes are fixed; what is left is split 15.6 % `/home`, 22.9 % `/data`, 39.2 % `/backup`, and the rest stays free.
@@ -209,6 +212,9 @@ exports the evidence to this stick with `chp-site review export` (it also record
 `review/heads.txt`, so later changes show). To let others sign, list them in **`REVIEW_DELEGATES`** in `site.conf`
 (comma separated; may be empty; separate from the AIDE and unexpire delegates). The administrator is alerted if a review
 waits more than 2 days for a sign-off. See `0.5.0-update1/UPDATE.md`.
+From 0.6.0 on (chp-site 0.13.0) signing needs a terminal (piped input no longer counts as consent), `--date` must be
+`YYYY-MM-DD`, `--notes` is at most 1000 characters with no control characters, and a second signer at the same moment
+is refused.
 
 ### From 0.5.0 on: network intrusion detection at install
 

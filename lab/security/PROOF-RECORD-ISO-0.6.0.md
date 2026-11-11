@@ -209,3 +209,28 @@ sample; the unit tests in the repo cover the same boundaries.
 No second quiet day, and not re-run: the backup-drive runbook, the layout `lvextend` proof, the check 76 catch and the
 forced YARA scan (none touch `chp-site`'s certificate rule; `chp-base` and `chp-security` are unchanged from rc1).
 
+
+## rc2: server under 1.9 TB (final-review ruling, 2026-11-11)
+
+Why: until now no server under 1.9 TB was installed from the release candidate, so the `DISK_NOTE` path of `%post`
+(under `set -e`) and the mid-tier sized layout had not run live. **iso5-srv was reinstalled from rc2** (sha256
+`0cb27c14...cac0`, `SECURITY_ADDONS=yes`) on a **931 GiB sparse disk** (`DISK_GB=931` = 999,653,638,144 bytes, about
+1 TB), size guard at 50 GB (active during the install, stopped afterwards: `inactive`). Run: `prove.sh prep` then `server`
+(install from the ISO, menu entry chosen, first boot unlocked): **ALL PASS** (`rc2-1tb-install.log`). Evidence:
+`rc2-1tb-evidence.log` (escrow: only the two lines named below were extracted with `grep`; nothing else from that file is
+printed or committed).
+
+| Check | Result |
+|---|---|
+| Install finished | yes, "INSTALLED and started iso5-srv" |
+| Escrow file: order of the two lines | `DISK_NOTE=disk is 999 GB, smaller than the recommended 2 TB for the server` at line 9, **before** `INSTALL COMPLETED 20261111T180749Z` at line 10 |
+| `CHP:` note line | `CHP: disk is 999 GB, smaller than the recommended 2 TB for the server` is in the installer's `/var/log/anaconda/program.log` (17:58:59, first stage). It was **not** mirrored to the lab's libvirt serial log, so the lab does not show it on the serial console; the real console path (`tee /dev/console`) is unchanged from earlier releases |
+| Layout equals `chp_site.layout.plan("server", 999653638144)` | exactly: `/home` 95232 MiB (93 GiB), `/data` 140288 (137), `/backup` 239616 (234), `/` 92160 (90), `/var` 102400 (100), `/var/log` 51200 (50), audit 30720 (30), `/var/tmp` 15360, `/tmp` 15360, swap 29696 (29); `vgs chp` VSize 927.98, **VFree 134.98 GiB** (layout.py: 134 whole GiB) |
+| Mount options | `/data` `rw,nosuid,nodev`, `/backup` `rw,nosuid,nodev,noexec` |
+| Packages | `chp-site-0.13.0-2`, `chp-base-0.1.0-4` (the security add-on installs at first boot, which was not waited for: not in scope) |
+| Image size | 9 GB actual after the install (limit 50) |
+
+**The lab is not at golden.** cli1 and cli2 were not reinstalled; they now point at a server that was reinstalled for this
+check (new identity server, new stick: `prove.sh prep` made a fresh stick image, so the clients' escrow files and tokens on
+the stick are gone). The rc2 results above were all taken before this check and stand; a re-run of the lab chain from
+`prep` is needed before any further lab proof.

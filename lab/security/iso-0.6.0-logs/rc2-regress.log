@@ -1019,6 +1019,6 @@ c4 run 2: GREEN
 ------------------------------------------------------------------------
  CHOICE: Type yes to apply, or no to skip, then press Enter
 c4 run 3: GREEN
-wrote /Users/dshannon/idm-assistant/lab/iso5/regression-2026-11-11.md
+wrote <repo>/lab/iso5/regression-2026-11-11.md
 regress rc=0
 REG-DONE

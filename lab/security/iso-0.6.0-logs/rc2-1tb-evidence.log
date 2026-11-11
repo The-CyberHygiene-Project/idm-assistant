@@ -1,0 +1,57 @@
+## escrow: ONLY the DISK_NOTE and INSTALL COMPLETED lines (grep -n gives the file order)
+2:# These secrets are valid only if a line 'INSTALL COMPLETED' follows (added by the installer's
+4:# *.old file that does say INSTALL COMPLETED.
+9:DISK_NOTE=disk is 999 GB, smaller than the recommended 2 TB for the server
+10:INSTALL COMPLETED 20261111T180749Z
+## console / install log CHP: note line (first stage)
+## virtual size of the disk (bytes)
+                "virtual-size": 999806402560,
+                "actual-size": 9282326528,
+## lsblk
+vda                                           999653638144 disk  
+├─vda1                                          1073741824 part  /boot/efi
+├─vda2                                          2147483648 part  /boot
+    ├─chp-root                                 96636764160 lvm   /
+    ├─chp-swap                                 31138512896 lvm   [SWAP]
+    ├─chp-backup                              251255586816 lvm   /backup
+    ├─chp-data                                147102629888 lvm   /data
+    ├─chp-var_log_audit                        32212254720 lvm   /var/log/audit
+    ├─chp-var_log                              53687091200 lvm   /var/log
+    ├─chp-var_tmp                              16106127360 lvm   /var/tmp
+    ├─chp-var                                 107374182400 lvm   /var
+    ├─chp-tmp                                  16106127360 lvm   /tmp
+    └─chp-home                                 99857989632 lvm   /home
+999653638144
+vda  999653638144
+## vgs / lvs
+  VG  #PV #LV #SN Attr   VSize  VFree 
+  chp   1  10   0 wz--n- 927.98 134.98
+  LV            LSize    
+  backup        239616.00
+  data          140288.00
+  home           95232.00
+  root           92160.00
+  swap           29696.00
+  tmp            15360.00
+  var           102400.00
+  var_log        51200.00
+  var_log_audit  30720.00
+  var_tmp        15360.00
+Filesystem             1G-blocks  Used Available Use% Mounted on
+/dev/mapper/chp-home         93G    1G       93G   1% /home
+/dev/mapper/chp-data        137G    1G      136G   1% /data
+/dev/mapper/chp-backup      234G    2G      233G   1% /backup
+rw,nosuid,nodev,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+rw,nosuid,nodev,noexec,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,no
+## packages
+chp-site-0.13.0-2.chp.el9.noarch
+chp-base-0.1.0-4.chp.el9.noarch
+package chp-security is not installed
+## size guard
+active
+9	/data/libvirt/images/iso5-srv-1.qcow2
+## CHP: note line: NOT in the libvirt serial log (grep -c 'CHP: ' = 0, so it was not mirrored to the lab's serial console); it IS in the installed server's installer log:
+17:58:59,241 INF program: CHP: disk is 999 GB, smaller than the recommended 2 TB for the server
+## guard stopped
+inactive
+9	/data/libvirt/images/iso5-srv-1.qcow2
