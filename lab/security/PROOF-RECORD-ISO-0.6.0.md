@@ -19,7 +19,7 @@ tripped. Raw logs of every stage below are in `lab/security/iso-0.6.0-logs/`.
 | Gate / proof | Result |
 |---|---|
 | Install stages (Task 6): prep, server, firstboot, export, client1, client2, wazuh-on | ALL PASS (see the Task 6 notes at the end) |
-| **Gate 3:** CUI scan (`prove.sh scan`) | **108 pass / 2 fail on every host**, the two accepted AIDE rules; `deviations.py` exit 0. The new volumes (`/data`, `/backup`, their mount options) caused **no change**: no rule appeared or disappeared, so `DEVIATIONS.md` needed no new entry |
+| **Gate 3:** CUI scan (`prove.sh scan`) | **108 pass / 2 fail on every host**, the two accepted AIDE rules; `deviations.py` exit 0 (run by hand, rc echoed; not in a log file). The new volumes (`/data`, `/backup`, their mount options) caused **no change**: no rule appeared or disappeared, so `DEVIATIONS.md` needed no new entry |
 | lab adapter, nvram, snapspike, fixtures (`FIXTURES OK`), golden | ALL PASS (golden: reset + 0 findings on both hosts) |
 | **Gate 2:** regression (`lab/iso5/regression-2026-11-10.md`, commit `33223ef`) | **33/33** (11 scenarios x 3 runs, all GREEN), Wazuh, YARA and Suricata running. Model: 33/33 valid, 32/33 agreeing (l4: 2/3, the same as in 0.2.0; each repair is code-driven) |
 | **Gate 2:** row 36 | **3/3**; token label `var_auth_t` afterwards |
@@ -30,7 +30,7 @@ tripped. Raw logs of every stage below are in `lab/security/iso-0.6.0-logs/`.
 `findmnt`: `/data` = `rw,nosuid,nodev,...` and `/backup` = `rw,nosuid,nodev,noexec,...`, both on their own LVs;
 `/var/ossec` is the bind mount of `chp-data[/wazuh]`. `lvextend -r -L +5G chp/var`, online: `/var` 102,336 M -> 107,456 M
 (+5 GiB), VFree 342.98 -> 337.98 GiB; the `MainPID` and start time of kanidmd, sshd and chronyd and the start time of the
-Wazuh manager were identical before and after, the failed-unit count printed at the end of `step1-lvextend.log` is `0`. Image after the extension: 14 GB (limit 50).
+Wazuh manager (it shows no PID, only a start time) were identical before and after, Image after the extension: 14 GB by `du -B1G` on aero (limit 50; this was a separate command, its output is not in the step log, but the same 14 GB is in `quiet-start-state.log`). The trailing bare `0` in `step1-lvextend.log` is the failed-unit count (`systemctl list-units --state=failed --no-legend | wc -l`; the command itself was not captured).
 Log: `iso-0.6.0-logs/step1-lvextend.log`.
 
 ### Step 2: check 76 catch (cli2)
@@ -59,7 +59,7 @@ item present, records from three hosts), and the new sign-off checks. The `repo`
 |---|---|
 | `on` | ALL PASS: versions, sysstat and record timers, record log 0640, no new listener, 0 AVCs, 0 fapolicyd denials, agent keys unchanged, build timer, review rules, records from all three hosts |
 | `build` | ALL PASS: Suricata catch from srv (inside), YARA test file under cli2, cli1 all OK, certs/keys/scans/repo OK, sysstat on all three, client lenient / server strict, resources |
-| `sign` | the ISSO signs **from a terminal**: "signed 1 review(s); recorded in the ledger and the audit log"; an unlisted name is refused; **piped `yes` is refused: "review sign needs a terminal…"**; **bad `--date 2026-13-45` gives "--date must be YYYY-MM-DD" and no traceback**; `review verify` clean; sign-off in the audit log |
+| `sign` | the ISSO signs **from a pty** (a scripted `ssh -tt` with a piped `yes`, not a human at a keyboard): "signed 1 review(s); recorded in the ledger and the audit log"; an unlisted name is refused; **piped `yes` is refused: "review sign needs a terminal…"**; **bad `--date 2026-13-45` gives "--date must be YYYY-MM-DD" and no traceback**; `review verify` clean; sign-off in the audit log |
 | `tamper` | ALL PASS: two entries (so neither refused attempt signed anything); an edited entry and an edited report both fail `review verify`; monitor 75 alerts; restored: clean |
 | `export` | ALL PASS: to the stick, `verify --stick` OK; an emptied ledger fails against the stick |
 | `soon`, `res` | ALL PASS; record about 2.3 KB (srv) / 1.8 KB (cli2), about 0.4 s CPU per run |
@@ -68,8 +68,7 @@ item present, records from three hosts), and the new sign-off checks. The `repo`
 
 One check of mine was wrong, not the product: "the refused attempts signed nothing" redirected `ledger.jsonl` from a
 non-root shell (Permission denied). It is fixed in the script (`sudo cat | wc -l`); the point itself is shown by the
-`tamper` stage counting exactly 2 entries after the two real sign-offs. The Mac-side `yes` stand-in for a terminal is
-the only difference from the ISSO typing it.
+`tamper` stage counting exactly 2 entries after the two real sign-offs. 
 
 ### Step 3: the backup-drive runbook (`docs/runbooks/move-backup-to-a-second-drive.md`), followed on srv
 
@@ -99,33 +98,48 @@ was attached to the running server (the guard counted it, 1 GB). Steps 1-12 were
 **The runbook was wrong in two places (fixed and committed):** step 13 said the list "must list only `/etc/fstab` and
 `/etc/crypttab`", which would make every ISSO say no. It now names the five paths the move explains and says anything
 else is not from the move. Step 12 now says the journal line "Failed to activate with specified passphrase" before
-"Finished Cryptography Setup" is normal (the empty first try, then the TPM). The top "What changes" note now mentions
+"Finished Cryptography Setup" is normal (the first unlock attempt fails, then the TPM unlocks it). The top "What changes" note now mentions
 the LVM records.
 
-Afterwards the second disk was detached (`virsh detach-disk --persistent --live`), `iso5-srv-2.qcow2` deleted, the lab
+**Order note:** srv was reverted to golden between Step 1 and this runbook (the regression resets it before every run), so `/var` was back to 100 GiB, VFree 342.98 GiB, and `/etc/lvm/archive` held no earlier file: the single archive file in the step 13 list is the one `lvremove` made. Afterwards the second disk was detached (`virsh detach-disk --persistent --live`), `iso5-srv-2.qcow2` deleted, the lab
 stick's `iso5-srv-backup-drive.txt` removed, and srv reset to golden (`reset.sh`), so the quiet day runs on the fresh
 layout (`/backup` on `chp-backup`, VFree 342.98 GiB).
 
-## Quiet day: PENDING
+## Quiet day: PASSED (T0 2026-11-10T01:59:15Z to 2026-11-11T14:23Z, about 36 hours, lab untouched)
 
-**T0 = 2026-11-10T01:59:15Z (2026-11-09 18:59 MST).** srv and cli2 are at golden (reverted at about 18:57 MST) plus a lab
-`ALERT_HOOK` on each (`/usr/local/sbin/lab-hook` -> `/var/log/lab-hook.log`); cli1 was not touched after the install.
-Guards `size-guard-iso5-srv` and `size-guard-iso5-cli2` are running (limit 50 GB). Image sizes at T0 (`du -B1G`): srv 14,
-cli2 11, cli1 9.
+srv and cli2 at golden plus a lab `ALERT_HOOK` each; cli1 untouched since install. Logs: `quiet-check.log`,
+`quiet-review.log`, `quiet-aide-paths.log`, `quiet-guards-stopped.log`.
 
-At T0 the monitor on both hosts showed one alert, "the 5-minute YARA scan has not succeeded for 107 minutes", an
-artefact of the snapshot revert (the stamp is the snapshot's). The timer ran at 19:02 MST and the monitor was clean
-(rc 0) on both hosts at 19:03. So each hook log starts with **2 explained lines** (18:59:12 / 18:59:57 on srv,
-18:59:14 / 18:59:59 on cli2: that alert, sent by my two monitor runs); anything after them needs an explanation.
-
-To check after at least 24 hours, with the lab untouched:
-
-1. The **real 00:20 build** made the review report for 2026-11-09 and monitor 75 did not raise a "not built" alarm;
-   record counts per host, the status table, resources.
-2. **No false check-76 alerts** on srv, cli1 or cli2 (journal `chp-monitor` and the hook logs).
-3. **Image sizes stable** (`du -B1G` on all three, well under 50 GB), `/data` and `/var` use on srv, VFree unchanged.
-4. **Every hook line explained** (AIDE repeats from the lab adapter and fixtures, the daily summary, the review line).
-5. Then stop the guards.
+- **The real 00:20 builds:** `chp-review-build.service` built `2026-11-09` (2026-11-10 00:20) and `2026-11-10`
+  (2026-11-11 00:20); `review verify` rc 0. Both reports: **Needs attention: 0**. 2026-11-09: 1,754 alerts, records
+  cli1 34 / cli2 33 / srv 35 (it includes the afternoon's proofs: promiscuous-mode and listening-port alerts from the
+  Suricata and `ss` work); 2026-11-10: 413 alerts, records 135 / 138 / 136, four low-level Wazuh items (RBAC auditd
+  at 03:31 to 04:30 around the AIDE checks, one listening-port change at 10:58). All three hosts report in the
+  status table, certificates and keys OK. The three `aide_ok` rows read ATTENTION on 11-10 ("changes or mismatch to
+  review") but are not counted in "Needs attention", because that item is watched by monitor 60 (a row with an owner
+  is excluded by design, `review_report.py` line 247). No monitor 75 "not built" alarm.
+- **Hook lines since T0** (srv 111, cli2 110, both with the hook; cli1 has no hook, its monitor journal has 102 AIDE
+  lines): srv = 2 YARA lines from the revert at 18:59 (explained above), 1 daily summary ("5 medium alerts (levels 7-9) on
+  3 hosts in the last 24 h"), and 108 AIDE repeats; cli2 = the same 2 YARA lines and 108 AIDE repeats. AIDE repeats are
+  monitor 60 every 15 minutes until accepted (existing behaviour), for two checks (11-10 and 11-11). The AIDE
+  changes are lab-only (`quiet-aide-paths.log`): `99-lab-adapter`, `/root/chp-scan`, `lab-hook`, the three fixture SSH
+  keys, `/etc/chp/site.conf` (the hook setting) and their parent directories; srv 8 added / 6 changed, cli2 5 / 5. cli1's
+  3 added / 1 changed could not be listed (no lab-adapter sudo there): it holds the scan files under `/root` and its
+  parent directory. Nothing from the new volumes, `/data`, `/backup` or check 76.
+- **No false check-76 alerts:** no "% full" line in the `chp-monitor` journal of srv or cli2 since T0 (0), none in the
+  hook logs, none in cli1's journal; the state file `/var/lib/chp/monitor/76-disk.state` is empty on both. Mounts at
+  the end: srv `/var` 2 %, `/data` 2 %, `/backup` 1 %; cli2 `/var` 5 %. VFree unchanged (342.98 / 303.98 GiB).
+- **The 24-hour repeat of check 76** is proved by the unit test `tests/test_chp_base_disk_check.py::test_76_repeats_after_24h`
+  (the clock is injected with `CHP_NOW`); the quiet day could not show it, because nothing crossed the limit.
+- **Image sizes (`du -B1G`, aero):** at T0 srv 14, cli2 11, cli1 9; at the end srv 14, cli2 12, cli1 9 (limit 50).
+  Both guards were active at the end and their journal has no `SIZE-GUARD` line (0), so neither tripped. They were then
+  stopped (`quiet-guards-stopped.log`: both `inactive`).
+- **Suricata:** RSS 531 MB on srv and cli2, up the whole time, 0 restarts. **YARA:** 0 match lines in `chp-yara.json`
+  on both; the weekly scan is not due yet (first Sunday scan: "not due" in the report). **Failed units:** the command
+  `systemctl list-units --state=failed --no-legend` printed nothing on srv and cli2 (and on cli1).
+- **Monitor 73 transient:** at T0 "the 5-minute YARA scan has not succeeded for 107 minutes" is the snapshot revert's
+  stamp, cleared when the timer ran at 19:02; it did not return. The monitors showed rc 1 at the end only for the AIDE
+  repeat (the journal shows that line alone).
 
 ## Task 6 notes (install stages)
 

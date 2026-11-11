@@ -152,7 +152,7 @@ All commands as root on the server (`su -`).
     typing at the console (the TPM unlocks both disks). After the boot, log in and run
     `findmnt /backup`, then read the monitor output: the only new alert should be the AIDE change. The journal for
     `systemd-cryptsetup@backupdrive` shows one "Failed to activate with specified passphrase" line followed by
-    "Finished Cryptography Setup": the first try uses an empty passphrase, then the TPM unlocks it. That is normal.
+    "Finished Cryptography Setup": the first unlock attempt fails, then the TPM unlocks it. That is normal.
 
 13. **ISSO: accept the AIDE change.** `/etc/fstab` and `/etc/crypttab` changed, so AIDE alerts. With the site stick
     plugged in, as the ISSO or a `BASELINE_DELEGATES` person:
