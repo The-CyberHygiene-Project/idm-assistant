@@ -30,7 +30,7 @@ tripped. Raw logs of every stage below are in `lab/security/iso-0.6.0-logs/`.
 `findmnt`: `/data` = `rw,nosuid,nodev,...` and `/backup` = `rw,nosuid,nodev,noexec,...`, both on their own LVs;
 `/var/ossec` is the bind mount of `chp-data[/wazuh]`. `lvextend -r -L +5G chp/var`, online: `/var` 102,336 M -> 107,456 M
 (+5 GiB), VFree 342.98 -> 337.98 GiB; the `MainPID` and start time of kanidmd, sshd and chronyd and the start time of the
-Wazuh manager (it shows no PID, only a start time) were identical before and after, Image after the extension: 14 GB by `du -B1G` on aero (limit 50; this was a separate command, its output is not in the step log, but the same 14 GB is in `quiet-start-state.log`). The trailing bare `0` in `step1-lvextend.log` is the failed-unit count (`systemctl list-units --state=failed --no-legend | wc -l`; the command itself was not captured).
+Wazuh manager (it shows no PID, only a start time) were identical before and after. Image after the extension: 14 GB by `du -B1G` on aero (limit 50; this was a separate command, its output is not in the step log, the 14 GB at the later quiet-day start is in `quiet-start-state.log`). The trailing bare `0` in `step1-lvextend.log` is the failed-unit count (`systemctl list-units --state=failed --no-legend | wc -l`; the command itself was not captured).
 Log: `iso-0.6.0-logs/step1-lvextend.log`.
 
 ### Step 2: check 76 catch (cli2)
