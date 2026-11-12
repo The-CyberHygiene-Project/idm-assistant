@@ -1,0 +1,19 @@
+
+2026-11-09T12:58:32-0700 Aero systemd[1]: Started /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-09T13:17:44-0700 Aero systemd[1]: Stopping /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50...
+2026-11-09T13:17:44-0700 Aero systemd[1]: size-guard-iso5-srv.service: Deactivated successfully.
+2026-11-09T13:17:44-0700 Aero systemd[1]: Stopped /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-09T13:17:45-0700 Aero systemd[1]: Started /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-09T13:34:55-0700 Aero systemd[1]: Stopping /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50...
+2026-11-09T13:34:55-0700 Aero systemd[1]: size-guard-iso5-srv.service: Deactivated successfully.
+2026-11-09T13:34:55-0700 Aero systemd[1]: Stopped /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-09T15:58:13-0700 Aero systemd[1]: Started /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-09T16:44:34-0700 Aero systemd[1]: Started /bin/bash /tmp/iso2/size-guard.sh iso5-cli2 50.
+2026-11-11T07:24:25-0700 Aero systemd[1]: Stopping /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50...
+2026-11-11T07:24:25-0700 Aero systemd[1]: size-guard-iso5-srv.service: Deactivated successfully.
+2026-11-11T07:24:25-0700 Aero systemd[1]: Stopped /bin/bash /tmp/iso2/size-guard.sh iso5-srv 50.
+2026-11-11T07:24:25-0700 Aero systemd[1]: size-guard-iso5-srv.service: Consumed 2min 51.321s CPU time.
+2026-11-11T07:24:25-0700 Aero systemd[1]: Stopping /bin/bash /tmp/iso2/size-guard.sh iso5-cli2 50...
+2026-11-11T07:24:25-0700 Aero systemd[1]: size-guard-iso5-cli2.service: Deactivated successfully.
+2026-11-11T07:24:25-0700 Aero systemd[1]: Stopped /bin/bash /tmp/iso2/size-guard.sh iso5-cli2 50.
+2026-11-11T07:24:25-0700 Aero systemd[1]: size-guard-iso5-cli2.service: Consumed 2min 49.505s CPU time.

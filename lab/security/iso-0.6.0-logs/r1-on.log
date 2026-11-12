@@ -1,0 +1,19 @@
+PASS srv: chp-site, chp-security, sysstat
+PASS srv: sysstat and record timers active
+PASS srv: record log present 0640
+PASS srv: no new listener
+PASS srv: 0 AVCs since enable
+PASS srv: 0 fapolicyd denials since enable
+PASS srv: agent keys unchanged
+PASS cli2: chp-site, chp-security, sysstat
+PASS cli2: sysstat and record timers active
+PASS cli2: record log present 0640
+PASS cli2: no new listener
+PASS cli2: 0 AVCs since enable
+PASS cli2: 0 fapolicyd denials since enable
+PASS cli2: agent keys unchanged
+PASS srv: build timer enabled
+PASS srv: review rules present
+PASS srv: records from all three hosts on the manager (0.6.0: cli1 is installed with the review too)
+PASS srv: monitor 75 runs
+stage on: ALL PASS

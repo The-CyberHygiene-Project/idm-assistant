@@ -30,6 +30,8 @@ X() {
 A() { ssh -F "$F" -n aero "$1" 2>&1 | grep -v -E 'post-quantum|store now|pq.html|^\\S$|^Kernel|^$' || true; }
 check() { if [[ $2 == "$3" ]]; then echo "PASS $1"; else echo "FAIL $1: got '$2', want '$3'"; fails=$((fails+1)); fi; }
 done_() { [[ $fails -eq 0 ]] && echo "stage $1: ALL PASS" || { echo "stage $1: $fails FAIL"; exit 1; }; }
+# SIGN HOST ARGS... : review sign from a real terminal (ssh -tt; the reviewer types yes). Since ISO 0.6.0 a piped yes is refused.
+SIGN() { local h=$1; shift; printf 'yes\n' | ssh -F "$F" -tt -o ConnectTimeout=15 "$([[ $h == srv ]] && echo srv1 || echo client2)" "sudo chp-site review sign $*" 2>&1 | tr -d '\r' | grep -v -E 'post-quantum|store now|pq.html|^\\S$|^Kernel|^$|Connection to' || true; }
 T0='$(sudo cat /root/r1-t0 | awk "{split(\$1,d,\"-\"); print d[2]\"/\"d[3]\"/\"d[1], \$2}")'
 # nightly() for a given "today" (the lab cannot wait a day): the same function the timer runs
 NIGHTLY='sudo python3 -c "import sys; sys.path.insert(0, \"'$PYZ'\"); import time; from datetime import date, timedelta; from chp_site import cli, review_store as st, wazuh_alerts as wa; s, h = cli._load(\"/etc/chp\"); n = time.time(); print(st.nightly(today=date.today() + timedelta(days=1), site=s, hosts=h, alerts=wa.load_alerts(\"/var/ossec/logs/alerts\", n - 3 * 86400), now=n))"'
@@ -48,7 +50,7 @@ case ${1:-} in
     A "sudo virsh detach-disk $v sdz --live >/dev/null && echo stick-detached-$v" ;;
   on)
     for h in srv cli2; do
-      check "$h: chp-site 0.12.0, chp-security 0.4.0, sysstat" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " chp-site chp-security sysstat')" "chp-site-0.12.0 chp-security-0.4.0 sysstat-12.5.4 "
+      check "$h: chp-site, chp-security, sysstat" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " chp-site chp-security sysstat')" "chp-site-${SITE_V:-0.13.0} chp-security-${SEC_V:-0.4.1} sysstat-12.5.4 "
       check "$h: sysstat and record timers active" "$(X $h 'systemctl is-active sysstat-collect.timer sysstat-summary.timer chp-review-record.timer | tr "\n" " "')" "active active active "
       check "$h: record log present 0640" "$(X $h 'sudo stat -c %a /var/log/chp-review.json')" "640"
       check "$h: no new listener" "$(X $h 'sudo ss -ltnup | sed -E "s/pid=[0-9]+,//g; s/fd=[0-9]+//g" | sort | sudo diff /root/r1-ss-before - >/dev/null && echo same || echo changed')" "same"
@@ -59,8 +61,8 @@ case ${1:-} in
     check "srv: build timer enabled" "$(X srv 'systemctl is-enabled chp-review-build.timer')" "enabled"
     check "srv: review rules present" "$(X srv 'sudo test -f /var/ossec/etc/rules/chp_review_rules.xml && echo yes')" "yes"
     X srv 'sudo systemctl start chp-review-record.service'; X cli2 'sudo systemctl start chp-review-record.service'
-    n=0; for _ in $(seq 30); do n=$(X srv 'sudo grep "\"id\":\"100520\"" /var/ossec/logs/alerts/alerts.json | grep -o "\"host\":\"iso5-[a-z0-9]*" | sort -u | wc -l'); [[ $n -ge 2 ]] && break; sleep 10; done
-    check "srv: records from both hosts on the manager" "$n" "2"
+    n=0; for _ in $(seq 30); do n=$(X srv 'sudo grep "\"id\":\"100520\"" /var/ossec/logs/alerts/alerts.json | grep -o "\"host\":\"iso5-[a-z0-9]*" | sort -u | wc -l'); [[ $n -ge 3 ]] && break; sleep 10; done
+    check "srv: records from all three hosts on the manager (0.6.0: cli1 is installed with the review too)" "$n" "3"
     check "srv: monitor 75 runs" "$(X srv 'sudo bash /usr/lib/chp/monitor.d/75-review.sh | grep -c "failed"')" "0"
     done_ on ;;
   build)
@@ -76,23 +78,26 @@ case ${1:-} in
     J="sudo python3 -c \"import json; d=json.load(open('$RD/$d/data.json'))"
     check "report: Suricata catch from the server, inside" "$(X srv "$J; print(any(i['kind']=='suricata' and i['source']=='192.168.100.50' and i['inside'] and i['source_host']=='iso5-srv' for i in d['intrusions']))\"")" "True"
     check "report: YARA test file under iso5-cli2" "$(X srv "$J; print(any(i['kind']=='yara' and i['source']=='iso5-cli2' for i in d['intrusions']))\"")" "True"
-    check "report: cli1 (no records, still 0.5.0) is STALE" "$(X srv "$J; print([s['state'] for s in d['status'] if s['host']=='iso5-cli1'])\"")" "['STALE']"
-    check "report: srv and cli2 certs, keys, scans and repo OK" "$(X srv "$J; print(sorted({s['state'] for s in d['status'] if s['host']!='iso5-cli1' and s['item']!='record' and s['item']!='sysstat'}))\"")" "['OK']"
-    check "report: sysstat item present on srv and cli2 (STALE minutes after enable: < 2 samples)" "$(X srv "$J; print(sorted(s['host'] for s in d['status'] if s['item']=='sysstat'))\"")" "['iso5-cli2', 'iso5-srv']"
+    check "report: cli1 (installed with the review, 0.6.0) has status items, all OK" "$(X srv "$J; v={s['state'] for s in d['status'] if s['host']=='iso5-cli1'}; print(sorted(v))\"")" "['OK']"
+    check "report: certs, keys, scans and repo OK on all three" "$(X srv "$J; print(sorted({s['state'] for s in d['status'] if s['item']!='record' and s['item']!='sysstat'}))\"")" "['OK']"
+    check "report: sysstat item present on all three hosts" "$(X srv "$J; print(sorted(s['host'] for s in d['status'] if s['item']=='sysstat'))\"")" "['iso5-cli1', 'iso5-cli2', 'iso5-srv']"
     check "report: client lenient (cli2 OK, last seen), server strict" "$(X srv "$J; r={s['host']:s['state'] for s in d['status'] if s['item']=='record'}; print(r['iso5-cli2'], r['iso5-srv'])\"")" "OK STALE"
     check "report: resources for srv and cli2 (disk at least; CPU needs 2 sysstat samples)" "$(X srv "$J; print(all(d['resources'][h] and 'disk' in d['resources'][h] for h in ('iso5-srv','iso5-cli2')))\"")" "True"
     done_ build ;;
   sign)
     d=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1")
-    check "srv: ISSO signs $d" "$(X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes 'R1 lab proof' --date $d | grep -o 'signed 1 review(s); recorded in the ledger and the audit log'")" "signed 1 review(s); recorded in the ledger and the audit log"
-    check "srv: an unlisted name is refused" "$(X srv "echo yes | sudo chp-site review sign --approver 'Mallory' --notes x --date $d 2>&1 | grep -c refusing")" "1"
+    check "srv: ISSO signs $d" "$(SIGN srv "--approver '$ISSO' --notes 'R1 lab proof' --date $d" | grep -o 'signed 1 review(s); recorded in the ledger and the audit log')" "signed 1 review(s); recorded in the ledger and the audit log"
+    check "srv: an unlisted name is refused" "$(SIGN srv "--approver 'Mallory' --notes x --date $d" | grep -c refusing)" "1"
+    check "srv: piped yes is refused (sign-off fix: needs a terminal)" "$(X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes x --date $d 2>&1 | grep -c 'review sign needs a terminal'")" "1"
+    check "srv: bad --date: plain error, no traceback" "$(X srv "sudo chp-site review sign --approver '$ISSO' --notes x --date 2026-13-45 2>&1 | grep -c -e '--date must be YYYY-MM-DD' ; sudo chp-site review sign --approver '$ISSO' --notes x --date 2026-13-45 2>&1 | grep -c Traceback" | tr '\n' ' ')" "1 0 "
+    check "srv: the refused attempts signed nothing" "$(X srv "sudo cat $RD/ledger.jsonl | wc -l | tr -d ' '")" "1"
     check "srv: review verify clean" "$(X srv 'sudo chp-site review verify --quiet; echo rc=$?')" "rc=0"
     check "srv: sign-off in the audit log" "$(X srv 'sudo grep -c "chp-site review-sign" /var/log/audit/audit.log | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
     done_ sign ;;
   tamper)                  # a chain protects every entry but the newest (that one: the stick anchor), so sign a 2nd day
     X srv "${NIGHTLY/timedelta(days=1)/timedelta(days=2)}" >/dev/null
     d2=$(X srv "sudo ls $RD | grep -E '^[0-9]{4}-' | tail -1")
-    X srv "echo yes | sudo chp-site review sign --approver '$ISSO' --notes 'R1 second day' --date $d2 >/dev/null"
+    SIGN srv "--approver '$ISSO' --notes 'R1 second day' --date $d2" >/dev/null
     check "srv: two entries" "$(X srv "sudo cat $RD/ledger.jsonl | wc -l")" "2"
     X srv "sudo cp $RD/ledger.jsonl /root/r1-ledger.bak; sudo sed -i 's/R1 lab proof/R1 lab proof EDITED/' $RD/ledger.jsonl"
     check "srv: edited entry: verify fails" "$(X srv 'sudo chp-site review verify --quiet >/dev/null; echo rc=$?')" "rc=1"

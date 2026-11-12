@@ -1,0 +1,5 @@
+PASS row 36 run 1: gdm-password accepts lab01 (password + GA code)
+PASS row 36 run 2: gdm-password accepts lab01 (password + GA code)
+PASS row 36 run 3: gdm-password accepts lab01 (password + GA code)
+PASS row 36: GA token label after the logins
+stage row36: ALL PASS

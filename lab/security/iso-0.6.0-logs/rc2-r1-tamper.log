@@ -1,0 +1,6 @@
+PASS srv: two entries
+PASS srv: edited entry: verify fails
+PASS srv: edited entry: monitor 75 alerts
+PASS srv: edited report: verify fails
+PASS srv: restored: verify clean
+stage tamper: ALL PASS

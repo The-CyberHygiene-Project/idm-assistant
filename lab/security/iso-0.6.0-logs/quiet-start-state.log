@@ -1,0 +1,35 @@
+
+iso5-srv
+/dev/mapper/chp-backup rw,nosuid,nodev,noexec,relatime,seclabel,attr2,
+/dev/mapper/chp-data rw,nosuid,nodev,relatime,seclabel,attr2,inode64,l
+/dev/mapper/chp-var rw,relatime,seclabel,attr2,inode64,logbufs=8,logbs
+  342.98g
+---------------------- /backup
+ls: cannot access '/dev/vdb': No such file or directory
+1
+
+iso5-cli2
+/dev/mapper/chp-var rw,relatime,seclabel,attr2,inode64,logbufs=8,logbs
+  303.98g
+lsattr: No such file or directory while trying to stat /backup
+ls: cannot access '/dev/vdb': No such file or directory
+1
+
+9	/data/libvirt/images/iso5-cli1-1.qcow2
+11	/data/libvirt/images/iso5-cli2-1.qcow2
+14	/data/libvirt/images/iso5-srv-1.qcow2
+active
+active
+2026-11-10T01:59:03Z
+
+iso5-srv
+monitor-rc=1
+the 5-minute YARA scan has not succeeded for 107 minutes (journalctl -u chp-yara-recent)
+hook-lines=1
+2026-11-09T18:59:13-0700
+
+iso5-cli2
+monitor-rc=1
+the 5-minute YARA scan has not succeeded for 107 minutes (journalctl -u chp-yara-recent)
+hook-lines=1
+2026-11-09T18:59:14-0700

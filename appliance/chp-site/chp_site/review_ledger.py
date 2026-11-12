@@ -102,7 +102,9 @@ def append(path, *, date, report_sha256, approver, operator, notes, now):
     fd = os.open(p, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
-        read(p)                                           # refuse a broken chain (and wait out a concurrent signer)
+        entries = read(p)                                 # refuse a broken chain (and wait out a concurrent signer)
+        if any(x["date"] == date for x in entries):       # a second signer who passed sign()'s check before the lock
+            raise SiteError(f"the review for {date} is already signed")
         e = {"date": date, "report_sha256": report_sha256, "approver": approver, "operator": operator, "time": now,
              "notes": notes, "prev": head(p)[1]}
         line = json.dumps(e, sort_keys=True, separators=(",", ":"))

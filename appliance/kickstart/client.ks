@@ -111,6 +111,8 @@ dev=$(lsblk -rpno NAME,FSTYPE | awk '$2=="crypto_LUKS"{print $1}')
 ( umask 0377; head -c 64 /dev/urandom > /mnt/sysimage/root/.chp-bind.key )
 cryptsetup luksAddKey --key-file=/tmp/chp/luks-pass "$dev" /mnt/sysimage/root/.chp-bind.key
 shred -u /tmp/chp/luks-pass
+# A disk below the recommended size is recorded with the secrets (the stick is where the owner looks).
+[ -s /tmp/chp/disk-note ] && echo "DISK_NOTE=$(cat /tmp/chp/disk-note)" >> "/mnt/oemdrv/escrow/$(cat /tmp/chp/escrow-name).txt"
 # Mark this host's escrow as used: its secrets are now the ones on the disk (until this line exists they are not).
 echo "INSTALL COMPLETED $(date -u +%Y%m%dT%H%M%SZ)" >> "/mnt/oemdrv/escrow/$(cat /tmp/chp/escrow-name).txt"
 sync; umount /mnt/oemdrv || true

@@ -13,6 +13,7 @@ from .clientconf import parse_client_conf
 from .disks import choose_disk
 from .facts import Facts  # noqa: F401  (re-exported for callers and tests)
 from .hosts import lookup, parse_hosts
+from .layout import note
 from .render import boot_ks, disk_ks, grub_pbkdf2, misc_ks, net_ks, repo_ks, users_ks
 from .sitefile import SiteError, parse_site, read_file
 
@@ -76,11 +77,15 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
                         "or full? The install stops: it never proceeds without its recovery secrets") from None
     out.mkdir(mode=0o700, parents=True, exist_ok=True)
     for name, text in (("misc", misc_ks(site)), ("net", net_ks(site, host, hosts)), ("users", users_ks(site, hasher(rootpw))), ("boot", boot_ks(grub_pbkdf2(grubpw))),
-                       ("disk", disk_ks(disk, luks)), ("repo", repo_ks(repo_url))):
+                       ("disk", disk_ks(disk.name, disk.size, role, luks)), ("repo", repo_ks(repo_url))):
         p = out / f"{name}.ks"
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(text)
+    msg = note(role, disk.size)
+    if msg:     # shown in the install log; %post --nochroot adds it to the escrow file as DISK_NOTE
+        (out / "disk-note").write_text(msg + "\n")
+        print("CHP: " + msg)
     (out / "escrow-name").write_text(host.hostname)     # not secret: tells %post --nochroot which file to mark
     if stick_id:        # the site stick's USB identity, pinned so only THIS stick is ever allowed post-install
         (out / "site-stick.id").write_text("".join(f"{k}={stick_id.get(k, '')}\n" for k in ("ID", "SERIAL", "NAME")))

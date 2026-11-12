@@ -1,0 +1,34 @@
+
+BEFORE
+/dev/mapper/chp-var   102336M 1506M   100831M   2% /var
+  chp   1  10   0 wz--n- <1.82t 342.98g
+wazuh-manager 0 Mon 2026-11-09 17:09:55 MST
+kanidmd 5588 Mon 2026-11-09 17:13:08 MST
+sshd 1937 Mon 2026-11-09 17:09:41 MST
+chronyd 5520 Mon 2026-11-09 17:12:03 MST
+  File system xfs found on chp/var mounted at /var.
+  Size of logical volume chp/var changed from 100.00 GiB (25600 extents) to 105.00 GiB (26880 extents).
+  Extending file system xfs to 105.00 GiB (112742891520 bytes) on chp/var...
+xfs_growfs /dev/chp/var
+meta-data=/dev/mapper/chp-var    isize=512    agcount=4, agsize=6553600 blks
+         =                       sectsz=512   attr=2, projid32bit=1
+         =                       crc=1        finobt=1, sparse=1, rmapbt=0
+         =                       reflink=1    bigtime=1 inobtcount=1 nrext64=0
+data     =                       bsize=4096   blocks=26214400, imaxpct=25
+         =                       sunit=0      swidth=0 blks
+naming   =version 2              bsize=4096   ascii-ci=0, ftype=1
+log      =internal log           bsize=4096   blocks=16384, version=2
+         =                       sectsz=512   sunit=0 blks, lazy-count=1
+realtime =none                   extsz=4096   blocks=0, rtextents=0
+data blocks changed from 26214400 to 27525120
+xfs_growfs done
+  Extended file system xfs on chp/var.
+  Logical volume chp/var successfully resized.
+AFTER
+/dev/mapper/chp-var   107456M 1542M   105915M   2% /var
+  chp   1  10   0 wz--n- <1.82t 337.98g
+wazuh-manager 0 Mon 2026-11-09 17:09:55 MST
+kanidmd 5588 Mon 2026-11-09 17:13:08 MST
+sshd 1937 Mon 2026-11-09 17:09:41 MST
+chronyd 5520 Mon 2026-11-09 17:12:03 MST
+0

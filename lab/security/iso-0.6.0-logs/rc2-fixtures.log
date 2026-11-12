@@ -1,0 +1,11 @@
+lab01: Kanidm person with password + TOTP + POSIX password
+lab02: Kanidm person with password + TOTP + POSIX password
+lab03: Kanidm person with password + TOTP + POSIX password
+lab04: Kanidm person with password + TOTP + POSIX password
+lab06: Kanidm person with password + TOTP + POSIX password
+prepared lab01: key registered, certificate +30d, GA token on client2 (posix=True)
+prepared lab02: key registered, certificate +30d, GA token on client2 (posix=True)
+prepared lab06: key registered, certificate +30d, GA token on client2 (posix=True)
+login probe lab01@client2 with its posix password: OK
+certificate login probe lab02@client2: RESULT: OK lab02
+FIXTURES OK

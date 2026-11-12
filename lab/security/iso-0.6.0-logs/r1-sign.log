@@ -1,0 +1,8 @@
+PASS srv: ISSO signs 2026-11-09
+PASS srv: an unlisted name is refused
+PASS srv: piped yes is refused (sign-off fix: needs a terminal)
+PASS srv: bad --date: plain error, no traceback
+FAIL srv: the refused attempts signed nothing: got 'bash: line 1: /var/lib/chp/review/ledger.jsonl: Permission denied', want '1'
+PASS srv: review verify clean
+PASS srv: sign-off in the audit log
+stage sign: 1 FAIL

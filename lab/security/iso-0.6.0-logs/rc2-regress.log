@@ -1,0 +1,1024 @@
+start 2026-11-11T16:19:01Z
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cred-reset-token
+========================================================================
+ PROBLEM DETECTED
+   A person can sign in to the identity web page but is refused on every
+   Linux login.
+   Why it matters: That person cannot use any workstation or server
+   until they set their Linux password.
+
+ LIKELY CAUSE  (found by the diagnostic tool: POSIX_PW_MISSING)
+   The account has a web sign-in credential but no Linux (POSIX)
+   password.
+   Found on this host: user lab08: POSIX account, primary credential
+   set, no unix (POSIX) password
+
+ PROPOSED ACTION
+   Issue a one-hour reset token for that person; they set their own
+   Linux password with it. This tool never sets passwords.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the token reaches the wrong person, they could set
+   the password and log in as that user within the hour.
+   Undo: Cannot be undone, but an unused token expires after one hour.
+
+ SAY NO IF
+   You cannot hand the token to that person directly and privately.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l1 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cred-reset-token
+========================================================================
+ PROBLEM DETECTED
+   A person can sign in to the identity web page but is refused on every
+   Linux login.
+   Why it matters: That person cannot use any workstation or server
+   until they set their Linux password.
+
+ LIKELY CAUSE  (found by the diagnostic tool: POSIX_PW_MISSING)
+   The account has a web sign-in credential but no Linux (POSIX)
+   password.
+   Found on this host: user lab08: POSIX account, primary credential
+   set, no unix (POSIX) password
+
+ PROPOSED ACTION
+   Issue a one-hour reset token for that person; they set their own
+   Linux password with it. This tool never sets passwords.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the token reaches the wrong person, they could set
+   the password and log in as that user within the hour.
+   Undo: Cannot be undone, but an unused token expires after one hour.
+
+ SAY NO IF
+   You cannot hand the token to that person directly and privately.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l1 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cred-reset-token
+========================================================================
+ PROBLEM DETECTED
+   A person can sign in to the identity web page but is refused on every
+   Linux login.
+   Why it matters: That person cannot use any workstation or server
+   until they set their Linux password.
+
+ LIKELY CAUSE  (found by the diagnostic tool: POSIX_PW_MISSING)
+   The account has a web sign-in credential but no Linux (POSIX)
+   password.
+   Found on this host: user lab08: POSIX account, primary credential
+   set, no unix (POSIX) password
+
+ PROPOSED ACTION
+   Issue a one-hour reset token for that person; they set their own
+   Linux password with it. This tool never sets passwords.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the token reaches the wrong person, they could set
+   the password and log in as that user within the hour.
+   Undo: Cannot be undone, but an unused token expires after one hour.
+
+ SAY NO IF
+   You cannot hand the token to that person directly and privately.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l1 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cert-renew
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in with a directory account, anywhere.
+   Why it matters: The identity server's certificate has expired, so
+   every machine refuses to talk to it.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TLS_CERT_EXPIRED)
+   The identity server's certificate is past its end date.
+   Found on this host: notAfter 2026-11-11T16:32:44Z; collected
+   2026-11-11T16:33:11Z; verify expired
+
+ PROPOSED ACTION
+   Back up the current certificate and key, issue a new certificate from
+   the project's certificate authority, and restart the identity server.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: The identity server restarts, interrupting logins for
+   a few seconds. If the certificate authority is unhealthy, the repair
+   does not start.
+   Undo: The previous certificate and key are saved and put back, with a
+   restart, if the check afterwards fails.
+
+ SAY NO IF
+   The site is moving the identity server to a different certificate
+   authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair acme-timer-restore
+========================================================================
+ PROBLEM DETECTED
+   Nothing yet: logins still work today.
+   Why it matters: The identity server's certificate will not renew
+   itself; when it expires, every directory login fails.
+
+ LIKELY CAUSE  (found by the diagnostic tool: ACME_RENEWAL_STOPPED)
+   The certificate-renewal timer on the identity server is not running.
+   Found on this host: cert-renew-kanidm.timer is inactive
+
+ PROPOSED ACTION
+   Turn the certificate-renewal timer back on; it checks the certificate
+   every 15 minutes.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: the timer renews the certificate only
+   when it is due. If it was paused on purpose, that pause ends.
+   Undo: The timer's previous on/off state is recorded and put back if
+   the check afterwards fails.
+
+ SAY NO IF
+   Someone paused the timer deliberately, for planned work on the
+   certificate authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c1 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cert-renew
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in with a directory account, anywhere.
+   Why it matters: The identity server's certificate has expired, so
+   every machine refuses to talk to it.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TLS_CERT_EXPIRED)
+   The identity server's certificate is past its end date.
+   Found on this host: notAfter 2026-11-11T16:39:48Z; collected
+   2026-11-11T16:40:16Z; verify expired
+
+ PROPOSED ACTION
+   Back up the current certificate and key, issue a new certificate from
+   the project's certificate authority, and restart the identity server.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: The identity server restarts, interrupting logins for
+   a few seconds. If the certificate authority is unhealthy, the repair
+   does not start.
+   Undo: The previous certificate and key are saved and put back, with a
+   restart, if the check afterwards fails.
+
+ SAY NO IF
+   The site is moving the identity server to a different certificate
+   authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair acme-timer-restore
+========================================================================
+ PROBLEM DETECTED
+   Nothing yet: logins still work today.
+   Why it matters: The identity server's certificate will not renew
+   itself; when it expires, every directory login fails.
+
+ LIKELY CAUSE  (found by the diagnostic tool: ACME_RENEWAL_STOPPED)
+   The certificate-renewal timer on the identity server is not running.
+   Found on this host: cert-renew-kanidm.timer is inactive
+
+ PROPOSED ACTION
+   Turn the certificate-renewal timer back on; it checks the certificate
+   every 15 minutes.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: the timer renews the certificate only
+   when it is due. If it was paused on purpose, that pause ends.
+   Undo: The timer's previous on/off state is recorded and put back if
+   the check afterwards fails.
+
+ SAY NO IF
+   Someone paused the timer deliberately, for planned work on the
+   certificate authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c1 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cert-renew
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in with a directory account, anywhere.
+   Why it matters: The identity server's certificate has expired, so
+   every machine refuses to talk to it.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TLS_CERT_EXPIRED)
+   The identity server's certificate is past its end date.
+   Found on this host: notAfter 2026-11-11T16:46:53Z; collected
+   2026-11-11T16:47:19Z; verify expired
+
+ PROPOSED ACTION
+   Back up the current certificate and key, issue a new certificate from
+   the project's certificate authority, and restart the identity server.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: The identity server restarts, interrupting logins for
+   a few seconds. If the certificate authority is unhealthy, the repair
+   does not start.
+   Undo: The previous certificate and key are saved and put back, with a
+   restart, if the check afterwards fails.
+
+ SAY NO IF
+   The site is moving the identity server to a different certificate
+   authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair acme-timer-restore
+========================================================================
+ PROBLEM DETECTED
+   Nothing yet: logins still work today.
+   Why it matters: The identity server's certificate will not renew
+   itself; when it expires, every directory login fails.
+
+ LIKELY CAUSE  (found by the diagnostic tool: ACME_RENEWAL_STOPPED)
+   The certificate-renewal timer on the identity server is not running.
+   Found on this host: cert-renew-kanidm.timer is inactive
+
+ PROPOSED ACTION
+   Turn the certificate-renewal timer back on; it checks the certificate
+   every 15 minutes.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: the timer renews the certificate only
+   when it is due. If it was paused on purpose, that pause ends.
+   Undo: The timer's previous on/off state is recorded and put back if
+   the check afterwards fails.
+
+ SAY NO IF
+   Someone paused the timer deliberately, for planned work on the
+   certificate authority.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c1 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair nsswitch-restore
+========================================================================
+ PROBLEM DETECTED
+   Users can log in, but sudo and group-shared folders stop working.
+   Why it matters: People lose everything their directory groups give
+   them: administrator rights, shared folders, group-only services.
+
+ LIKELY CAUSE  (found by the diagnostic tool: NSS_ORDER_WRONG)
+   The group-lookup setting (initgroups) does not list Kanidm, and
+   authselect reports the login settings were edited by hand.
+   Found on this host: initgroups: 'files'; authselect check: MODIFIED
+   outside authselect
+
+ PROPOSED ACTION
+   Re-apply the approved login settings (the pinned authselect profile
+   and features) to this workstation.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Any deliberate hand edits to this workstation's login
+   settings are replaced by the approved ones.
+   Undo: The current settings are saved first and put back automatically
+   if the check afterwards fails.
+
+ SAY NO IF
+   This workstation was deliberately set up with its own login settings,
+   different from the other workstations.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l2 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair nsswitch-restore
+========================================================================
+ PROBLEM DETECTED
+   Users can log in, but sudo and group-shared folders stop working.
+   Why it matters: People lose everything their directory groups give
+   them: administrator rights, shared folders, group-only services.
+
+ LIKELY CAUSE  (found by the diagnostic tool: NSS_ORDER_WRONG)
+   The group-lookup setting (initgroups) does not list Kanidm, and
+   authselect reports the login settings were edited by hand.
+   Found on this host: initgroups: 'files'; authselect check: MODIFIED
+   outside authselect
+
+ PROPOSED ACTION
+   Re-apply the approved login settings (the pinned authselect profile
+   and features) to this workstation.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Any deliberate hand edits to this workstation's login
+   settings are replaced by the approved ones.
+   Undo: The current settings are saved first and put back automatically
+   if the check afterwards fails.
+
+ SAY NO IF
+   This workstation was deliberately set up with its own login settings,
+   different from the other workstations.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l2 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair nsswitch-restore
+========================================================================
+ PROBLEM DETECTED
+   Users can log in, but sudo and group-shared folders stop working.
+   Why it matters: People lose everything their directory groups give
+   them: administrator rights, shared folders, group-only services.
+
+ LIKELY CAUSE  (found by the diagnostic tool: NSS_ORDER_WRONG)
+   The group-lookup setting (initgroups) does not list Kanidm, and
+   authselect reports the login settings were edited by hand.
+   Found on this host: initgroups: 'files'; authselect check: MODIFIED
+   outside authselect
+
+ PROPOSED ACTION
+   Re-apply the approved login settings (the pinned authselect profile
+   and features) to this workstation.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Any deliberate hand edits to this workstation's login
+   settings are replaced by the approved ones.
+   Undo: The current settings are saved first and put back automatically
+   if the check afterwards fails.
+
+ SAY NO IF
+   This workstation was deliberately set up with its own login settings,
+   different from the other workstations.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l2 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair unixd-refresh
+========================================================================
+ PROBLEM DETECTED
+   A person removed from a group can still use that group's access on
+   this workstation.
+   Why it matters: Access that was taken away still works here until the
+   cache is refreshed: a security exposure.
+
+ LIKELY CAUSE  (found by the diagnostic tool: UNIXD_CACHE_STALE)
+   This workstation still lists group memberships the identity server
+   has removed.
+
+ PROPOSED ACTION
+   Mark this workstation's account cache as out of date and re-read the
+   person's account, so the removal takes effect now.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it re-reads current data from the
+   identity server. The repair refuses if the server is unreachable.
+   Undo: Cannot be undone, and does not need to be: it only re-reads
+   current data.
+
+   Follows ISSO decision 28.
+
+ SAY NO IF
+   The identity server is unreachable from this workstation: fix that
+   first.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l3 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair unixd-refresh
+========================================================================
+ PROBLEM DETECTED
+   A person removed from a group can still use that group's access on
+   this workstation.
+   Why it matters: Access that was taken away still works here until the
+   cache is refreshed: a security exposure.
+
+ LIKELY CAUSE  (found by the diagnostic tool: UNIXD_CACHE_STALE)
+   This workstation still lists group memberships the identity server
+   has removed.
+
+ PROPOSED ACTION
+   Mark this workstation's account cache as out of date and re-read the
+   person's account, so the removal takes effect now.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it re-reads current data from the
+   identity server. The repair refuses if the server is unreachable.
+   Undo: Cannot be undone, and does not need to be: it only re-reads
+   current data.
+
+   Follows ISSO decision 28.
+
+ SAY NO IF
+   The identity server is unreachable from this workstation: fix that
+   first.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l3 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair unixd-refresh
+========================================================================
+ PROBLEM DETECTED
+   A person removed from a group can still use that group's access on
+   this workstation.
+   Why it matters: Access that was taken away still works here until the
+   cache is refreshed: a security exposure.
+
+ LIKELY CAUSE  (found by the diagnostic tool: UNIXD_CACHE_STALE)
+   This workstation still lists group memberships the identity server
+   has removed.
+
+ PROPOSED ACTION
+   Mark this workstation's account cache as out of date and re-read the
+   person's account, so the removal takes effect now.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it re-reads current data from the
+   identity server. The repair refuses if the server is unreachable.
+   Undo: Cannot be undone, and does not need to be: it only re-reads
+   current data.
+
+   Follows ISSO decision 28.
+
+ SAY NO IF
+   The identity server is unreachable from this workstation: fix that
+   first.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l3 run 3: GREEN
+l3n run 1: GREEN
+l3n run 2: GREEN
+l3n run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair time-resync
+========================================================================
+ PROBLEM DETECTED
+   Authenticator codes are rejected on this workstation, and some secure
+   connections fail.
+   Why it matters: People who log in with an authenticator code are
+   locked out of this machine until its clock is right.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TOTP_TIME_SKEW)
+   This host's clock differs from the time source by more than 30
+   seconds.
+   Found on this host: offset 0.0 s, last source sample 600.0 s vs ;
+   threshold 30 s
+
+ PROPOSED ACTION
+   Restart the time service and set this workstation's clock to the time
+   source now, once, with your approval.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the time source itself is wrong, the clock moves
+   to the wrong time. The repair refuses to run without a reachable
+   source.
+   Undo: Cannot be undone, and does not need to be: the old time was
+   wrong. Without this step the clock corrects itself in about two
+   hours.
+
+   Follows ISSO decision 30.
+
+ SAY NO IF
+   The time source itself is in doubt (other machines show clock
+   problems too).
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l4 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair time-resync
+========================================================================
+ PROBLEM DETECTED
+   Authenticator codes are rejected on this workstation, and some secure
+   connections fail.
+   Why it matters: People who log in with an authenticator code are
+   locked out of this machine until its clock is right.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TOTP_TIME_SKEW)
+   This host's clock differs from the time source by more than 30
+   seconds.
+   Found on this host: offset 0.0 s, last source sample 600.0 s vs ;
+   threshold 30 s
+
+ PROPOSED ACTION
+   Restart the time service and set this workstation's clock to the time
+   source now, once, with your approval.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the time source itself is wrong, the clock moves
+   to the wrong time. The repair refuses to run without a reachable
+   source.
+   Undo: Cannot be undone, and does not need to be: the old time was
+   wrong. Without this step the clock corrects itself in about two
+   hours.
+
+   Follows ISSO decision 30.
+
+ SAY NO IF
+   The time source itself is in doubt (other machines show clock
+   problems too).
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l4 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair time-resync
+========================================================================
+ PROBLEM DETECTED
+   Authenticator codes are rejected on this workstation, and some secure
+   connections fail.
+   Why it matters: People who log in with an authenticator code are
+   locked out of this machine until its clock is right.
+
+ LIKELY CAUSE  (found by the diagnostic tool: TOTP_TIME_SKEW)
+   This host's clock differs from the time source by more than 30
+   seconds.
+   Found on this host: offset 0.0 s, last source sample 600.0 s vs ;
+   threshold 30 s
+
+ PROPOSED ACTION
+   Restart the time service and set this workstation's clock to the time
+   source now, once, with your approval.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the time source itself is wrong, the clock moves
+   to the wrong time. The repair refuses to run without a reachable
+   source.
+   Undo: Cannot be undone, and does not need to be: the old time was
+   wrong. Without this step the clock corrects itself in about two
+   hours.
+
+   Follows ISSO decision 30.
+
+ SAY NO IF
+   The time source itself is in doubt (other machines show clock
+   problems too).
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l4 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair client-ca-trust
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in to this workstation with a directory account.
+   Why it matters: All directory users are locked out of this machine;
+   local administrator accounts still work.
+
+ LIKELY CAUSE  (found by the diagnostic tool: CLIENT_MISSING_CA_ROOT)
+   The project's certificate authority is missing from this
+   workstation's list of trusted certificates.
+   Found on this host: lab step-ca root not in the system trust store
+
+ PROPOSED ACTION
+   Put the project's certificate authority back in this workstation's
+   trusted list (only the copy whose fingerprint matches the pinned
+   value), then restart the login service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: only the pinned, known certificate can
+   be installed. The login service restarts, which takes a few seconds.
+   Undo: The previous trust file (or its absence) is saved and put back
+   if the check afterwards fails.
+
+ SAY NO IF
+   The site has moved to a new certificate authority that this tool does
+   not know yet.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c2 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair client-ca-trust
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in to this workstation with a directory account.
+   Why it matters: All directory users are locked out of this machine;
+   local administrator accounts still work.
+
+ LIKELY CAUSE  (found by the diagnostic tool: CLIENT_MISSING_CA_ROOT)
+   The project's certificate authority is missing from this
+   workstation's list of trusted certificates.
+   Found on this host: lab step-ca root not in the system trust store
+
+ PROPOSED ACTION
+   Put the project's certificate authority back in this workstation's
+   trusted list (only the copy whose fingerprint matches the pinned
+   value), then restart the login service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: only the pinned, known certificate can
+   be installed. The login service restarts, which takes a few seconds.
+   Undo: The previous trust file (or its absence) is saved and put back
+   if the check afterwards fails.
+
+ SAY NO IF
+   The site has moved to a new certificate authority that this tool does
+   not know yet.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c2 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair client-ca-trust
+========================================================================
+ PROBLEM DETECTED
+   Nobody can log in to this workstation with a directory account.
+   Why it matters: All directory users are locked out of this machine;
+   local administrator accounts still work.
+
+ LIKELY CAUSE  (found by the diagnostic tool: CLIENT_MISSING_CA_ROOT)
+   The project's certificate authority is missing from this
+   workstation's list of trusted certificates.
+   Found on this host: lab step-ca root not in the system trust store
+
+ PROPOSED ACTION
+   Put the project's certificate authority back in this workstation's
+   trusted list (only the copy whose fingerprint matches the pinned
+   value), then restart the login service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: only the pinned, known certificate can
+   be installed. The login service restarts, which takes a few seconds.
+   Undo: The previous trust file (or its absence) is saved and put back
+   if the check afterwards fails.
+
+ SAY NO IF
+   The site has moved to a new certificate authority that this tool does
+   not know yet.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c2 run 3: GREEN
+l5 run 1: GREEN
+l5 run 2: GREEN
+l5 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair selinux-restorecon
+========================================================================
+ PROBLEM DETECTED
+   Logins or the login service fail on this workstation, often with no
+   entry in the security log.
+   Why it matters: The security system silently blocks the login service
+   because some of its files carry the wrong security labels.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SELINUX_LABEL_WRONG)
+   Identity-related files on this host carry a security label different
+   from the one the policy defines.
+   Found on this host: /run/kanidm-unixd: var_run_t (policy says
+   kanidm_unixd_var_run_t); /run/kanidm-unixd/sock: var_run_t (policy
+   says kanidm_unixd_var_run_t); /run/kanidm-unixd/task_sock: var_run_t
+   (policy says kanidm_unixd_var_run_t)
+
+ PROPOSED ACTION
+   Put back the security labels the policy defines, only on the identity
+   files that differ.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it restores only the labels the
+   installed policy defines, on a fixed list of identity paths.
+   Undo: The current labels are recorded first and put back if the check
+   afterwards fails.
+
+   Follows ISSO decision 12.
+
+ SAY NO IF
+   Those labels were set on purpose as a documented exception.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l6 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair selinux-restorecon
+========================================================================
+ PROBLEM DETECTED
+   Logins or the login service fail on this workstation, often with no
+   entry in the security log.
+   Why it matters: The security system silently blocks the login service
+   because some of its files carry the wrong security labels.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SELINUX_LABEL_WRONG)
+   Identity-related files on this host carry a security label different
+   from the one the policy defines.
+   Found on this host: /run/kanidm-unixd: var_run_t (policy says
+   kanidm_unixd_var_run_t); /run/kanidm-unixd/sock: var_run_t (policy
+   says kanidm_unixd_var_run_t); /run/kanidm-unixd/task_sock: var_run_t
+   (policy says kanidm_unixd_var_run_t)
+
+ PROPOSED ACTION
+   Put back the security labels the policy defines, only on the identity
+   files that differ.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it restores only the labels the
+   installed policy defines, on a fixed list of identity paths.
+   Undo: The current labels are recorded first and put back if the check
+   afterwards fails.
+
+   Follows ISSO decision 12.
+
+ SAY NO IF
+   Those labels were set on purpose as a documented exception.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l6 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair selinux-restorecon
+========================================================================
+ PROBLEM DETECTED
+   Logins or the login service fail on this workstation, often with no
+   entry in the security log.
+   Why it matters: The security system silently blocks the login service
+   because some of its files carry the wrong security labels.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SELINUX_LABEL_WRONG)
+   Identity-related files on this host carry a security label different
+   from the one the policy defines.
+   Found on this host: /run/kanidm-unixd: var_run_t (policy says
+   kanidm_unixd_var_run_t); /run/kanidm-unixd/sock: var_run_t (policy
+   says kanidm_unixd_var_run_t); /run/kanidm-unixd/task_sock: var_run_t
+   (policy says kanidm_unixd_var_run_t)
+
+ PROPOSED ACTION
+   Put back the security labels the policy defines, only on the identity
+   files that differ.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: Little risk: it restores only the labels the
+   installed policy defines, on a fixed list of identity paths.
+   Undo: The current labels are recorded first and put back if the check
+   afterwards fails.
+
+   Follows ISSO decision 12.
+
+ SAY NO IF
+   Those labels were set on purpose as a documented exception.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l6 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair ssh-user-cert-reissue
+========================================================================
+ PROBLEM DETECTED
+   One person's SSH certificate login is refused everywhere.
+   Why it matters: That person cannot log in remotely until they get a
+   new certificate.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_USER_CERT_EXPIRED)
+   The newest SSH certificate issued to that person has expired.
+   Found on this host: newest certificate issued to lab02 expired
+   2026-11-11T17:27:43Z; principals ['lab02', 'lab02@idm.iso5.lab.test']
+
+ PROPOSED ACTION
+   Sign the person's already-registered public key again with a short
+   validity, and hand them the new certificate. No private key moves.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the person should no longer have access, a new
+   certificate gives it back until it expires.
+   Undo: The certificate authority's record of the previous certificate
+   is put back; a certificate already handed out stays valid until it
+   expires.
+
+ SAY NO IF
+   The person's access was ended on purpose, or their key was reported
+   lost or stolen.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c3 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair ssh-user-cert-reissue
+========================================================================
+ PROBLEM DETECTED
+   One person's SSH certificate login is refused everywhere.
+   Why it matters: That person cannot log in remotely until they get a
+   new certificate.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_USER_CERT_EXPIRED)
+   The newest SSH certificate issued to that person has expired.
+   Found on this host: newest certificate issued to lab02 expired
+   2026-11-11T17:29:43Z; principals ['lab02', 'lab02@idm.iso5.lab.test']
+
+ PROPOSED ACTION
+   Sign the person's already-registered public key again with a short
+   validity, and hand them the new certificate. No private key moves.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the person should no longer have access, a new
+   certificate gives it back until it expires.
+   Undo: The certificate authority's record of the previous certificate
+   is put back; a certificate already handed out stays valid until it
+   expires.
+
+ SAY NO IF
+   The person's access was ended on purpose, or their key was reported
+   lost or stolen.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c3 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair ssh-user-cert-reissue
+========================================================================
+ PROBLEM DETECTED
+   One person's SSH certificate login is refused everywhere.
+   Why it matters: That person cannot log in remotely until they get a
+   new certificate.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_USER_CERT_EXPIRED)
+   The newest SSH certificate issued to that person has expired.
+   Found on this host: newest certificate issued to lab02 expired
+   2026-11-11T17:31:43Z; principals ['lab02', 'lab02@idm.iso5.lab.test']
+
+ PROPOSED ACTION
+   Sign the person's already-registered public key again with a short
+   validity, and hand them the new certificate. No private key moves.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the person should no longer have access, a new
+   certificate gives it back until it expires.
+   Undo: The certificate authority's record of the previous certificate
+   is put back; a certificate already handed out stays valid until it
+   expires.
+
+ SAY NO IF
+   The person's access was ended on purpose, or their key was reported
+   lost or stolen.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c3 run 3: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 3: GREEN
+wrote <repo>/lab/iso5/regression-2026-11-11.md
+regress rc=0
+REG-DONE

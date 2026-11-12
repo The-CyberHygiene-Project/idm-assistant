@@ -1,0 +1,22 @@
+
+assemble-repo.sh
+check-key-expiry.sh
+PACKAGES.txt
+push.sh
+release-iso.sh
+release-kit.sh
+release-repo.sh
+RPM-GPG-KEY-cyberhygiene
+RPM-GPG-KEY-EPEL-9
+RPM-GPG-KEY-Rocky-9
+== DVD: sha256 (takes about a minute)
+== repo 0.11.0: signatures
+REPO OK: 28 packages, all signed by pinned keys; repomd.xml signed by 2DE0D71BF37D8F5E4201A590521276F43C908F8E
+== DVD tree -> work copy (about 15 GB, on /backup)
+== stage /chp, menus, NOTICE
+== /images/efiboot.img: our grub.cfg (DVD and USB UEFI boot read this copy; the EFI binaries are not touched)
+== ISO
+Written to medium : 7854156 sectors at LBA 0
+Writing to 'stdio:/var/lib/libvirt/images/chp-iso/0.6.0-rc2/cyberhygiene-lab-installer-el9.iso' completed successfully.
+
+built: /var/lib/libvirt/images/chp-iso/0.6.0-rc2/cyberhygiene-lab-installer-el9.iso

@@ -1,0 +1,65 @@
+=== srv1
+chp-site-0.13.0-2.chp.el9.noarch
+chp-base-0.1.0-4.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+vda   1.8T
+  backup        600.00g
+  data          350.00g
+  home          238.00g
+  root           90.00g
+  swap           29.00g
+  tmp            15.00g
+  var           100.00g
+  var_log        50.00g
+  var_log_audit  30.00g
+  var_tmp        15.00g
+  chp 1859.98g 342.98g
+=== client1
+ssh: Could not resolve hostname client1: nodename nor servname provided, or not known
+=== client2
+chp-site-0.13.0-2.chp.el9.noarch
+chp-base-0.1.0-4.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+vda   512G
+  home          101.00g
+  root           40.00g
+  swap            8.00g
+  tmp             4.00g
+  var            20.00g
+  var_log        20.00g
+  var_log_audit   8.00g
+  var_tmp         4.00g
+  chp 508.98g 303.98g
+=== DISK_NOTE counts
+0 0 3  <- iso5-srv
+0 0 3  <- iso5-cli1
+0 0 3  <- iso5-cli2
+=== images
+9	/data/libvirt/images/iso5-cli1-1.qcow2
+11	/data/libvirt/images/iso5-cli2-1.qcow2
+14	/data/libvirt/images/iso5-srv-1.qcow2
+active
+active
+=== srv /data /backup
+/data  rw,nosuid,nodev,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+/backup rw,nosuid,nodev,noexec,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+iso5-srv
+ vda      /data/libvirt/images/iso5-srv-1.qcow2
+iso5-cli1
+ vda      /data/libvirt/images/iso5-cli1-1.qcow2
+iso5-cli2
+ vda      /data/libvirt/images/iso5-cli2-1.qcow2
+qemu-img: Could not open '/data/libvirt/images/iso5-cli1-1.qcow2': Failed to get shared "write" lock
+Is another process using the image [/data/libvirt/images/iso5-cli1-1.qcow2]?
+=== cli1 (root console)
+chp-site-0.13.0-2.chp.el9.noarch
+vda   120G
+  home          10.00g
+  root          54.99g
+  swap           7.99g
+  tmp            4.00g
+  var           20.00g
+  var_log        8.00g
+  var_log_audit  8.00g
+  var_tmp        4.00g
+  chp 116.98g    0g

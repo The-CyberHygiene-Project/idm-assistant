@@ -1,0 +1,42 @@
+== srv1 check-20261111T103515Z
+
+f+++++++++++++++++: /etc/sudoers.d/99-lab-adapter
+d+++++++++++++++++: /root/chp-scan
+f+++++++++++++++++: /root/chp-scan/iso5-srv.xml
+f+++++++++++++++++: /root/chp-scan/tailoring.xml
+f+++++++++++++++++: /usr/local/sbin/lab-hook
+f+++++++++++++++++: /var/lib/ssh-ca/keys/lab01.pub
+f+++++++++++++++++: /var/lib/ssh-ca/keys/lab02.pub
+f+++++++++++++++++: /var/lib/ssh-ca/keys/lab06.pub
+f > ... mci.H...  : /etc/chp/site.conf
+d > ...   .. .... : /etc/sudoers.d
+d > ...   .. .... : /usr/local/sbin
+d > ... mc.. ...  : /var/lib/ssh-ca/keys
+== client2 check-20261111T105231Z
+
+f+++++++++++++++++: /etc/sudoers.d/99-lab-adapter
+d+++++++++++++++++: /root/chp-scan
+f+++++++++++++++++: /root/chp-scan/iso5-cli2.xml
+f+++++++++++++++++: /root/chp-scan/tailoring.xml
+f+++++++++++++++++: /usr/local/sbin/lab-hook
+f > ... mci.H...  : /etc/chp/site.conf
+d > ...   .. .... : /etc/sudoers.d
+d > ...   .. .... : /usr/local/sbin
+== cli1 check-20261111T110417Z
+
+== remaining changed lines, srv
+
+d = ... mc.. ...  : /etc/chp
+f > ... mci.H...  : /etc/chp/site.conf
+d > ...   .. .... : /etc/sudoers.d
+d = ...   .n .... : /root
+d > ...   .. .... : /usr/local/sbin
+d > ... mc.. ...  : /var/lib/ssh-ca/keys
+6
+== cli2
+
+d = ... mc.. ...  : /etc/chp
+f > ... mci.H...  : /etc/chp/site.conf
+d > ...   .. .... : /etc/sudoers.d
+d = ...   .n .... : /root
+d > ...   .. .... : /usr/local/sbin

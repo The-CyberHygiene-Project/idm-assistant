@@ -1,0 +1,21 @@
+# baseline
+
+OK no XFS file system at or above 85% (or already alerted)
+monitor-rc=0
+0
+# make 1 GiB LV at /mnt/t76 and fill to 90%
+
+/dev/mapper/chp-t76      960M   39M      922M   5% /mnt/t76
+/dev/mapper/chp-t76      960M  939M       22M  98% /mnt/t76
+ 98%
+# first monitor run (via the systemd unit)
+
+unit-rc=0
+17:14:54 /mnt/t76 is 98% full (limit 85%); grow with lvextend -r; 302 GB free in chp
+/mnt/t76 is 98% full (limit 85%); grow with lvextend -r; 302 GB free in chp
+# second run (manual + unit)
+
+OK no XFS file system at or above 85% (or already alerted)
+monitor-rc=0
+1
+/mnt/t76 1794269694

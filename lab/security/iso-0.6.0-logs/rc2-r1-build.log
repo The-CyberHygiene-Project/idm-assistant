@@ -1,0 +1,13 @@
+stage catch: ALL PASS
+PASS srv: YARA match for the test file reached the manager
+[datetime.date(2026, 11, 11)]
+report day: 2026-11-11
+PASS srv: today's report built (0600 files)
+PASS report: Suricata catch from the server, inside
+PASS report: YARA test file under iso5-cli2
+PASS report: cli1 (installed with the review, 0.6.0) has status items, all OK
+PASS report: certs, keys, scans and repo OK on all three
+PASS report: sysstat item present on all three hosts
+PASS report: client lenient (cli2 OK, last seen), server strict
+PASS report: resources for srv and cli2 (disk at least; CPU needs 2 sysstat samples)
+stage build: ALL PASS

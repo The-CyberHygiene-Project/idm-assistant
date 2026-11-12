@@ -1,0 +1,161 @@
+# review reports
+##### 2026-11-09
+
+# Daily security review 2026-11-09
+
+Built 2026-11-10 00:20. Needs attention: 0. Sources: 1754 alerts, records iso5-cli1 34, iso5-cli2 33, iso5-srv 35.
+
+## 1. Intrusions
+
+| kind | source | inside/outside | site host | target | signature | count | first | last |
+|---|---|---|---|---|---|---|---|---|
+| wazuh | ? | ? |  | iso5-cli2 | Auditd: Device enables promiscuous mode. | 5 | 16:38 | 17:10 |
+| wazuh | ? | ? |  | iso5-srv | Auditd: Device enables promiscuous mode. | 2 | 16:12 | 17:10 |
+| wazuh | ? | ? |  | iso5-cli1 | Auditd: Device enables promiscuous mode. | 2 | 16:25 | 16:27 |
+| wazuh | ? | ? |  | iso5-cli2 | Listened ports status (netstat) changed (new port opened or closed). | 5 | 16:40 | 18:58 |
+| wazuh | ? | ? |  | iso5-srv | Listened ports status (netstat) changed (new port opened or closed). | 4 | 16:11 | 19:03 |
+| wazuh | ? | ? |  | iso5-cli1 | Listened ports status (netstat) changed (new port opened or closed). | 1 | 16:27 | 16:27 |
+
+## 2. Security status
+
+| host | item | state | detail | watched by |
+|---|---|---|---|---|
+| iso5-srv | record | OK | 35 records; last 0 h ago |  |
+| iso5-srv | repo | OK | repo a88c03542021 |  |
+| iso5-srv | cert /etc/pki/kanidm/chain.pem | OK | 19 h left of 24 h | 30-kanidm-cert |
+| iso5-srv | cert /etc/step-ca/certs/intermediate_ca.crt | OK | 3649 days left |  |
+| iso5-srv | cert /etc/step-ca/certs/root_ca.crt | OK | 3649 days left |  |
+| iso5-srv | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3649 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 186 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 688 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-srv | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-srv | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-srv | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-srv | aide_check | OK | last 6 h ago | 61-aide-stale |
+| iso5-srv | aide_ok | OK | accepted, no changes | 60-aide-result |
+| iso5-srv | sysstat | OK | 35 samples |  |
+| iso5-cli1 | record | OK | 34 records; last seen 23:57 |  |
+| iso5-cli1 | repo | OK | same as iso5-srv |  |
+| iso5-cli1 | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3649 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 186 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 688 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-cli1 | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-cli1 | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-cli1 | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-cli1 | aide_check | OK | last 6 h ago | 61-aide-stale |
+| iso5-cli1 | aide_ok | OK | accepted, no changes | 60-aide-result |
+| iso5-cli1 | sysstat | OK | 44 samples |  |
+| iso5-cli2 | record | OK | 33 records; last seen 23:50 |  |
+| iso5-cli2 | repo | OK | same as iso5-srv |  |
+| iso5-cli2 | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3649 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 186 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 688 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-cli2 | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-cli2 | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-cli2 | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-cli2 | aide_check | OK | last 6 h ago | 61-aide-stale |
+| iso5-cli2 | aide_ok | OK | accepted, no changes | 60-aide-result |
+| iso5-cli2 | sysstat | OK | 31 samples |  |
+
+## 3. Resources
+
+| host | CPU % avg / peak | memory % avg / peak | disk peak | net kB/s rx / tx |
+|---|---|---|---|---|
+| iso5-srv | 1.7 / 12.9 | 29.3 / 33.2 | / 7%, /backup 1%, /boot 21%, /boot/efi 1%, /data 2%, /home 1%, /tmp 1%, /var 2%, /var/log 1%, /var/log/audit 1%, /var/tmp 1% | 1.1 / 0.2 |
+| iso5-cli1 | 1.2 / 8.4 | 22.4 / 25.5 | / 10%, /boot 21%, /boot/efi 1%, /home 2%, /tmp 2%, /var 5%, /var/log 2%, /var/log/audit 2%, /var/tmp 2% | 0.1 / 0.9 |
+| iso5-cli2 | 0.9 / 9.3 | 19.7 / 19.9 | / 13%, /boot 21%, /boot/efi 1%, /home 2%, /tmp 2%, /var 5%, /var/log 2%, /var/log/audit 2%, /var/tmp 2% | 0.1 / 0.6 |
+
+Routine events below level 7: iso5-cli1 294, iso5-cli2 689, iso5-srv 650
+##### 2026-11-10
+
+# Daily security review 2026-11-10
+
+Built 2026-11-11 00:20. Needs attention: 0. Sources: 413 alerts, records iso5-cli1 135, iso5-cli2 138, iso5-srv 136.
+
+## 1. Intrusions
+
+| kind | source | inside/outside | site host | target | signature | count | first | last |
+|---|---|---|---|---|---|---|---|---|
+| wazuh | ? | ? |  | iso5-cli2 | Auditd: Role-Based Access Control (RBAC) failure detected. | 1 | 03:31 | 03:31 |
+| wazuh | ? | ? |  | iso5-srv | Auditd: Role-Based Access Control (RBAC) failure detected. | 1 | 03:32 | 03:32 |
+| wazuh | ? | ? |  | iso5-cli1 | Auditd: Role-Based Access Control (RBAC) failure detected. | 1 | 04:30 | 04:30 |
+| wazuh | ? | ? |  | iso5-srv | Listened ports status (netstat) changed (new port opened or closed). | 1 | 10:58 | 10:58 |
+
+## 2. Security status
+
+| host | item | state | detail | watched by |
+|---|---|---|---|---|
+| iso5-srv | record | OK | 136 records; last 0 h ago |  |
+| iso5-srv | repo | OK | repo a88c03542021 |  |
+| iso5-srv | cert /etc/pki/kanidm/chain.pem | ATTENTION | 10 h left of 24 h | 30-kanidm-cert |
+| iso5-srv | cert /etc/step-ca/certs/intermediate_ca.crt | OK | 3648 days left |  |
+| iso5-srv | cert /etc/step-ca/certs/root_ca.crt | OK | 3648 days left |  |
+| iso5-srv | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3648 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 185 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 687 days left |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-srv | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-srv | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-srv | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-srv | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-srv | aide_check | OK | last 20 h ago | 61-aide-stale |
+| iso5-srv | aide_ok | ATTENTION | changes or mismatch to review | 60-aide-result |
+| iso5-srv | sysstat | OK | 143 samples |  |
+| iso5-cli1 | record | OK | 135 records; last seen 23:50 |  |
+| iso5-cli1 | repo | OK | same as iso5-srv |  |
+| iso5-cli1 | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3648 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 185 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 687 days left |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-cli1 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-cli1 | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-cli1 | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-cli1 | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-cli1 | aide_check | OK | last 19 h ago | 61-aide-stale |
+| iso5-cli1 | aide_ok | ATTENTION | changes or mismatch to review | 60-aide-result |
+| iso5-cli1 | sysstat | OK | 143 samples |  |
+| iso5-cli2 | record | OK | 138 records; last seen 23:57 |  |
+| iso5-cli2 | repo | OK | same as iso5-srv |  |
+| iso5-cli2 | cert /etc/pki/ca-trust/source/anchors/chp-root.crt | OK | 3648 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-9 | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9-Testing | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-WAZUH | OK | 185 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-cyberhygiene | OK | 687 days left |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-beta | OK | does not expire |  |
+| iso5-cli2 | key /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release | OK | does not expire |  |
+| iso5-cli2 | yara_recent | OK | last 0 h ago | 73-yara-scan |
+| iso5-cli2 | yara_full | OK | first weekly scan not due yet | 73-yara-scan |
+| iso5-cli2 | suricata_stats | OK | last 0 h ago | 74-suricata |
+| iso5-cli2 | aide_check | OK | last 20 h ago | 61-aide-stale |
+| iso5-cli2 | aide_ok | ATTENTION | changes or mismatch to review | 60-aide-result |
+| iso5-cli2 | sysstat | OK | 143 samples |  |
+
+## 3. Resources
+
+| host | CPU % avg / peak | memory % avg / peak | disk peak | net kB/s rx / tx |
+|---|---|---|---|---|
+| iso5-srv | 1.1 / 5.2 | 30.4 / 31.0 | / 7%, /backup 1%, /boot 21%, /boot/efi 1%, /data 2%, /home 1%, /tmp 1%, /var 2%, /var/log 1%, /var/log/audit 1%, /var/tmp 1% | 0.1 / 0.0 |
+| iso5-cli1 | 1.0 / 6.1 | 21.3 / 25.4 | / 10%, /boot 21%, /boot/efi 1%, /home 2%, /tmp 2%, /var 5%, /var/log 2%, /var/log/audit 2%, /var/tmp 2% | 0.1 / 0.0 |
+| iso5-cli2 | 0.6 / 4.7 | 21.0 / 21.7 | / 13%, /boot 21%, /boot/efi 1%, /home 1%, /tmp 2%, /var 5%, /var/log 1%, /var/log/audit 2%, /var/tmp 2% | 0.1 / 0.0 |

@@ -43,7 +43,7 @@ def test_kickstart_rules(role):
 def test_kickstart_with_snippets_validates(tmp_path, role, host):
     site = parse_site(GOOD); hs = parse_hosts(HOSTS, site)
     snip = {"misc": misc_ks(site), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
-            "disk": disk_ks("vda", "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
+            "disk": disk_ks("vda", 120 * 2**30, "server", "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
             "boot": boot_ks("grub.pbkdf2.sha512.10000.AA.BB")}
     t = (KS / f"{role}.ks").read_text()
     for k, v in snip.items():
@@ -150,3 +150,11 @@ def test_kickstart_copies_the_isos_repo_and_installs_the_agent_key_only_when_nee
     assert 'rsync -a "$(cat /tmp/chp/repo-dir)/" /mnt/sysimage/var/lib/chp/repo/' in t      # the ISO's repo, not the stick
     assert "install -D -m 0600 /tmp/chp/wazuh.key /mnt/sysimage/var/lib/chp/wazuh/agent.key" in t
     assert "shred -u /tmp/chp/wazuh.key" in t
+
+
+@pytest.mark.parametrize("role", ["server", "client"])
+def test_disk_note_is_appended_to_the_escrow_before_install_completed(role):
+    t = (KS / f"{role}.ks").read_text()
+    post = _section(t, "%post --nochroot")
+    line = '[ -s /tmp/chp/disk-note ] && echo "DISK_NOTE=$(cat /tmp/chp/disk-note)" >>'
+    assert line in post and post.index(line) < post.index("INSTALL COMPLETED")

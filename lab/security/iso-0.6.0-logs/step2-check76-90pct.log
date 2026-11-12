@@ -1,0 +1,25 @@
+# remove the 98% trial LV; monitor forgets it
+
+rc=0
+state-end
+# fresh 1 GiB LV filled to 90%
+
+/dev/mapper/chp-t76      960M  859M      102M  90% /mnt/t76
+# run 1 (unit)
+
+unit-rc=0
+hook-log:
+17:15:09 /mnt/t76 is 90% full (limit 85%); grow with lvextend -r; 302 GB free in chp
+/mnt/t76 1794269709
+# run 2 (manual monitor, then unit): silent
+
+monitor-rc=0
+hook-lines=1
+# remove the LV -> OK
+
+  Logical volume "t76" successfully removed.
+OK no XFS file system at or above 85% (or already alerted)
+monitor-rc=0
+state=[]
+hook-lines=1
+  chp   1   8   0 wz--n- 508.98g 303.98g

@@ -1,0 +1,12 @@
+##### ISO=0.6.0-rc2 SECURITY_ADDONS=yes DISK_GB=931 (guard 50 GB)
+##### bash lab/iso5/prove.sh prep 2026-11-11T17:58:09Z
+PASS chp-site validate (iso5 site, diag key)
+PASS stick image made
+stage prep: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh server 2026-11-11T17:58:12Z
+PASS iso5-srv: installed from the ISO (menu entry chosen, nothing typed)
+PASS iso5-srv: first boot unlocked
+stage server: ALL PASS
+##### rc=0
+##### done 2026-11-11T18:09:01Z

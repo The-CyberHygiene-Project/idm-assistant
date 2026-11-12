@@ -1,0 +1,7 @@
+cleared review/ on /data/libvirt/images/iso5-stick.img
+stick-attached
+PASS srv: export to the stick
+PASS srv: verify --stick OK
+PASS srv: emptied ledger fails against the stick
+stick-detached
+stage export: ALL PASS

@@ -28,7 +28,8 @@ RPM=$(tar tzf "$TAR" | grep -E '^(\./)?repo/chp-site-.*\.noarch\.rpm$' | head -1
 (cd "$w" && tar xzf "$TAR" "$RPM" && tar xf "$RPM")
 cp "$w/usr/share/chp-site/chp-site.pyz" "$P/"
 cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$kit/profile.ini.template" "$P/"
-(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz > SHA256SUMS)
+mkdir -p "$P/runbooks" && cp "$top"/docs/runbooks/*.md "$P/runbooks/"      # 0.6.0: grow a volume, move /backup (the guide points here)
+(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz runbooks/*.md > SHA256SUMS)
 echo "== signing SHA256SUMS (PIN dialog, then touch the key)"; say "Kit signing now. Watch for the PIN dialog." 2>/dev/null || true
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
 echo "== checks"
@@ -64,6 +65,8 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `site-stick-kit-0.5.0/` | the site-stick kit for 0.5.0 | `site-stick-kit-0.5.0/SITE-STICK.md` |
 | `0.5.0-update1/` | package update: the security add-on, part 4 (the ISSO's daily security review: report, sign-off ledger, alerts) | `0.5.0-update1/UPDATE.md` |
 | `site-stick-kit-0.5.0-update1/` | the site-stick kit for 0.5.0 update 1 (guide section: the daily security review; `REVIEW_DELEGATES`) | `site-stick-kit-0.5.0-update1/SITE-STICK.md` |
+| `0.6.0/` | release 0.6.0: the installer ISO with the disk layout sized by the disk and the role (server and workstation), monitor check 76 (disk space), the daily-review sign-off fixes, and the short-lived certificate rule (Kanidm's 24 h certificate is no longer flagged); signed repo, key | `0.6.0/VERIFY.md` |
+| `site-stick-kit-0.6.0/` | the site-stick kit for 0.6.0 (guide section: disks, the layout and the backup drive; `runbooks/`) | `site-stick-kit-0.6.0/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.

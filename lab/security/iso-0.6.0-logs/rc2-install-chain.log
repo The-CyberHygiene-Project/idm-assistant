@@ -1,0 +1,143 @@
+##### bash lab/iso5/prove.sh prep 2026-11-11T15:16:08Z
+PASS chp-site validate (iso5 site, diag key)
+PASS stick image made
+stage prep: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh server 2026-11-11T15:16:11Z
+PASS iso5-srv: installed from the ISO (menu entry chosen, nothing typed)
+PASS iso5-srv: first boot unlocked
+stage server: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh firstboot 2026-11-11T15:27:50Z
+PASS server first boot finished
+PASS new first-boot steps done (unixd-tokens, self-client, client enrolment)
+PASS two client tokens pending (600)
+PASS server-as-client: kanidm-unixd online
+PASS server-as-client: authselect custom/kanidm + CUI features
+PASS server-as-client: nsswitch passwd/group/initgroups start with kanidm
+PASS server-as-client: sshd methods (user / chpadmin)
+PASS server-as-client: unixd token 600 root
+PASS server-as-client: chp_kanidm loaded, socket dir labelled
+PASS server-as-client: fapolicyd no denials
+PASS server-as-client: SELinux no AVC since boot
+PASS server-as-client: boot-loader password set
+PASS server-as-client: Rocky release key imported
+PASS server allows chp_admins only
+PASS chp_admins sudo rule installed (0440)
+PASS diag account + forced command on the server
+PASS no chpcache account on the server
+PASS server: stick blocked during first boot
+PASS server: AIDE baseline built at first boot
+PASS server: baseline after server.done
+PASS server: stick hash pinned before the baseline
+PASS server: daily AIDE timer enabled
+PASS server: escrow folder not in AIDE
+PASS server: escrow-lookalike sibling still checked
+PASS iso5-srv: stick detached
+PASS monitor alerts only: secrets still on the server + AIDE baseline not pinned
+stage firstboot: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh export 2026-11-11T15:31:06Z
+PASS export-client moved the server secrets
+PASS export-client moved both client tokens
+PASS stick holds client.conf + both tokens
+PASS nothing pending on the server
+PASS server AIDE baseline pinned by export-client
+PASS server: escrow emptied, AIDE baseline unchanged
+PASS server monitor: only the not-yet-installed agents
+stage export: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh client1 2026-11-11T15:31:23Z
+PASS iso5-cli1: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)
+PASS iso5-cli1: first boot unlocked
+PASS iso5-cli1: client first boot finished
+PASS iso5-cli1: stick blocked during first boot
+PASS iso5-cli1: AIDE baseline built at first boot
+PASS iso5-cli1: baseline after client.done
+PASS iso5-cli1: stick hash pinned before the baseline
+PASS iso5-cli1: daily AIDE timer enabled
+PASS iso5-cli1: escrow folder not in AIDE
+PASS iso5-cli1: escrow-lookalike sibling still checked
+PASS iso5-cli1: aide-pin (pinned: aide/iso5-cli1.txt on the site stick (SHA-512 f1fab8cc5291f7dd…))
+PASS iso5-cli1: stick detached
+PASS iso5-cli1: anchor = pinned root
+PASS iso5-cli1: no staged token copy left
+PASS iso5-cli1: kanidm-unixd online
+PASS iso5-cli1: authselect custom/kanidm + CUI features
+PASS iso5-cli1: nsswitch passwd/group/initgroups start with kanidm
+PASS iso5-cli1: sshd methods (user / chpadmin)
+PASS iso5-cli1: unixd token 600 root
+PASS iso5-cli1: chp_kanidm loaded, socket dir labelled
+PASS iso5-cli1: fapolicyd no denials
+PASS iso5-cli1: SELinux no AVC since boot
+PASS iso5-cli1: boot-loader password set
+PASS iso5-cli1: Rocky release key imported
+PASS iso5-cli1: clients allow chp_users
+PASS iso5-cli1: chpcache pinned to the server + exact sudo
+PASS iso5-cli1: monitors quiet
+PASS iso5-cli1: TPM unlock after reboot
+stage client1: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh client2 2026-11-11T15:44:58Z
+PASS iso5-cli2: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)
+PASS iso5-cli2: first boot unlocked
+PASS iso5-cli2: client first boot finished
+PASS iso5-cli2: stick blocked during first boot
+PASS iso5-cli2: AIDE baseline built at first boot
+PASS iso5-cli2: baseline after client.done
+PASS iso5-cli2: stick hash pinned before the baseline
+PASS iso5-cli2: daily AIDE timer enabled
+PASS iso5-cli2: escrow folder not in AIDE
+PASS iso5-cli2: escrow-lookalike sibling still checked
+PASS iso5-cli2: aide-pin (pinned: aide/iso5-cli2.txt on the site stick (SHA-512 8584ba9cbe484a77…))
+PASS iso5-cli2: stick detached
+PASS iso5-cli2: anchor = pinned root
+PASS iso5-cli2: no staged token copy left
+PASS iso5-cli2: kanidm-unixd online
+PASS iso5-cli2: authselect custom/kanidm + CUI features
+PASS iso5-cli2: nsswitch passwd/group/initgroups start with kanidm
+PASS iso5-cli2: sshd methods (user / chpadmin)
+PASS iso5-cli2: unixd token 600 root
+PASS iso5-cli2: chp_kanidm loaded, socket dir labelled
+PASS iso5-cli2: fapolicyd no denials
+PASS iso5-cli2: SELinux no AVC since boot
+PASS iso5-cli2: boot-loader password set
+PASS iso5-cli2: Rocky release key imported
+PASS iso5-cli2: clients allow chp_users
+PASS iso5-cli2: chpcache pinned to the server + exact sudo
+PASS iso5-cli2: monitors quiet
+PASS iso5-cli2: TPM unlock after reboot
+stage client2: ALL PASS
+##### rc=0
+##### bash lab/iso5/prove.sh wazuh-on 2026-11-11T15:58:42Z
+FAIL agents Active (2): got '1', want '2'
+PASS pending wazuh folder empty after export
+PASS server: default API logins refused
+PASS server: listeners
+PASS server: update_check off
+PASS iso5-srv: no 'No such tag' warnings
+PASS iso5-srv: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-srv: security step done
+PASS iso5-srv: 0 Wazuh SELinux denials
+PASS iso5-srv: 0 fapolicyd denials
+PASS iso5-srv: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: no 'No such tag' warnings
+PASS iso5-cli1: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli1: security step done
+PASS iso5-cli1: 0 Wazuh SELinux denials
+PASS iso5-cli1: 0 fapolicyd denials
+PASS iso5-cli1: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli2: no 'No such tag' warnings
+PASS iso5-cli2: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli2: security step done
+PASS iso5-cli2: 0 Wazuh SELinux denials
+PASS iso5-cli2: 0 fapolicyd denials
+PASS iso5-cli2: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: staged agent.key shredded
+PASS iso5-cli1: agent upgrade module off
+PASS iso5-cli2: staged agent.key shredded
+PASS iso5-cli2: agent upgrade module off
+PASS USBGuard allow events only from export-client (server)
+stage iso5-cli2: FAIL
+##### rc=1
+CHAIN-DONE

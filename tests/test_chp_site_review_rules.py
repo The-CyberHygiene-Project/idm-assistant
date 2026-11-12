@@ -3,11 +3,19 @@ from chp_site import review_rules as r
 H, D = 3600, 86400
 
 
-def test_short_lived_cert_attention_below_half_and_immediate_below_quarter():
+def test_short_lived_cert_attention_below_30_percent_and_immediate_below_quarter():
     nb = 0; na = 24 * H                                          # Kanidm: 24 h
     assert r.cert_state(nb, na, 1 * H)[:2] == ("OK", False)
-    assert r.cert_state(nb, na, 13 * H)[:2] == ("ATTENTION", False)   # 11 h left < 12 h
+    assert r.cert_state(nb, na, 17 * H)[:2] == ("ATTENTION", False)   # 7 h left < 7.2 h (30 %)
     assert r.cert_state(nb, na, 19 * H)[:2] == ("ATTENTION", True)    # 5 h left < 6 h
+
+
+def test_healthy_kanidm_cert_is_ok_until_renewal_is_missed():
+    nb, na = 0, 24 * H          # renewed by the timer when 8 h are left, so 8..24 h left is healthy
+    assert r.cert_state(nb, na, 14 * H)[:2] == ("OK", False)          # 10 h left
+    assert r.cert_state(nb, na, 16 * H)[:2] == ("OK", False)          # 8 h left
+    assert r.cert_state(nb, na, 17 * H)[:2] == ("ATTENTION", False)   # 7 h left
+    assert r.cert_state(nb, na, 19 * H)[:2] == ("ATTENTION", True)    # 5 h left
 
 
 def test_long_lived_cert_attention_at_30_days_immediate_at_7():

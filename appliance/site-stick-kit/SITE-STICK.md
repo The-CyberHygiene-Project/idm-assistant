@@ -29,7 +29,8 @@ Files in this kit:
 - [ ] **An ECDSA SSH key** on the admin workstation (§3). ed25519 keys are refused (FIPS).
 - [ ] **Firmware on every machine:** UEFI boot, **Secure Boot on**, **TPM 2.0 enabled**. Without Secure Boot or a TPM
       the install still works, but the disk passphrase must be typed at **every** boot.
-- [ ] **One internal disk per machine** — or note which disk to erase (§3, `disk` column).
+- [ ] **One internal disk per machine** — or note which disk to erase (§3, `disk` column). Recommended: a 2 TB SSD for
+      the server, 240 GB or more for a workstation (see "From 0.6.0 on" in §6).
 - [ ] **A monitor and keyboard** on each machine for its install and first boot.
 - [ ] The ISO checked and written to its own USB stick (`0.1.0/VERIFY.md`).
 
@@ -123,6 +124,85 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.6.0 on: disks, the layout, and the backup drive
+
+**What is new in 0.6.0.** The installer now sizes the volumes by the size of the disk. Before 0.6.0 every machine got
+the same small volumes and `/` took the rest. On a big server that left `/var` and the logs (where Wazuh, Suricata,
+YARA, the Kanidm database and the daily reviews write) in 20 GB and 8 GB volumes that could not be grown. Also new:
+a low-disk-space alert on every host (monitor check 76), logrotate for the YARA log (chp-security 0.4.1), and fixes to
+the daily-review sign-off (chp-site 0.13.0): signing needs a terminal (piped input no longer counts as consent),
+`--date` must be `YYYY-MM-DD`, and `--notes` is at most 1000 characters with no control characters.
+
+**Recommended disks.**
+
+- **Server: one 2 TB SSD.** The data of the site lives on the server. Add a second drive in the spare bay for backups
+  (see below).
+- **Workstation: any disk of 240 GB or more.** Workstations keep their working data on the server, not locally.
+- **Smaller disks still work.** The minimum is still 100 GB. A server under 900 GB and a workstation under 240 GB get
+  the same layout as before 0.6.0 (this is what lab VMs get). Then `/data` and `/backup` are plain folders on `/`.
+- A server disk under 1.9 TB works, and the installer says so: the note is written to the install log
+  (`/var/log/anaconda/program.log`) and as a `DISK_NOTE` line in the host's escrow file on the site stick. It is a
+  note, not a stop. (The install-complete screen does not show it.)
+
+**The layout** (sizes in GiB, rounded down; the volumes are in the encrypted volume group `chp`). The columns assume
+real disk sizes in bytes: a 2 TB disk is 2,000,398,934,016 bytes, a 1 TB disk 1,000,204,886,016 and a 512 GB disk
+512,110,190,592. Your disk's exact size moves the last three server rows and the free space by a few GiB.
+
+| Volume | Server 2 TB | Server 1 TB | Workstation 512 GB |
+|---|---|---|---|
+| `/` | 90 | 90 | 40 |
+| `/var` | 100 | 100 | 20 |
+| `/var/log` | 50 | 50 | 20 |
+| `/var/log/audit` | 30 | 30 | 8 |
+| `/var/tmp` | 15 | 15 | 4 |
+| `/tmp` | 15 | 15 | 4 |
+| swap | 29 | 29 | 8 |
+| `/home` | 238 | 93 | 92 |
+| `/data` | 350 | 137 | none |
+| `/backup` | 600 | 234 | none |
+| **left free in the volume group** | **342** | **135** | **277** |
+
+How other disk sizes are worked out: on a server the `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/tmp`, `/tmp` and swap
+volumes are fixed; what is left is split 15.6 % `/home`, 22.9 % `/data`, 39.2 % `/backup`, and the rest stays free.
+On a workstation the fixed volumes are as above, `/home` is a quarter of what is left (at least 10 GiB), and
+the rest stays free. `/boot/efi` (1 GiB) and `/boot` (2 GiB) are outside the encrypted group, as before.
+
+**The free space is the point.** XFS can grow but never shrink, so space left unassigned is space you can give to any
+volume later, online, with one command: see `runbooks/grow-a-volume.md` in this kit. The monitor (check 76) alerts at
+85 % full on any volume and tells you how much is free in `chp`.
+
+**Mount options.** `/data` is `nodev,nosuid`. `/backup` is `nodev,nosuid,noexec`. `/var/log/audit` is
+`nodev,nosuid,noexec` (set by the CUI profile at install). Other volumes use the defaults.
+
+**The backup drive.** `/backup` starts on the server's own disk, so it is not yet a backup against the loss of that disk.
+Add a separate drive in the spare bay, then move `/backup` to it with `runbooks/move-backup-to-a-second-drive.md`
+(it encrypts the drive, binds it to the TPM, puts its recovery passphrase on this stick, and returns the space to the
+volume group). Do this soon after the install. The project does not install backup software or set a schedule.
+The new mount is marked `nofail`, so a dead backup drive does not stop the server booting. The runbook also makes the
+empty `/backup` folder immutable and enables `clevis-luks-askpass.path` (so the TPM unlocks the drive at boot). While the
+drive is missing, writes to `/backup` then fail loudly instead of filling `/`.
+
+If the second drive is already in the machine **at install time**, the installer will not guess which disk to erase.
+Put the install disk in the **fifth column of `hosts`** (`disk`, see §3) by its `/dev/disk/by-id/...` name. The other
+drive is left alone and is added with the runbook afterwards.
+
+**What happens when the audit volume fills.** These are the installed settings (`/etc/audit/auditd.conf`, set by the CUI
+profile). They were read from the configuration; a full volume was not tested. auditd logs a warning to syslog at 75 MB
+free (`space_left`). At 50 MB free (`admin_space_left`) it suspends. If the volume is full or has an error
+(`disk_full_action` and `disk_error_action`), auditd **suspends auditing** and the machine keeps running. So the audit
+trail gets a gap, but the host does not halt. Avoid the gap: the earlier warning is monitor check 76, which alerts at
+85 % full, long before 50 MB is left. Act on it; grow the volume with the runbook.
+
+**Existing installs keep their layout.** An install made with an earlier ISO is not repartitioned: its volume group has
+no free space, because `/` took it. The new layout reaches a site only by reinstalling. Check 76 does apply to
+existing hosts once they have the update. If you are planning a new server (for example a second site), install
+0.6.0 or later.
+
+**Sync clients and `/home` on workstations.** A workstation's `/home` is modest on purpose. If a site runs a sync
+client that keeps a **full local copy** of the user's files (for example the Nextcloud desktop client), those files land
+in `/home` and its size matters. Either grow `/home` (`runbooks/grow-a-volume.md`) or set the client to on-demand
+files. A file service on the CHP server itself is not part of 0.6.0; `/data` is where one would live.
+
 ### From 0.5.0 update 1 on: the daily security review
 
 With the security add-on on, the server builds a review of the previous day every night: intrusions by source address
@@ -132,6 +212,9 @@ exports the evidence to this stick with `chp-site review export` (it also record
 `review/heads.txt`, so later changes show). To let others sign, list them in **`REVIEW_DELEGATES`** in `site.conf`
 (comma separated; may be empty; separate from the AIDE and unexpire delegates). The administrator is alerted if a review
 waits more than 2 days for a sign-off. See `0.5.0-update1/UPDATE.md`.
+From 0.6.0 on (chp-site 0.13.0) signing needs a terminal (piped input no longer counts as consent), `--date` must be
+`YYYY-MM-DD`, `--notes` is at most 1000 characters with no control characters, and a second signer at the same moment
+is refused.
 
 ### From 0.5.0 on: network intrusion detection at install
 

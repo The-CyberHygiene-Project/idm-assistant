@@ -1,0 +1,9 @@
+PASS iso5-srv: CUI scan of this install exists (before the adapter)
+PASS iso5-cli2: CUI scan of this install exists (before the adapter)
+PASS iso5-srv: lab adapter sudo rule
+PASS iso5-cli2: lab adapter sudo rule
+PASS pins file (0600, two keys)
+PASS idm_admin secret file (0600)
+PASS srv1: harness sudo works (ssh_config + adapter)
+PASS client2: harness sudo works (ssh_config + adapter)
+stage adapter: ALL PASS

@@ -103,7 +103,7 @@ case ${1:-} in
       scp -q "$R/../iso5-$r.ks" "aero:/tmp/iso2/$r.ks"; rm -f "$R/../iso5-$r.ks"
     done
     scp -q "$PYZ" "$iso2/stick.sh" "$iso2/install.sh" "$iso2/unlock.sh" "$iso2/luks-send.exp" "$iso3/rootrun.exp" "$iso3/rs.sh" \
-      "$top/lab/iso4/rsx.sh" "$top/lab/iso4/ssh-ki.exp" "$here/install-iso.sh" "$top/lab/srv1/totp.py" "$top/lab/host/console-login.exp" "$KEY" aero:/tmp/iso2/
+      "$top/lab/iso4/rsx.sh" "$top/lab/iso4/ssh-ki.exp" "$here/install-iso.sh" "$here/size-guard.sh" "$top/lab/srv1/totp.py" "$top/lab/host/console-login.exp" "$KEY" aero:/tmp/iso2/
     scp -q "$UKEY" aero:/tmp/iso2/ops_key; A 'chmod 600 /tmp/iso2/ops_key /tmp/iso2/iso2_chpadmin'
     # the lab users' POSIX password: made on aero, root-only, never printed
     A "sudo sh -c 'umask 077; python3 -c \"import secrets; print(secrets.token_urlsafe(24))\" > /tmp/iso2/ops.pw'"
@@ -124,7 +124,7 @@ case ${1:-} in
     check "row 37: no escrow written for the refused install" "$(A "sudo bash /tmp/iso2/stick.sh has $STICK escrow/iso5-srv.txt && echo yes || echo no")" "no"
     A "sudo rm -rf $TR" ;;
   server)
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO '' --keep-stick")
+    out=$(A "sudo DISK_GB=${DISK_GB:-120} bash /tmp/iso2/install-iso.sh $SRV 52:54:00:c4:05:50 2 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/server.ks"* && $out == *"INSTALLED and started $SRV"* ]] \
       && pass "$SRV: installed from the ISO (menu entry chosen, nothing typed)" || { fail "$SRV: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $SRV $STICK $SRV")
@@ -160,8 +160,9 @@ case ${1:-} in
     check "server: listeners" "$(Rv 'ss -ltn | awk "{print \$4}" | grep -E ":(1514|1515|55000)$" | sort | tr "\n" " "')" "0.0.0.0:1514 127.0.0.1:55000 "
     check "server: update_check off" "$(Rv 'grep -c "<update_check>no</update_check>" /var/ossec/etc/ossec.conf')" "1"
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
+      # wazuh.py data_dir(): /data/wazuh when /data is its own mount, else /srv/wazuh. Expect the bind SOURCE (device + path) the host's own layout implies.
       check "$1: no 'No such tag' warnings" "$(Rh "$1" "$2" 'for t in wazuh-analysisd wazuh-agentd wazuh-modulesd; do [ -x /var/ossec/bin/$t ] && /var/ossec/bin/$t -t 2>&1; done | grep -c "No such tag"')" "0"
-      check "$1: data bind-mounted" "$(Rh "$1" "$2" 'findmnt -no SOURCE /var/ossec | sed "s/.*\[//; s/\]//"')" "/srv/wazuh"
+      check "$1: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)" "$(Rh "$1" "$2" 'if mountpoint -q /data; then e="$(findmnt -no SOURCE /data)[/wazuh]"; else e="$(findmnt -no SOURCE -T /srv)[/srv/wazuh]"; fi; [ "$(findmnt -no SOURCE /var/ossec)" = "$e" ] && echo match || echo "no: $(findmnt -no SOURCE /var/ossec) want $e"')" "match"
       want=1; [[ $1 == "$SRV" ]] && want=2   # the server also runs client-enrol for itself (its step does nothing)
       check "$1: security step done" "$(Rh "$1" "$2" 'ls /var/lib/chp/firstboot/security.done /var/lib/chp/firstboot/client-security.done 2>/dev/null | wc -l')" "$want"
       check "$1: 0 Wazuh SELinux denials" "$(Rh "$1" "$2" 'ausearch -m AVC --input-logs 2>/dev/null | grep denied | grep -v kanidm_unixd | grep -c denied')" "0"
@@ -214,7 +215,7 @@ case ${1:-} in
     fi ;;
   client1|client2)
     if [[ $1 == client1 ]]; then VM=$C1; IP=$C1IP; MAC=52:54:00:c4:05:51; else VM=$C2; IP=$C2IP; MAC=52:54:00:c4:05:52; fi
-    out=$(A "sudo bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")
+    out=$(A "sudo DISK_GB=${DISK_GB:-120} bash /tmp/iso2/install-iso.sh $VM $MAC 3 $STICK 1 $ISO '' --keep-stick")
     [[ $out == *"BOOTED: inst.ks=hd:LABEL=CHP-LAB-EL9:/chp/ks/client.ks"* && $out == *"INSTALLED and started $VM"* ]] \
       && pass "$VM: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)" || { fail "$VM: install" "$out"; exit 1; }
     out=$(A "sudo bash /tmp/iso2/unlock.sh $VM $STICK $VM")

@@ -1,0 +1,5 @@
+PASS iso5-srv: NVRAM is qcow2
+PASS iso5-cli2: NVRAM is qcow2
+PASS iso5-srv: back up (TPM unlock)
+PASS iso5-cli2: back up (TPM unlock)
+stage nvram: ALL PASS

@@ -1,0 +1,11 @@
+# Managed by chp-security (YARA spec): the YARA scan results log, read by the Wazuh agent.
+# copytruncate: the agent keeps its file open and follows the truncation; results are also kept on the manager.
+/var/log/chp-yara.json {
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

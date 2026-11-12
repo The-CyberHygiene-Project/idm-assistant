@@ -1,0 +1,5 @@
+PASS iso5-cli2: internal snapshot with vTPM created
+PASS iso5-cli2: revert to the snapshot
+PASS iso5-cli2: answers after revert
+PASS iso5-cli2: unixd online after revert
+stage snapspike: ALL PASS

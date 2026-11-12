@@ -17,8 +17,9 @@ def _span(seconds):
 
 
 def cert_state(not_before, not_after, now):
-    """(state, immediate, detail). Lifetime under 90 days (renewed automatically): ATTENTION below half the lifetime
-    left, immediate below a quarter. 90 days or more: ATTENTION at <= 30 days left, immediate at <= 7 days."""
+    """(state, immediate, detail). Lifetime under 90 days (renewed automatically): ATTENTION below 30 % of the lifetime
+    left (the Kanidm certificate is renewed at 8 h of 24 h left, which is 33 %, so a healthy one never trips this),
+    immediate below a quarter. 90 days or more: ATTENTION at <= 30 days left, immediate at <= 7 days."""
     life, left = not_after - not_before, not_after - now
     if left <= 0:
         return ATTENTION, True, f"expired {_span(-left)} ago"
@@ -26,7 +27,7 @@ def cert_state(not_before, not_after, now):
         detail = f"{_span(left)} left of {_span(life)}"
         if left < life / 4:
             return ATTENTION, True, detail
-        return (ATTENTION if left < life / 2 else OK), False, detail
+        return (ATTENTION if left < life * 0.3 else OK), False, detail
     detail = f"{int(left // DAY)} days left"
     if left <= 7 * DAY:
         return ATTENTION, True, detail

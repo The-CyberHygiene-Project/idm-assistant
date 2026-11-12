@@ -25,7 +25,7 @@ def test_users_root_hash_and_keyonly_admin():
 
 
 def test_disk_is_luks2_on_the_chosen_disk_only():
-    s = disk_ks("vda", "PASSPHRASE")
+    s = disk_ks("vda", 120 * 2**30, "server", "PASSPHRASE")
     assert "ignoredisk --only-use=vda" in s and "clearpart --all --initlabel --drives=vda" in s
     assert "--encrypted --luks-version=luks2 --passphrase=PASSPHRASE" in s
     for mnt in ("/boot/efi", "/boot", "/home", "/tmp", "/var", "/var/tmp", "/var/log", "/var/log/audit", "swap"):
@@ -60,3 +60,30 @@ def test_boot_ks_sets_fips_and_the_hashed_password():
     from chp_site.render import boot_ks
     assert boot_ks("grub.pbkdf2.sha512.10000.AA.BB") == \
         'bootloader --append="fips=1" --iscrypted --password=grub.pbkdf2.sha512.10000.AA.BB\n'
+
+
+def test_todays_layout_unchanged_byte_for_byte():
+    want = (
+        "ignoredisk --only-use=vda\nclearpart --all --initlabel --drives=vda\npart /boot/efi --fstype=efi --size=1024\n"
+        "part /boot --fstype=xfs --size=2048\n"
+        "part pv.01 --size=1 --grow --encrypted --luks-version=luks2 --passphrase=P\nvolgroup chp pv.01\n"
+        "logvol swap           --vgname=chp --name=swap          --size=8192\n"
+        "logvol /home          --vgname=chp --name=home          --fstype=xfs --size=10240\n"
+        "logvol /tmp           --vgname=chp --name=tmp           --fstype=xfs --size=4096\n"
+        "logvol /var           --vgname=chp --name=var           --fstype=xfs --size=20480\n"
+        "logvol /var/tmp       --vgname=chp --name=var_tmp       --fstype=xfs --size=4096\n"
+        "logvol /var/log       --vgname=chp --name=var_log       --fstype=xfs --size=8192\n"
+        "logvol /var/log/audit --vgname=chp --name=var_log_audit --fstype=xfs --size=8192\n"
+        "logvol /              --vgname=chp --name=root          --fstype=xfs --size=20480 --grow\n")
+    assert disk_ks("vda", 120 * 2**30, "server", "P") == want
+    assert disk_ks("vda", 120 * 2**30, "client", "P") == want
+
+
+def test_sized_layout_has_no_grow_and_options():
+    s = disk_ks("vda", 2_000_398_934_016, "server", "P")
+    assert "--grow" not in s.split("volgroup")[1]
+    assert "--name=var           --fstype=xfs --size=102400" in s
+    assert [l for l in s.splitlines() if l.startswith("logvol /backup")][0].endswith(
+        '--size=614400 --fsoptions="nodev,nosuid,noexec"')
+    assert '--fsoptions="nodev,nosuid"' in [l for l in s.splitlines() if l.startswith("logvol /data")][0]
+    assert s.count("--fsoptions") == 2
