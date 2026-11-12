@@ -48,7 +48,7 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
 * Mon Nov 09 2026 The CyberHygiene Project - 0.13.0-1.chp
 - 0.6.0 disk layout: sized layouts for servers (>= 900 GB) and workstations (>= 240 GB), /data and /backup volumes,
-  DISK_NOTE line in the escrow file and on the console for servers under 1.9 TB.
+  DISK_NOTE line in the escrow file and in the install log for servers under 1.9 TB.
 - Sign-off fixes: review sign needs a terminal; --date must be YYYY-MM-DD; --notes is at most 1000 characters with no
   control characters; a concurrent second signer is re-checked under the lock and refused; the build date uses the
   site's TIMEZONE, not the build machine's.

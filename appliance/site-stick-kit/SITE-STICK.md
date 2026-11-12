@@ -140,8 +140,8 @@ the daily-review sign-off (chp-site 0.13.0): signing needs a terminal (piped inp
 - **Workstation: any disk of 240 GB or more.** Workstations keep their working data on the server, not locally.
 - **Smaller disks still work.** The minimum is still 100 GB. A server under 900 GB and a workstation under 240 GB get
   the same layout as before 0.6.0 (this is what lab VMs get). Then `/data` and `/backup` are plain folders on `/`.
-- A server disk under 1.9 TB works, and the installer says so: the note is printed on the console during the
-  first stage of the install, and written as a `DISK_NOTE` line in the host's escrow file on the site stick. It is a
+- A server disk under 1.9 TB works, and the installer says so: the note is written to the install log
+  (`/var/log/anaconda/program.log`) and as a `DISK_NOTE` line in the host's escrow file on the site stick. It is a
   note, not a stop. (The install-complete screen does not show it.)
 
 **The layout** (sizes in GiB, rounded down; the volumes are in the encrypted volume group `chp`). The columns assume
