@@ -116,6 +116,13 @@ class NC:
         self.users, self.groups, self.folders, self.tags = set(), {"admin"}, {}, {}
         self.providers, self.certs, self.calls, self.envs = set(), set(), [], []
         self.sticky_groups = False
+        self.root = None                                  # set by Env: config.php is written like NextCloud does
+
+    def _cfg(self):
+        if self.root is not None:
+            c = self.root / "etc/nextcloud/config.php"
+            c.parent.mkdir(parents=True, exist_ok=True)
+            c.write_text("<?php $CONFIG = " + json.dumps(sorted(map(list, self.sysconf.items()))) + ";\n")
 
     def __call__(self, argv, env=None):
         argv = list(argv)
@@ -126,6 +133,7 @@ class NC:
             return 0, json.dumps({"installed": self.installed}), ""
         if c == "maintenance:install":
             self.installed = True
+            self._cfg()
             return 0, "Nextcloud was successfully installed", ""
         if not self.installed and c not in ("status",):
             return 1, "", "Nextcloud is not installed"
@@ -133,6 +141,7 @@ class NC:
             keys = [x for x in a if not x.startswith("--")]
             val = next((x.split("=", 1)[1] for x in a if x.startswith("--value=")), None)
             self.sysconf[tuple(keys)] = val
+            self._cfg()
             return 0, "", ""
         if c == "config:app:set":
             keys = [x for x in a if not x.startswith("--")]
@@ -248,6 +257,7 @@ class Env:
     def __init__(self, tmp_path, security=True, mta=False):
         self.root = make_root(tmp_path, security)
         self.run, self.nc, self.kcli = Run(self.root, mta), NC(), KanidmCli()
+        self.nc.root = self.root
         self.k = Kanidm("idm_admin", run=self.kcli)
         self.records = []
         self.stick = tmp_path / "stick"
@@ -812,3 +822,77 @@ def test_status_when_off_and_when_unfinished(tmp_path):
     assert "not enabled" in D.status(r, run)[0] and run.calls == []
     (r / "etc/chp/documents.conf").write_text("ENABLED=no\nFQDN=x\n")
     assert "has not finished" in D.status(r, run)[0]
+
+
+# ---------- round 2 ----------
+
+def _upd(calls):
+    return [c for c in calls if c[:3] == ["fapolicyd-cli", "--file", "update"]]
+
+
+def test_config_php_trust_refreshed_after_the_last_write(tmp_path):
+    e = Env(tmp_path)
+    nc = e.nc
+    tl = e.run.calls                                           # one timeline: occ calls go into run's list too
+
+    def occ(argv, env=None):
+        tl.append(["OCC", *argv])
+        return nc(argv, env)
+    D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
+             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x")
+    u = _index(tl, lambda c: c[:3] == ["fapolicyd-cli", "--file", "update"], "trust update")
+    assert tl[u + 1] == ["fapolicyd-cli", "--update"]
+    assert _index(tl, lambda c: c == ["systemctl", "restart", "fapolicyd"], "restart") > u
+    assert not [c for c in tl[u:] if c[:1] == ["OCC"]]         # no occ call (no config.php write) after the update
+    # a run that changes config.php (a setting drifted) refreshes the entry and restarts fapolicyd
+    e.nc.sysconf[("updatechecker",)] = "true"; e.nc._cfg()
+    n = len(e.run.calls)
+    e.enable()
+    assert _upd(e.run.calls[n:]) and ["systemctl", "restart", "fapolicyd"] in e.run.calls[n:]
+    # a run that changes nothing does neither
+    n = len(e.run.calls)
+    e.enable()
+    assert not _upd(e.run.calls[n:]) and ["systemctl", "restart", "fapolicyd"] not in e.run.calls[n:]
+
+
+def test_wazuh_check_failure_keeps_an_earlier_mark(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    (e.root / D.MARK).parent.mkdir(parents=True, exist_ok=True)
+    (e.root / D.MARK).write_text("wazuh-manager\n")            # an earlier restart failed
+    (e.root / "var/ossec/etc/rules/chp_nextcloud_rules.xml").write_text("<group name='older'/>\n")
+    base = Run.__call__
+
+    def bad(self, argv, **kw):
+        if argv[:1] == ["/var/ossec/bin/wazuh-analysisd"]:
+            return R(1, "", "rule error")
+        return base(self, argv, **kw)
+    e.run.__class__ = type("BadRun", (Run,), {"__call__": bad})
+    with pytest.raises(SiteError, match="old rules are back"):
+        e.enable()
+    assert "wazuh-manager" in (e.root / D.MARK).read_text()
+
+
+def test_wazuh_check_failure_with_nothing_changed_says_so(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.run.wazuh_active = False                                  # forces the check without a file change
+    base = Run.__call__
+
+    def bad(self, argv, **kw):
+        if argv[:1] == ["/var/ossec/bin/wazuh-analysisd"]:
+            return R(1, "", "rule error")
+        return base(self, argv, **kw)
+    e.run.__class__ = type("BadRun", (Run,), {"__call__": bad})
+    with pytest.raises(SiteError) as ex:
+        e.enable()
+    assert "nothing was changed" in str(ex.value) and "old rules are back" not in str(ex.value)
+
+
+def test_unwritable_marker_is_a_plain_error(tmp_path):
+    e = Env(tmp_path)
+    blocker = e.root / "var/lib/chp/documents"
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("not a directory")                       # the marker's directory cannot be made
+    with pytest.raises(SiteError, match="restart-pending"):
+        e.enable()

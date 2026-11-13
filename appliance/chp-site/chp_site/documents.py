@@ -104,17 +104,21 @@ def _p(root, rel):
 
 def _put(path, text, mode, chown=None):
     """Write only when the content or mode differs. Returns True when written."""
-    if path.exists() and path.read_text() == text and (path.stat().st_mode & 0o7777) == mode:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".chp-tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(text)
-    os.chmod(tmp, mode)
-    if chown:
-        chown(tmp)
-    os.replace(tmp, path)
+    try:
+        if path.exists() and path.read_text() == text and (path.stat().st_mode & 0o7777) == mode:
+            return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".chp-tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp, mode)
+        if chown:
+            chown(tmp)
+        os.replace(tmp, path)
+    except OSError as e:
+        raise SiteError(f"could not write {path} ({e.strerror or e}); fix it, then re-run chp-site documents enable") \
+            from None
     return True
 
 
@@ -220,7 +224,10 @@ def _out(run, argv):
 
 def _restart_marks(root):
     p = _p(root, MARK)
-    return [ln.strip() for ln in p.read_text().splitlines() if ln.strip()] if p.exists() else []
+    try:
+        return [ln.strip() for ln in p.read_text().splitlines() if ln.strip()] if p.exists() else []
+    except OSError as e:
+        raise SiteError(f"could not read {p} ({e.strerror or e})") from None
 
 
 def _mark(root, units):
@@ -239,11 +246,25 @@ def _unmark(root, units):
         if left:
             _put(_p(root, MARK), "".join(u + "\n" for u in left), 0o600)
         else:
-            _p(root, MARK).unlink()
+            try:
+                _p(root, MARK).unlink()
+            except OSError as e:
+                raise SiteError(f"could not clear {_p(root, MARK)} ({e.strerror or e})") from None
 
 
 def _differs(path, text, mode):
-    return not (path.exists() and path.read_text() == text and (path.stat().st_mode & 0o7777) == mode)
+    try:
+        return not (path.exists() and path.read_text() == text and (path.stat().st_mode & 0o7777) == mode)
+    except OSError as e:
+        raise SiteError(f"could not read {path} ({e.strerror or e})") from None
+
+
+def _sha(path):
+    import hashlib
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    except OSError as e:
+        raise SiteError(f"could not read {path} ({e.strerror or e})") from None
 
 
 def _put_r(root, path, text, mode, units, chown=None):
@@ -343,6 +364,8 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
 
     record("documents-enable", {"host": host, "step": "start", "fqdn": fqdn})   # before any change; refuses if it fails
 
+    cfg = _p(root, "etc/nextcloud/config.php")
+    cfg_before = _sha(cfg)                            # fapolicyd's trust entry must follow every rewrite of it
     # 1. packages (the signed chp repo); a transaction this run means fapolicyd restarts at the end (never inside one)
     run(["dnf", "-y", "--enablerepo=chp", "module", "enable", "php:8.3", "postgresql:16"], check=True,
         capture_output=True, text=True)
@@ -426,7 +449,8 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
             "--data-dir", f"{DATA}/data")
     # fapolicyd: config.php is PHP NextCloud itself writes -> a path trust entry (spike, trust step)
     tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
-    if not (tf.exists() and "/etc/nextcloud/config.php" in tf.read_text()):
+    trust_added = not (tf.exists() and "/etc/nextcloud/config.php" in tf.read_text())
+    if trust_added:
         _mark(root, ["fapolicyd"])
         run(["fapolicyd-cli", "--file", "add", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
         run(["fapolicyd-cli", "--update"], check=True)
@@ -556,6 +580,14 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     _restart(run, root, ["php-fpm", "httpd"])
     step("services", f"started: {', '.join(UNITS)} (HTTPS {PORT}, LAN {cidr} only)")
 
+    # 15a. config.php's trust entry follows its content (spike §Under the CUI profile fix 2): the settings and apps
+    # steps rewrite it after the entry was added, so refresh the entry after the last occ call whenever it changed
+    if trust_added or _sha(cfg) != cfg_before:
+        _mark(root, ["fapolicyd"])
+        run(["fapolicyd-cli", "--file", "update", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
+        run(["fapolicyd-cli", "--update"], check=True)
+        step("trust", "fapolicyd trust entry for /etc/nextcloud/config.php refreshed (its content changed)")
+
     # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or
     # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet
     fsmark = _p(root, FSMARK_PENDING)
@@ -649,6 +681,7 @@ def _wazuh(root, run, chown):
     old_conf = conf.read_text()
     new_conf = w.documents_manager(old_conf)
     changed = _differs(rules, w.NEXTCLOUD_RULES, 0o640) or _differs(conf, new_conf, 0o640)
+    marked_before = "wazuh-manager" in _restart_marks(root)
     if changed:
         _mark(root, ["wazuh-manager"])
         _put(rules, w.NEXTCLOUD_RULES, 0o640, grp)
@@ -659,15 +692,19 @@ def _wazuh(root, run, chown):
         return
     r = run(["/var/ossec/bin/wazuh-analysisd", "-t"], capture_output=True, text=True)
     if r.returncode != 0:
+        why = (r.stderr or r.stdout or "").strip()[:200]
         if changed:
             if old_rules is None:
                 rules.unlink()
             else:
                 _put(rules, old_rules, 0o640, grp)
             _put(conf, old_conf, 0o640, grp)
-            _unmark(root, ["wazuh-manager"])
-        raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the NextCloud rules; the old rules are "
-                        "back and the manager was not restarted: " + (r.stderr or r.stdout or "").strip()[:200])
+            if not marked_before:                    # keep a mark an earlier failed restart left
+                _unmark(root, ["wazuh-manager"])
+            raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; the old "
+                            "rules are back and the manager was not restarted: " + why)
+        raise SiteError("the Wazuh rule check (wazuh-analysisd -t) fails on the installed rules (nothing was changed "
+                        "by this run); the manager was not restarted: " + why)
     _restart(run, root, ["wazuh-manager"], extra=["wazuh-manager"])
 
 
