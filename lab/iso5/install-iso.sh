@@ -3,6 +3,7 @@
 # BOOTING THE ISO, the way a person would: wait for our menu on the serial console, choose ENTRY with the keyboard
 # (virsh send-key), and let the kickstart run. Firmware as in lab/iso2/install.sh: q35, UEFI Secure Boot with enrolled
 # keys, vTPM; the stick is a removable USB disk. Afterwards the stick and the ISO are detached ("removed").
+# MEM_MB (env, default 4096; ISO 0.7.0: the NextCloud server gets 8192).
 # --keep-stick (8th argument; 0.2.0): the stick stays in until prove.sh detaches it after the AIDE baseline, as
 # SITE-STICK.md "From 0.2.0 on" tells sites to do. Pass "" as the 7th argument with it.
 set -Eeuo pipefail
@@ -23,7 +24,7 @@ if (( ${DISK_GB:-120} > 120 )); then
   systemctl is-active --quiet "size-guard-$name" || { echo "size guard not active; refusing to install"; exit 1; }
 fi
 disks=(); for i in $(seq 1 "$ndisks"); do disks+=(--disk "path=/data/libvirt/images/$name-$i.qcow2,size=${DISK_GB:-120},format=qcow2"); done
-virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osinfo detect=on,name=rhel9-unknown \
+virt-install --name "$name" --memory "${MEM_MB:-4096}" --vcpus 2 --cpu host-passthrough --osinfo detect=on,name=rhel9-unknown \
   --machine q35 --features smm.state=on \
   --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes,firmware.feature1.name=enrolled-keys,firmware.feature1.enabled=yes \
   --tpm emulator,model=tpm-crb,version=2.0 --check disk_size=off \

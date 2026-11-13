@@ -1,0 +1,3 @@
+PASS chp-site validate (iso5 site, diag key)
+PASS stick image made
+stage prep: ALL PASS
