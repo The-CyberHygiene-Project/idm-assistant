@@ -64,7 +64,7 @@ def test_rules_file_ships_empty_of_rules():
 
 def test_spec_ships_mechanism_check_80_and_bumps_release():
     s = (B / "chp-base.spec").read_text()
-    assert "Release:        8.chp" in s
+    assert "Release:        9.chp" in s
     for needle in ("80-fapolicyd.sh", "%{_libexecdir}/chp/fapolicyd-fsmark", "%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf",
                    "%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules", "%posttrans"):
         assert needle in s
@@ -140,3 +140,55 @@ def test_rewrite_keeps_mode(tmp_path):
     (tmp_path / "fapolicyd.conf").write_text(CONF); (tmp_path / "fapolicyd.conf").chmod(0o640)
     apply(tmp_path, 1, conf=CONF)
     assert oct((tmp_path / "fapolicyd.conf").stat().st_mode & 0o777) == "0o640"
+
+
+def _pending_run(tmp_path, systemctl_show, date_out="2000"):
+    """Run with a pending marker (mtime 1000) and fake systemctl/date that record TZ and args."""
+    (tmp_path / "pending").write_text("")
+    os.utime(tmp_path / "pending", (1000, 1000))
+    (tmp_path / "flag").write_text("FSMARK=0\n"); (tmp_path / "fapolicyd.conf").write_text(CONF)
+    b = tmp_path / "bin"; b.mkdir(exist_ok=True)
+    (b / "systemctl").write_text(f'#!/bin/bash\necho "TZ=$TZ $*" >> {tmp_path}/calls\n'
+                                 f'[ "$1" = show ] && printf "%s\\n" "{systemctl_show}"\nexit 0\n')
+    (b / "date").write_text(f'#!/bin/bash\necho "date TZ=$TZ $*" >> {tmp_path}/calls\necho {date_out}\n')
+    for x in b.iterdir():
+        x.chmod(0o755)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_FSMARK_CONF=str(tmp_path / "flag"),
+               CHP_FAPOLICYD_CONF=str(tmp_path / "fapolicyd.conf"), CHP_FSMARK_PENDING=str(tmp_path / "pending"))
+    env.pop("CHP_FAPOLICYD_START", None)
+    r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
+    assert r.returncode == 0 and r.stderr == "", r.stderr
+    return (tmp_path / "calls").read_text()
+
+
+def test_daemon_start_is_read_in_utc(tmp_path):
+    calls = _pending_run(tmp_path, "Fri 2026-11-13 10:00:00 UTC")
+    assert "TZ=UTC show fapolicyd -p ActiveEnterTimestamp --value" in calls
+    assert "date TZ=UTC -d Fri 2026-11-13 10:00:00 UTC +%s" in calls
+    assert not (tmp_path / "pending").exists()          # 2000 > 1000: restarted after the marker
+
+
+def test_empty_or_never_started_daemon_keeps_the_marker(tmp_path):
+    for n, show in enumerate(("", "n/a")):
+        d = tmp_path / str(n); d.mkdir()
+        calls = _pending_run(d, show)
+        assert "date " not in calls and (d / "pending").exists(), show
+
+
+def test_unparsable_start_keeps_the_marker(tmp_path):
+    _pending_run(tmp_path, "garbage", date_out="")
+    assert (tmp_path / "pending").exists()
+
+
+def test_restart_in_the_same_second_as_the_marker_keeps_it(tmp_path):
+    (tmp_path / "pending").write_text("")
+    os.utime(tmp_path / "pending", (1000, 1000))
+    apply(tmp_path, 0, start=1000)
+    assert (tmp_path / "pending").exists()
+
+
+def test_values_tested_separately_and_temp_file_trapped():
+    s = S.read_text()
+    assert 'isnum "$mt" && isnum "$st" && [ "$st" -gt "$mt" ]' in s and '"$mt$st"' not in s
+    assert s.index("trap 'rm -f \"$tmp\" 2>/dev/null' EXIT") < s.index("rewrite() {")
+    assert "Race:" in s

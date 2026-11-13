@@ -22,18 +22,29 @@ want=${want:-0}
 cur=$(sed -n 's/^[[:space:]]*allow_filesystem_mark[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$conf" | tail -n 1)
 ours=0; grep -qxF "$mark" "$conf" && ours=1
 tmp=$(dirname "$conf")/.fapolicyd.conf.chp.$$
+trap 'rm -f "$tmp" 2>/dev/null' EXIT   # the temp file never outlives the run, whatever the exit (signals end in EXIT too)
+trap 'exit 1' HUP INT TERM
 pend=${CHP_FSMARK_PENDING:-/var/lib/chp/fapolicyd-restart-pending}
 changed=0
-# Seconds since the epoch at which fapolicyd last (re)started; empty when unknown. CHP_FAPOLICYD_START overrides (tests).
+# Seconds since the epoch at which fapolicyd last (re)started; empty when unknown ("n/a" when it never started).
+# systemctl prints the timestamp in the local zone; TZ=UTC on both systemctl and date keeps the round trip zone-safe
+# (no reliance on date parsing a local zone abbreviation). CHP_FAPOLICYD_START overrides (tests).
 fstart() {
   [ -n "${CHP_FAPOLICYD_START:-}" ] && { echo "$CHP_FAPOLICYD_START"; return; }
-  local t; t=$(systemctl show fapolicyd -p ActiveEnterTimestamp --value 2>/dev/null)
-  [ -n "$t" ] && date -d "$t" +%s 2>/dev/null
+  local t; t=$(TZ=UTC systemctl show fapolicyd -p ActiveEnterTimestamp --value 2>/dev/null)
+  case $t in ''|n/a) return 0 ;; esac
+  TZ=UTC date -d "$t" +%s 2>/dev/null
+  return 0
 }
-# A pending marker is stale once the daemon has restarted after it was written: clear it.
+isnum() { case $1 in ''|*[!0-9]*) return 1 ;; esac; return 0; }
+# A pending marker is stale once the daemon has restarted after it was written: clear it. Both values must be numbers on
+# their own (an empty start must not pass). Race: both have one-second resolution, so a restart in the same second as
+# the marker write cannot be ordered; strictly later (-gt) is required, so that case keeps the marker and costs at most
+# one extra restart, never a lost one. A restart by someone else between the write and this check still clears it,
+# which is correct (the new conf is loaded).
 if [ -f "$pend" ]; then
   mt=$(stat -c %Y "$pend" 2>/dev/null || stat -f %m "$pend" 2>/dev/null); st=$(fstart)
-  case "$mt$st" in *[!0-9]*|'') ;; *) [ "$st" -ge "$mt" ] && rm -f "$pend" ;; esac
+  if isnum "$mt" && isnum "$st" && [ "$st" -gt "$mt" ]; then rm -f "$pend"; fi
 fi
 # Atomic: build the new file beside the old one (same mode/owner/SELinux label), then mv over it. On any failure the
 # old conf is untouched and nothing is recorded.
