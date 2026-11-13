@@ -54,6 +54,7 @@ run 50
 [[ $(cat "$T/rc") == 2 ]] && ok "destroy-failed exit 2" || no "destroy-failed exit" "$(cat "$T/rc")"
 grep -q "SIZE-GUARD DESTROY FAILED iso5-test" "$T/out" && ok "destroy-failed message" || no "destroy-failed message" "$(cat "$T/out")"
 
+# 4. no image: (POLL_S=60 and the stubbed sleep make the 120 s threshold hit on the 2nd poll, instantly)
 # 4. no image: one warning after 120 s, keeps waiting (guard killed by the test)
 reset; POLL_S=60 PATH=$T/bin:$PATH bash "$guard" iso5-test 50 > "$T/out" 2>&1 &
 gp=$!; sleep 1; kill $gp 2>/dev/null; wait $gp 2>/dev/null

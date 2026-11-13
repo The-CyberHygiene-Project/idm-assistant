@@ -175,8 +175,8 @@ case ${1:-} in
       check "$1: agent upgrade module off" "$(Rh "$1" "$2" 'grep -c "Module Agent Upgrade started" /var/ossec/logs/ossec.log')" "0"
     done
     check "USBGuard allow events only from export-client (server)" "$(Rv 'journalctl -u usbguard --no-pager | grep -ci "allow"')" "$(Rv 'journalctl -t chp-site --no-pager | grep -c "export-client\|stick allowed"')" ;;
-  wazuh-on-neg) # negative for the wazuh-on bind-mount check: a stray /backup/wazuh over /var/ossec must print "no:" (TEST HOST ONLY; always unmounts)
-    r=$(Rv 'mkdir -p /backup/wazuh && mount --bind /backup/wazuh /var/ossec && { if mountpoint -q /data; then e="$(findmnt -no SOURCE /data)[/wazuh]"; else e="$(findmnt -no SOURCE -T /srv)[/srv/wazuh]"; fi; [ "$(findmnt -no SOURCE /var/ossec)" = "$e" ] && echo match || echo "no: $(findmnt -no SOURCE /var/ossec) want $e"; }; umount /var/ossec; rmdir /backup/wazuh 2>/dev/null')
+  wazuh-on-neg) # negative for the wazuh-on bind-mount check: a stray /backup/wazuh over /var/ossec must print "no:" (TEST HOST ONLY; unmounts only a bind this stage made, and an EXIT trap covers a dropped ssh)
+    r=$(Rv 'mkdir -p /backup/wazuh; m=0; mount --bind /backup/wazuh /var/ossec && m=1; [ "$m" = 1 ] || { echo "no mount made"; exit 0; }; trap "umount /var/ossec 2>/dev/null" EXIT; if mountpoint -q /data; then e="$(findmnt -no SOURCE /data)[/wazuh]"; else e="$(findmnt -no SOURCE -T /srv)[/srv/wazuh]"; fi; [ "$(findmnt -no SOURCE /var/ossec)" = "$e" ] && echo match || echo "no: $(findmnt -no SOURCE /var/ossec) want $e"; umount /var/ossec; trap - EXIT; rmdir /backup/wazuh 2>/dev/null')
     check "stray /backup/wazuh bind is NOT accepted (prints no:)" "$(printf %s "$r" | head -n1 | cut -c1-3)" "no:" ;;
   aidepeek)     # read-only: the Wazuh paths in each host's latest AIDE report (paths only, no hashes)
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
