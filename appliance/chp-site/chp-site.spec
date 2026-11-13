@@ -1,6 +1,6 @@
 Name:           chp-site
-Version:        0.13.0
-Release:        2.chp%{?dist}
+Version:        0.14.0
+Release:        1.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,14 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.14.0-1.chp
+- Documents server role (ISO 0.7.0 Plan 2): DOCUMENTS / FILES_FQDN site keys, the files record and the apache hosts
+  file; `chp-site documents enable|status|check|canary-off`: NextCloud enabled idempotently (team folders, Kanidm
+  OIDC, tags and folder rules, egress address, fapolicyd trust for config.php, Wazuh rules with a checked
+  rollback), the nightly tag check and share-link canary, and the DEGRADED database-MD5 state.
+- Daily review: a NextCloud section (tag check, canary, DEGRADED state, the NextCloud Wazuh rule set incl. egress).
+- Wazuh rollback after a failed rule check restores each piece on its own and names whatever was not rolled back.
+
 * Wed Nov 11 2026 The CyberHygiene Project - 0.13.0-2.chp
 - Daily review: a short-lived certificate is ATTENTION below 30 % of its lifetime left (was half), so a healthy
   24-hour Kanidm certificate no longer shows ATTENTION before its renewal point.
