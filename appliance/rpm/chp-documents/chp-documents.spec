@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -140,6 +140,10 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/documents
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-5.chp
+- chp-nextcloud-backup: only directories named as UTC stamps are copies or partials (nothing else under
+  /backup/nextcloud is touched); a lock that cannot be opened records FAILED (check 77 alerts)
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-4.chp
 - chp-nextcloud-backup: only a directory with a MANIFEST (now written last, by rename) is a copy; a killed run's
   partial directory is neither the --link-dest base nor counted toward the 2 kept copies and is deleted at the

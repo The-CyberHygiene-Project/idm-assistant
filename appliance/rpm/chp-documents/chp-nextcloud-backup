@@ -24,7 +24,8 @@ KEEP=$(keep_days)
 occ() { "$OCC" "$@"; }
 log() { logger -t chp-nextcloud-backup -- "$*" 2>/dev/null || :; echo "$*"; }
 status() { install -d -m 0700 "$SD"; printf '%s %s %s\n' "$1" "$(date +%s)" "$2" > "$SD/backup.status"; }
-dirs() { find "$B" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort; }   # UTC stamps sort oldest first
+# only backup directories (UTC stamp names, which sort oldest first); anything else under $B is never touched
+dirs() { find "$B" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -E '/[0-9]{8}T[0-9]{6}Z$' | sort; return 0; }
 stamps() { local d; for d in $(dirs); do [ -s "$d/MANIFEST" ] && echo "$d"; done; return 0; }   # complete copies only
 partials() { local d; for d in $(dirs); do [ -s "$d/MANIFEST" ] || echo "$d"; done; return 0; }
 free_kb() { df -Pk "$B" | awk 'NR==2{print $4}'; }
@@ -32,7 +33,9 @@ case ${1:-backup} in
   keep-days) echo "$KEEP" ;;
   backup)
     install -d -m 0700 "$B"
-    install -d -m 0700 "$SD"; exec 9> "$SD/backup.lock"; flock -n 9 || { log "backup not started: another backup is running (it records the status)"; exit 75; }
+    { install -d -m 0700 "$SD" && exec 9> "$SD/backup.lock"; } 2>/dev/null \
+      || { log "backup FAILED: cannot open the lock $SD/backup.lock"; status FAILED "cannot open the lock $SD/backup.lock"; exit 75; }
+    flock -n 9 || { log "backup not started: another backup is running (it records the status)"; exit 75; }
     for d in $(partials); do log "deleting the incomplete copy $d (no MANIFEST: an earlier run was killed)"; rm -rf "$d"; done
     prev=$(stamps | tail -1)
     # Space first: a full /backup must not stop backups forever. Each night is an rsync --link-dest incremental plus a

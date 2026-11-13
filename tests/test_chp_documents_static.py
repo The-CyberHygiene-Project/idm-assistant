@@ -111,7 +111,7 @@ def test_no_file_references_the_internet():
 def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        4.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        5.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
@@ -121,7 +121,7 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
     assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
     assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
-    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        4.chp" in SPEC
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        5.chp" in SPEC
     assert "UMask=0077" in t("chp-nextcloud-backup.service")
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
@@ -206,6 +206,23 @@ def test_backup_manifest_written_last_by_rename_and_single_run_lock(tmp_path):
     rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"], partial=["20260102T000000Z"], flock_rc=1)
     assert rc == 75 and "another backup is running" in out and calls == ""
     assert (tmp_path / "backup/20260102T000000Z").is_dir()   # a running backup's dir is never deleted
+
+
+def test_backup_only_touches_stamp_named_directories(tmp_path):
+    (tmp_path / "backup/lost+found").mkdir(parents=True)              # not a stamp: never deleted, never a copy
+    (tmp_path / "backup/notes").mkdir()
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 0, out
+    assert (tmp_path / "backup/lost+found").is_dir() and (tmp_path / "backup/notes").is_dir()
+    assert "lost+found" not in out and "notes" not in calls
+    assert f"--link-dest={tmp_path}/backup/20260101T000000Z/data" in calls
+
+
+def test_backup_lock_that_cannot_be_opened_records_failed(tmp_path):
+    (tmp_path / "st/backup.lock").mkdir(parents=True)                  # cannot be opened for writing
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 75 and "cannot open the lock" in out and calls == ""
+    assert (tmp_path / "st/backup.status").read_text().startswith("FAILED ")
 
 
 def test_readme_says_du_overestimates_hardlinked_incrementals():

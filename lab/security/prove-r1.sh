@@ -50,7 +50,7 @@ case ${1:-} in
     A "sudo virsh detach-disk $v sdz --live >/dev/null && echo stick-detached-$v" ;;
   on)
     for h in srv cli2; do
-      check "$h: chp-site, chp-security, sysstat" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " chp-site chp-security sysstat')" "chp-site-${SITE_V:-0.13.0} chp-security-${SEC_V:-0.4.1} sysstat-12.5.4 "
+      check "$h: chp-site, chp-security, sysstat" "$(X $h 'rpm -q --qf "%{NAME}-%{VERSION} " chp-site chp-security sysstat')" "chp-site-${SITE_V:-0.14.0} chp-security-${SEC_V:-0.4.1} sysstat-12.5.4 "
       check "$h: sysstat and record timers active" "$(X $h 'systemctl is-active sysstat-collect.timer sysstat-summary.timer chp-review-record.timer | tr "\n" " "')" "active active active "
       check "$h: record log present 0640" "$(X $h 'sudo stat -c %a /var/log/chp-review.json')" "640"
       check "$h: no new listener" "$(X $h 'sudo ss -ltnup | sed -E "s/pid=[0-9]+,//g; s/fd=[0-9]+//g" | sort | sudo diff /root/r1-ss-before - >/dev/null && echo same || echo changed')" "same"
