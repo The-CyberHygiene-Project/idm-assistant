@@ -63,8 +63,9 @@ here is new testing: it summarises Tasks 1-3.
   in the data path); (3) headless `x2t` works only after a first GUI run and is undocumented; (4) the start page
   shows vendor and AI features; (5) Chromium runs `--no-sandbox`; (6) the app is 1.2 GB, runs `unconfined_t` and
   keeps autosave copies of CUI under `~/.local/share/onlyoffice` (`logs/88`); (7) fapolicyd failed once during back-to-back installs;
-  (8) the GUI was tested under Xvfb only, with a minimal feature set; (9) Chromium has a path straight to a public
-  resolver, so `/etc/hosts` alone is not an egress control. It also needs six extra Rocky packages in the stick repo.
+  (8) the GUI was tested under Xvfb only, with a minimal feature set; (9) a Chromium probe attempts `connect()` to a
+  public resolver (2001:4860:4860::8888; `ENETUNREACH` in the lab; no packet in runs 1-2, `logs/89`), so `/etc/hosts`
+  alone is not an egress control. It also needs six extra Rocky packages in the stick repo.
   Its three gate items are G1-G3 below. LibreOffice was not tried.
 - **Resource use** (§Resource use, `logs/37`; §Transport, `logs/63`; §Editor). At rest the server used 1.7 GiB of
   an 8 GiB VM. The largest services are wazuh-manager 1,281 MB and suricata 539 MB; php-fpm 123 MB, httpd 60 MB and
@@ -97,7 +98,7 @@ here is new testing: it summarises Tasks 1-3.
 
 1. **M1 Server-side publish** (review fix 1): Compliance read-only to users; atomic compare-and-write by sha256 under a lock.
 2. **M2 Ledger hardening** (fixes 3-5, round 2, deferred minors): Kanidm userinfo re-validation; approve and override
-   need a Bearer; per-cycle author rule; quarantine on any failure; finite start limits with `OnFailure` alert on the
+   need a Bearer; per-cycle author rule; quarantine on any failure, and the quarantine writes a record without `bearer_token`; an unparsable file is recorded only by size and sha256; the spool file is always deleted (round 2, `logs/75-76`); finite start limits with `OnFailure` alert on the
    service **and** the path unit; a per-user rate limit in the app; Compliance-only file ids, with the team-folder
    ids rendered from the site; a generic refusal text; the userinfo call pinned to the site CA, host from site
    config, no redirects, timeout + rate budget; retry (not quarantine) on a Kanidm outage; `O_NOFOLLOW`, no TOCTOU on the
@@ -121,8 +122,9 @@ here is new testing: it summarises Tasks 1-3.
 8. **G1 fapolicyd health** (editor gate 1): alarm on `fapolicyd.service` failed; a "two package installs back to
    back" test on the workstation role.
 9. **G2 Autosave cleanup** (editor gate 2): a close hook in `chp-site doc` **and** a periodic sweep that removes
-   `recover/DE__*` only when there is no live ONLYOFFICE process of that user **and** it is older than N hours;
-   logged; the copies are treated as CUI.
+   `recover/DE__*` only when there is no live ONLYOFFICE process of that user **and** it is older than N hours.
+   `recover/` is also the editor's crash recovery, so the sweep must never touch a live session's copies; it logs
+   what it removes (ledger/Wazuh); the copies are treated as CUI.
 10. **G3 Per-application egress on the workstation** (editor gate 3): default-drop except the site server, DNS only
     to the site resolver (IPv4 + IPv6, DoT/DoH ports), hosts block kept; tested with an IPv6 default route present.
 11. **G4 ONLYOFFICE packaging**: re-sign the yum-repo RPM (sha256 pinned); remove the AI Tools plugin as a
@@ -164,12 +166,7 @@ here is new testing: it summarises Tasks 1-3.
 Smaller policy points that Plan 2 should confirm with the owner: repeated checkouts void pending approvals, and
 `create` makes the caller an author (round 2).
 
-**Task 3 (editor, 2026-11-12, §Editor): ONLYOFFICE Desktop Editors 10.0.0 on the FIPS/CUI workstation: works with limits.**
-
-**Task 2 (doc commands, 2026-11-13, §Transport and §Ledger):** sign in with a Kanidm public client and send the
-token as a Bearer (nothing long-lived on the workstation; a Kanidm lock takes effect on the next request); the
-freshness marker is the content hash, because **NextCloud's ETag can stay the same across a content change**;
-the approval ledger is appended by a root job, fed by a small NextCloud app over NextCloud's own HTTPS (no new port).
+## Spike findings (Task 1: server; Tasks 2-3 in §Transport, §Ledger, §Editor)
 
 **Result: NextCloud 35.0.3 runs on a FIPS, SELinux-enforcing, fapolicyd, CUI-profile CHP server installed from ISO
 0.6.0, signs in through Kanidm (password + TOTP), never reaches the internet, refuses every share of CUI/FCI, tags by
@@ -1050,7 +1047,7 @@ version is `~/conf.keep`); the "Don't show AI Tools" click remains in the profil
    - Kanidm evidence is taken only from Kanidm's userinfo; approve and override need a verified Bearer (fix 3).
    - The per-cycle author rule with `create` (fix 4).
    - Quarantine on any failure, finite start limits + alert, Compliance-only file ids, a **per-user rate limit**, a
-     monitor check of the path unit (fix 5).
+     monitor check of the path unit (fix 5). The quarantine writes a record without `bearer_token`; an unparsable file is recorded only by size and sha256; the spool file is always deleted (round 2, `logs/75-76`).
    - Test a refresh near the limit; read the session expiry from Kanidm (fix 6).
    - The login-page rewrite.
    - `occ upgrade` in `%post` when an app's version changes.
