@@ -38,7 +38,7 @@ def test_on_sets_it_once_and_is_idempotent(tmp_path):
     out, calls = apply(tmp_path, 1, runs=2)
     assert out.count("allow_filesystem_mark") == 2 and "allow_filesystem_mark = 1" in out   # marker line + setting
     assert "allow_filesystem_mark = 0" not in out and "permissive = 0" in out and "integrity = none" in out
-    assert calls.count("restart fapolicyd") == 1 or calls == ""   # fake systemctl: is-active -> exit 0 means active
+    assert calls.count("restart fapolicyd") == 1   # fake systemctl exits 0 = active; the second run changes nothing
 
 
 def test_off_after_on_reverts_only_our_change(tmp_path):
