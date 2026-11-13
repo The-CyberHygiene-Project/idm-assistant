@@ -272,18 +272,33 @@ def _size_sha(path):
         raise SiteError(f"could not read {path} ({e.strerror or e})") from None
 
 
-def _trust_entry(trust_file, target):
-    """The (size, sha256) fapolicyd's trust file records for `target`; None when absent or unreadable as such
-    (treated as stale)."""
+def _trust_lines(trust_file, target):
+    """Every line of fapolicyd's trust file that is for `target`, as (size, sha256), or None for a line that names
+    `target` but is malformed. Lines are "<path> <size> <sha256>", parsed from the right so a path may hold spaces;
+    the path must equal `target` exactly (config.php.bak is not config.php)."""
     try:
         text = trust_file.read_text() if trust_file.exists() else ""
     except OSError as e:
         raise SiteError(f"could not read {trust_file} ({e.strerror or e})") from None
+    out = []
     for ln in text.splitlines():
-        f = ln.split()
-        if len(f) == 3 and f[0] == target and f[1].isdigit() and re.fullmatch(r"[0-9a-f]{64}", f[2]):
-            return f[1], f[2]
-    return None
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        f = ln.rsplit(None, 2)
+        if len(f) == 3 and re.fullmatch(r"0|[1-9][0-9]*", f[1]) and re.fullmatch(r"[0-9a-f]{64}", f[2]):
+            if f[0] == target:
+                out.append((f[1], f[2]))
+        elif ln == target or (ln.startswith(target) and ln[len(target)].isspace()):
+            out.append(None)                                  # names target, but not a valid entry
+    return out
+
+
+def _trust_entry(trust_file, target):
+    """The (size, sha256) fapolicyd's trust file records for `target`; None (treated as stale) unless there is
+    EXACTLY ONE valid entry for it (none, a malformed one, or duplicates all mean: refresh)."""
+    m = _trust_lines(trust_file, target)
+    return m[0] if len(m) == 1 else None
 
 
 def _put_r(root, path, text, mode, units, chown=None):
@@ -467,7 +482,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
             "--data-dir", f"{DATA}/data")
     # fapolicyd: config.php is PHP NextCloud itself writes -> a path trust entry (spike, trust step)
     tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
-    if not (tf.exists() and CONFIG_PHP in tf.read_text()):
+    if not _trust_lines(tf, CONFIG_PHP):                    # no entry at all (a stale one: step 15a)
         _mark(root, ["fapolicyd"])
         run(["fapolicyd-cli", "--file", "add", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
         run(["fapolicyd-cli", "--update"], check=True)
@@ -638,7 +653,11 @@ def _pending_secret(path, secret=None):
     BEFORE it is used, so it is never lost."""
     import secrets as _s
     if path.exists():
-        v = _kv(path).get("NEXTCLOUD_ADMIN_PASSWORD")
+        try:
+            v = _kv(path).get("NEXTCLOUD_ADMIN_PASSWORD")
+        except OSError as e:
+            raise SiteError(f"could not read the pending break-glass secret file {path} ({e.strerror or e}); no "
+                            "account was made; fix it, then re-run chp-site documents enable") from None
         if v:
             return v
     pw = secret or _s.token_urlsafe(32)
@@ -699,8 +718,14 @@ def _wazuh(root, run, chown):
     grp = _owner(chown, "root", "wazuh")
     conf = _p(root, "var/ossec/etc/ossec.conf")
     rules = _p(root, f"var/ossec/etc/rules/{w.NC_RULES_FILE}")
-    old_rules = rules.read_text() if rules.exists() else None
-    old_conf = conf.read_text()
+    try:
+        old_rules = rules.read_text() if rules.exists() else None
+    except OSError as e:
+        raise SiteError(f"could not read {rules} ({e.strerror or e})") from None
+    try:
+        old_conf = conf.read_text()
+    except OSError as e:
+        raise SiteError(f"could not read {conf} ({e.strerror or e})") from None
     new_conf = w.documents_manager(old_conf)
     changed = _differs(rules, w.NEXTCLOUD_RULES, 0o640) or _differs(conf, new_conf, 0o640)
     marked_before = "wazuh-manager" in _restart_marks(root)
@@ -716,17 +741,28 @@ def _wazuh(root, run, chown):
     if r.returncode != 0:
         why = (r.stderr or r.stdout or "").strip()[:200]
         if changed:
+            unlink_err = None
             if old_rules is None:
                 try:
                     rules.unlink()
                 except OSError as e:
-                    raise SiteError(f"the new NextCloud rules failed wazuh-analysisd -t and could not be removed "
-                                    f"({rules}: {e.strerror or e}); remove that file before restarting Wazuh") from None
+                    unlink_err = e.strerror or str(e)
             else:
                 _put(rules, old_rules, 0o640, grp)
-            _put(conf, old_conf, 0o640, grp)
+            try:
+                _put(conf, old_conf, 0o640, grp)
+                conf_err = None
+            except SiteError as e:
+                conf_err = str(e)
             if not marked_before:                    # keep a mark an earlier failed restart left
                 _unmark(root, ["wazuh-manager"])
+            if unlink_err or conf_err:
+                done_ = [] if conf_err else [f"the previous {conf} is back"]
+                notdone = ([f"the new rules file {rules} could not be removed ({unlink_err})"] if unlink_err else []) \
+                    + ([f"{conf} could not be restored ({conf_err})"] if conf_err else [])
+                raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; "
+                                + "; ".join(done_ + ["NOT rolled back: " + "; ".join(notdone)])
+                                + "; the manager was not restarted; fix that by hand before restarting Wazuh: " + why)
             raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; the old "
                             "rules are back and the manager was not restarted: " + why)
         raise SiteError("the Wazuh rule check (wazuh-analysisd -t) fails on the installed rules (nothing was changed "

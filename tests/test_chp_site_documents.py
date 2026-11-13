@@ -971,8 +971,131 @@ def test_change_then_later_failure_then_rerun_refreshes_trust(tmp_path):
     e.run.__class__ = FailCert
     with pytest.raises(SiteError):
         e.enable()
-    assert not _upd(e.run.calls)[1:]                             # only the first run's update so far
+    # run 1 refreshed the entry once (config.php changed after the add); run 2 failed before step 15a: no update
+    assert len(_upd(e.run.calls)) == 1
     e.run.__class__ = Run
     n = len(e.run.calls)
     e.enable()
-    assert _upd(e.run.calls[n:])
+    assert len(_upd(e.run.calls[n:])) == 1                      # run 3 refreshes the entry exactly once
+    assert D._trust_entry(e.root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP) == \
+        D._size_sha(e.root / "etc/nextcloud/config.php")
+
+
+# ---------- round 4: exactly one valid trust entry; remaining OSError paths ----------
+
+SHA_A, SHA_B = "a" * 64, "b" * 64
+
+
+def test_trust_entry_duplicates_are_stale_in_both_orders(tmp_path):
+    t = tmp_path / "nextcloud"
+    for text in (f"{D.CONFIG_PHP} 10 {SHA_A}\n{D.CONFIG_PHP} 9 {SHA_B}\n",     # correct, then a stale duplicate
+                 f"{D.CONFIG_PHP} 9 {SHA_B}\n{D.CONFIG_PHP} 10 {SHA_A}\n"):    # stale, then correct
+        t.write_text(text)
+        assert D._trust_entry(t, D.CONFIG_PHP) is None
+    t.write_text(f"{D.CONFIG_PHP} 10 {SHA_A}\n")
+    assert D._trust_entry(t, D.CONFIG_PHP) == ("10", SHA_A)
+
+
+def test_trust_entry_ignores_a_bak_path_and_parses_spaces(tmp_path):
+    t = tmp_path / "nextcloud"
+    t.write_text(f"{D.CONFIG_PHP}.bak 10 {SHA_A}\n")
+    assert D._trust_entry(t, D.CONFIG_PHP) is None and D._trust_lines(t, D.CONFIG_PHP) == []
+    t.write_text(f"{D.CONFIG_PHP}.bak 10 {SHA_A}\n{D.CONFIG_PHP} 7 {SHA_B}\n")
+    assert D._trust_entry(t, D.CONFIG_PHP) == ("7", SHA_B)
+    t.write_text(f"/srv/my files/config.php 12 {SHA_A}\n")
+    assert D._trust_entry(t, "/srv/my files/config.php") == ("12", SHA_A)
+    assert D._trust_entry(t, "/srv/my") is None
+
+
+def test_trust_entry_size_must_be_canonical(tmp_path):
+    t = tmp_path / "nextcloud"
+    t.write_text(f"{D.CONFIG_PHP} 010 {SHA_A}\n")
+    assert D._trust_entry(t, D.CONFIG_PHP) is None and D._trust_lines(t, D.CONFIG_PHP) == [None]
+    t.write_text(f"{D.CONFIG_PHP} 0 {SHA_A}\n")
+    assert D._trust_entry(t, D.CONFIG_PHP) == ("0", SHA_A)
+
+
+@pytest.mark.parametrize("stale_first", [False, True])
+def test_duplicate_trust_entry_is_refreshed_on_rerun(tmp_path, stale_first):
+    e = Env(tmp_path)
+    e.enable()
+    t = e.root / "etc/fapolicyd/trust.d/nextcloud"
+    good = t.read_text().strip()
+    stale = f"{D.CONFIG_PHP} 1 {SHA_B}"
+    t.write_text("\n".join([stale, good] if stale_first else [good, stale]) + "\n")
+    n = len(e.run.calls)
+    e.enable()
+    assert len(_upd(e.run.calls[n:])) == 1 and ["systemctl", "restart", "fapolicyd"] in e.run.calls[n:]
+    assert D._trust_lines(t, D.CONFIG_PHP) == [D._size_sha(e.root / "etc/nextcloud/config.php")]
+
+
+def test_bak_entry_does_not_count_as_config_php_added(tmp_path):
+    e = Env(tmp_path)
+    t = e.root / "etc/fapolicyd/trust.d/nextcloud"
+    t.parent.mkdir(parents=True)
+    t.write_text(f"{D.CONFIG_PHP}.bak 10 {SHA_A}\n")
+    e.enable()
+    assert [c for c in e.run.calls if c[:3] == ["fapolicyd-cli", "--file", "add"]]
+    assert D._trust_entry(t, D.CONFIG_PHP) == D._size_sha(e.root / "etc/nextcloud/config.php")
+
+
+def test_unreadable_trust_file_is_a_plain_error(tmp_path):
+    e = Env(tmp_path)
+    (e.root / "etc/fapolicyd/trust.d/nextcloud").mkdir(parents=True)     # exists, cannot be read as a file
+    with pytest.raises(SiteError, match="trust.d/nextcloud"):
+        e.enable()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a 0000 file")
+def test_unreadable_pending_secret_is_a_plain_error(tmp_path):
+    e = Env(tmp_path)
+    p = e.pending / "documents" / f"{SRV}-nextcloud-admin.secret"
+    p.parent.mkdir(parents=True)
+    p.write_text("NEXTCLOUD_ADMIN_PASSWORD=" + "k" * 43 + "\n")
+    p.chmod(0)
+    try:
+        with pytest.raises(SiteError, match="could not read the pending break-glass secret file .*admin.secret"):
+            e.enable()
+    finally:
+        p.chmod(0o600)
+    assert not [c for c in e.nc.calls if c[0] == "user:add"]
+
+
+def test_unreadable_ossec_conf_is_a_plain_error(tmp_path):
+    e = Env(tmp_path)
+    conf = e.root / "var/ossec/etc/ossec.conf"
+    conf.unlink()
+    conf.mkdir()                                                # exists, cannot be read as a file
+    with pytest.raises(SiteError, match="could not read .*ossec.conf"):
+        e.enable()
+
+
+def test_wazuh_rollback_when_new_rules_cannot_be_removed(tmp_path, monkeypatch):
+    e = Env(tmp_path)
+    conf = e.root / "var/ossec/etc/ossec.conf"
+    old_conf = conf.read_text()
+    rules = e.root / "var/ossec/etc/rules/chp_nextcloud_rules.xml"
+    assert not rules.exists()                                   # no old rules: the rollback must remove the new ones
+    base = Run.__call__
+
+    def bad(self, argv, **kw):
+        if argv[:1] == ["/var/ossec/bin/wazuh-analysisd"]:
+            return R(1, "", "rule error")
+        return base(self, argv, **kw)
+    e.run.__class__ = type("BadRun", (Run,), {"__call__": bad})
+    real_unlink = Path.unlink
+
+    def unlink(self, *a, **k):
+        if self == rules:
+            raise PermissionError(13, "Permission denied")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pytest.raises(SiteError) as ex:
+        e.enable()
+    msg = str(ex.value)
+    assert conf.read_text() == old_conf                         # ossec.conf is restored anyway
+    assert "previous" in msg and "ossec.conf is back" in msg
+    assert "NOT rolled back" in msg and str(rules) in msg and "Permission denied" in msg
+    assert "old rules are back" not in msg
+    assert not (e.root / D.MARK).exists() or "wazuh-manager" not in (e.root / D.MARK).read_text()
+    assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
