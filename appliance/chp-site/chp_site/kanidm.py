@@ -138,7 +138,13 @@ class Kanidm:
         self._k("group", "create", _sa(name))
 
     def oauth2(self, name):
-        return parse_entry(self._k("system", "oauth2", "get", _sa(name)))
+        """The client's attributes. Its output is never echoed in an error (it may carry secret material)."""
+        try:
+            return parse_entry(self._k("system", "oauth2", "get", _sa(name)))
+        except SiteError as e:
+            if str(e).startswith("unexpected output from kanidm"):
+                raise SiteError(f"unexpected output from kanidm system oauth2 get {name} (not shown)") from None
+            raise
 
     def oauth2_create(self, name, display, origin):
         self._k("system", "oauth2", "create", _sa(name), display, _url(origin))

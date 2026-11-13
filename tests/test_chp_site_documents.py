@@ -32,12 +32,15 @@ class Run:
         self.root, self.calls, self.kw = root, [], []
         self.pg_role = self.pg_db = False
         self.rich, self.sebool, self.mta, self.pkgs = set(), False, mta, set()
+        self.pgver, self.fail_restart, self.wazuh_active = "16.13", None, True
 
     def __call__(self, argv, **kw):
         argv = list(argv)
         self.calls.append(argv)
         self.kw.append(kw)
         j = " ".join(argv)
+        if argv[:3] == ["rpm", "-q", "--qf"]:
+            return R(0, self.pgver)
         if argv[:2] == ["rpm", "-q"]:
             pk = argv[-1]
             if pk in ("postfix", "sendmail", "exim", "opensmtpd"):
@@ -90,7 +93,14 @@ class Run:
         if argv[:2] == ["fapolicyd-cli", "--check-status"]:
             return R(0, "Allowed accesses: 100\nDenied accesses: 0\n")
         if argv[:2] == ["systemctl", "is-active"]:
+            if argv[-1] == "wazuh-manager" and not self.wazuh_active:
+                return R(3, "inactive\n")
             return R(0, "active\n")
+        if argv[:2] == ["systemctl", "restart"] and self.fail_restart and self.fail_restart in argv:
+            if kw.get("check"):
+                import subprocess
+                raise subprocess.CalledProcessError(1, argv)
+            return R(1)
         return R()
 
 
@@ -105,6 +115,7 @@ class NC:
         self.enabled = set(DEFAULT_APPS)
         self.users, self.groups, self.folders, self.tags = set(), {"admin"}, {}, {}
         self.providers, self.certs, self.calls, self.envs = set(), set(), [], []
+        self.sticky_groups = False
 
     def __call__(self, argv, env=None):
         argv = list(argv)
@@ -148,14 +159,20 @@ class NC:
             self.groups.add(a[0])
             return 0, "", ""
         if c == "groupfolders:list":
-            return 0, json.dumps([{"id": i, "mount_point": f["name"], "groups": f["groups"], "acl": f["acl"]}
+            bits = {"read": 1, "write": 6, "delete": 8, "share": 16}
+            return 0, json.dumps([{"id": i, "mount_point": f["name"], "acl": f["acl"],
+                                   "groups": {g: sum(bits[x] for x in p) for g, p in f["groups"].items()}}
                                   for i, f in sorted(self.folders.items())]), ""
         if c == "groupfolders:create":
             i = len(self.folders) + 1
             self.folders[i] = {"name": a[0], "groups": {}, "acl": False, "rules": []}
             return 0, f"{i}\n", ""
         if c == "groupfolders:group":
-            self.folders[int(a[0])]["groups"][a[1]] = a[2:]
+            if "--delete" in a:
+                if not self.sticky_groups:
+                    self.folders[int(a[0])]["groups"].pop(a[1], None)
+            else:
+                self.folders[int(a[0])]["groups"][a[1]] = a[2:]
             return 0, "", ""
         if c == "groupfolders:permissions":
             f = self.folders[int(a[0])]
@@ -335,8 +352,11 @@ def test_enable_order(tmp_path):
                and "chp-nextcloud-backup.timer" in x[1], "backup timer")
     wz = i(lambda x: x[0] == "rec" and x[1][1] == "wazuh", "wazuh rules")
     fapo = i(lambda x: x[0] == "run" and x[1] == ["systemctl", "restart", "fapolicyd"], "fapolicyd restart")
-    assert pkgs < hosts_rec < egress < initdb < install < inet < apps_on < oauth < claim < grp < folders < acl \
-        < tagrule < cert < backup < wz < fapo
+    web = i(lambda x: x[0] == "run" and x[1][:3] == ["systemctl", "enable", "--now"] and "httpd" in x[1], "httpd")
+    # ruling: Wazuh reads the audit log with the rules loaded BEFORE NextCloud is installed or serves anyone
+    assert pkgs < hosts_rec < egress < wz < initdb < install < inet < apps_on < oauth < claim < grp < folders < acl \
+        < tagrule < cert < backup < fapo
+    assert wz < web and backup == web
     # offline install: no admin on the command line, the data on /data
     inst = next(x[1] for x in tl if x[0] == "occ" and x[1][0] == "maintenance:install")
     assert "--disable-admin-user" in inst and "/data/nextcloud/data" in inst and not any("admin-pass" in a for a in inst)
@@ -505,13 +525,14 @@ def test_enable_is_idempotent(tmp_path):
     creates = {"maintenance:install", "user:add", "group:add", "groupfolders:create", "tag:add",
                "security:certificates:import"}
     assert [c for c in occ2 if c[0] in creates] == []
-    assert [c for c in occ2 if c[0] == "user_oidc:provider" and c[1:] != ["--output=json"]] == []
+    assert [c for c in occ2 if c[0] == "user_oidc:provider"]          # an upsert, applied every run (no drift)
     assert [c for c in k2 if "create" in c[:3]] == []
     assert [c for c in k2 if "show-basic-secret" in c] == []
     j = [" ".join(c) for c in run2]
     assert not [x for x in j if "CREATE ROLE" in x or "CREATE DATABASE" in x or x.startswith("postgresql-setup")
                 or "--add-rich-rule" in x or x.startswith("setsebool") or "cert-renew-nextcloud" in x
-                or x.startswith("rndc") or "systemctl restart wazuh-manager" in x or "fapolicyd-cli --file add" in x]
+                or x.startswith("rndc") or x.startswith("systemctl restart") or "fapolicyd-cli --file add" in x
+                or x.startswith("dnf -y --enablerepo=chp install")]
     assert e.nc.folders == folders and e.nc.tags == tags
     for p in written:
         assert p.stat().st_mtime == 1000, f"{p} rewritten on a second run"
@@ -613,3 +634,181 @@ def test_status_degraded_when_database_refuses_md5(tmp_path):
 def test_md5_constant():
     import hashlib
     assert D.MD5_CHP == hashlib.md5(b"chp").hexdigest()
+
+
+# ---------- review fixes (Task 5 review) ----------
+
+def test_failed_restart_is_redone_by_the_next_run(tmp_path):
+    e = Env(tmp_path)
+    e.run.fail_restart = "httpd"
+    with pytest.raises(SiteError):
+        e.enable()
+    mark = e.root / D.MARK
+    assert "httpd" in mark.read_text()
+    conf = (e.root / "etc/chp/documents.conf").read_text()
+    assert "ENABLED=no" in conf and "ENABLED=yes" not in conf                 # not proven yet
+    assert "ENABLED" in D.status(e.root, e.run)[0]
+    e.run.fail_restart = None
+    n = len(e.run.calls)
+    e.enable()
+    assert any(c[:2] == ["systemctl", "restart"] and "httpd" in c for c in e.run.calls[n:])
+    assert not mark.exists()
+    assert "ENABLED=yes" in (e.root / "etc/chp/documents.conf").read_text()
+
+
+def test_egress_address_change_restarts_the_egress_unit(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    (e.root / "etc/chp/nextcloud-egress-addr.nft").write_text("define CHP_NC_SERVER_IP = 192.168.100.99\n")
+    n = len(e.run.calls)
+    e.enable()
+    again = e.run.calls[n:]
+    assert ["systemctl", "restart", "chp-nextcloud-egress.service"] in again
+    assert (e.root / "etc/chp/nextcloud-egress-addr.nft").read_text() == "define CHP_NC_SERVER_IP = 192.168.100.30\n"
+
+
+def test_wazuh_manager_restarted_when_not_active(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.run.wazuh_active = False
+    n = len(e.run.calls)
+    e.enable()
+    assert ["systemctl", "restart", "wazuh-manager"] in e.run.calls[n:]
+
+
+def test_stray_group_on_cui_is_removed_and_share_read_back(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    cui = next(i for i, f in e.nc.folders.items() if f["name"] == "CUI")
+    e.nc.folders[cui]["groups"]["chp-users"] = ["read", "write", "delete", "share"]     # hand-added in the UI
+    e.enable()
+    assert e.nc.folders[cui]["groups"] == {"cui-users": ["read", "write", "delete"]}
+    assert ["groupfolders:group", str(cui), "chp-users", "--delete"] in e.nc.calls
+
+
+def test_stray_group_that_cannot_be_removed_is_refused_by_name(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    cui = next(i for i, f in e.nc.folders.items() if f["name"] == "CUI")
+    e.nc.folders[cui]["groups"]["chp-users"] = ["read", "share"]
+    e.nc.sticky_groups = True
+    with pytest.raises(SiteError, match="CUI.*chp-users"):
+        e.enable()
+
+
+def test_share_on_cui_users_is_refused_when_read_back_shows_it(tmp_path):
+    e = Env(tmp_path)
+    base = e.nc.__class__.__call__
+
+    def sharing(self, argv, env=None):
+        if argv[:1] == ["groupfolders:group"] and argv[2:3] == ["cui-users"]:
+            argv = argv + ["share"]                      # a groupfolders that ignores the list we gave it
+        return base(self, argv, env)
+    e.nc.__class__ = type("Sharing", (NC,), {"__call__": sharing})
+    with pytest.raises(SiteError, match="share"):
+        e.enable()
+    assert not any("share off" in r[0][1].get("step", "") for r in e.records)
+
+
+def test_oidc_client_without_pkce_is_refused(tmp_path):
+    e = Env(tmp_path)
+    e.kcli.clients["nextcloud"] = []
+    orig = KanidmCli.__call__
+
+    def nopkce(self, argv):
+        if argv[:4] == ["system", "oauth2", "get", "nextcloud"]:
+            return 0, "name: nextcloud\noauth2_allow_insecure_client_disable_pkce: true\n", ""
+        return orig(self, argv)
+    e.kcli.__class__ = type("NoPkce", (KanidmCli,), {"__call__": nopkce})
+    with pytest.raises(SiteError, match="PKCE"):
+        e.enable()
+
+
+def test_oauth2_get_output_never_in_an_error(tmp_path):
+    e = Env(tmp_path)
+    orig = KanidmCli.__call__
+
+    def garbage(self, argv):
+        if argv[:3] == ["system", "oauth2", "get"]:
+            return 0, "oauth2_rs_basic_secret: TOPSECRETVALUE\n", ""
+        return orig(self, argv)
+    e.kcli.__class__ = type("Garbage", (KanidmCli,), {"__call__": garbage})
+    with pytest.raises(SiteError) as ex:
+        e.enable()
+    assert "TOPSECRETVALUE" not in str(ex.value) and "not shown" in str(ex.value)
+
+
+def test_pending_secret_is_reused_after_a_failed_run(tmp_path):
+    e = Env(tmp_path)
+    p = e.pending / "documents" / f"{SRV}-nextcloud-admin.secret"
+    p.parent.mkdir(parents=True)
+    p.write_text("NEXTCLOUD_ADMIN_USER=ncadmin\nNEXTCLOUD_ADMIN_PASSWORD=" + "k" * 43 + "\n")
+    e.enable()
+    env = next(env for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add")
+    assert env["OC_PASS"] == "k" * 43
+    assert ("k" * 43) in (e.stick / "escrow" / f"{SRV}-nextcloud-admin.secret").read_text()
+
+
+def test_mail_refusal_comes_before_any_change(tmp_path):
+    e = Env(tmp_path, mta=True)
+    with pytest.raises(SiteError, match="postfix"):
+        e.enable()
+    assert all(c[:2] == ["rpm", "-q"] for c in e.run.calls) and e.records == [] and e.kcli.calls == []
+
+
+def test_bad_zone_never_replaces_the_live_one(tmp_path):
+    e = Env(tmp_path)
+    live = (e.root / "var/named/iso2.lab.test.zone").read_text()
+    base = Run.__call__
+
+    def badzone(self, argv, **kw):
+        if argv[:1] == ["named-checkzone"]:
+            self.calls.append(list(argv))
+            return R(1, "zone iso2.lab.test/IN: bad")
+        return base(self, argv, **kw)
+    e.run.__class__ = type("BadZone", (Run,), {"__call__": badzone})
+    with pytest.raises(SiteError, match="named-checkzone"):
+        e.enable()
+    assert (e.root / "var/named/iso2.lab.test.zone").read_text() == live
+    assert not list((e.root / "var/named").glob("*.chp-new"))
+    chk = next(c for c in e.run.calls if c[:1] == ["named-checkzone"])
+    assert chk[-1].endswith(".chp-new")
+
+
+def test_postgresql_must_be_16(tmp_path):
+    e = Env(tmp_path)
+    e.run.pgver = "13.20"
+    with pytest.raises(SiteError, match="16"):
+        e.enable()
+    assert e.nc.calls == []
+
+
+def test_module_enable_failure_refuses(tmp_path):
+    e = Env(tmp_path)
+    base = Run.__call__
+
+    def nomod(self, argv, **kw):
+        if "module" in argv:
+            import subprocess
+            raise subprocess.CalledProcessError(1, argv)
+        return base(self, argv, **kw)
+    e.run.__class__ = type("NoMod", (Run,), {"__call__": nomod})
+    with pytest.raises(SiteError, match="module"):
+        e.enable()
+
+
+def test_fapolicyd_not_restarted_when_nothing_needs_it(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    n = len(e.run.calls)
+    done = e.enable()
+    assert ["systemctl", "restart", "fapolicyd"] not in e.run.calls[n:]
+    assert any("no restart needed" in d for d in done)
+
+
+def test_status_when_off_and_when_unfinished(tmp_path):
+    r = make_root(tmp_path)
+    run = Run(r)
+    assert "not enabled" in D.status(r, run)[0] and run.calls == []
+    (r / "etc/chp/documents.conf").write_text("ENABLED=no\nFQDN=x\n")
+    assert "has not finished" in D.status(r, run)[0]

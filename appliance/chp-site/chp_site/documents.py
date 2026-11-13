@@ -28,6 +28,7 @@ OIDC_SECRET = "/etc/nextcloud/oidc-secret"
 SITE_ROOT_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
 CERT = "etc/pki/nextcloud/chain.pem"
 FSMARK_PENDING = "var/lib/chp/fapolicyd-restart-pending"
+MARK = "var/lib/chp/documents/restart-pending"           # units still to restart (a failed run leaves them here)
 PORT = 8443
 ADMIN = "ncadmin"
 CLIENT = "nextcloud"
@@ -123,9 +124,10 @@ def _kv(path):
     return dict(ln.split("=", 1) for ln in path.read_text().splitlines() if "=" in ln and not ln.startswith("#"))
 
 
-def conf_text(fqdn, server_ip, days, ids):
-    """/etc/chp/documents.conf (0644, no secrets): read by the checks (77-79, Plan 2 Task 6), the units and Plan 3."""
-    lines = ["# written by chp-site documents enable; no secrets here", "ENABLED=yes", f"FQDN={fqdn}",
+def conf_text(fqdn, server_ip, days, ids, enabled="yes"):
+    """/etc/chp/documents.conf (0644, no secrets): read by the checks (77-79, Plan 2 Task 6), the units and Plan 3.
+    ENABLED=yes is written by the LAST step of enable (it means every step succeeded once)."""
+    lines = ["# written by chp-site documents enable; no secrets here", f"ENABLED={enabled}", f"FQDN={fqdn}",
              f"SERVER_IP={server_ip}", f"DOCUMENTS_BACKUP_DAYS={days}"]
     for n in CONTROLLED + OPEN:
         if n in ids:
@@ -191,6 +193,7 @@ def enable(host, site, hosts, *, run, occ, kanidm, root=Path("/"), record=None, 
     from . import audit
     data_is_mount = os.path.ismount("/data") if data_is_mount is None else data_is_mount
     me = _refuse(host, site, hosts, root, data_is_mount)
+    _mta_check(run)
     record = record or audit.record
     try:
         return _enable(me, site, hosts, run=run, occ=_Occ(occ), k=kanidm, root=Path(root), record=record, stick=stick,
@@ -215,6 +218,118 @@ def _out(run, argv):
     return run(argv, capture_output=True, text=True).stdout or ""
 
 
+def _restart_marks(root):
+    p = _p(root, MARK)
+    return [ln.strip() for ln in p.read_text().splitlines() if ln.strip()] if p.exists() else []
+
+
+def _mark(root, units):
+    """Record units that need a restart BEFORE the change that needs it: a run that fails between the change and the
+    restart leaves the marker, and the next run restarts them although the file is unchanged by then."""
+    have = _restart_marks(root)
+    new = have + [u for u in units if u not in have]
+    if new != have:
+        _put(_p(root, MARK), "".join(u + "\n" for u in new), 0o600)
+
+
+def _unmark(root, units):
+    have = _restart_marks(root)
+    left = [u for u in have if u not in units]
+    if left != have:
+        if left:
+            _put(_p(root, MARK), "".join(u + "\n" for u in left), 0o600)
+        else:
+            _p(root, MARK).unlink()
+
+
+def _differs(path, text, mode):
+    return not (path.exists() and path.read_text() == text and (path.stat().st_mode & 0o7777) == mode)
+
+
+def _put_r(root, path, text, mode, units, chown=None):
+    """_put, with `units` marked for a restart first when the file is about to change."""
+    if _differs(path, text, mode):
+        _mark(root, units)
+    return _put(path, text, mode, chown)
+
+
+def _restart(run, root, units, extra=()):
+    """Restart the units that are marked (or in `extra`), then clear their marks. A failed restart keeps them marked."""
+    marks = _restart_marks(root)
+    todo = [u for u in units if u in marks or u in extra]
+    if todo:
+        run(["systemctl", "restart", *todo], check=True)
+        _unmark(root, todo)
+    return todo
+
+
+def _mta_check(run):
+    """No local mail server at all (a unix-socket relay is a path the egress uid match cannot see). Run before any
+    change: rpm -q needs nothing installed."""
+    mta = [m for m in MTAS if _ok(run, ["rpm", "-q", m])]
+    if mta:
+        raise SiteError(f"a mail server is installed ({', '.join(mta)}): NextCloud's mail is off, but the apache user "
+                        "could relay through a local MTA's socket, which the egress table cannot see. Remove it "
+                        f"(dnf remove {' '.join(mta)}), then re-run chp-site documents enable")
+
+
+def _write_zone(run, zp, text, d, chown):
+    """The new zone is checked with named-checkzone as a temp file BEFORE it replaces the live one."""
+    tmp = zp.with_name(zp.name + ".chp-new")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o640)
+    _owner(chown, "root", "named")(tmp)
+    r = run(["named-checkzone", d, str(tmp)], capture_output=True, text=True)
+    if r.returncode != 0:
+        tmp.unlink()
+        raise SiteError(f"the new site zone with the files record failed named-checkzone; the live zone is unchanged: "
+                        + (r.stdout or r.stderr or "").strip()[:200])
+    os.replace(tmp, zp)
+
+
+def _perm_has_share(v):
+    """groupfolders reports a group's permissions as a bitmask (share = 16), a dict holding it, or (fakes) words."""
+    if isinstance(v, dict):
+        v = v.get("permissions", 0)
+    if isinstance(v, (list, tuple)):
+        return "share" in v
+    try:
+        return bool(int(v) & 16)
+    except (TypeError, ValueError):
+        return True                                    # unreadable = assume the worst
+
+
+def _folder_groups(occ):
+    out = occ.json("groupfolders:list", "--output=json")
+    items = out if isinstance(out, list) else list(out.values()) if isinstance(out, dict) else []
+    return {str(f.get("id")): (f.get("groups") or {}) for f in items if isinstance(f, dict)}
+
+
+def _exact_controlled(occ, ids):
+    """CUI, FCI, Archive must be mapped to cui-users WITHOUT share and to nothing else (read back, never assumed).
+    A stray group is removed; what cannot be removed or still has share is refused, naming it."""
+    for _ in range(2):
+        cur = _folder_groups(occ)
+        stray = [(n, g) for n in CONTROLLED for g in cur.get(str(ids[n]), {}) if g != "cui-users"]
+        if not stray:
+            break
+        for n, g in stray:
+            occ("groupfolders:group", ids[n], g, "--delete")
+    cur = _folder_groups(occ)
+    for n in CONTROLLED:
+        gs = cur.get(str(ids[n]), {})
+        other = sorted(g for g in gs if g != "cui-users")
+        if other:
+            raise SiteError(f"team folder {n} is still mapped to {', '.join(other)} after removal; remove it "
+                            f"(occ groupfolders:group {ids[n]} <group> --delete), then re-run")
+        if "cui-users" not in gs:
+            raise SiteError(f"team folder {n} is not mapped to cui-users after groupfolders:group")
+        if _perm_has_share(gs["cui-users"]):
+            raise SiteError(f"team folder {n} still gives cui-users the share permission; share must be off")
+
+
 def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown, now, secret):
     host = me.hostname
     fqdn, d = dr.fqdn(site), site["DOMAIN"]
@@ -228,16 +343,17 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
 
     record("documents-enable", {"host": host, "step": "start", "fqdn": fqdn})   # before any change; refuses if it fails
 
-    # 1. packages (the signed chp repo). The fapolicyd restart comes at the very end, never inside a transaction.
-    run(["dnf", "-y", "--enablerepo=chp", "module", "enable", "php:8.3", "postgresql:16"], capture_output=True, text=True)
+    # 1. packages (the signed chp repo); a transaction this run means fapolicyd restarts at the end (never inside one)
+    run(["dnf", "-y", "--enablerepo=chp", "module", "enable", "php:8.3", "postgresql:16"], check=True,
+        capture_output=True, text=True)
     if not all(_ok(run, ["rpm", "-q", p]) for p in PACKAGES):
+        _mark(root, ["fapolicyd"])
         run(["dnf", "-y", "--enablerepo=chp", "install", *PACKAGES], check=True)
-    step("packages", "packages: nextcloud-chp, chp-documents (PHP 8.3, PostgreSQL 16, httpd from Rocky)")
-    mta = [m for m in MTAS if _ok(run, ["rpm", "-q", m])]
-    if mta:
-        raise SiteError(f"a mail server is installed ({', '.join(mta)}): NextCloud's mail is off, but the apache user "
-                        "could relay through a local MTA's socket, which the egress table cannot see. Remove it "
-                        f"(dnf remove {' '.join(mta)}), then re-run chp-site documents enable")
+    pgv = _out(run, ["rpm", "-q", "--qf", "%{VERSION}", "postgresql-server"]).strip()
+    if pgv.split(".")[0] != "16":
+        raise SiteError(f"postgresql-server is {pgv or 'not installed'}, not 16: the document server needs the "
+                        "postgresql:16 stream (dnf module reset postgresql; dnf module enable postgresql:16)")
+    step("packages", f"packages: nextcloud-chp, chp-documents (PHP 8.3, PostgreSQL {pgv}, httpd from Rocky)")
     step("mail", "mail: no mail server installed (postfix, sendmail, exim, opensmtpd absent); NextCloud mail off",
          mta="none")
 
@@ -252,24 +368,33 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         from .render import zone
         m = re.search(r"\(\s*(\d+)", ztext)
         serial = max(int(m.group(1)) + 1 if m else 0, int(time.strftime("%Y%m%d")) * 100 + 1)
-        _put(zp, zone(site, hosts, serial), 0o640, _owner(chown, "root", "named"))
-        run(["named-checkzone", d, str(zp)], check=True, capture_output=True, text=True)
+        _write_zone(run, zp, zone(site, hosts, serial), d, chown)
         run(["rndc", "reload", d], check=True, capture_output=True, text=True)
     step("dns", f"DNS: {fqdn} IN A {sip} in the site zone")
 
-    # 3. site-rendered web and egress files (chp-documents ships them failing closed)
-    web_changed = _put(_p(root, LAN_INC), f"Require ip {cidr}\n", 0o644)
-    web_changed |= _put(_p(root, EGRESS_ADDR), f"define CHP_NC_SERVER_IP = {sip}\n", 0o644)
+    # 3. site-rendered web and egress files (chp-documents ships them failing closed). ENABLED stays as it was
+    # (no on a first run) until the very last step.
+    _put_r(root, _p(root, LAN_INC), f"Require ip {cidr}\n", 0o644, ["httpd"])
+    _put_r(root, _p(root, EGRESS_ADDR), f"define CHP_NC_SERVER_IP = {sip}\n", 0o644,
+           ["chp-nextcloud-egress.service", "php-fpm", "httpd"])     # a re-IP must not leave the old address allowed
     cp = _p(root, CONF)
-    ids = {n: _kv(cp)[f"{n.upper()}_FOLDER_ID"] for n in CONTROLLED + OPEN if f"{n.upper()}_FOLDER_ID" in _kv(cp)}
+    old = _kv(cp)
+    ids = {n: old[f"{n.upper()}_FOLDER_ID"] for n in CONTROLLED + OPEN if f"{n.upper()}_FOLDER_ID" in old}
+    enabled_now = old.get("ENABLED", "no")
     days = site.get("DOCUMENTS_BACKUP_DAYS", 14)
-    _put(cp, conf_text(fqdn, sip, days, ids), 0o644)
+    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now), 0o644)
     step("render", f"rendered: LAN-only httpd ({cidr}), egress address {sip}, /etc/chp/documents.conf")
     run(["systemctl", "daemon-reload"], check=True)
     run(["systemctl", "enable", "--now", "chp-nextcloud-egress.service"], check=True)
+    _restart(run, root, ["chp-nextcloud-egress.service"])
     step("egress", "egress table inet chp_nextcloud_egress loaded (apache: this server only, no DNS)")
 
-    # 4. database: PostgreSQL 16, Unix socket, peer authentication
+    # 4. Wazuh from day one: the audit log and the rules before NextCloud writes its first line or serves anyone
+    _audit_log(root, chown)
+    _wazuh(root, run, chown)
+    step("wazuh", "Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress at 12)")
+
+    # 5. database: PostgreSQL 16, Unix socket, peer authentication
     pgd = _p(root, PGDATA)
     if not (pgd / "PG_VERSION").exists():
         run(["postgresql-setup", "--initdb"], check=True, capture_output=True, text=True)
@@ -278,20 +403,19 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     new = re.sub(r"^#?\s*listen_addresses\s*=.*$", "listen_addresses = ''", text, flags=re.M)
     if "listen_addresses = ''" not in new:
         new += ("" if new.endswith("\n") or not new else "\n") + "listen_addresses = ''\n"
-    pg_changed = _put(pc, new, 0o600, _owner(chown, "postgres", "postgres"))
-    pg_changed |= _put(pgd / "pg_hba.conf", PG_HBA, 0o600, _owner(chown, "postgres", "postgres"))
+    _put_r(root, pc, new, 0o600, ["postgresql"], _owner(chown, "postgres", "postgres"))
+    _put_r(root, pgd / "pg_hba.conf", PG_HBA, 0o600, ["postgresql"], _owner(chown, "postgres", "postgres"))
     run(["systemctl", "enable", "--now", "postgresql"], check=True)
-    if pg_changed:
-        run(["systemctl", "restart", "postgresql"], check=True)
+    _restart(run, root, ["postgresql"])
     psql = ["runuser", "-u", "postgres", "--", "psql", "-qtA", "-c"]
     if _out(run, psql + ["SELECT 1 FROM pg_roles WHERE rolname='apache'"]).strip() != "1":
         run(psql + ["CREATE ROLE apache LOGIN"], check=True, capture_output=True, text=True)
     if _out(run, psql + ["SELECT 1 FROM pg_database WHERE datname='nextcloud'"]).strip() != "1":
         run(psql + ["CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING 'UTF8'"], check=True,
             capture_output=True, text=True)
-    step("database", "database: PostgreSQL 16, socket only, peer authentication, database nextcloud (owner apache)")
+    step("database", f"database: PostgreSQL {pgv}, socket only, peer authentication, database nextcloud (owner apache)")
 
-    # 5. NextCloud installed offline (no admin on the command line), data on /data
+    # 6. NextCloud installed offline (no admin on the command line), data on /data
     if not _p(root, f"{DATA}/data").is_dir():                # labelled once; NextCloud's files inherit the label
         run(["install", "-d", "-m", "0750", "-o", "apache", "-g", "apache", DATA, f"{DATA}/data"], check=True)
         run(["restorecon", "-R", DATA], check=True)
@@ -303,11 +427,12 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     # fapolicyd: config.php is PHP NextCloud itself writes -> a path trust entry (spike, trust step)
     tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
     if not (tf.exists() and "/etc/nextcloud/config.php" in tf.read_text()):
+        _mark(root, ["fapolicyd"])
         run(["fapolicyd-cli", "--file", "add", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
         run(["fapolicyd-cli", "--update"], check=True)
     step("install", f"NextCloud installed offline (data {DATA}/data)")
 
-    # 6. settings: offline, hardening, logs; bcrypt (FIPS breaks PHP Argon2id) before any local account
+    # 7. settings: offline, hardening, logs; bcrypt (FIPS breaks PHP Argon2id) before any local account
     occ("config:system:set", "hashing_default_password", "--type=boolean", "--value=true")
     for keys, value, typ in _system(fqdn):
         occ("config:system:set", *keys, *([f"--type={typ}"] if typ else []), f"--value={value}")
@@ -317,7 +442,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     step("settings", "settings: no internet connection, app store and update checker off, mail off, "
                      f"trusted domain {fqdn}, {origin}, sharing locked down")
 
-    # 7. apps: exactly what the design needs on; editors and outbound features off
+    # 8. apps: exactly what the design needs on; editors and outbound features off
     enabled = set(occ.json("app:list", "--output=json").get("enabled", {}))
     for a in APPS_ON:
         if a not in enabled:
@@ -330,9 +455,8 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         raise SiteError(f"apps not as required: missing {sorted(set(APPS_ON) - enabled)}, still on "
                         f"{sorted(set(APPS_OFF) & enabled)}")
     step("apps", f"apps on: {', '.join(APPS_ON)}; editors and outbound apps off")
-    _audit_log(root, chown)
 
-    # 8. break-glass admin (bcrypt; /login?direct=1); its secret escrowed, never printed or logged
+    # 9. break-glass admin (bcrypt; /login?direct=1); its secret escrowed, never printed or logged
     rc, _ = occ("user:info", ADMIN, check=False)
     pend = pending / "documents" / f"{host}-nextcloud-admin.secret"
     if rc != 0:
@@ -344,7 +468,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     else:
         step("breakglass", f"break-glass NextCloud admin {ADMIN} present")
 
-    # 9. Kanidm: groups and the OIDC client (ES256, PKCE S256, chp_groups claim)
+    # 10. Kanidm: groups and the OIDC client (ES256, PKCE S256, chp_groups claim)
     for g in ("cui-users", "doc-reviewers"):
         if k.group(g) is None:
             k.create_group(g)
@@ -365,24 +489,21 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         run(["restorecon", OIDC_SECRET], check=True)
     step("kanidm", "Kanidm: groups cui-users, doc-reviewers; OAuth2 client nextcloud (ES256, PKCE), chp_groups claim")
 
-    # 10. NextCloud -> Kanidm: SELinux relay (the egress table limits where), the site CA, the provider
+    # 11. NextCloud -> Kanidm: SELinux relay (the egress table limits where), the site CA, the provider
     if "--> on" not in _out(run, ["getsebool", "httpd_can_network_relay"]):
         run(["setsebool", "-P", "httpd_can_network_relay", "on"], check=True)
     if "chp-root.crt" not in occ("security:certificates")[1]:
         occ("security:certificates:import", SITE_ROOT_CA)
-    provs = occ.json("user_oidc:provider", "--output=json")
-    names = {p.get("identifier") for p in (provs if isinstance(provs, list) else provs.values() if isinstance(provs, dict)
-                                           else []) if isinstance(p, dict)}
-    if "kanidm" not in names:
-        occ("user_oidc:provider", "kanidm", f"--clientid={CLIENT}", f"--clientsecret-file={OIDC_SECRET}",
-            f"--discoveryuri=https://idm.{d}/oauth2/openid/{CLIENT}/.well-known/openid-configuration",
-            "--scope=openid profile email groups", "--unique-uid=0", "--mapping-uid=preferred_username",
-            "--mapping-display-name=name", "--mapping-email=email", "--mapping-groups=chp_groups",
-            "--group-provisioning=1", "--group-whitelist-regex=^(cui-users|doc-reviewers|chp-users)$",
-            "--check-bearer=0", "--send-id-token-hint=1")
+    # an upsert (spike folders.sh): applied every run so whitelist, mappings and discovery cannot drift
+    occ("user_oidc:provider", "kanidm", f"--clientid={CLIENT}", f"--clientsecret-file={OIDC_SECRET}",
+        f"--discoveryuri=https://idm.{d}/oauth2/openid/{CLIENT}/.well-known/openid-configuration",
+        "--scope=openid profile email groups", "--unique-uid=0", "--mapping-uid=preferred_username",
+        "--mapping-display-name=name", "--mapping-email=email", "--mapping-groups=chp_groups",
+        "--group-provisioning=1", "--group-whitelist-regex=^(cui-users|doc-reviewers|chp-users)$",
+        "--check-bearer=0", "--send-id-token-hint=1")
     step("oidc", "sign-in: user_oidc provider kanidm; the login page goes straight to Kanidm")
 
-    # 11. groups, team folders, ACLs
+    # 12. groups, team folders, ACLs
     have = set(occ.json("group:list", "--output=json"))
     for g in GROUPS_NC:
         if g not in have:
@@ -402,10 +523,11 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         occ("groupfolders:permissions", ids[n], "--enable")
         if n in CONTROLLED:                                                               # owner decision 7
             occ("groupfolders:permissions", ids[n], "--group", "doc-reviewers", "--", "/", *REVIEWER_ACL)
+    _exact_controlled(occ, ids)                       # read back: only cui-users, no share, on CUI/FCI/Archive
     step("folders", "team folders: " + ", ".join(f"{n}={ids[n]}" for n in CONTROLLED + OPEN)
-         + "; share off on CUI/FCI/Archive; reviewers read-only there")
+         + "; read back: CUI/FCI/Archive mapped to cui-users only, share off; reviewers read-only there")
 
-    # 12. tags by folder + containment (owner decision 3)
+    # 13. tags by folder + containment (owner decision 3)
     tags = _tags(occ)
     for t in ("CUI", "FCI"):
         if t not in tags:
@@ -418,37 +540,34 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     allow = [[int(ids["CUI"]), int(ids["Archive"])], [int(ids["Archive"]), int(ids["CUI"])]]
     for key, val in (("rules", rules), ("contain", contain), ("contain_allow", allow)):
         occ("config:app:set", "chp_foldertag", key, f"--value={json.dumps(val, separators=(',', ':'))}")
-    _put(cp, conf_text(fqdn, sip, days, ids), 0o644)
-    step("tags", f"tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive")
+    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now), 0o644)
+    step("tags", "tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive")
 
-    # 13. web: LAN-only firewall, certificate, services
+    # 14. web: LAN-only firewall, certificate, services
     rich = f'rule family="ipv4" source address="{cidr}" port port="{PORT}" protocol="tcp" accept'
     if rich not in _out(run, ["firewall-cmd", "--permanent", "--list-rich-rules"]).splitlines():
         run(["firewall-cmd", "-q", "--permanent", "--add-rich-rule", rich], check=True)
         run(["firewall-cmd", "-q", "--reload"], check=True)
-    cert_new = not _p(root, CERT).exists()
-    if cert_new:
+    if not _p(root, CERT).exists():
+        _mark(root, ["httpd"])
         run(["/usr/libexec/chp/cert-renew-nextcloud", "--issue"], check=True)
     step("cert", f"certificate for {fqdn} from the site CA (renewed by chp-nextcloud-cert-renew.timer)")
     run(["systemctl", "enable", "--now", *UNITS], check=True)
-    if web_changed or cert_new:
-        run(["systemctl", "restart", "php-fpm", "httpd"], check=True)
+    _restart(run, root, ["php-fpm", "httpd"])
     step("services", f"started: {', '.join(UNITS)} (HTTPS {PORT}, LAN {cidr} only)")
 
-    # 14. Wazuh: the audit log and the rules (checked before the manager restarts; a bad rule stops it)
-    _wazuh(root, run, chown)
-    step("wazuh", "Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress at 12)")
+    # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or
+    # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet
+    fsmark = _p(root, FSMARK_PENDING)
+    if _restart(run, root, ["fapolicyd"], extra=["fapolicyd"] if fsmark.exists() else []):
+        fsmark.unlink(missing_ok=True)
+        denied = next((ln.strip() for ln in _out(run, ["fapolicyd-cli", "--check-status"]).splitlines()
+                       if ln.strip().startswith("Denied")), "Denied accesses: unknown")
+        step("fapolicyd", f"fapolicyd restarted (rule 65 loaded); {denied}")
+    else:
+        step("fapolicyd", "fapolicyd: no restart needed")
 
-    # 15. fapolicyd: AFTER every package and file change (never in an rpm scriptlet)
-    run(["fapolicyd-cli", "--file", "update", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=False,
-        capture_output=True, text=True)
-    run(["systemctl", "restart", "fapolicyd"], check=True)
-    _p(root, FSMARK_PENDING).unlink(missing_ok=True)        # chp-base's fsmark change is applied by this restart
-    denied = next((ln.strip() for ln in _out(run, ["fapolicyd-cli", "--check-status"]).splitlines()
-                   if ln.strip().startswith("Denied")), "Denied accesses: unknown")
-    step("fapolicyd", f"fapolicyd restarted (rule 65 loaded); {denied}")
-
-    # 16. escrow, AIDE
+    # 16. escrow, AIDE, and last: ENABLED=yes (every step above succeeded)
     if pend.exists():
         if stick is not None:
             from .escrow import move_documents_secrets
@@ -457,6 +576,8 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         else:
             step("escrow", "break-glass secret is in the pending folder: plug in the site stick and run "
                            "chp-site export-client")
+    _put(cp, conf_text(fqdn, sip, days, ids, "yes"), 0o644)
+    step("enabled", "documents.conf ENABLED=yes")
     step("aide", "AIDE: httpd, /etc/hosts and new units changed: refresh the baseline now with "
                  "chp-site aide-accept --approver \"<ISSO>\" --reason \"documents enable\"", aide_refresh="needed")
     return done
@@ -526,27 +647,38 @@ def _wazuh(root, run, chown):
     rules = _p(root, f"var/ossec/etc/rules/{w.NC_RULES_FILE}")
     old_rules = rules.read_text() if rules.exists() else None
     old_conf = conf.read_text()
-    changed = _put(rules, w.NEXTCLOUD_RULES, 0o640, grp)
-    changed |= _put(conf, w.documents_manager(old_conf), 0o640, grp)
-    if not changed:
+    new_conf = w.documents_manager(old_conf)
+    changed = _differs(rules, w.NEXTCLOUD_RULES, 0o640) or _differs(conf, new_conf, 0o640)
+    if changed:
+        _mark(root, ["wazuh-manager"])
+        _put(rules, w.NEXTCLOUD_RULES, 0o640, grp)
+        _put(conf, new_conf, 0o640, grp)
+    marked = "wazuh-manager" in _restart_marks(root)
+    active = _out(run, ["systemctl", "is-active", "wazuh-manager"]).strip() == "active"
+    if not (marked or not active):
         return
     r = run(["/var/ossec/bin/wazuh-analysisd", "-t"], capture_output=True, text=True)
     if r.returncode != 0:
-        if old_rules is None:
-            rules.unlink()
-        else:
-            _put(rules, old_rules, 0o640, grp)
-        _put(conf, old_conf, 0o640, grp)
+        if changed:
+            if old_rules is None:
+                rules.unlink()
+            else:
+                _put(rules, old_rules, 0o640, grp)
+            _put(conf, old_conf, 0o640, grp)
+            _unmark(root, ["wazuh-manager"])
         raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the NextCloud rules; the old rules are "
                         "back and the manager was not restarted: " + (r.stderr or r.stdout or "").strip()[:200])
-    run(["systemctl", "restart", "wazuh-manager"], check=True)
+    _restart(run, root, ["wazuh-manager"], extra=["wazuh-manager"])
 
 
 def status(root, run):
     """Lines for `chp-site documents status` (and the nightly check, §12)."""
     c = _kv(_p(root, CONF))
-    if c.get("ENABLED") != "yes":
+    if not c:
         return ["documents: not enabled on this host (chp-site documents enable, on the server)"]
+    if c.get("ENABLED") != "yes":
+        return ["documents: enable has not finished on this host (ENABLED is not yes): re-run chp-site documents "
+                "enable"]
     rows = [f"documents: https://{c.get('FQDN')}:{PORT} (server {c.get('SERVER_IP')}); folders "
             + " ".join(f"{n}={c.get(n.upper() + '_FOLDER_ID', '?')}" for n in CONTROLLED + OPEN)]
     for u in STATUS_UNITS:
