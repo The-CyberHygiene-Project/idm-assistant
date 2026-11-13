@@ -10,6 +10,7 @@ Host chp-build
     ProxyJump aero
     IdentityFile ~/idm-lab-secrets/chp_build_ed25519
     IdentitiesOnly yes
+    # host key changes on every rebuild of this throwaway lab VM, so it is not pinned
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR

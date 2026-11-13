@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # create.sh (RUNS ON AERO, sudo): (re)build the chp-build RPM build VM from the Rocky 9.8 DVD (owner decision 4).
-# Usage: sudo bash create.sh KS_FILE   (ks.cfg with @PUBKEY@ already replaced; see README). Isolated: br-lab has no route out.
+# Usage: sudo bash create.sh KS_FILE [--force]   (ks.cfg with @PUBKEY@ already replaced by the README's sed).
+# Refuses if chp-build or its disk already exists; --force deletes both first (and says so). br-lab has no route out.
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo"; exit 1; }
 ks=${1:?ks file}; name=chp-build; iso=/data/lab-inputs/Rocky-9.8-x86_64-dvd.iso
 grep -q '@PUBKEY@' "$ks" && { echo "ks still has @PUBKEY@"; exit 1; }
 log=/var/log/libvirt/qemu/$name-install.log; rm -f "$log"
+img=/data/libvirt/images/$name.qcow2
+if virsh dominfo "$name" >/dev/null 2>&1 || [[ -e $img ]]; then
+  [[ ${2:-} == --force ]] || { echo "refusing: $name (domain and/or $img) already exists; re-run with --force to DELETE and rebuild it"; exit 1; }
+  echo "--force: destroying domain $name (if any), undefining it with its NVRAM, and deleting $img"
+fi
 if virsh dominfo "$name" >/dev/null 2>&1; then virsh destroy "$name" >/dev/null 2>&1 || true; virsh undefine "$name" --nvram >/dev/null 2>&1 || true; fi
 rm -f /data/libvirt/images/$name.qcow2
 virt-install --name "$name" --memory 4096 --vcpus 2 --cpu host-passthrough --osinfo detect=on,name=rhel9-unknown \
