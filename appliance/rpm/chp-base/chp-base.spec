@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        9.chp%{?dist}
+Release:        10.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,10 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-10.chp
+- Check 80: the pending-restart rule equals fapolicyd-fsmark's (applied only when the daemon started strictly later
+  than the marker; start read with TZ=UTC; "n/a" or unknown = not applied), so the two never disagree.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-9.chp
 - fapolicyd-fsmark: the marker time and the daemon start are each checked as numbers (an empty start never passes);
   the start is read with TZ=UTC (zone-safe); a restart must be strictly later than the marker (same-second race

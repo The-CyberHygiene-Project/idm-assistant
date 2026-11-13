@@ -64,14 +64,20 @@ if [ "$pm" = 1 ]; then
 elif [ "$pm" != 0 ] && [ "$st" = active ]; then
   flag "mode unknown" "cannot determine fapolicyd mode (no Permissive: line from fapolicyd-cli --check-status, no permissive= in $conf)"
 fi
-# A recorded allow_filesystem_mark change (pending marker) that the daemon has not picked up: it restarted before the
-# marker was written (or its start time is unknown). The fsmark helper clears the marker once the daemon restarts.
+# A recorded allow_filesystem_mark change (pending marker) that the daemon has not picked up. Same rule as the fsmark
+# helper (which clears the marker), so the two never disagree: applied only when the daemon started STRICTLY later than
+# the marker was written (one-second resolution: the same second counts as not applied); the start is read with TZ=UTC
+# (zone-safe); an unknown start ("", "n/a", unparsable) counts as not applied.
 if [ -f "$pend" ]; then
   mt=$(stat -c %Y "$pend" 2>/dev/null || stat -f %m "$pend" 2>/dev/null)
-  ds=${CHP_FAPOLICYD_START:-$(d=$(systemctl show fapolicyd -p ActiveEnterTimestamp --value 2>/dev/null); [ -n "$d" ] && date -d "$d" +%s 2>/dev/null)}
+  if [ -n "${CHP_FAPOLICYD_START:-}" ]; then ds=$CHP_FAPOLICYD_START
+  else
+    d=$(TZ=UTC systemctl show fapolicyd -p ActiveEnterTimestamp --value 2>/dev/null)
+    case $d in ''|n/a) ds= ;; *) ds=$(TZ=UTC date -d "$d" +%s 2>/dev/null) ;; esac
+  fi
   case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
   case "$ds" in ''|*[!0-9]*) ds=0 ;; esac
-  if [ "$ds" -lt "$mt" ]; then
+  if [ "$ds" -le "$mt" ]; then
     flag "restart pending" "fapolicyd restart pending since $(when "$mt") (allow_filesystem_mark change not applied): systemctl restart fapolicyd"
   fi
 fi

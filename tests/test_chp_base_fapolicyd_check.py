@@ -126,3 +126,41 @@ def test_80_pending_restart_alerts_until_daemon_restarted(tmp_path):
     assert len(a) == 1 and "restart pending since" in a[0] and "systemctl restart fapolicyd" in a[0]
     d = tmp_path / "z"; d.mkdir()
     assert run(d, pending=2000, start=3000).startswith("OK fapolicyd active")
+
+
+def test_80_restart_in_the_same_second_counts_as_not_applied(tmp_path):
+    # same rule as fapolicyd-fsmark (strictly later = applied), so the helper keeping the marker and check 80 agree
+    a = alerts(run(tmp_path, pending=2000, start=2000))
+    assert len(a) == 1 and "restart pending since" in a[0]
+
+
+def _start_from_systemctl(tmp_path, show, date_out="3000"):
+    """check 80 reading the daemon start itself: fake systemctl/date record TZ and args."""
+    b = tmp_path / "bin"; b.mkdir(exist_ok=True)
+    (b / "systemctl").write_text(f'#!/bin/bash\necho "TZ=$TZ $*" >> {tmp_path}/calls\n'
+                                 f'if [ "$1" = show ]; then printf "%s\\n" "{show}"; else echo active; fi\nexit 0\n')
+    (b / "date").write_text(f'#!/bin/bash\necho "date TZ=$TZ $*" >> {tmp_path}/calls\necho {date_out}\n')
+    (b / "fapolicyd-cli").write_text("#!/bin/bash\necho 'Permissive: false'; echo 'Denied accesses: 0'\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    (tmp_path / "fapolicyd.conf").write_text("permissive = 0\n")
+    pf = tmp_path / "pending"; pf.write_text(""); os.utime(pf, (2000, 2000))
+    sd = tmp_path / "state"; sd.mkdir(exist_ok=True)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_STATE_DIR=str(sd), CHP_NOW="1000000000",
+               CHP_FAPOLICYD_CONF=str(tmp_path / "fapolicyd.conf"), CHP_FSMARK_PENDING=str(pf))
+    env.pop("CHP_FAPOLICYD_START", None)
+    r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout, (tmp_path / "calls").read_text()
+
+
+def test_80_reads_the_daemon_start_in_utc(tmp_path):
+    out, calls = _start_from_systemctl(tmp_path, "Fri 2026-11-13 10:00:00 UTC")
+    assert "TZ=UTC show fapolicyd -p ActiveEnterTimestamp --value" in calls
+    assert "date TZ=UTC -d Fri 2026-11-13 10:00:00 UTC +%s" in calls
+    assert out.startswith("OK fapolicyd active")                 # 3000 > 2000: applied
+
+
+def test_80_never_started_daemon_counts_as_not_applied(tmp_path):
+    out, calls = _start_from_systemctl(tmp_path, "n/a")
+    assert "date TZ=UTC" not in calls and "restart pending since" in out
