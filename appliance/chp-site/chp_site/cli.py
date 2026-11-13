@@ -346,11 +346,21 @@ def _yara_scan(a):
 
 
 def _day(text):
+    import re
     from datetime import date
     try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):     # 3.11+ fromisoformat also takes 20261107 and ISO weeks
+            raise ValueError(text)
         return date.fromisoformat(text)
     except ValueError:
         raise SiteError("--date must be YYYY-MM-DD") from None
+
+
+def _site_today(site, now):
+    """Today's date in the site's TIMEZONE (UTC when unset): one definition for review build and monitor."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
 
 
 def _review(a):
@@ -379,7 +389,7 @@ def _review(a):
         now = time.time()
         from zoneinfo import ZoneInfo
         from datetime import datetime
-        today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
+        today = _site_today(site, now)
         zone = ZoneInfo(site.get("TIMEZONE") or "UTC")
         missing = st.missing_days(today=today)
         if missing:                                      # only from the earliest missing day, minus a day of margin
@@ -420,9 +430,7 @@ def _review(a):
         site, hosts = _load(a.site)
         now = time.time()
         imm = st.immediate(site=site, hosts=hosts, alerts=wa.load_alerts("/var/ossec/logs/alerts", now - 86400), now=now)
-        from zoneinfo import ZoneInfo
-        from datetime import datetime
-        today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
+        today = _site_today(site, now)
         try:
             since = os.stat("/etc/chp/security.conf").st_mtime
         except OSError:

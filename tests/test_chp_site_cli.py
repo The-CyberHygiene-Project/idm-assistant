@@ -212,3 +212,124 @@ def test_alerts_rejects_a_bad_since(capsys):
     from chp_site import cli as cli_mod
     assert cli_mod.main(["alerts", "--since", "soon"]) == 2
     assert "--since" in capsys.readouterr().err
+
+
+# --- review sign CLI (moved from the ledger tests) ---
+from datetime import date
+
+import pytest
+
+from chp_site.sitefile import SiteError
+
+from chp_site import review_ledger as rl
+from chp_site import review_store as st
+
+SITE = {"ISSO_NAME": "Dana ISSO", "REVIEW_DELEGATES": ["Deputy One"]}
+
+
+def test_cli_sign_passes_the_approver_dates_and_a_yes_prompt(monkeypatch):
+    from chp_site import cli
+    got = {}
+    monkeypatch.setattr(cli, "_load", lambda site: (SITE, []))
+    monkeypatch.setattr(rl, "sign", lambda **kw: got.update(kw) or [{}])
+    monkeypatch.setattr("builtins.input", lambda prompt: "yes")
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    assert cli.main(["review", "sign", "--approver", "Dana ISSO", "--notes", "ok", "--date", "2026-11-06",
+                     "--date", "2026-11-07"]) == 0
+    assert got["approver"] == "Dana ISSO" and got["days"] == [date(2026, 11, 6), date(2026, 11, 7)]
+    assert got["confirm"]("sign?") is True
+    monkeypatch.setattr("builtins.input", lambda prompt: "no")
+    assert got["confirm"]("sign?") is False
+
+
+def test_cli_sign_requires_approver_and_notes(capsys):
+    from chp_site import cli
+    assert cli.main(["review", "sign", "--notes", "ok"]) == 2
+    assert "--approver" in capsys.readouterr().err
+    assert cli.main(["review", "sign", "--approver", "Dana ISSO"]) == 2
+
+
+def _cli_sign(monkeypatch, tty, *extra, notes="ok"):
+    from chp_site import cli
+    got = []
+    monkeypatch.setattr(cli, "_load", lambda site: (SITE, []))
+    monkeypatch.setattr(rl, "sign", lambda **kw: got.append(kw) or [{}])
+    monkeypatch.setattr("builtins.input", lambda prompt: "yes")
+    monkeypatch.setattr("sys.stdin.isatty", lambda: tty, raising=False)
+    rc = cli.main(["review", "sign", "--approver", "Dana ISSO", "--notes", notes, *extra])
+    return rc, got
+
+
+def test_sign_refuses_without_a_terminal(monkeypatch, capsys):
+    rc, got = _cli_sign(monkeypatch, False)
+    assert rc != 0 and got == []
+    err = capsys.readouterr().err
+    assert "review sign needs a terminal: the reviewer must read the summary and type yes" in err
+    assert "Traceback" not in err
+
+
+def test_bad_date_is_a_plain_error(monkeypatch, capsys):
+    from chp_site import cli
+    assert cli.main(["review", "show", "--date", "2026-13-01"]) != 0
+    assert "--date must be YYYY-MM-DD" in capsys.readouterr().err
+    rc, got = _cli_sign(monkeypatch, True, "--date", "x")
+    assert rc != 0 and got == []
+    err = capsys.readouterr().err
+    assert "--date must be YYYY-MM-DD" in err and "Traceback" not in err
+
+
+@pytest.mark.parametrize("notes", ["x" * 1001, "a\x1bb", "a\rb", "a\x00b", "a\nb", "a\tb"])
+def test_notes_limits(monkeypatch, capsys, notes):
+    rc, got = _cli_sign(monkeypatch, True, notes=notes)
+    assert rc != 0 and got == []
+    assert "--notes: at most 1000 characters, no control characters" in capsys.readouterr().err
+
+
+def test_notes_of_1000_characters_are_fine(monkeypatch):
+    rc, got = _cli_sign(monkeypatch, True, notes="x" * 1000)
+    assert rc == 0 and len(got) == 1
+
+
+@pytest.mark.parametrize("tz, want", [("Pacific/Kiritimati", date(2026, 11, 9)), ("Pacific/Pago_Pago", date(2026, 11, 8))])
+def test_build_uses_the_site_timezone(monkeypatch, tz, want):
+    # the same instant gives different dates in these two zones; the old host-zone code gave one date for both
+    from datetime import datetime, timezone
+    from chp_site import cli
+    seen = {}
+    now = datetime(2026, 11, 9, 6, 30, tzinfo=timezone.utc).timestamp()
+    monkeypatch.setattr(st, "nightly", lambda **kw: seen.update(kw) or [])
+    monkeypatch.setattr(cli, "_load", lambda site: ({"TIMEZONE": tz}, []))
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: [])
+    monkeypatch.setattr("time.time", lambda: now)
+    assert cli.main(["review", "build"]) == 0
+    assert seen["today"] == want
+
+
+@pytest.mark.parametrize("text", ["20261107", "2026-W45-1", "2026-11-7", "2026-11-07 "])
+def test_day_is_strict_on_every_python(text):
+    from chp_site import cli
+    with pytest.raises(SiteError, match="--date must be YYYY-MM-DD"):
+        cli._day(text)
+    assert cli._day("2026-11-07") == date(2026, 11, 7)
+
+
+def test_site_today_helper_used_by_build_and_monitor(monkeypatch):
+    from datetime import datetime, timezone
+    from chp_site import cli
+    now = datetime(2026, 11, 9, 6, 30, tzinfo=timezone.utc).timestamp()
+    assert cli._site_today({"TIMEZONE": "Pacific/Kiritimati"}, now) == date(2026, 11, 9)
+    assert cli._site_today({"TIMEZONE": "Pacific/Pago_Pago"}, now) == date(2026, 11, 8)
+    assert cli._site_today({}, now) == date(2026, 11, 9)
+    calls = []
+    real = cli._site_today
+    monkeypatch.setattr(cli, "_site_today", lambda site, n: calls.append(n) or real(site, n))
+    monkeypatch.setattr("time.time", lambda: now)
+    monkeypatch.setattr(cli, "_load", lambda site: ({"TIMEZONE": "UTC"}, []))
+    monkeypatch.setattr(st, "nightly", lambda **kw: [])
+    monkeypatch.setattr(st, "missing_days", lambda today: [])
+    monkeypatch.setattr(st, "immediate", lambda **kw: [])
+    monkeypatch.setattr(st, "monitor_lines", lambda **kw: [])
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: [])
+    assert cli.main(["review", "build"]) == 0
+    assert cli.main(["review", "monitor"]) == 0
+    assert calls == [now, now]

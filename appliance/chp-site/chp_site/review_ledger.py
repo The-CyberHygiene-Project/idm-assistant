@@ -160,15 +160,33 @@ def sign(*, site, approver, notes, days, root=Path("/"), now, operator, confirm,
             raise SiteError(f"the review for {d} is already signed")
     for d in want:
         say(st.show(root=root, day=date.fromisoformat(d)).split("\n## ")[0])
+        say(_attention_text(root, d))
     if not confirm(f"sign {len(want)} review(s) ({', '.join(want)}) as {approver}?"):
         raise SiteError("not signed")
     out = []
     for d in want:
-        e = append(path, date=d, report_sha256=st.report_sha256(st._dir(root) / d), approver=approver,
-                   operator=operator, notes=notes, now=now)
-        rec("review-sign", {"date": d, "approver": approver, "notes": notes, "entry": head(path)[1]})
+        try:
+            e = append(path, date=d, report_sha256=st.report_sha256(st._dir(root) / d), approver=approver,
+                       operator=operator, notes=notes, now=now)
+            rec("review-sign", {"date": d, "approver": approver, "notes": notes, "entry": head(path)[1]})
+        except SiteError as err:
+            if out:                                 # earlier days stay signed and recorded; say so
+                raise SiteError(f"signed {', '.join(x['date'] for x in out)} before stopping: {err}") from None
+            raise
         out.append(e)
     return out
+
+
+def _attention_text(root, day):
+    """The review's 'Needs attention' items, so the reviewer sees what they are signing for (not just the count)."""
+    try:
+        items = json.loads((st._dir(root) / day / "data.json").read_text()).get("attention") or []
+    except (OSError, ValueError):
+        return "Needs attention: (the item list could not be read; see the full report)"
+    if not items:
+        return "Needs attention: none"
+    return "Needs attention:\n" + "\n".join(
+        f"  - {i.get('host', '?')} {i.get('item', '?')} {i.get('state', '?')}: {i.get('detail', '')}" for i in items)
 
 
 def verify_heads(path, heads_text):
