@@ -43,3 +43,11 @@ def test_noleak_keeps_the_diagnostic_lines():
 
 def test_aideinfo_runs_no_arbitrary_command():
     assert "AIDEINFO_CMD" not in PROVE
+
+
+def test_wazuh_on_neg_failed_umount_reaches_stdout_and_fails_the_check():
+    # Rh drops stderr: the FAILED line must go to stdout, and any FAILED line fails the stage's check
+    stage = PROVE[PROVE.index("  wazuh-on-neg)"):PROVE.index("  aidepeek)")]
+    assert 'echo "FAILED: umount /var/ossec' in stage and "FAILED: umount /var/ossec (stray bind may be left; the EXIT trap retries it)\" >&2" not in stage
+    assert "bad=$(printf '%s\\n' \"$r\" | grep -m1 '^FAILED')" in stage and '"${bad:-' in stage
+    assert subprocess.run(["bash", "-n", str(Path(__file__).resolve().parents[1] / "lab" / "iso5" / "prove.sh")]).returncode == 0
