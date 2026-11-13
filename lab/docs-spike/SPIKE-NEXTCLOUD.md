@@ -1,5 +1,169 @@
 # Spike: NextCloud on a hardened CHP server (ISO 0.7.0 Plan 1, Task 1)
 
+## Plan 2 inputs (Task 9 hand-off, 2026-11-12)
+
+Plan 2 is written from this section. Each item cites the section or log below that holds the evidence. Nothing
+here is new testing: it summarises Tasks 1-3.
+
+### What was chosen
+
+- **Packages** (§Packages, `logs/42`). Everything below comes from the Rocky 9.8 DVD and is Rocky-signed:
+  PHP `php:8.3` stream 8.3.29 (php-fpm with the modules listed there; no php-sodium in Rocky); PostgreSQL
+  `postgresql:16` 16.13, socket only, peer authentication, so there is no database password; httpd 2.4.62 + mod_ssl +
+  php-fpm; APCu cache, file locking in the database. NextCloud 35.0.3 plus groupfolders 23.0.1, files_accesscontrol
+  6.0.1 and user_oidc 8.13.0 (signatures verified, `MANIFEST.txt`), plus our apps `chp_foldertag` and `chp_ledger`.
+  All of it goes in our own RPM, code under `/usr/lib/nextcloud` (not `/usr/share`: fapolicyd's filter, §Under the
+  CUI profile fix 1). **PHP 8.3 is the newest PHP in Rocky 9, and NextCloud 35 already calls it deprecated**
+  ("Nextcloud 37 may require at least PHP 8.4", finding 4).
+- **Sign-in** (§Sign-in). OIDC from NextCloud's user_oidc to Kanidm: ES256 id tokens, PKCE S256, a `chp_groups`
+  claim map (`cui-users`, `doc-reviewers`, `chp-users`). The login page goes straight to Kanidm. The break-glass
+  admin uses `/login?direct=1` with a bcrypt hash, because FIPS breaks PHP's Argon2id (fix 3). Host sign-in is
+  unchanged: row 36 3/3 (`logs/20`).
+- **Transport for `chp-site doc`** (§Transport, route 1, `logs/44-49`, `logs/62-63`). A Kanidm **public client**
+  `chp-doc` (authorization code + PKCE, a one-shot `127.0.0.1` redirect listener on port 0). The access token goes to
+  NextCloud as `Authorization: Bearer`. Tokens are kept in `$XDG_RUNTIME_DIR` (tmpfs) and are gone at logout. Access
+  tokens last 15 min; refresh tokens are set to 8 h, but that limit is untested. A Kanidm lock takes effect on the
+  next request. NextCloud gets a second user_oidc provider that checks the Bearer with userinfo, and five vhost
+  rewrite lines keep the login page straight to Kanidm. Login Flow v2 app passwords are rejected: they never expire
+  and keep working after a Kanidm lock (`logs/47`).
+- **Freshness** (§Freshness, `logs/50-53`). The marker is the **sha256 of the canonical bytes plus the file id**,
+  recorded at checkout and compared at publish. The ETag can stay the same when the content changes and can come
+  back after a version restore, so it is used only as a cheap pre-check and as `If-Match` on the final write. That
+  **narrows** the race between check and write. It does not close it (review fix 2).
+- **Ledger** (§Ledger L1, review fixes 3-5, `logs/57`, `logs/60`, `logs/67-72`). The NextCloud app `chp_ledger`
+  takes a request over NextCloud's HTTPS (no new port), stamps it with the authenticated NextCloud user and drops it
+  in `/var/lib/chp-docs/spool`. A `.path` unit then starts the **root appender**, which writes the hash-chained
+  ledger at `/var/lib/chp-docs/ledger/ledger.jsonl` (root, 0600), with a head witness and an export to the stick.
+  The appender **re-validates every Bearer at Kanidm's `chp-doc` userinfo** and records only what Kanidm returns. A
+  token that does not validate makes the whole request refused, and approve and override need a verified Bearer.
+  **Author rule, per cycle** (fix 4). A cycle runs from the last publish (or the creation) to now. Authors(cycle) =
+  the creator + everyone who checked the file out in the cycle + the publisher. An approver must be outside
+  Authors(cycle), must approve after the cycle's last checkout, and must approve that exact sha256. The publisher must
+  be in Authors(cycle).
+- **Server-side publish is a MUST** (review fix 1). The prototype's PUT by the author lets anyone with write access
+  skip every rule. In Plan 2 the Compliance areas are read-only to all users (ACL), and `chp_ledger` (or the
+  appender) receives the bytes. Under a lock, it compares and writes in one step: the received sha256 must equal the
+  approved sha256, and the canonical copy's current sha256 must equal the checkout's.
+- **Tag by folder** (§Tag by folder, `logs/24`, `logs/26`). The app `chp_foldertag` tags on NodeCreated, Written,
+  Copied and Renamed. Its rule maps a team folder to a restricted system tag (`CUI`, `FCI`). Disabling it raises a
+  level-12 alert. The nightly check must run **outside** the app, from chp-base/chp-site with SQL, because the
+  app's own command disappears when the app is off. **ContainListener** (§Copy out, `logs/41`): `chp_foldertag`
+  0.2.0 refuses copy and move out of CUI, FCI and Archive (403, nothing created).
+- **Egress** (§Outbound, `logs/21`, `logs/40`). The settings say there is no internet connection and the outbound
+  apps are off. Below the application, the nftables table `inet chp_nextcloud_egress` matches **the apache uid**
+  (`meta skuid "apache"`, a positive match): loopback and the server's own address only; anything else is logged
+  (`CHP-NC-EGRESS`) and rejected. SELinux: only `httpd_can_network_relay` is on. **BindsTo + `ExecStartPre` pre-check**
+  drop-ins mean php-fpm and httpd do not run without the table. **No DNS for apache** (port 53 refused and
+  logged). NextCloud's own names (`idm.`, `files.`) come from **`/etc/hosts`, rendered from site config**. The
+  spike recommends shipping the no-DNS variant.
+- **Editor** (§Editor, `logs/78-89`). **ONLYOFFICE Desktop Editors 10.0.0 works with limits** on the FIPS/CUI
+  workstation: open, edit, save and PDF export, with the marks kept on every page; no crypto error; 0 fapolicyd
+  denials and 0 AVCs from the app. The limits: (1) the "latest" RPM is unsigned (the yum-repo copy is signed, so we
+  re-sign it); (2) the bundled Chromium BoringSSL is not validated and ignores FIPS (POA&M; the editor makes no TLS
+  in the data path); (3) headless `x2t` works only after a first GUI run and is undocumented; (4) the start page
+  shows vendor and AI features; (5) Chromium runs `--no-sandbox`; (6) the app is 1.2 GB, runs `unconfined_t` and
+  keeps autosave copies of CUI under `~/.local/share/onlyoffice` (`logs/88`); (7) fapolicyd failed once during back-to-back installs;
+  (8) the GUI was tested under Xvfb only, with a minimal feature set; (9) Chromium has a path straight to a public
+  resolver, so `/etc/hosts` alone is not an egress control. It also needs six extra Rocky packages in the stick repo.
+  Its three gate items are G1-G3 below. LibreOffice was not tried.
+- **Resource use** (§Resource use, `logs/37`; §Transport, `logs/63`; §Editor). At rest the server used 1.7 GiB of
+  an 8 GiB VM. The largest services are wazuh-manager 1,281 MB and suricata 539 MB; php-fpm 123 MB, httpd 60 MB and
+  postgresql 39 MB. The code is 874 MB and the database 74 MB. **The server needs 8 GiB, not the 4 GiB default.** A
+  Bearer PROPFIND takes a median 191 ms, against 92 ms with an app password. On the workstation, ONLYOFFICE is a
+  291 MB RPM, 1.2 GB installed, plus 14 MB of user data.
+- **Port 8443** (finding 3). Kanidm owns `SERVER_IP:443`, so NextCloud serves `https://files.<DOMAIN>:8443`, LAN only
+  (`SUBNET_CIDR`, fix 7).
+- **Build host** (§Packages). aero's fapolicyd denies `rpmbuild` reading untrusted PHP, so the spike RPM was built
+  on the Mac (rpm 6.1, v4 format; EL9 installs it). An aero rule was refused by the permission system.
+- **App version bump** (§Copy out, review fix 3, `logs/67`). Any change to an app's version leaves NextCloud
+  answering 503 ("upgrade required") until `occ upgrade` runs, so the RPM's `%post` must run it.
+
+### Every "(builder)" item in the design, answered
+
+| Design | Item | Answer |
+|---|---|---|
+| §2 | database, web server, PHP stream | PostgreSQL 16 (socket, peer auth), httpd + mod_ssl + php-fpm, `php:8.3` (§Packages) |
+| §2 | no-internet mechanism | settings + apps off; nft table by apache uid; no DNS for apache, `/etc/hosts` from site; BindsTo + pre-check; only `httpd_can_network_relay` (§Outbound) |
+| §3 | sign-in protocol | OIDC (user_oidc, ES256, PKCE S256, `chp_groups` claim) (§Sign-in) |
+| §4 | doc transport and authentication | Kanidm public client `chp-doc` + Bearer, tokens in tmpfs (§Transport route 1) |
+| §4 | citation check: how far to automate | **not studied in the spike**; Plan 2 design |
+| §4 | site-key names for the ISSO's and approvers' Kanidm accounts | **not named in the spike** (the prototype used constants, `proto/docs_ledger.py` `APPROVERS`/`ISSO`); Plan 2 names them |
+| §4 | ledger location; append without a new listener | `/var/lib/chp-docs/ledger/`, `chp_ledger` OCS app → spool → root appender with Kanidm userinfo check (§Ledger L1) |
+| §5 | marking site-key names | **not studied**; Plan 2 names them |
+| §5 | checker per format | **not built**. Evidence only: python-docx, openpyxl and `pdftotext` read the banners and blocks reliably on ONLYOFFICE output (§Editor); `x2t` can make the PDF after a first GUI run (limit 3); md not looked at |
+| §6 | monitor check numbers | **not assigned** (check 76 is the latest in use). The spike needs checks for: httpd, php-fpm and postgresql up; the NextCloud certificate; the egress table present and intact; `chp-docs-ledger.path` active; `fapolicyd.service` not failed (G1) |
+
+### Plan 2 MUST / gate items (deduplicated)
+
+1. **M1 Server-side publish** (review fix 1): Compliance read-only to users; atomic compare-and-write by sha256 under a lock.
+2. **M2 Ledger hardening** (fixes 3-5, round 2, deferred minors): Kanidm userinfo re-validation; approve and override
+   need a Bearer; per-cycle author rule; quarantine on any failure; finite start limits with `OnFailure` alert on the
+   service **and** the path unit; a per-user rate limit in the app; Compliance-only file ids, with the team-folder
+   ids rendered from the site; a generic refusal text; the userinfo call pinned to the site CA, host from site
+   config, no redirects, timeout + rate budget; retry (not quarantine) on a Kanidm outage; `O_NOFOLLOW`, no TOCTOU on the
+   spool; keep `--mapping-uid=preferred_username`/`--unique-uid=0`; set `auto_provision` deliberately. Deferred
+   minors (ledger, Task 2): root check on `purge-quarantine`; non-dict JSON in quarantine; the appender's
+   team-folder re-check trusts apache-side fields; `O_TRUNC` filename collision; unlink failure in `finally`; a
+   requester told "refused" after a successful append.
+3. **M3 Transport**: bind port 0 and keep listening until the right `state` arrives; linger off for these users;
+   test a refresh near the 8 h limit and read the expiry from Kanidm (fix 6); the login rewrite.
+4. **M4 Egress**: ship the no-DNS variant and `/etc/hosts` from the site; BindsTo + pre-check; a monitor check for the
+   table (deleting it at run time goes unnoticed until a restart).
+5. **M5 Tags**: nightly tag check and canary from chp-base/chp-site (SQL), not from the app; send ContainListener's
+   refusals to the audit log and Wazuh. Untested so far: renames and subfolder moves inside CUI, and trash or
+   version restore across folders.
+6. **M6 Package**: our signed RPM from a decided build host; `occ upgrade` in `%post`; the `config.php` trust entry;
+   rule 65; stock listeners off; `SUBNET_CIDR`; `files` in the site zone; certificate renewal timer (ACME opens
+   :80 per issue, like Kanidm's); backup timer; Wazuh rules (+ a Kanidm failed-TOTP rule); 8 GiB server default.
+7. **M7 fapolicyd** (findings 1-2): trial `allow_filesystem_mark = 1` per role before shipping; decide the gate
+   (FANOTIFY count vs `--check-status`, read after a fapolicyd restart, because a rule reload keeps cached
+   decisions).
+8. **G1 fapolicyd health** (editor gate 1): alarm on `fapolicyd.service` failed; a "two package installs back to
+   back" test on the workstation role.
+9. **G2 Autosave cleanup** (editor gate 2): a close hook in `chp-site doc` **and** a periodic sweep that removes
+   `recover/DE__*` only when there is no live ONLYOFFICE process of that user **and** it is older than N hours;
+   logged; the copies are treated as CUI.
+10. **G3 Per-application egress on the workstation** (editor gate 3): default-drop except the site server, DNS only
+    to the site resolver (IPv4 + IPv6, DoT/DoH ports), hosts block kept; tested with an IPv6 default route present.
+11. **G4 ONLYOFFICE packaging**: re-sign the yum-repo RPM (sha256 pinned); remove the AI Tools plugin as a
+    post-install step; pre-seed "Don't show AI Tools"; ship the six extra packages.
+
+### Owner decisions needed (not decided here)
+
+1. **fapolicyd `allow_filesystem_mark`** (finding 1). *Problem:* with the RHEL default 0, daemons in their own mount
+   namespace (httpd, php-fpm, kanidmd, named, step-ca, suricata, …) have their file opens unchecked; this was seen
+   on two hosts and probably affects released ones. Past "0 denials" gates and the **shipped**
+   collector `idm-collect` (line 266) share the blind spot (finding 2). *Options:* turn it on for 0.7.0 and released hosts after a per-role
+   trial (it broke php-fpm until rule 65); 0.7.0 only; or leave it off and record it. *Spike:* trial per role
+   before shipping.
+2. **Download then re-upload of CUI** (§Copy out). *Problem:* a `cui-users` member can download a CUI file, upload it
+   to Operations and share it; nothing in NextCloud can stop that. *Options:* a content (banner) check on uploads
+   outside CUI/FCI; no share right for `cui-users` outside CUI; or accept it, document it, and rely on training and
+   audit. *Spike:* no recommendation.
+3. **ContainListener also blocks CUI → Archive/FCI moves** (§Copy out; a Task 1 review minor). *Problem:* the
+   design's "withdraw to Archive" step and admin moves are refused too. *Options:* allow named pairs (for example
+   CUI → Archive); do withdrawals through the server-side publish path; or keep the block and do moves by admin
+   `occ`. *Spike:* no recommendation.
+4. **Where the NextCloud RPM is built** (§Packages). *Problem:* aero's fapolicyd blocks PHP in `rpmbuild`.
+   *Options:* an aero fapolicyd rule limited to the build directory (owner approval); a small build VM; the Mac.
+   *Spike:* no recommendation.
+5. **Port 8443** (finding 3). *Options:* (a) 8443; (b) a second server address for `files.`; (c) an SNI router in
+   front of Kanidm and NextCloud. *Spike:* (a).
+6. **PHP 8.3** (finding 4). *Problem:* NextCloud 35 calls PHP 8.3 deprecated and Rocky 9 has nothing newer; 37 may
+   need 8.4. *Options:* ship on 8.3 and plan the move before 37 (a later Rocky 9 stream, or Rocky 10; neither
+   checked); a third-party PHP (breaks the Rocky-signed rule in design §2); stay on an older NextCloud. *Spike:* needs
+   a plan before 37; no choice made.
+7. **Reviewers read-only on all six folders** (§Folders). *Problem:* as built, the reviewer ACL removes write,
+   create, delete and share for reviewers on Operations, Internal and Public as well. *Options:* confirm; or limit
+   the ACL to CUI, FCI and Archive. *Spike:* asks for confirmation.
+8. **ONLYOFFICE: accept the limits?** (§Editor; design §4 TBD). *Problem:* it works, but with a bundled
+   non-validated BoringSSL (POA&M line), `--no-sandbox`, `unconfined_t`, autosave copies of CUI outside the CUI
+   rules (G2), and a vendor RPM we must re-sign. *Options (design §4):* accept with the POA&M line and G1-G4;
+   LibreOffice from Rocky (not tested); or ship the store without a desktop editor. *Spike:* no recommendation.
+
+Smaller policy points that Plan 2 should confirm with the owner: repeated checkouts void pending approvals, and
+`create` makes the caller an author (round 2).
+
 **Task 3 (editor, 2026-11-12, §Editor): ONLYOFFICE Desktop Editors 10.0.0 on the FIPS/CUI workstation: works with limits.**
 
 **Task 2 (doc commands, 2026-11-13, §Transport and §Ledger):** sign in with a Kanidm public client and send the
@@ -748,7 +912,7 @@ changes, templates inside the editor (the CUI template library is Plan 2 work), 
   alarm on `fapolicyd.service` failed); Plan 2 should test "install two packages back to back" on the workstation role.
 - **User data (all under `~/.local/share/onlyoffice` and `~/.config/onlyoffice`, 14 MB):** font cache, Chromium profile,
   recents list and an **auto-recovery copy of every open document** under `data/recover/` (`Editor.bin` + a copy of the
-  file). These copies are CUI. **Lifecycle measured (`logs/88`):** a clean tab close (discarding changes) empties `recover/`; **`kill -9` keeps the copy and the unsaved edit** (and the next launch offers "Recover"); **a session scope killed with SIGKILL after a `loginctl terminate-session` (a forced simulation of logout, not a real GDM logout) keeps it**; no timeout was seen over the ~5 minutes observed. `recents.xml` (paths of every opened file) and the Chromium profile also persist. **These copies sit outside the CUI folder's labelling and cleanup rules** (no `CUI_` name, no tag, not under `~/chp-docs-work`), and a logged-off, locked-out or revoked user would presumably leave them behind (only a forced session kill was measured; lock-out and revocation were not) in a home directory that survives (home is 0700, on LUKS2, but readable by root/backup and by the next admin). **PLAN 2 GATE item 2:** cleanup is a requirement (see below).
+  file). These copies are CUI. **Lifecycle measured (`logs/88`):** a clean tab close (discarding changes) empties `recover/`; **`kill -9` keeps the copy and the unsaved edit** (and the next launch offers "Recover"); **a session scope killed with SIGKILL after a `loginctl terminate-session` (a forced simulation of logout, not a real GDM logout) keeps it**; no timeout was seen over the ~5 minutes observed (inside the 19:10-19:15 test window in the log's header; the start and end of that observation itself were not recorded). `recents.xml` (paths of every opened file) and the Chromium profile also persist. **These copies sit outside the CUI folder's labelling and cleanup rules** (no `CUI_` name, no tag, not under `~/chp-docs-work`), and a logged-off, locked-out or revoked user would presumably leave them behind (only a forced session kill was measured; lock-out and revocation were not) in a home directory that survives (home is 0700, on LUKS2, but readable by root/backup and by the next admin). **PLAN 2 GATE item 2:** cleanup is a requirement (see below).
 
 ### FIPS (what can and cannot be determined)
 `fips-mode-setup --check`: "FIPS mode is enabled."; `/proc/sys/crypto/fips_enabled` = 1; crypto policy `FIPS`
@@ -804,7 +968,7 @@ The `strace` of a launch shows `connect()` to **2001:4860:4860::8888 port 53** (
 It is most likely Chromium's network probe (a failed `connect()` emits nothing); **no packet to any public address appeared in the captures logged** (runs 1 and 2: 0 non-multicast packets addressed outside 192.168.100.0/24, IPv4 or IPv6, at the workstation's tap; runs 3-5 captured port 53 only), and the app **did** honour `/etc/hosts` (the vendor names went to `0.0.0.0`). But it is a
 **direct-to-public-resolver code path that does not go through `/etc/hosts` or the site resolver**; it failed only because
 the lab has no IPv6 route. The same applies to the first run's and the Templates page's lookups: they went through the site
-resolver (REFUSED), not directly. So **"0 DNS queries / 0 packets out of the lab net" holds for this lab's routing**; it
+resolver (REFUSED), not directly. So **"0 DNS queries / 0 packets out of the lab net" holds for this lab's routing, and only for runs 1-2** (the full captures; runs 3-5 captured port 53 only); it
 is not a proof for a site with a default IPv6 route or open DNS egress. The 5,905 packets to 192.168.100.53 port 1514
 were the **Wazuh agent** (`wazuh-agentd`, `ss -tnp`), the 12 to port 443 were, by inference from `/etc/kanidm/config` and timing (not a socket owner at capture), **kanidm-unixd** to `https://idm.docs.lab.test`
 (login/identity, the same second as the kanidm AVC), and the 20 DNS/12 mDNS/3 NetBIOS packets were the system resolver and
@@ -828,13 +992,13 @@ the GTK file dialog: none were ONLYOFFICE's.
    embedded browser shows only local app content here, so the exposure is small, but it is an unsandboxed
    Chromium on a CUI workstation: owner-level risk statement.
 6. **Heavy and not constrained by SELinux:** 1.2 GB, runs `unconfined_t`; it uses `~/.local/share/onlyoffice` for
-   an autosave copy of every open CUI document.
+   an autosave copy of every open CUI document (lifecycle in `logs/88`).
 7. **The fapolicyd daemon failed once during back-to-back package installs** (not ONLYOFFICE's fault; not reproduced in
    three retries; Plan 2 gate item 1).
 8. **GUI tested under Xvfb, not under GDM,** and on the minimum feature set (open/edit/save/PDF; header/footer;
    odd/even; designation block; page-number field).
 9. **A direct-to-public-resolver path exists** (Chromium's probe to 2001:4860:4860::8888): `/etc/hosts` alone is not an
-   egress control; and the autosave copies outlive crashes and logout (limit 5, `logs/88`).
+   egress control; and the autosave copies outlive crashes and logout (limit 6, `logs/88`).
 
 ### Plan 2 gate items (requirements that come out of this spike)
 1. **fapolicyd health:** monitoring must alarm on `fapolicyd.service` failed (a failed daemon leaves the host unprotected and
@@ -845,7 +1009,7 @@ the GTK file dialog: none were ONLYOFFICE's.
    `recover/DE__*` older than N hours when no ONLYOFFICE process of that user runs, and at logout/revocation), because
    the measurements show the close path alone does not cover `kill -9`, a crash or a killed session, and nothing else
    removes the copy. The copies must also be treated as CUI by the working-folder rules (marking, audit, backup exclusion
-   or protection); the sweep must log what it removes (ledger/Wazuh). **Trade-off:** `recover/` is also the editor's crash recovery, so a blanket sweep deletes unsaved CUI edits that "Recover" could restore; the sweep must remove only copies of closed or abandoned sessions (no live ONLYOFFICE process of that user, or a stated age), never a live session's.
+   or protection); the sweep must log what it removes (ledger/Wazuh). **Trade-off:** `recover/` is also the editor's crash recovery, so a blanket sweep deletes unsaved CUI edits that "Recover" could restore; the sweep must remove only copies of closed or abandoned sessions (no live ONLYOFFICE process of that user **and** older than N hours), never a live session's.
 3. **Per-application egress control, not hosts alone:** an nftables/firewalld rule that drops all workstation egress except
    the site server (the CHP workstation role already has the site zone) and blocks DNS to anything but the site resolver
    (UDP/TCP 53 and DoT/DoH ports, IPv4 and IPv6), ideally per-uid or per-cgroup for the editor; keep the `/etc/hosts` block

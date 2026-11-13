@@ -8,6 +8,7 @@ Nov 12 19:09:02 iso5-dcli.docs.lab.test fapolicyd[51129]: It looks like there wa
 active
 after: active
 Nov 12 19:09:02 iso5-dcli.docs.lab.test fapolicyd[51129]: It looks like there was an update of the system... Syncing DB.
+# ^ (label added in Task 9) carried over from trial 1: the same 19:09:02 line, before trial 2 started at 19:09:23; not a sync of trial 2.
 --- trial 3 19:09:44
 active
   mc-1:4.8.26-5.el9.0.1.x86_64                                                  
@@ -19,3 +20,4 @@ Nov 12 19:09:45 iso5-dcli.docs.lab.test fapolicyd[51129]: It looks like there wa
 # probably already installed: trial 2 was most likely a no-op. Two of the three trials (1 and 3) show a trust sync; a per-window
 # grep for "Cannot|exited|failed" (19:08:50-19:10:30) found no error line. The two installs inside a trial were ~1-2 s apart,
 # the trials ~20 s apart; the original failure came on a transaction ~90 s after the first. Not reproduced, not ruled out.
+# The output of that per-window grep was not saved; only its result (no match) is recorded here.

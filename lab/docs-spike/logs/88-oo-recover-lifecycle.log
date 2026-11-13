@@ -5,6 +5,7 @@ A. clean close of the tab, "No" to "save the changes?" (docx open, unsaved edit)
    (ctrl+q did nothing in the Xvfb session; the tab close button was used.)
 B. kill -9 of DesktopEditors + editors_helper with an unsaved edit: recover/ = 5 files (copy + Editor.bin + changes0.json containing the edit). KEPT.
    Next launch shows a "Recover" list with the document; the copy stays until the user acts on it (no timeout seen).
+   (Added in Task 9) "No timeout seen" = ~5 min, inside the 19:10-19:15 window in the header line; the start and end of this observation itself were not recorded.
 C. logout: session 454 scope (app started with setsid in that ssh session): `loginctl terminate-session` did not stop the app (KillUserProcesses is the default `no`), copy kept;
    then `systemctl kill --signal=SIGKILL session-454.scope`: app gone, recover/ = 4 files (copy + Editor.bin...). KEPT.
 Also kept indefinitely: recents.xml (full paths of every file opened) and the Chromium cache/profile.
