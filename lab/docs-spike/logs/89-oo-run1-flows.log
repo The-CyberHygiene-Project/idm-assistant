@@ -1,0 +1,5 @@
+# Task 3 fix 3: what the run-1 flows to 192.168.100.53 were (iso5-dcli, 2026-11-12)
+- 5905 packets .54:53391 -> .53:1514 ("fujitsu-dtcns" is nmap's name for 1514/tcp): `ss -tnp` on the workstation: ESTAB 192.168.100.54:53391 192.168.100.53:1514 users:(("wazuh-agentd",pid=34169)) = the Wazuh agent to the lab server's manager. Same source port 53391 as the capture.
+- 12 packets .54 -> .53:443 at 18:52:38.67 (+ DNS A/AAAA idm.docs.lab.test at 18:52:38.674): kanidm-unixd -> uri = "https://idm.docs.lab.test" (/etc/kanidm/config; idm.docs.lab.test = 192.168.100.53). Same second as the tuned-ppd AVC that touched /run/kanidm-unixd/sock and a setroubleshoot kanidm line. System login/identity traffic, not ONLYOFFICE (launched 18:52:40, after it).
+- 20 packets to :53 = DNS to the site resolver (.53): idm.docs.lab.test, SAMBA (gio/GTK file dialog browsing), and the 6 download.onlyoffice.com lookups; 12 mDNS; 3 NetBIOS-NS (GTK file dialog).
+- capture point: tcpdump on aero's tap for iso5-dcli, so it records what the workstation emits (an unroutable packet is still seen); 0 non-multicast packets addressed outside 192.168.100.0/24, IPv4 or IPv6.

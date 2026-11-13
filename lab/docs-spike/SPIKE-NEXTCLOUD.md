@@ -687,9 +687,9 @@ mismatch as finding 2, not explained.
 
 **VERDICT: works with limits.** ONLYOFFICE Desktop Editors 10.0.0 (build 169) installs, runs, opens, edits, saves and
 exports PDF on **iso5-dcli** (Rocky 9.8, FIPS mode on, SELinux Enforcing, fapolicyd, CUI profile, site docs.lab.test)
-with **no crash, no FIPS or crypto error, no fapolicyd denial and no AVC from the application** (2026-11-12; logs
+with **no crash, no FIPS or crypto error, 0 fapolicyd denials from the app and 0 AVCs from the app** (the tuned-ppd AVCs in the window are unrelated) (2026-11-12; logs
 `78`-`86`, test documents and outputs in `editor/`). The limits are below; none stopped the editing, saving or
-PDF-export path. The owner decides (spec §4); the limits that matter most are 1, 2, 4 and 5.
+PDF-export path. The owner decides (spec §4); the limits that matter most are 1, 2, 4, 5, 7 and 9, and the **Plan 2 gate items** at the end of this section.
 
 ### What was tested, and how
 | Check | Result | How |
@@ -731,7 +731,7 @@ changes, templates inside the editor (the CUI template library is Plan 2 work), 
 - **SELinux:** files are `usr_t`, processes run `unconfined_t` (the user is unconfined): **zero AVC denials** from the
   application. SELinux therefore constrains it by nothing; this is a property of the user, not of the package.
 - **fapolicyd:** the RPM's files are trusted through the rpmdb backend (fapolicyd's trust DB had 2235 ONLYOFFICE
-  entries after the sync); the application, the CEF helpers and `x2t` ran with **0 denials** (after the daemon
+  entries after the sync); the application, the CEF helpers and `x2t` ran with **0 denials from the app** (after the daemon
   restart noted below: `fapolicyd-cli --check-status` `Denied accesses: 0`, `Permissive: false`; `ausearch -m FANOTIFY`
   shows only my own `ldd` runs (ld.so exec is refused: `logs/79`) and one Xvfb exec, below). Both counters were read,
   as Task 1 requires.
@@ -739,18 +739,16 @@ changes, templates inside the editor (the CUI template library is Plan 2 work), 
   helpers), so Task 1 finding 1 (own mount namespace is not checked while `allow_filesystem_mark = 0`) does not apply
   to it: its file opens were genuinely checked, and passed. It does not bypass the policy; it also does not rely on it.
   (I could not read `/etc/fapolicyd/fapolicyd.conf` as chpadmin; the setting is the RHEL default per Task 1.)
-- **fapolicyd daemon failure during package install (not ONLYOFFICE-specific, but seen while installing it):** the
+- **fapolicyd daemon failure during package install (not ONLYOFFICE-specific, but seen while installing it; PLAN 2 GATE item 1):** the
   second `rpm` transaction (installing Xvfb for GUI testing, 1 minute after the ONLYOFFICE install) triggered fapolicyd's
   rpm-plugin trust sync, which logged `Cannot delete database (1)` / `Cannot update trust database!` and the daemon
   **exited (failed)** at 18:51:47; the freshly installed `/usr/bin/Xvfb` was denied (`obj_trust=no`) in that window;
-  `systemctl start fapolicyd` rebuilt the DB and fixed it. The first sync (the ONLYOFFICE install) was fine. Not
-  reproduced; cause not isolated (two syncs 90 s apart, with my `fapolicyd-cli --dump-db` run concurrently is the
+  `systemctl start fapolicyd` rebuilt the DB and fixed it. The first sync (the ONLYOFFICE install) was fine. **Retried (`logs/87`): three back-to-back pairs of `dnf install` of small packages (no concurrent `--dump-db`) did not reproduce it; fapolicyd stayed active and synced cleanly each time.** Cause not isolated (two syncs 90 s apart, with my `fapolicyd-cli --dump-db` run concurrently is the
   only unusual thing). **A failed fapolicyd leaves the host unprotected until someone notices** (the monitoring should
   alarm on `fapolicyd.service` failed); Plan 2 should test "install two packages back to back" on the workstation role.
 - **User data (all under `~/.local/share/onlyoffice` and `~/.config/onlyoffice`, 14 MB):** font cache, Chromium profile,
   recents list and an **auto-recovery copy of every open document** under `data/recover/` (`Editor.bin` + a copy of the
-  file). These copies are CUI and stay in the user's home (LUKS2); the CUI-folder rules and the working-folder
-  cleanup (`chp-site doc`) must treat that directory as CUI too (not examined: when `recover/` is emptied).
+  file). These copies are CUI. **Lifecycle measured (`logs/88`):** a clean tab close (discarding changes) empties `recover/`; **`kill -9` keeps the copy and the unsaved edit** (and the next launch offers "Recover"); **a killed or logged-out session keeps it**; no timeout was seen. `recents.xml` (paths of every opened file) and the Chromium profile also persist. **These copies sit outside the CUI folder's labelling and cleanup rules** (no `CUI_` name, no tag, not under `~/chp-docs-work`), and **a logged-off, locked-out or revoked user leaves them behind** in a home directory that survives (home is 0700, on LUKS2, but readable by root/backup and by the next admin). **PLAN 2 GATE item 2:** cleanup is a requirement (see below).
 
 ### FIPS (what can and cannot be determined)
 `fips-mode-setup --check`: "FIPS mode is enabled."; `/proc/sys/crypto/fips_enabled` = 1; crypto policy `FIPS`
@@ -801,6 +799,19 @@ Captured on aero (`tcpdump` on the workstation's tap) during the edit sessions, 
   stored in the Chromium profile (Local Storage), not in `DesktopEditors.conf`: the first-run needs it pre-seeded, or
   the entries stay (harmless without the network, but visible). `--lock-portals` exists on the command line.
 
+### Direct-resolver path and what the run-1 flows were (`logs/89`)
+The `strace` of a launch shows `connect()` to **2001:4860:4860::8888 port 53** (Google public DNS, IPv6) failing `ENETUNREACH`.
+That is Chromium's network probe; **no packet was ever sent** to any public address in any run (0 non-multicast
+packets addressed outside 192.168.100.0/24, IPv4 or IPv6, measured at the workstation's tap, so unroutable packets would
+still have shown), and the app **did** honour `/etc/hosts` (the vendor names went to `0.0.0.0`). But it is a
+**direct-to-public-resolver code path that does not go through `/etc/hosts` or the site resolver**; it failed only because
+the lab has no IPv6 route. The same applies to the first run's and the Templates page's lookups: they went through the site
+resolver (REFUSED), not directly. So **"0 DNS queries / 0 packets out of the lab net" holds for this lab's routing**; it
+is not a proof for a site with a default IPv6 route or open DNS egress. The 5,905 packets to 192.168.100.53 port 1514
+were the **Wazuh agent** (`wazuh-agentd`, `ss -tnp`), the 12 to port 443 were **kanidm-unixd** to `https://idm.docs.lab.test`
+(login/identity, the same second as the kanidm AVC), and the 20 DNS/12 mDNS/3 NetBIOS packets were the system resolver and
+the GTK file dialog: none were ONLYOFFICE's.
+
 ### Limits (the list behind "works with limits")
 1. **Vendor RPM from the "latest" link is unsigned;** only the yum-repo copy is signed (above). Re-signing under our key
    is needed (spec already says signed).
@@ -820,9 +831,27 @@ Captured on aero (`tcpdump` on the workstation's tap) during the edit sessions, 
    Chromium on a CUI workstation: owner-level risk statement.
 6. **Heavy and not constrained by SELinux:** 1.2 GB, runs `unconfined_t`; it uses `~/.local/share/onlyoffice` for
    an autosave copy of every open CUI document.
-7. **The fapolicyd daemon failed once during back-to-back package installs** (not ONLYOFFICE's fault; see above).
+7. **The fapolicyd daemon failed once during back-to-back package installs** (not ONLYOFFICE's fault; not reproduced in
+   three retries; Plan 2 gate item 1).
 8. **GUI tested under Xvfb, not under GDM,** and on the minimum feature set (open/edit/save/PDF; header/footer;
    odd/even; designation block; page-number field).
+9. **A direct-to-public-resolver path exists** (Chromium's probe to 2001:4860:4860::8888): `/etc/hosts` alone is not an
+   egress control; and the autosave copies outlive crashes and logout (limit 5, `logs/88`).
+
+### Plan 2 gate items (requirements that come out of this spike)
+1. **fapolicyd health:** monitoring must alarm on `fapolicyd.service` failed (a failed daemon leaves the host unprotected and
+   denied newly installed binaries meanwhile), and the workstation role needs a "two package installs back to back" test
+   in the build gates. (Not reproduced in three retries; the failure was seen once.)
+2. **Autosave cleanup:** `recover/` (and `recents.xml`) must be cleaned: both a **close hook** (`chp-site doc` closes/publishes
+   and removes the document's `DE__*` dir and its recents entry) **and a periodic sweep** (a systemd timer that deletes
+   `recover/DE__*` older than N hours when no ONLYOFFICE process of that user runs, and at logout/revocation), because
+   the measurements show the close path alone does not cover `kill -9`, a crash or a killed session, and nothing else
+   removes the copy. The copies must also be treated as CUI by the working-folder rules (marking, audit, backup exclusion
+   or protection); the sweep must log what it removes (ledger/Wazuh).
+3. **Per-application egress control, not hosts alone:** an nftables/firewalld rule that drops all workstation egress except
+   the site server (the CHP workstation role already has the site zone) and blocks DNS to anything but the site resolver
+   (UDP/TCP 53 and DoT/DoH ports, IPv4 and IPv6), ideally per-uid or per-cgroup for the editor; keep the `/etc/hosts` block
+   and the site resolver REFUSE as defence in depth. Test it with the same tap capture, with an IPv6 default route present.
 
 ### Not done
 - LibreOffice comparison: **not run**, because the verdict is not "does not work".
