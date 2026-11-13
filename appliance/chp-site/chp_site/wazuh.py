@@ -4,6 +4,7 @@
 """Wazuh hardening (security bundle spec §4): pure transforms of Wazuh's installed default ossec.conf, the agent keys,
 the bind-mounted data directory and the firewall rules. Nothing here runs a command."""
 import ipaddress
+import re as _re
 import secrets
 import xml.etree.ElementTree as ET
 
@@ -367,6 +368,8 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
 
 
 CANARY_RULE = "100608"
+KANIDM_TOTP_RULE = "100630"                      # in the same rules file, but Kanidm's, not NextCloud's
+NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE} | {CANARY_RULE}
 
 
 def canary_rules(fileid):

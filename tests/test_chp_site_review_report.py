@@ -380,3 +380,17 @@ def test_only_listed_nextcloud_rules_are_nextcloud_intrusions():
          alert("100609", 12, "srv1", START + 3700, {"remoteAddr": "192.0.2.51"}, desc="canary enabled")]
     d = build(healthy(a))
     assert {i["source"]: i["kind"] for i in d["intrusions"] if i["target"] == "srv1"} == {None: "wazuh", "192.0.2.51": "nextcloud"}
+
+
+def test_nextcloud_rule_set_comes_from_the_defined_rules():
+    from chp_site import wazuh as w
+    assert "100620" in rr.NC_RULES and "100608" in rr.NC_RULES and "100630" not in rr.NC_RULES
+    assert rr.NC_RULES == {i for i in w.NEXTCLOUD_RULE_IDS}
+
+
+def test_egress_100620_is_a_nextcloud_intrusion():
+    a = alert("100620", 12, "srv1", START + 3600, {}, desc="NextCloud egress block tripped")
+    d = build(healthy([a]))
+    assert [i["kind"] for i in d["intrusions"]] == ["nextcloud"]
+    a = alert("100630", 12, "srv1", START + 3600, {}, desc="Kanidm totp")
+    assert [i["kind"] for i in build(healthy([a]))["intrusions"]] == ["wazuh"]

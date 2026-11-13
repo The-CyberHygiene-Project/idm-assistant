@@ -10,6 +10,7 @@ import json
 from datetime import date, datetime, time as dtime, timedelta
 
 from . import review_rules as rr
+from . import wazuh as _wazuh
 
 RECORD_RULE = "100520"
 RECORD_EVERY = 600                              # the hosts' record timer (10 minutes)
@@ -20,7 +21,7 @@ DAY = 86400
 # Items an existing monitor check already alerts on: shown in the report, never alerted again (spec §6).
 SCANS = (("yara_recent", 300, "73-yara-scan"), ("yara_full", 7 * DAY, "73-yara-scan"),
          ("suricata_stats", 60, "74-suricata"), ("aide_check", DAY, "61-aide-stale"))
-NC_RULES = {str(i) for i in range(100601, 100620)}            # wazuh.py NEXTCLOUD_RULES (incl. the canary rules)
+NC_RULES = _wazuh.NEXTCLOUD_RULE_IDS                           # derived from the rules wazuh.py defines
 FUTURE = 300                                                    # a timestamp this far ahead is a clock fault
 KANIDM_CERTS = "/etc/pki/kanidm/"
 
@@ -300,7 +301,7 @@ def _documents_items(hosts, recs, end):
         ca = sum(int(x["documents"].get("ca") or 0) for x in withdoc)
         out.append(_item(name, "nextcloud refusals", rr.OK,
                          f"{cr} contain refusals, {sa} share attempts today; canary: {ca} refused as expected",
-                         "100601-100611"))
+                         "nextcloud rules"))
     return out
 
 
