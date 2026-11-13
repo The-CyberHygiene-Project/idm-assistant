@@ -85,10 +85,15 @@ class Run:
             (p / "chain.pem").write_text("CERT")
             (p / "key.pem").write_text("KEY")
             return R()
-        if argv[:2] == ["fapolicyd-cli", "--file"] and argv[2] == "add":
+        if argv[:2] == ["fapolicyd-cli", "--file"] and argv[2] in ("add", "update"):
+            # fapolicyd records "<path> <size> <sha256>" of the file as it is at that moment
+            import hashlib
             t = self.root / "etc/fapolicyd/trust.d/nextcloud"
             t.parent.mkdir(parents=True, exist_ok=True)
-            t.write_text(f"{argv[3]} 0 0\n")
+            f = self.root / argv[3].lstrip("/")
+            b = f.read_bytes() if f.exists() else b""
+            lines = [ln for ln in (t.read_text().splitlines() if t.exists() else []) if ln.split()[:1] != [argv[3]]]
+            t.write_text("\n".join(lines + [f"{argv[3]} {len(b)} {hashlib.sha256(b).hexdigest()}"]) + "\n")
             return R()
         if argv[:2] == ["fapolicyd-cli", "--check-status"]:
             return R(0, "Allowed accesses: 100\nDenied accesses: 0\n")
@@ -845,7 +850,7 @@ def test_config_php_trust_refreshed_after_the_last_write(tmp_path):
     assert _index(tl, lambda c: c == ["systemctl", "restart", "fapolicyd"], "restart") > u
     assert not [c for c in tl[u:] if c[:1] == ["OCC"]]         # no occ call (no config.php write) after the update
     # a run that changes config.php (a setting drifted) refreshes the entry and restarts fapolicyd
-    e.nc.sysconf[("updatechecker",)] = "true"; e.nc._cfg()
+    e.nc.sysconf[("maintenance",)] = "false"; e.nc._cfg()       # NextCloud wrote a key enable does not manage
     n = len(e.run.calls)
     e.enable()
     assert _upd(e.run.calls[n:]) and ["systemctl", "restart", "fapolicyd"] in e.run.calls[n:]
@@ -896,3 +901,78 @@ def test_unwritable_marker_is_a_plain_error(tmp_path):
     blocker.write_text("not a directory")                       # the marker's directory cannot be made
     with pytest.raises(SiteError, match="restart-pending"):
         e.enable()
+
+
+# ---------- round 3: the trust entry is compared with the file itself ----------
+
+class FailTrustUpdate(Run):
+    def __call__(self, argv, **kw):
+        if argv[:3] == ["fapolicyd-cli", "--file", "update"]:
+            self.calls.append(list(argv))
+            import subprocess
+            raise subprocess.CalledProcessError(1, argv)
+        return super().__call__(argv, **kw)
+
+
+def test_failed_trust_update_is_retried_on_rerun(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.nc.sysconf[("maintenance",)] = "false"; e.nc._cfg()       # drift; this run's trust update then fails
+    e.run.__class__ = FailTrustUpdate
+    with pytest.raises(SiteError):
+        e.enable()
+    e.run.__class__ = Run
+    n = len(e.run.calls)
+    e.enable()                                                  # config.php is already at its new content
+    assert _upd(e.run.calls[n:]) and ["systemctl", "restart", "fapolicyd"] in e.run.calls[n:]
+    assert D._trust_entry(e.root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP) == \
+        D._size_sha(e.root / "etc/nextcloud/config.php")
+
+
+def test_runtime_drift_between_runs_is_caught(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.nc.sysconf[("instanceid",)] = "rotated"; e.nc._cfg()      # NextCloud rewrote config.php at run time
+    n = len(e.run.calls)
+    e.enable()
+    assert _upd(e.run.calls[n:])
+
+
+def test_unparseable_trust_entry_is_stale(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    (e.root / "etc/fapolicyd/trust.d/nextcloud").write_text("/etc/nextcloud/config.php garbage\n")
+    n = len(e.run.calls)
+    e.enable()
+    assert _upd(e.run.calls[n:])
+
+
+def test_unwritable_pending_secret_is_a_plain_error(tmp_path):
+    e = Env(tmp_path)
+    e.pending.mkdir()
+    (e.pending / "documents").write_text("not a directory")
+    with pytest.raises(SiteError, match="break-glass secret file"):
+        e.enable()
+    assert not [c for c in e.nc.calls if c[0] == "user:add"]
+
+
+def test_change_then_later_failure_then_rerun_refreshes_trust(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.nc.sysconf[("maintenance",)] = "false"; e.nc._cfg()       # config.php changed...
+    (e.root / D.CERT).unlink()                                  # ...and this run fails before the trust step
+
+    class FailCert(Run):
+        def __call__(self, argv, **kw):
+            if argv[:1] == ["/usr/libexec/chp/cert-renew-nextcloud"]:
+                import subprocess
+                raise subprocess.CalledProcessError(1, argv)
+            return super().__call__(argv, **kw)
+    e.run.__class__ = FailCert
+    with pytest.raises(SiteError):
+        e.enable()
+    assert not _upd(e.run.calls)[1:]                             # only the first run's update so far
+    e.run.__class__ = Run
+    n = len(e.run.calls)
+    e.enable()
+    assert _upd(e.run.calls[n:])

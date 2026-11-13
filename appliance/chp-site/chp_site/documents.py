@@ -25,6 +25,7 @@ EGRESS_ADDR = "etc/chp/nextcloud-egress-addr.nft"
 PGDATA = "var/lib/pgsql/data"
 DATA = "/data/nextcloud"
 OIDC_SECRET = "/etc/nextcloud/oidc-secret"
+CONFIG_PHP = "/etc/nextcloud/config.php"
 SITE_ROOT_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
 CERT = "etc/pki/nextcloud/chain.pem"
 FSMARK_PENDING = "var/lib/chp/fapolicyd-restart-pending"
@@ -259,12 +260,30 @@ def _differs(path, text, mode):
         raise SiteError(f"could not read {path} ({e.strerror or e})") from None
 
 
-def _sha(path):
+def _size_sha(path):
+    """(size, sha256) of a file, None when it is absent."""
     import hashlib
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        if not path.exists():
+            return None
+        b = path.read_bytes()
+        return str(len(b)), hashlib.sha256(b).hexdigest()
     except OSError as e:
         raise SiteError(f"could not read {path} ({e.strerror or e})") from None
+
+
+def _trust_entry(trust_file, target):
+    """The (size, sha256) fapolicyd's trust file records for `target`; None when absent or unreadable as such
+    (treated as stale)."""
+    try:
+        text = trust_file.read_text() if trust_file.exists() else ""
+    except OSError as e:
+        raise SiteError(f"could not read {trust_file} ({e.strerror or e})") from None
+    for ln in text.splitlines():
+        f = ln.split()
+        if len(f) == 3 and f[0] == target and f[1].isdigit() and re.fullmatch(r"[0-9a-f]{64}", f[2]):
+            return f[1], f[2]
+    return None
 
 
 def _put_r(root, path, text, mode, units, chown=None):
@@ -365,7 +384,6 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     record("documents-enable", {"host": host, "step": "start", "fqdn": fqdn})   # before any change; refuses if it fails
 
     cfg = _p(root, "etc/nextcloud/config.php")
-    cfg_before = _sha(cfg)                            # fapolicyd's trust entry must follow every rewrite of it
     # 1. packages (the signed chp repo); a transaction this run means fapolicyd restarts at the end (never inside one)
     run(["dnf", "-y", "--enablerepo=chp", "module", "enable", "php:8.3", "postgresql:16"], check=True,
         capture_output=True, text=True)
@@ -449,8 +467,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
             "--data-dir", f"{DATA}/data")
     # fapolicyd: config.php is PHP NextCloud itself writes -> a path trust entry (spike, trust step)
     tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
-    trust_added = not (tf.exists() and "/etc/nextcloud/config.php" in tf.read_text())
-    if trust_added:
+    if not (tf.exists() and CONFIG_PHP in tf.read_text()):
         _mark(root, ["fapolicyd"])
         run(["fapolicyd-cli", "--file", "add", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
         run(["fapolicyd-cli", "--update"], check=True)
@@ -580,13 +597,14 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     _restart(run, root, ["php-fpm", "httpd"])
     step("services", f"started: {', '.join(UNITS)} (HTTPS {PORT}, LAN {cidr} only)")
 
-    # 15a. config.php's trust entry follows its content (spike §Under the CUI profile fix 2): the settings and apps
-    # steps rewrite it after the entry was added, so refresh the entry after the last occ call whenever it changed
-    if trust_added or _sha(cfg) != cfg_before:
+    # 15a. config.php's trust entry follows its content (spike §Under the CUI profile fix 2). Stateless: the entry
+    # fapolicyd holds (trust.d/nextcloud: "<path> <size> <sha256>") is compared with the file itself on every run,
+    # so a failed update in an earlier run, or NextCloud rewriting config.php between runs, is caught and fixed.
+    if _trust_entry(tf, CONFIG_PHP) != _size_sha(cfg):
         _mark(root, ["fapolicyd"])
-        run(["fapolicyd-cli", "--file", "update", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
+        run(["fapolicyd-cli", "--file", "update", CONFIG_PHP, "--trust-file", "nextcloud"], check=True)
         run(["fapolicyd-cli", "--update"], check=True)
-        step("trust", "fapolicyd trust entry for /etc/nextcloud/config.php refreshed (its content changed)")
+        step("trust", f"fapolicyd trust entry for {CONFIG_PHP} refreshed (it did not match the file)")
 
     # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or
     # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet
@@ -624,14 +642,18 @@ def _pending_secret(path, secret=None):
         if v:
             return v
     pw = secret or _s.token_urlsafe(32)
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(path.parent, 0o700)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(f"# NextCloud break-glass admin (sign in at /login?direct=1)\nNEXTCLOUD_ADMIN_USER={ADMIN}\n"
-                f"NEXTCLOUD_ADMIN_PASSWORD={pw}\n")
-        f.flush()
-        os.fsync(f.fileno())
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(path.parent, 0o700)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(f"# NextCloud break-glass admin (sign in at /login?direct=1)\nNEXTCLOUD_ADMIN_USER={ADMIN}\n"
+                    f"NEXTCLOUD_ADMIN_PASSWORD={pw}\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError as e:                              # nothing was made yet: the account needs this file first
+        raise SiteError(f"could not write the break-glass secret file {path} ({e.strerror or e}); no account was "
+                        "made; fix it, then re-run chp-site documents enable") from None
     return pw
 
 
@@ -695,7 +717,11 @@ def _wazuh(root, run, chown):
         why = (r.stderr or r.stdout or "").strip()[:200]
         if changed:
             if old_rules is None:
-                rules.unlink()
+                try:
+                    rules.unlink()
+                except OSError as e:
+                    raise SiteError(f"the new NextCloud rules failed wazuh-analysisd -t and could not be removed "
+                                    f"({rules}: {e.strerror or e}); remove that file before restarting Wazuh") from None
             else:
                 _put(rules, old_rules, 0o640, grp)
             _put(conf, old_conf, 0o640, grp)
