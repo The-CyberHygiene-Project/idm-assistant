@@ -40,6 +40,8 @@ def _is_today(role, size_bytes):
 
 def plan(role, size_bytes):
     """(volumes, grow_root). grow_root is True only for today's layout (root takes the rest)."""
+    if role not in ("server", "client"):
+        raise ValueError(f"unknown role {role!r}: expected 'server' or 'client'")
     if _is_today(role, size_bytes):
         return [Vol(m, n, mib, "") for m, n, mib in _TODAY], True
     vols = _fixed(role)

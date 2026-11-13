@@ -10,6 +10,12 @@ def test_short_lived_cert_attention_below_30_percent_and_immediate_below_quarter
     assert r.cert_state(nb, na, 19 * H)[:2] == ("ATTENTION", True)    # 5 h left < 6 h
 
 
+def test_cert_exactly_30_percent_left_is_ok_just_below_is_attention():
+    na = 24 * H                                                  # 30 % of 24 h = 25920 s = 7.2 h
+    assert r.cert_state(0, na, na - 25920)[:2] == ("OK", False)
+    assert r.cert_state(0, na, na - 25919)[:2] == ("ATTENTION", False)
+
+
 def test_healthy_kanidm_cert_is_ok_until_renewal_is_missed():
     nb, na = 0, 24 * H          # renewed by the timer when 8 h are left, so 8..24 h left is healthy
     assert r.cert_state(nb, na, 14 * H)[:2] == ("OK", False)          # 10 h left

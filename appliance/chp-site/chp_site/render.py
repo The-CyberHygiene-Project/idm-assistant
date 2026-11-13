@@ -5,8 +5,8 @@
 import hashlib
 import os
 
-from .layout import plan
 from .hosts import server_of
+from .layout import plan
 from .sitevars import ANCHOR, values
 
 

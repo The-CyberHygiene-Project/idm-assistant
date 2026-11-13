@@ -27,7 +27,7 @@ def cert_state(not_before, not_after, now):
         detail = f"{_span(left)} left of {_span(life)}"
         if left < life / 4:
             return ATTENTION, True, detail
-        return (ATTENTION if left < life * 0.3 else OK), False, detail
+        return (ATTENTION if left * 10 < life * 3 else OK), False, detail
     detail = f"{int(left // DAY)} days left"
     if left <= 7 * DAY:
         return ATTENTION, True, detail

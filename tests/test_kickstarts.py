@@ -53,6 +53,21 @@ def test_kickstart_with_snippets_validates(tmp_path, role, host):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+@pytest.mark.skipif(shutil.which("uvx") is None, reason="needs uvx (pykickstart)")
+@pytest.mark.parametrize("role,host,size", [("server", 0, 2_000_398_934_016), ("client", 1, 512 * 2**30)])
+def test_ksvalidator_accepts_the_sized_layouts(tmp_path, role, host, size):
+    site = parse_site(GOOD); hs = parse_hosts(HOSTS, site)
+    snip = {"misc": misc_ks(site), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
+            "disk": disk_ks("vda", size, role, "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
+            "boot": boot_ks("grub.pbkdf2.sha512.10000.AA.BB")}
+    t = (KS / f"{role}.ks").read_text()
+    for k, v in snip.items():
+        t = t.replace(f"%include /tmp/chp/{k}.ks", v.rstrip("\n"))
+    f = tmp_path / "ks.cfg"; f.write_text(t)
+    r = subprocess.run(["uvx", "--from", "pykickstart", "ksvalidator", "-v", "RHEL9", str(f)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
 @pytest.mark.parametrize("role", ["server", "client"])
 def test_nochroot_post_stops_on_failure_and_marks_the_escrow_completed(role):   # final review I1 + Minor 7
     t = (KS / f"{role}.ks").read_text()

@@ -1,4 +1,6 @@
-from chp_site.layout import note, plan, unallocated_gib
+import pytest
+
+from chp_site.layout import CLIENT_TODAY_BELOW, GIB, OVERHEAD_MIB, SERVER_TODAY_BELOW, note, plan, unallocated_gib
 
 
 def gib(vols): return {v.mount: v.mib // 1024 for v in vols}
@@ -45,8 +47,22 @@ def test_mount_options():
     assert o["/data"] == "nodev,nosuid" and o["/backup"] == "nodev,nosuid,noexec"
 
 
-def test_volumes_always_fit():
-    for role in ("server", "client"):
+def test_unknown_role_is_refused():
+    with pytest.raises(ValueError, match="workstation"):
+        plan("workstation", 512 * 2**30)
+
+
+def test_sized_layouts_leave_real_headroom():   # replaces the tautological test_volumes_always_fit
+    for role, floor, today_below in (("server", 0.20, SERVER_TODAY_BELOW), ("client", 0.70, CLIENT_TODAY_BELOW)):
         for b in range(100 * 10**9, 8 * 10**12, 37 * 10**9):
-            vols, _ = plan(role, b)
-            assert sum(v.mib for v in vols) <= b // 2**20 - 3072 - 64
+            vols, grow = plan(role, b)
+            usable = b // 2**20 - OVERHEAD_MIB
+            assert sum(v.mib for v in vols) <= usable
+            if b < today_below:
+                assert grow
+                continue
+            fixed = sum(v.mib for v in vols if v.mount not in ("/home", "/data", "/backup"))
+            r = usable - fixed
+            free = usable - sum(v.mib for v in vols)
+            assert free >= floor * r, (role, b, free, r)
+            assert free >= GIB, (role, b)
