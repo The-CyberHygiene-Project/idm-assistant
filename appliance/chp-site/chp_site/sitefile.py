@@ -127,7 +127,7 @@ def parse_site(text):
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
              "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY",
              "COLLECTOR_SSH_PUBKEY", "BASELINE_DELEGATES", "SECURITY_ADDONS", "SECURITY_ALERT_LEVEL",
-             "REVIEW_DELEGATES"}
+             "REVIEW_DELEGATES", "DOCUMENTS", "DOCUMENTS_BACKUP_DAYS"}
     for k in raw:
         if k not in known:
             raise SiteError(f"site.conf: unknown key {k}")
@@ -190,6 +190,16 @@ def parse_site(text):
     if sa not in ("yes", "no"):
         raise SiteError("SECURITY_ADDONS: yes or no")
     s["SECURITY_ADDONS"] = sa
+    dc = raw.get("DOCUMENTS", "no") or "no"               # ISO 0.7.0 document server: additive, default off
+    if dc not in ("yes", "no"):
+        raise SiteError("DOCUMENTS: yes or no")
+    if dc == "yes" and sa != "yes":
+        raise SiteError("DOCUMENTS=yes needs SECURITY_ADDONS=yes (the document server is monitored by the security add-on)")
+    s["DOCUMENTS"] = dc
+    bd = raw.get("DOCUMENTS_BACKUP_DAYS", "14") or "14"
+    if not (bd.isdigit() and 1 <= int(bd) <= 365):
+        raise SiteError("DOCUMENTS_BACKUP_DAYS: a number of days from 1 to 365 (default 14)")
+    s["DOCUMENTS_BACKUP_DAYS"] = int(bd)
     lv = raw.get("SECURITY_ALERT_LEVEL", "10") or "10"
     if not (lv.isdigit() and 3 <= int(lv) <= 15):
         raise SiteError("SECURITY_ALERT_LEVEL: a number from 3 to 15 (Wazuh rule level; default 10)")

@@ -70,6 +70,8 @@ def zone(site, hosts, serial):
     for h in hosts:
         lines.append(f"{h.hostname:<12} IN A {h.ip}")
     lines += [f"{'idm':<12} IN A {v['SERVER_IP']}", f"{'ca':<12} IN A {v['SERVER_IP']}"]
+    if site.get("DOCUMENTS") == "yes":
+        lines.append(f"{'files':<12} IN A {v['SERVER_IP']}")
     return "\n".join(lines) + "\n"
 
 

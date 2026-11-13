@@ -184,3 +184,29 @@ def test_review_delegates_parsed_and_optional():                  # review spec 
     assert parse_site(GOOD + "REVIEW_DELEGATES=Deputy One, Second Reviewer\n")["REVIEW_DELEGATES"] == ["Deputy One", "Second Reviewer"]
     with pytest.raises(SiteError, match="REVIEW_DELEGATES: bad name"):
         parse_site(GOOD + "REVIEW_DELEGATES=ok, " + "x" * 65 + "\n")      # as BASELINE_DELEGATES: names of 64 at most
+
+
+# ---- ISO 0.7.0 DOCUMENTS ----
+def test_documents_key_defaults_off():
+    s = parse_site(GOOD)
+    assert s["DOCUMENTS"] == "no" and s["DOCUMENTS_BACKUP_DAYS"] == 14
+
+
+def test_documents_parses_with_security_addons():
+    s = parse_site(GOOD + "SECURITY_ADDONS=yes\nDOCUMENTS=yes\nDOCUMENTS_BACKUP_DAYS=30\n")
+    assert s["DOCUMENTS"] == "yes" and s["DOCUMENTS_BACKUP_DAYS"] == 30
+
+
+def test_documents_requires_security_addons():
+    with pytest.raises(SiteError, match="DOCUMENTS=yes needs SECURITY_ADDONS=yes"):
+        parse_site(GOOD + "DOCUMENTS=yes\n")
+    with pytest.raises(SiteError, match="DOCUMENTS: yes or no"):
+        parse_site(GOOD + "DOCUMENTS=maybe\n")
+
+
+@pytest.mark.parametrize("v", ["0", "366", "abc", "-1"])
+def test_backup_days_bounds(v):
+    with pytest.raises(SiteError, match="DOCUMENTS_BACKUP_DAYS"):
+        parse_site(GOOD + f"DOCUMENTS_BACKUP_DAYS={v}\n")
+    assert parse_site(GOOD + "DOCUMENTS_BACKUP_DAYS=1\n")["DOCUMENTS_BACKUP_DAYS"] == 1
+    assert parse_site(GOOD + "DOCUMENTS_BACKUP_DAYS=365\n")["DOCUMENTS_BACKUP_DAYS"] == 365

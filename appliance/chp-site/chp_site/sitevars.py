@@ -17,7 +17,9 @@ def values(site, hosts, client=None):
          "CLIENT_HOSTS": " ".join(h.hostname for h in hosts if h.role == "client"),
          "COLLECTOR_IP": site.get("COLLECTOR_IP", ""), "COLLECTOR_SSH_PUBKEY": site.get("COLLECTOR_SSH_PUBKEY", ""),
          "SECURITY_ADDONS": site.get("SECURITY_ADDONS", "no"),
-         "SECURITY_ALERT_LEVEL": str(site.get("SECURITY_ALERT_LEVEL", 10))}
+         "SECURITY_ALERT_LEVEL": str(site.get("SECURITY_ALERT_LEVEL", 10)),
+         "DOCUMENTS": site.get("DOCUMENTS", "no"), "DOCUMENTS_BACKUP_DAYS": str(site.get("DOCUMENTS_BACKUP_DAYS", 14)),
+         "FILES_FQDN": f"files.{d}"}
     if client:
         v.update({k: client[k] for k in ("CA_ROOT_SHA256", "SSH_CA_PUBKEY", "SSH_CA_FPR", "CACHE_PUBKEY", "KANIDM_URL")})
     return v

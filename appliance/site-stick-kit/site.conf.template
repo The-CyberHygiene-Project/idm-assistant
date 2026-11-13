@@ -62,3 +62,9 @@ SECURITY_ADDONS=no
 # It is read once, when the add-on is first enabled; to change it later, edit ALERT_LEVEL in /etc/chp/security.conf on
 # the server, then: systemctl restart chp-wazuh-alerts
 SECURITY_ALERT_LEVEL=10
+
+# Optional (0.7.0 on): the document server (Nextcloud, at https://files.<your domain>). yes = the installer sets it up
+# on the server at first boot; no (default) = the same as before. yes needs SECURITY_ADDONS=yes.
+DOCUMENTS=no
+# Optional: days of nightly document-server backups kept (1-365, default 14).
+DOCUMENTS_BACKUP_DAYS=14
