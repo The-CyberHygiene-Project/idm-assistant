@@ -11,6 +11,7 @@ namespace OCA\ChpFolderTag\Listener;
 
 use OCA\ChpFolderTag\Service\Audit;
 use OCA\ChpFolderTag\Service\Policy;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Exceptions\AbortedEventException;
@@ -70,15 +71,18 @@ class FolderGuardListener implements IEventListener {
 				$path = 'unknown';
 			}
 			$reason = 'internal error: ' . get_class($e);
-			$this->audit->event(Audit::FOLDEROP_REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $path
-				. ($target !== null ? ' -> ' . $target : ''),
-				['op' => $op, 'source' => $path, 'target' => $target, 'reason' => $reason]);
+			try {   // the refusal below must happen even when the audit write fails
+				$this->audit->event(Audit::FOLDEROP_REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $path
+					. ($target !== null ? ' -> ' . $target : ''),
+					['op' => $op, 'source' => $path, 'target' => $target, 'reason' => $reason]);
+			} catch (\Throwable $ignored) {
+			}
 			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
 		}
 	}
 
 	private function decide(Node $node, string $op, ?string $target): void {
-		if ($node instanceof Folder && $node->getDirectoryListing() !== []) {
+		if ($node instanceof Folder && $this->hasChildren($node)) {
 			$what = 'a non-empty folder';
 		} elseif ($node instanceof File && $target !== null && $this->leavesTeamFolder($node, $target) && $this->hasOldVersions($node)) {
 			$what = 'a file with old versions to another folder';
@@ -106,6 +110,29 @@ class FolderGuardListener implements IEventListener {
 	private function leavesTeamFolder(Node $node, string $target): bool {
 		$src = Policy::folderOfMount($node->getMountPoint());
 		return $src !== null && $this->policy->folderOfPath($target) !== $src;
+	}
+
+	/**
+	 * Whether the folder has any child, counted in the filecache by parent. Not the acting user's directory
+	 * listing: groupfolders ACLs hide children from it (an ACL-hidden child would make the folder look empty and
+	 * its move would hit the MD5 failure).
+	 */
+	private function hasChildren(Folder $folder): bool {
+		try {
+			$id = (int)$folder->getId();
+			if ($id <= 0) {
+				return true;   // not in the filecache yet: cannot tell (fail closed)
+			}
+			$q = $this->db->getQueryBuilder();
+			$q->select($q->func()->count('fileid'))->from('filecache')
+				->where($q->expr()->eq('parent', $q->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+			$r = $q->executeQuery();
+			$n = (int)$r->fetchOne();
+			$r->closeCursor();
+			return $n > 0;
+		} catch (\Throwable $e) {
+			return true;   // cannot tell: treat as non-empty (fail closed)
+		}
 	}
 
 	/** groupfolders keeps a team folder file's old versions in versions/<file id> of the folder's own storage. */

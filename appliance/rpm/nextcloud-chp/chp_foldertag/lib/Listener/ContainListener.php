@@ -52,9 +52,12 @@ class ContainListener implements IEventListener {
 			$srcPath = self::pathOr(fn () => $event->getSource()->getPath());
 			$dstPath = self::pathOr(fn () => $event->getTarget()->getPath());
 			$reason = 'internal error: ' . get_class($e);
-			$this->audit->event(Audit::REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $srcPath . ' -> ' . $dstPath,
-				['op' => $op, 'source_folder' => null, 'target_folder' => null, 'source' => $srcPath, 'target' => $dstPath,
-					'reason' => $reason]);
+			try {   // the refusal below must happen even when the audit write fails
+				$this->audit->event(Audit::REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $srcPath . ' -> ' . $dstPath,
+					['op' => $op, 'source_folder' => null, 'target_folder' => null, 'source' => $srcPath, 'target' => $dstPath,
+						'reason' => $reason]);
+			} catch (\Throwable $ignored) {
+			}
 			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
 		}
 	}

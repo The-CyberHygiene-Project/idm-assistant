@@ -211,5 +211,38 @@ def test_tag_listener_reports_every_failure():
     rules = h[h.index("$rules = $this->policy->rules();"):]
     assert rules.index("catch (\\Throwable $e)") < rules.index("return;")   # not only PolicyError
     assert h.count("catch (\\Throwable $e)") >= 3    # rules, per file, the subtree walk
-    assert h.count("$this->failed(") >= 3
+    assert h.count("$this->failed(") + h.count("$this->failedAt(") >= 3
     assert "Audit::TAG_FAILED" in t[t.index("private function failed("):]
+
+
+def test_before_listener_refusal_survives_a_failing_audit_write():
+    # an exception from the audit/logger call in the catch-all must not replace the AbortedEventException
+    for f in ("Listener/ContainListener.php", "Listener/FolderGuardListener.php"):
+        h = _handle(php(f))
+        tail = h[h.index("catch (\\Throwable $e) {"):h.index("\n\t}\n")]
+        i_try = tail.index("try {   // the refusal below must happen even when the audit write fails")
+        i_audit = tail.index("$this->audit->event(")
+        i_ign = tail.index("} catch (\\Throwable $ignored) {\n\t\t\t}")
+        i_throw = tail.index("throw new AbortedEventException(")
+        assert i_try < i_audit < i_ign < i_throw, f
+
+
+def test_children_come_from_the_filecache_not_the_acting_users_listing():
+    # groupfolders ACLs hide children from the acting user's listing ([]): count and walk by filecache parent.
+    # The ACL-hidden case itself is proven on the lab server (Task 9).
+    for p in PHP:
+        assert "getDirectoryListing" not in p.read_text(), p
+    fg = php("Listener/FolderGuardListener.php")
+    assert "$node instanceof Folder && $this->hasChildren($node)" in fg
+    hc = fg[fg.index("private function hasChildren("):fg.index("private function hasOldVersions(")]
+    assert "->from('filecache')" in hc and "$q->expr()->eq('parent'," in hc
+    assert "return true;   // cannot tell: treat as non-empty (fail closed)" in hc
+    assert "return true;   // not in the filecache yet" in hc
+    t = php("Listener/TagListener.php")
+    walk = t[t.index("private function files(Node $node)"):t.index("private function sourceId(")]
+    assert "->from('filecache')" in walk and "$q->expr()->eq('parent'," in walk
+    assert "$this->mimeTypeLoader->getId('httpd/unix-directory')" in walk and "$queue[] =" in walk
+    assert "throw new \\RuntimeException('folder has no id yet')" in walk   # becomes chp.tag.failed, never silent
+    src = t[t.index("private function sourceId("):t.index("private function managedTagsOf(")]
+    assert "eq('path_hash', $q->createNamedParameter(md5($path)))" in src and "eq('storage'," in src
+    assert "->get($rel)" not in t
