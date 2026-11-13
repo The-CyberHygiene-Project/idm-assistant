@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        6.chp%{?dist}
+Release:        7.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -20,6 +20,7 @@ Source10:       80-fapolicyd.sh
 Source11:       fapolicyd-fsmark.sh
 Source12:       fapolicyd-fsmark.conf
 Source13:       66-chp-fsmark.rules
+Requires:       fapolicyd
 Requires:       mokutil
 Requires:       chp-site, clevis, clevis-luks, clevis-dracut, clevis-systemd, tpm2-tools, cryptsetup, policycoreutils, chrony, util-linux
 BuildRequires:  systemd-rpm-macros
@@ -53,8 +54,8 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %systemd_preun chp-firstboot-common.service chp-monitor.timer
 
 %posttrans
-# Apply the fapolicyd allow_filesystem_mark flag (shipped OFF = no change); idempotent, safe on every transaction.
-%{_libexecdir}/chp/fapolicyd-fsmark || :
+# Apply the fapolicyd allow_filesystem_mark flag (shipped OFF = no change); idempotent. No restart inside the transaction: a change leaves /var/lib/chp/fapolicyd-restart-pending for a later step.
+CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -79,6 +80,10 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-7.chp
+- Check 80: runtime Permissive: line first, conf fallback, "cannot determine mode" alert, transient activating/reloading, missing unit alerts; Requires fapolicyd.
+- fapolicyd-fsmark: no restart in the transaction (pending marker), never takes over an admin-set value, changed only on a successful write.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-6.chp
 - Monitor check 80: fapolicyd not running or in permissive mode (alerts once per state change, again after 24 h).
 - allow_filesystem_mark mechanism: flag /etc/chp/fapolicyd-fsmark.conf (FSMARK=0, shipped OFF), /usr/libexec/chp/fapolicyd-fsmark, empty rules file 66-chp-fsmark.rules.

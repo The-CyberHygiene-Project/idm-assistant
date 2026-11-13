@@ -61,7 +61,7 @@ case ${1:-} in
     s=$(waitdone "$SRV" "$SIP" server.done); check "server first boot finished" "$s" "DONE"
     [[ $s == FAILED ]] && Rh "$SRV" "$SIP" 'journalctl -u chp-server-firstboot --no-pager | tail -25'
     check "server AIDE baseline built at first boot" "$(waitbase "$SRV" "$SIP")" "first-boot"
-    check "fapolicyd no denials" "$(Rh "$SRV" "$SIP" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
+    check "fapolicyd no denials (--check-status counter)" "$(Rh "$SRV" "$SIP" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
     check "SELinux no AVC since boot" "$(Rh "$SRV" "$SIP" 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0"
     Rh "$SRV" "$SIP" 'findmnt -rno TARGET,SOURCE,OPTIONS /data /backup; vgs --noheadings -o vg_name,vg_size,vg_free'
     detach_stick "$SRV" ;;

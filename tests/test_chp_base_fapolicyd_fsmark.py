@@ -9,13 +9,16 @@ S = B / "fapolicyd-fsmark.sh"
 CONF = "# fapolicyd\npermissive = 0\nallow_filesystem_mark = 0\nintegrity = none\n"
 
 
-def apply(tmp_path, flag, conf=CONF, runs=1):
+def apply(tmp_path, flag, conf=CONF, runs=1, no_restart=False):
     (tmp_path / "flag").write_text(f"FSMARK={flag}\n" if flag is not None else "# nothing\n")
     (tmp_path / "fapolicyd.conf").write_text(conf)
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
     (b / "systemctl").write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/calls\n'); (b / "systemctl").chmod(0o755)
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_FSMARK_CONF=str(tmp_path / "flag"),
-               CHP_FAPOLICYD_CONF=str(tmp_path / "fapolicyd.conf"))
+               CHP_FAPOLICYD_CONF=str(tmp_path / "fapolicyd.conf"),
+               CHP_FSMARK_PENDING=str(tmp_path / "pending"))
+    if no_restart:
+        env["CHP_NO_RESTART"] = "1"
     for _ in range(runs):
         assert subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True).returncode == 0
     calls = (tmp_path / "calls").read_text() if (tmp_path / "calls").exists() else ""
@@ -59,7 +62,7 @@ def test_rules_file_ships_empty_of_rules():
 
 def test_spec_ships_mechanism_check_80_and_bumps_release():
     s = (B / "chp-base.spec").read_text()
-    assert "Release:        6.chp" in s
+    assert "Release:        7.chp" in s
     for needle in ("80-fapolicyd.sh", "%{_libexecdir}/chp/fapolicyd-fsmark", "%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf",
                    "%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules", "%posttrans"):
         assert needle in s
@@ -70,8 +73,30 @@ def test_spec_ships_mechanism_check_80_and_bumps_release():
 
 def test_no_proof_script_gates_on_fanotify_counts():
     bad = []
-    for p in list((ROOT / "lab").glob("iso*/prove.sh")) + list((ROOT / "lab" / "security").glob("prove-*.sh")) + [ROOT / "lab" / "host" / "iso1-install-test.sh"]:
+    for p in list((ROOT / "lab").glob("iso*/prove.sh")) + list((ROOT / "lab" / "docs-spike").glob("*.sh")) + list((ROOT / "lab" / "security").glob("prove-*.sh")) + [ROOT / "lab" / "host" / "iso1-install-test.sh"]:
         for n, l in enumerate(p.read_text().splitlines(), 1):
-            if "FANOTIFY" in l and "lower bound" not in l:
+            if "FANOTIFY" in l and not ("lower bound" in l and "grep -c" not in l):
                 bad.append(f"{p.name}:{n}")
     assert bad == []
+
+
+def test_admin_set_value_is_not_taken_over(tmp_path):
+    c = CONF.replace("mark = 0", "mark = 1")
+    out, calls = apply(tmp_path, 1, conf=c)
+    assert out == c and calls == "" and not (tmp_path / "pending").exists()
+
+
+def test_in_transaction_no_restart_but_pending_marker(tmp_path):
+    out, calls = apply(tmp_path, 1, no_restart=True)
+    assert "allow_filesystem_mark = 1" in out and calls == "" and (tmp_path / "pending").exists()
+
+
+def test_off_leaves_no_pending_marker(tmp_path):
+    apply(tmp_path, 0, no_restart=True)
+    assert not (tmp_path / "pending").exists()
+
+
+def test_spec_posttrans_runs_helper_by_bash_without_restart_and_requires_fapolicyd():
+    s = (B / "chp-base.spec").read_text()
+    assert "CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark" in s
+    assert re.search(r"^Requires:\s+fapolicyd$", s, re.M)

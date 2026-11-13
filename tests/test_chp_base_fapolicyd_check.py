@@ -6,11 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 S = ROOT / "appliance" / "rpm" / "chp-base" / "monitor.d" / "80-fapolicyd.sh"
 
 
-def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, state_text=None, cli=True):
+def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, state_text=None, cli=True, runtime="false"):
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
     (b / "systemctl").write_text(f"#!/bin/bash\necho {active}\n[ {active} = active ]\n"); (b / "systemctl").chmod(0o755)
     if cli:
-        (b / "fapolicyd-cli").write_text("#!/bin/bash\nexit 0\n"); (b / "fapolicyd-cli").chmod(0o755)
+        (b / "fapolicyd-cli").write_text(
+            "#!/bin/bash\n" + (f"echo 'Permissive: {runtime}'; echo 'Denied accesses: 0'\n" if runtime else "exit 1\n")); (b / "fapolicyd-cli").chmod(0o755)
     cf = tmp_path / "fapolicyd.conf"
     if conf is not None:
         cf.write_text(conf)
@@ -41,7 +42,7 @@ def test_80_failed_and_inactive_alert(tmp_path):
 
 
 def test_80_permissive_alerts(tmp_path):
-    a = alerts(run(tmp_path, conf="# c\npermissive = 1\n"))
+    a = alerts(run(tmp_path, conf="# c\npermissive = 1\n", runtime=""))
     assert len(a) == 1 and "permissive" in a[0]
 
 
@@ -68,6 +69,31 @@ def test_80_garbage_state_and_clock_step_count_as_due(tmp_path):
     assert len(alerts(run(d, active="failed", state_text="service failed 2000000000\n"))) == 1
 
 
-def test_80_not_installed_is_ok(tmp_path):
-    out = run(tmp_path, active="inactive", conf=None, cli=False)
-    assert out.startswith("OK") and "not installed" in out
+def test_80_runtime_permissive_with_conf_enforcing_alerts(tmp_path):
+    a = alerts(run(tmp_path, conf="permissive = 0\n", runtime="true"))
+    assert len(a) == 1 and "permissive" in a[0]
+
+
+def test_80_runtime_enforcing_wins_over_conf_permissive(tmp_path):
+    assert run(tmp_path, conf="permissive = 1\n", runtime="false").startswith("OK fapolicyd active")
+
+
+def test_80_conf_fallback_when_runtime_unreadable(tmp_path):
+    assert len(alerts(run(tmp_path, conf="permissive = 1\n", runtime=""))) == 1
+    d = tmp_path / "y"; d.mkdir()
+    assert run(d, conf="permissive = 0\n", runtime="").startswith("OK fapolicyd active")
+
+
+def test_80_cannot_tell_alerts(tmp_path):
+    a = alerts(run(tmp_path, conf=None, runtime=""))
+    assert len(a) == 1 and "cannot determine fapolicyd mode" in a[0]
+
+
+def test_80_activating_is_transient_ok(tmp_path):
+    out = run(tmp_path, active="activating")
+    assert alerts(out) == [] and "activating" in out and out.startswith("OK")
+
+
+def test_80_missing_unit_is_an_alert_on_a_chp_host(tmp_path):
+    a = alerts(run(tmp_path, active="inactive", conf=None, cli=False, runtime=""))
+    assert len(a) == 1 and "fapolicyd.service is inactive" in a[0]

@@ -5,7 +5,7 @@
 #   push               copy setup.sh, the egress rules and the spike RPM to /root/spike on the server
 #   run STAGE          sudo bash /root/spike/setup.sh STAGE (packages|db|install|config|web)
 #   egress             load pkg/nextcloud-egress.nft (SERVER_IP filled in) through stdin
-#   denials [SINCE]    AVC + fapolicyd (FANOTIFY) records since SINCE (ausearch time, default: boot), one line each
+#   denials [SINCE]    AVC + fapolicyd (FANOTIFY, a lower bound, not a gate) records since SINCE (ausearch time, default: boot), one line each
 #   sh CMD             sudo bash -c CMD on the server
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; F="$here/ssh_config"
@@ -27,7 +27,7 @@ case ${1:-} in
   run) X "sudo bash /root/spike/setup.sh $2" ;;
   egress) sed "s/@SERVER_IP@/$SIP/" "$here/pkg/nextcloud-egress.nft" | X 'sudo bash /root/spike/setup.sh egress' ;;
   denials)
-    X "sudo ausearch --input-logs -m AVC,USER_AVC,FANOTIFY -ts ${2:-boot} </dev/null 2>/dev/null | grep -E '^type=(AVC|USER_AVC|FANOTIFY)' | sed -E 's/msg=audit\\(([0-9.]+):[0-9]+\\)/t=\\1/'" ;;
+    X "sudo ausearch --input-logs -m AVC,USER_AVC,FANOTIFY -ts ${2:-boot} </dev/null 2>/dev/null | grep -E '^type=(AVC|USER_AVC|FANOTIFY)' | sed -E 's/msg=audit\\(([0-9.]+):[0-9]+\\)/t=\\1/'" ;;  # FANOTIFY listing = lower bound
   sh) X "sudo bash -c $(printf '%q' "$2")" ;;
   *) echo "usage: $0 dvd-on|dvd-off|push|run STAGE|egress|denials [SINCE]|sh CMD"; exit 2 ;;
 esac
