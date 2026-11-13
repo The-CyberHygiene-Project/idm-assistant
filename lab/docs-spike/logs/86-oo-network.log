@@ -1,0 +1,34 @@
+# Task 3 network evidence (captures on aero, tcpdump on iso5-dcli's vnet828; all times MST 2026-11-12)
+## run 1: first launch, default config, opened a docx directly (18:52-18:57, 5954 packets from .54)
+destinations from .54:
+   5905 192.168.100.53 port fujitsu-dtcns
+     20 192.168.100.53 port domain
+     12 224.0.0.251 port mdns
+     12 192.168.100.53 port https
+      3 192.168.100.255 port netbios-ns
+      1 is-at... port 
+      1 192.168.100.1 port 
+packets leaving 192.168.100.0/24 (excluding mDNS multicast):
+0
+vendor DNS queries (the only vendor contact):
+18:52:44.726694 IP 192.168.100.54.42720 > 192.168.100.53.domain: 56711+ A? download.onlyoffice.com. (41)
+18:52:44.727071 IP 192.168.100.54.36068 > 192.168.100.53.domain: 56711+ A? download.onlyoffice.com. (41)
+18:52:44.727259 IP 192.168.100.54.54314 > 192.168.100.53.domain: 18726+ A? download.onlyoffice.com.docs.lab.test. (55)
+18:55:13.763442 IP 192.168.100.54.55054 > 192.168.100.53.domain: 3453+ A? download.onlyoffice.com. (41)
+18:55:13.763903 IP 192.168.100.54.43162 > 192.168.100.53.domain: 3453+ A? download.onlyoffice.com. (41)
+18:55:13.764151 IP 192.168.100.54.38219 > 192.168.100.53.domain: 61738+ A? download.onlyoffice.com.docs.lab.test. (55)
+## run 2: hosts block (0.0.0.0 for 8 vendor names) + conf autoUpdateMode=disabled; edit session (18:57-19:00)
+DNS queries from .54: 0
+packets leaving lab net, non-multicast: 0
+strace -f -e connect of a launch with the hosts block (~/oo-strace.txt):
+connect(25, {sa_family=AF_INET6, sin6_port=htons(53), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "2001:4860:4860::8888", &sin6_addr), sin6_scope_id=0}, 28) = -1 ENETUNREACH (Network is unreachable)
+connect(26, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("0.0.0.0")}, 16) = -1 EINPROGRESS (Operation now in progress)
+## run 3: no hosts block, conf without autoUpdateMode, start page, then click Templates (19:03-19:05)
+launch + 40 s idle, DNS from .54: 0
+after clicking Templates:
+19:04:23.574647 IP 192.168.100.54.60338 > 192.168.100.53.domain: 46617+ A? templates-embed.onlyoffice.com. (48
+19:04:23.575620 IP 192.168.100.54.35046 > 192.168.100.53.domain: 46617+ A? templates-embed.onlyoffice.com. (48
+19:04:23.576418 IP 192.168.100.54.54087 > 192.168.100.53.domain: 55969+ A? templates-embed.onlyoffice.com.docs
+19:04:23.578586 IP 192.168.100.54.37228 > 192.168.100.53.domain: 47829+ A? templates-embed.onlyoffice.com. (48
+19:04:23.579304 IP 192.168.100.54.58872 > 192.168.100.53.domain: 47829+ A? templates-embed.onlyoffice.com. (48
+19:04:23.579536 IP 192.168.100.54.50890 > 192.168.100.53.domain: 28552+ A? templates-embed.onlyoffice.com.docs

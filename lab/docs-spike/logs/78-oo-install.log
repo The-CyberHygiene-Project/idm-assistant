@@ -1,0 +1,70 @@
++ date
+Thu Nov 12 06:49:59 PM MST 2026
++ fips-mode-setup --check
+FIPS mode is enabled.
++ sestatus
++ head -3
+SELinux status:                 enabled
+SELinuxfs mount:                /sys/fs/selinux
+SELinux root directory:         /etc/selinux
++ fapolicyd-cli --check-status
++ grep -i -E 'denied|allowed|^Permissive|trust'
++ sudo rpm --import /home/chpadmin/GPG-KEY-ONLYOFFICE
++ rpm -qa gpg-pubkey --qf '%{NAME}-%{VERSION}-%{RELEASE} %{SUMMARY}\n'
++ grep -i onlyoffice
+gpg-pubkey-cb2de8e5-585285b8 Ascensio System Limited (ONLYOFFICE) <support@onlyoffice.com> public key
++ rpm -Kv /home/chpadmin/oo.rpm
+/home/chpadmin/oo.rpm:
+    Header V4 RSA/SHA256 Signature, key ID cb2de8e5: OK
+    Header SHA256 digest: OK
+    Header SHA1 digest: OK
+    Payload SHA256 digest: OK
++ sha256sum /home/chpadmin/oo.rpm
+2e63445620f8df8449e5c485754861bdfc662482b711024e2d38f2ec545c2df9  /home/chpadmin/oo.rpm
++ sudo rpm --import /mnt/dvd/RPM-GPG-KEY-Rocky-9
++ sudo dnf -y '--disablerepo=*' --repofrompath=bo,/mnt/dvd/BaseOS --repofrompath=ap,/mnt/dvd/AppStream --setopt=bo.gpgcheck=1 --setopt=ap.gpgcheck=1 --setopt=bo.gpgkey=file:///mnt/dvd/RPM-GPG-KEY-Rocky-9 --setopt=ap.gpgkey=file:///mnt/dvd/RPM-GPG-KEY-Rocky-9 install /home/chpadmin/oo.rpm
++ tail -40
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Installing       : xcb-util-wm-0.4.1-22.el9.x86_64                        1/9 
+  Installing       : xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64            2/9 
+  Installing       : xcb-util-keysyms-0.4.0-17.el9.x86_64                   3/9 
+  Installing       : xcb-util-image-0.4.0-19.el9.0.1.x86_64                 4/9 
+  Installing       : liberation-narrow-fonts-2:1.07.6-9.el9.noarch          5/9 
+  Installing       : libXScrnSaver-1.2.3-10.el9.x86_64                      6/9 
+  Installing       : boost-system-1.75.0-13.el9_7.x86_64                    7/9 
+  Installing       : boost-filesystem-1.75.0-13.el9_7.x86_64                8/9 
+  Installing       : onlyoffice-desktopeditors-10.0.0-169.el7.x86_64        9/9 
+  Running scriptlet: onlyoffice-desktopeditors-10.0.0-169.el7.x86_64        9/9 
+  Verifying        : boost-filesystem-1.75.0-13.el9_7.x86_64                1/9 
+  Verifying        : boost-system-1.75.0-13.el9_7.x86_64                    2/9 
+  Verifying        : libXScrnSaver-1.2.3-10.el9.x86_64                      3/9 
+  Verifying        : liberation-narrow-fonts-2:1.07.6-9.el9.noarch          4/9 
+  Verifying        : xcb-util-image-0.4.0-19.el9.0.1.x86_64                 5/9 
+  Verifying        : xcb-util-keysyms-0.4.0-17.el9.x86_64                   6/9 
+  Verifying        : xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64            7/9 
+  Verifying        : xcb-util-wm-0.4.1-22.el9.x86_64                        8/9 
+  Verifying        : onlyoffice-desktopeditors-10.0.0-169.el7.x86_64        9/9 
+Installed products updated.
+
+Installed:
+  boost-filesystem-1.75.0-13.el9_7.x86_64                                       
+  boost-system-1.75.0-13.el9_7.x86_64                                           
+  libXScrnSaver-1.2.3-10.el9.x86_64                                             
+  liberation-narrow-fonts-2:1.07.6-9.el9.noarch                                 
+  onlyoffice-desktopeditors-10.0.0-169.el7.x86_64                               
+  xcb-util-image-0.4.0-19.el9.0.1.x86_64                                        
+  xcb-util-keysyms-0.4.0-17.el9.x86_64                                          
+  xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64                                   
+  xcb-util-wm-0.4.1-22.el9.x86_64                                               
+
+Complete!
+rc=0
++ echo rc=0
++ rpm -q onlyoffice-desktopeditors
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64

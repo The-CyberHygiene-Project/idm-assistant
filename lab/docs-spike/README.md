@@ -55,3 +55,7 @@ On iso5-dcli: `rm -rf ~/chp-docs-work ~/.config/chp-doc`.
 Review fixes (logs/66-74): `proto/forged_bearer.py` (Mac; fix 3), `bash proto/cycle-run.sh` (fix 4, needs route-1 sessions
 for lab01, lab02, lab04), `proto/open_redirect.py` (workstation, joined with doc_auth.py). chp_ledger is now 0.2.0: after
 copying a new version, run `occ upgrade` (logs/67).
+
+## Task 3 additions (ONLYOFFICE Desktop on iso5-dcli; findings in SPIKE-NEXTCLOUD.md §Editor, logs/78-86)
+
+`editor/make_docs.py OUTDIR` makes the test docx/xlsx; the GUI ran under Xvfb :77 on the workstation, driven with `editor/xin.sh` (XTest keys/clicks) and read with `editor/shot.sh`. Vendor RPM and key: `~/idm-lab-inputs/onlyoffice/` (use the yum-repo copy: the "latest" link is unsigned).

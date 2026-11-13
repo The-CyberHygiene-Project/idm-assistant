@@ -1,0 +1,60 @@
+== ausearch -m FANOTIFY (since 18:40)
+node=iso5-dcli.docs.lab.test type=SYSCALL msg=audit(11/12/2026 18:50:40.823:50937) : arch=x86_64 syscall=execve success=no exit=EPERM(Operation not permitted) a0=0x558cd27dab50 a1=0x558cd27dabb0 a2=0x558cd27e4fc0 a3=0x558cd27dbc70 items=1 ppid=50394 pid=50396 auid=chpadmin uid=chpadmin gid=chpadmin euid=chpadmin suid=chpadmin fsuid=chpadmin egid=chpadmin sgid=chpadmin fsgid=chpadmin tty=(none) ses=342 comm=ldd exe=/usr/bin/bash subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=(null) 
+node=iso5-dcli.docs.lab.test type=FANOTIFY msg=audit(11/12/2026 18:50:40.823:50937) : resp=deny fan_type=rule_info fan_info=5 subj_trust=unknown obj_trust=yes 
+----
+node=iso5-dcli.docs.lab.test type=PROCTITLE msg=audit(11/12/2026 18:50:40.823:50938) : proctitle=/usr/bin/bash /usr/bin/ldd /opt/onlyoffice/desktopeditors/converter/x2t 
+node=iso5-dcli.docs.lab.test type=PATH msg=audit(11/12/2026 18:50:40.823:50938) : item=0 name=/lib64/ld-linux-x86-64.so.2 inode=101066931 dev=fd:01 mode=file,755 ouid=root ogid=root rdev=00:00 obj=system_u:object_r:ld_so_t:s0 nametype=NORMAL cap_fp=none cap_fi=none cap_fe=0 cap_fver=0 cap_frootid=0 
+node=iso5-dcli.docs.lab.test type=CWD msg=audit(11/12/2026 18:50:40.823:50938) : cwd=/home/chpadmin 
+node=iso5-dcli.docs.lab.test type=SYSCALL msg=audit(11/12/2026 18:50:40.823:50938) : arch=x86_64 syscall=openat success=no exit=EPERM(Operation not permitted) a0=AT_FDCWD a1=0x558cd27dab50 a2=O_RDONLY a3=0x0 items=1 ppid=50394 pid=50396 auid=chpadmin uid=chpadmin gid=chpadmin euid=chpadmin suid=chpadmin fsuid=chpadmin egid=chpadmin sgid=chpadmin fsgid=chpadmin tty=(none) ses=342 comm=ldd exe=/usr/bin/bash subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=unsuccessful-access 
+node=iso5-dcli.docs.lab.test type=FANOTIFY msg=audit(11/12/2026 18:50:40.823:50938) : resp=deny fan_type=rule_info fan_info=5 subj_trust=unknown obj_trust=yes 
+----
+node=iso5-dcli.docs.lab.test type=PROCTITLE msg=audit(11/12/2026 18:50:40.823:50939) : proctitle=/usr/bin/bash /usr/bin/ldd /opt/onlyoffice/desktopeditors/converter/x2t 
+node=iso5-dcli.docs.lab.test type=PATH msg=audit(11/12/2026 18:50:40.823:50939) : item=0 name=/lib64/ld-linux-x86-64.so.2 inode=101066931 dev=fd:01 mode=file,755 ouid=root ogid=root rdev=00:00 obj=system_u:object_r:ld_so_t:s0 nametype=NORMAL cap_fp=none cap_fi=none cap_fe=0 cap_fver=0 cap_frootid=0 
+node=iso5-dcli.docs.lab.test type=CWD msg=audit(11/12/2026 18:50:40.823:50939) : cwd=/home/chpadmin 
+node=iso5-dcli.docs.lab.test type=SYSCALL msg=audit(11/12/2026 18:50:40.823:50939) : arch=x86_64 syscall=openat success=no exit=EPERM(Operation not permitted) a0=AT_FDCWD a1=0x558cd27dab50 a2=O_RDONLY a3=0x0 items=1 ppid=50394 pid=50396 auid=chpadmin uid=chpadmin gid=chpadmin euid=chpadmin suid=chpadmin fsuid=chpadmin egid=chpadmin sgid=chpadmin fsgid=chpadmin tty=(none) ses=342 comm=ldd exe=/usr/bin/bash subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=unsuccessful-access 
+node=iso5-dcli.docs.lab.test type=FANOTIFY msg=audit(11/12/2026 18:50:40.823:50939) : resp=deny fan_type=rule_info fan_info=5 subj_trust=unknown obj_trust=yes 
+----
+node=iso5-dcli.docs.lab.test type=PROCTITLE msg=audit(11/12/2026 18:51:47.412:51835) : proctitle=bash -c sudo dnf -y -q --disablerepo="*" --repofrompath=bo,/mnt/dvd/BaseOS --repofrompath=ap,/mnt/dvd/AppStream --setopt=ap.gpgc 
+node=iso5-dcli.docs.lab.test type=PATH msg=audit(11/12/2026 18:51:47.412:51835) : item=0 name=/usr/bin/Xvfb inode=68224106 dev=fd:01 mode=file,755 ouid=root ogid=root rdev=00:00 obj=system_u:object_r:bin_t:s0 nametype=NORMAL cap_fp=none cap_fi=none cap_fe=0 cap_fver=0 cap_frootid=0 
+node=iso5-dcli.docs.lab.test type=CWD msg=audit(11/12/2026 18:51:47.412:51835) : cwd=/home/chpadmin 
+node=iso5-dcli.docs.lab.test type=SYSCALL msg=audit(11/12/2026 18:51:47.412:51835) : arch=x86_64 syscall=execve success=no exit=EPERM(Operation not permitted) a0=0x7ffe8c1b62f0 a1=0x7ffe8c1b6540 a2=0x7ffe8c1b6580 a3=0x563821665340 items=1 ppid=1 pid=50944 auid=chpadmin uid=chpadmin gid=chpadmin euid=chpadmin suid=chpadmin fsuid=chpadmin egid=chpadmin sgid=chpadmin fsgid=chpadmin tty=(none) ses=351 comm=setsid exe=/usr/bin/setsid subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=(null) 
+node=iso5-dcli.docs.lab.test type=FANOTIFY msg=audit(11/12/2026 18:51:47.412:51835) : resp=deny fan_type=rule_info fan_info=13 subj_trust=unknown obj_trust=no 
+== fapolicyd-cli --check-status
+Permissive: false
+Allowed accesses: 60165
+Denied accesses: 0
+== AVC since 18:40
+----
+node=iso5-dcli.docs.lab.test type=PROCTITLE msg=audit(11/12/2026 18:52:38.671:52518) : proctitle=/usr/bin/python3 -Es /usr/sbin/tuned-ppd -l 
+node=iso5-dcli.docs.lab.test type=PATH msg=audit(11/12/2026 18:52:38.671:52518) : item=0 name=/var/run/kanidm-unixd/sock inode=1862 dev=00:1a mode=socket,777 ouid=kanidm-unixd ogid=kanidm-unixd rdev=00:00 obj=system_u:object_r:kanidm_unixd_var_run_t:s0 nametype=NORMAL cap_fp=none cap_fi=none cap_fe=0 cap_fver=0 cap_frootid=0 
+node=iso5-dcli.docs.lab.test type=CWD msg=audit(11/12/2026 18:52:38.671:52518) : cwd=/ 
+node=iso5-dcli.docs.lab.test type=SOCKADDR msg=audit(11/12/2026 18:52:38.671:52518) : saddr={ saddr_fam=local path=/var/run/kanidm-unixd/sock } 
+node=iso5-dcli.docs.lab.test type=SYSCALL msg=audit(11/12/2026 18:52:38.671:52518) : arch=x86_64 syscall=connect success=yes exit=0 a0=0x3 a1=0x7ffcf2547620 a2=0x1d a3=0x0 items=1 ppid=1 pid=51295 auid=unset uid=root gid=root euid=root suid=root fsuid=root egid=root sgid=root fsgid=root tty=(none) ses=unset comm=tuned-ppd exe=/usr/bin/python3.9 subj=system_u:system_r:tuned_ppd_t:s0 key=(null) 
+node=iso5-dcli.docs.lab.test type=AVC msg=audit(11/12/2026 18:52:38.671:52518) : avc:  denied  { connectto } for  pid=51295 comm=tuned-ppd path=/run/kanidm-unixd/sock scontext=system_u:system_r:tuned_ppd_t:s0 tcontext=system_u:system_r:unconfined_service_t:s0 tclass=unix_stream_socket permissive=1 
+node=iso5-dcli.docs.lab.test type=AVC msg=audit(11/12/2026 18:52:38.671:52518) : avc:  denied  { write } for  pid=51295 comm=tuned-ppd name=sock dev="tmpfs" ino=1862 scontext=system_u:system_r:tuned_ppd_t:s0 tcontext=system_u:object_r:kanidm_unixd_var_run_t:s0 tclass=sock_file permissive=1 
+node=iso5-dcli.docs.lab.test type=AVC msg=audit(11/12/2026 18:52:38.671:52518) : avc:  denied  { search } for  pid=51295 comm=tuned-ppd name=kanidm-unixd dev="tmpfs" ino=1856 scontext=system_u:system_r:tuned_ppd_t:s0 tcontext=system_u:object_r:kanidm_unixd_var_run_t:s0 tclass=dir permissive=1 
+== fapolicyd journal
+Nov 12 18:52:09 iso5-dcli.docs.lab.test fapolicyd[51129]: fapolicyd integrity is 0
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Checking if the trust database up to date
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Importing trust data from rpmdb backend
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Importing trust data from file backend
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Entries in trust DB: 21293
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Trust database at 5% capacity - might consider shrinking the size to save space
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Loaded trust info from all backends (without duplicates): 21295
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: New trust database entries: 2
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Found 2 problematic trust database entries
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Updating trust database
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Creating trust database
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Loading trust data from rpmdb backend
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Loading trust data from file backend
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Trust database at 5% capacity - might consider shrinking the size to save space
+Nov 12 18:52:10 iso5-dcli.docs.lab.test fapolicyd[51129]: Starting to listen for events
+== fapolicyd mount-namespace caveat: do the app processes share the host mount namespace?
+54179 mnt:[4026531841]
+54189 mnt:[4026531841]
+54190 mnt:[4026531841]
+54203 mnt:[4026531841]
+host: 
+== allow_filesystem_mark
+grep: /etc/fapolicyd/fapolicyd.conf== exec of app files from home-dir copy? (untrusted check) cp binary to /tmp and exec
+: Permission denied

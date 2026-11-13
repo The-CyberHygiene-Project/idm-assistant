@@ -1,0 +1,37 @@
+[General]
+titlebar=system
+==== hosts in binaries
+# /opt/onlyoffice/desktopeditors/DesktopEditors
+https://docspace.onlyoffice.com/s/b_rVPpqtF-pqKBr
+https://download.onlyoffice.com/install/desktop/editors/help/v10.0.0/apps
+https://download.onlyoffice.com/install/desktop/editors/windows/onlyoffice/appcastdev.json
+https://download.onlyoffice.com/install/desktop/editors/windows/onlyoffice/appcast.json
+https://onlyoffice.com/registration.aspx?desktop=true
+https://templates.onlyoffice.com/?desktop=true
+http://www.onlyoffice.com
+# /opt/onlyoffice/desktopeditors/libascdocumentscore.so
+https://onlyoffice.com/
+# /opt/onlyoffice/desktopeditors/libqtascdocumentscore.so
+==== web-apps/index.html and addon
+api
+common
+documenteditor
+pdfeditor
+presentationeditor
+spreadsheeteditor
+visioeditor
+https://templates-embed.onlyoffice.com/
+==== AI
+{07FD8DFA-DFE0-4089-AL24-0730933CC80A}
+{38E022EA-AD92-45FC-B22B-49DF39746DB4}
+{440EBF13-9B19-4BD8-8621-05200E58140B}
+{7327FC95-16DA-41D9-9AF2-0E7F449F6800}
+{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}
+{AA2EA9B6-9EC2-415F-9762-634EE8D9A95E}
+{B509123E-6335-40BD-B965-91EB799346E3}
+{BE5CBF95-C0AD-4842-B157-AC40FEDD9840}
+{BE5CBF95-C0AD-4842-B157-AC40FEDD9841}
+{FFF0E1EB-13DB-4678-B67D-FF0A41DBBCEF}
+pluginBase.js
+plugins.css
+v1

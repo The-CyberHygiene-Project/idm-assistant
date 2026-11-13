@@ -1,0 +1,5 @@
+x2t rc=0 -> cli-report.pdf
+x2t rc=0 -> cli-data.pdf
+total 72
+-rw-r--r--. 1 chpadmin chpadmin 36912 Nov 12 19:01 cli-data.pdf
+-rw-r--r--. 1 chpadmin chpadmin 32034 Nov 12 19:01 cli-report.pdf

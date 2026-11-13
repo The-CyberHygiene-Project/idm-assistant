@@ -1,0 +1,92 @@
+== fips-mode-setup --check
+FIPS mode is enabled.
+1
+FIPS
+== crypto libs mapped by running processes
+pid 54179: /opt/onlyoffice/desktopeditors/DesktopEditors CUI_test-report_v0.1-DRAFT.docx 
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54189: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-zygote-sandbox --no-sandbox --force-device-sc
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54190: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-sandbox --force-device-scale-factor=1 --log-s
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54203: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-zygote-sandbox --no-sandbox --force-device-sc
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54216: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-sandbox --force-device-scale-factor=1 --log-s
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54222: /opt/onlyoffice/desktopeditors/editors_helper --type=utility --utility-sub-type=network.mojom.NetworkService -
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54226: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-sandbox --force-device-scale-factor=1 --log-s
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+pid 54234: /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-sandbox --force-device-scale-factor=1 --log-s
+/usr/lib64/libcrypto.so.3.5.5
+/usr/lib64/libgcrypt.so.20.4.0
+/usr/lib64/libgnutls.so.30.40.4
+/usr/lib64/libhogweed.so.6.10
+/usr/lib64/libnettle.so.8.10
+/usr/lib64/libnss3.so
+== OpenSSL/libs bundled in package
+(none above = no separate bundled OpenSSL/NSS/GnuTLS/curl .so)
+== statically linked crypto inside libs (strings)
+# /opt/onlyoffice/desktopeditors/libcef.so
+UseBoringSSLForRandBytes
+../../third_party/boringssl/src/crypto/fipsmodule/ec/ec_montgomery.c
+../../third_party/boringssl/src/crypto/fipsmodule/bn/montgomery.c
+# /opt/onlyoffice/desktopeditors/converter/x2t
+# /opt/onlyoffice/desktopeditors/converter/libkernel_network.so
+# /opt/onlyoffice/desktopeditors/converter/libooxmlsignature.so
+fips_mode
+error setting fips mode
+fips mode not supported
+# /opt/onlyoffice/desktopeditors/libascdocumentscore.so
+== DT_NEEDED
+# /opt/onlyoffice/desktopeditors/converter/libkernel_network.so
+# /opt/onlyoffice/desktopeditors/converter/libooxmlsignature.so
+# /opt/onlyoffice/desktopeditors/libascdocumentscore.so
+# /opt/onlyoffice/desktopeditors/DesktopEditors
+== journal since 18:49 mentioning crypto
+Nov 12 18:49:59 iso5-dcli.docs.lab.test sudo[50086]: chpadmin : PWD=/home/chpadmin ; USER=root ; COMMAND=/bin/rpm --import /home/chpadmin/GPG-KEY-ONLYOFFICE
+Nov 12 18:50:49 iso5-dcli.docs.lab.test sudo[50435]: chpadmin : PWD=/home/chpadmin ; USER=chpadmin ; COMMAND=/bin/env LD_LIBRARY_PATH=/opt/onlyoffice/desktopeditors/converter:/opt/onlyoffice/desktopeditors /opt/onlyoffic
+Nov 12 18:51:20 iso5-dcli.docs.lab.test kernel: traps: x2t[50544] trap invalid opcode ip:7f5af5970969 sp:7ffd3a362cd8 error:0 in libdoctrenderer.so[7f5af5000000+146b000]
+Nov 12 18:51:26 iso5-dcli.docs.lab.test kernel: traps: x2t[50596] trap invalid opcode ip:7f8b37770969 sp:7ffd40bc8c28 error:0 in libdoctrenderer.so[7f8b36e00000+146b000]
+Nov 12 18:52:38 iso5-dcli.docs.lab.test gnome-keyring-d[51288]: out of core handler ignored in FIPS mode
+Nov 12 18:57:34 iso5-dcli.docs.lab.test sudo[53651]: chpadmin : PWD=/home/chpadmin ; USER=root ; COMMAND=/bin/sh -c 'echo "0.0.0.0 download.onlyoffice.com templates.onlyoffice.com templates-embed.onlyoffice.com onlyoffic
+Nov 12 19:00:22 iso5-dcli.docs.lab.test sudo[54174]: chpadmin : PWD=/home/chpadmin ; USER=root ; COMMAND=/bin/mv /opt/onlyoffice/desktopeditors/editors/sdkjs-plugins/{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007} /root/ai-plugin
+== coredumps
+No coredumps found.
+== app log grep
+      4 libva error: vaGetDriverNames() failed with unknown libva error

@@ -1,0 +1,79 @@
+addon.html
+bearer
+chrome_100_percent.pak
+chrome_200_percent.pak
+chrome-sandbox
+converter
+DesktopEditors
+dictionaries
+editors
+editors_helper
+fonts
+iconengines
+icudtl.dat
+imageformats
+index.html
+libascdocumentscore.so
+libcef.so
+libEGL.so
+libGLESv2.so
+libhunspell.so
+libicudata.so.52
+libicui18n.so.52
+libicuuc.so.52
+libqgsttools_p.so
+libqgsttools_p.so.1
+libqgsttools_p.so.1.0
+libqgsttools_p.so.1.0.0
+libQt5Core.so.5
+libQt5DBus.so.5
+libQt5Gui.so.5
+libQt5Multimedia.so.5
+libQt5MultimediaWidgets.so.5
+libQt5Network.so.5
+libQt5OpenGL.so.5
+libQt5PrintSupport.so.5
+libQt5Svg.so.5
+libQt5Widgets.so.5
+libQt5X11Extras.so.5
+libQt5XcbQpa.so.5
+libqtascdocumentscore.so
+libvideoplayer.so
+libvk_swiftshader.so
+libvulkan.so.1
+LICENSE.txt
+locales
+mediaservice
+platforminputcontexts
+platforms
+platformthemes
+playlistformats
+1.2G	/opt/onlyoffice/desktopeditors
+== libs crypto
+libcef.so
+-rw-r--r--. 1 root root 313555528 Oct 11 09:54 /opt/onlyoffice/desktopeditors/libcef.so
+== strings openssl versions
+== scriptlets
+postuninstall scriptlet (using /bin/sh):
+rm -f /usr/share/mime/packages/onlyoffice-docxf.xml
+rm -f /usr/share/mime/packages/onlyoffice-oform.xml
+== bins
+ls: cannot access '/usr/bin/DesktopEditors': No such file or directory
+lrwxrwxrwx. 1 root root   25 Oct 11 09:54 /usr/bin/desktopeditors -> onlyoffice-desktopeditors
+-rwxr-xr-x. 1 root root 8852 Oct 11 09:54 /usr/bin/onlyoffice-desktopeditors
+== selinux
+-rwxr-xr-x. 1 root root system_u:object_r:usr_t:s0 46673016 Oct 11 09:54 /opt/onlyoffice/desktopeditors/converter/x2t
+-rwxr-xr-x. 1 root root system_u:object_r:usr_t:s0  2528232 Oct 11 09:54 /opt/onlyoffice/desktopeditors/DesktopEditors
+system_u:object_r:usr_t:s0 addon.html
+system_u:object_r:usr_t:s0 bearer
+system_u:object_r:usr_t:s0 chrome_100_percent.pak
+system_u:object_r:usr_t:s0 chrome_200_percent.pak
+system_u:object_r:usr_t:s0 chrome-sandbox
+== fapolicyd trust
+0
+/var/ossec/etc/localtime miscompares: file size
+==ldd
+/usr/bin/ldd: line 160: /lib64/ld-linux-x86-64.so.2: Operation not permitted
+ldd: exited with unknown exit code (126)
+/usr/bin/ldd: line 160: /lib64/ld-linux-x86-64.so.2: Operation not permitted
+ldd: exited with unknown exit code (126)

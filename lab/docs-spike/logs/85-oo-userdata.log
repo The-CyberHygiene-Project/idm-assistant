@@ -1,0 +1,24 @@
+14M	.
+8.0K	dictionaries
+124K	sdkjs-plugins
+484K	recover
+868K	cache
+12M	fonts
+== recover
+recover/DE__WKjoLB/CUI_test-report_v0.1-DRAFT.docx
+recover/DE__WKjoLB/asc_name.info
+recover/DE__WKjoLB/Editor.bin
+recover/DE__WKjoLB/user_name.log
+﻿<?xml version="1.0" encoding="utf-8"?><recents><file path="/home/chpadmin/oo-test/CUI_test-report_v0.1-DRAFT.docx" type="65" date="12.11.2026 19:00" url="" parent="/home/chpadmin/oo-test" /><file path="/home/chpadmin/oo-test/gui-data.pdf" type="513" date="12.11.2026 18:56" url="" parent="/home/chpadmin/oo-test" /><file path="/home/chpadmin/oo-test/CUI_test-data_v0.1-DRAFT.xlsx" type="257" date="12.11.2026 18:55" url="" parent="/home/chpadmin/oo-test" /><file path="/home/chpadmin/oo-test/gui-report.pdf" type="513" date="12.11.2026 18:54" url="" parent="/home/chpadmin/oo-test" /></recents>
+== any doc text in user data
+== sdkjs-plugins dir in user data
+addons
+pluginBase.js
+plugins.css
+v1
+Enforcing
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 54179 ? 00:00:05 DesktopEditors
+== sandbox
+-rw-r--r--. 1 root root 335080 Oct 11 09:54 /opt/onlyoffice/desktopeditors/chrome-sandbox
+== launcher env
+327:export LD_LIBRARY_PATH=$APP_PATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}

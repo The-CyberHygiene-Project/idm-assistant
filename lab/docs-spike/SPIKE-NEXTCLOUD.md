@@ -1,5 +1,7 @@
 # Spike: NextCloud on a hardened CHP server (ISO 0.7.0 Plan 1, Task 1)
 
+**Task 3 (editor, 2026-11-12, §Editor): ONLYOFFICE Desktop Editors 10.0.0 on the FIPS/CUI workstation: works with limits.**
+
 **Task 2 (doc commands, 2026-11-13, §Transport and §Ledger):** sign in with a Kanidm public client and send the
 token as a Bearer (nothing long-lived on the workstation; a Kanidm lock takes effect on the next request); the
 freshness marker is the content hash, because **NextCloud's ETag can stay the same across a content change**;
@@ -680,6 +682,160 @@ Re-run on two new controlled documents in `Internal/Compliance`, as listed in `l
 All route-1 sessions were revoked (`logs/64`, `logs/65`). No new SELinux or fapolicyd denials were recorded during
 Task 2 (`logs/61`). fapolicyd's counter says 1 denial since its start while the audit log holds none: the same
 mismatch as finding 2, not explained.
+
+## Editor (Task 3): ONLYOFFICE Desktop Editors on a FIPS, CUI-profile workstation
+
+**VERDICT: works with limits.** ONLYOFFICE Desktop Editors 10.0.0 (build 169) installs, runs, opens, edits, saves and
+exports PDF on **iso5-dcli** (Rocky 9.8, FIPS mode on, SELinux Enforcing, fapolicyd, CUI profile, site docs.lab.test)
+with **no crash, no FIPS or crypto error, no fapolicyd denial and no AVC from the application** (2026-11-12; logs
+`78`-`86`, test documents and outputs in `editor/`). The limits are below; none stopped the editing, saving or
+PDF-export path. The owner decides (spec §4); the limits that matter most are 1, 2, 4 and 5.
+
+### What was tested, and how
+| Check | Result | How |
+|---|---|---|
+| Install from the vendor RPM | pass | `rpm -K` against the vendor key, then `dnf install` (deps from the Rocky 9.8 DVD) (`logs/78`) |
+| Open docx (8 pages, odd/even header + footer "CUI", designation block, page-number field) | pass | **GUI** (`desktopeditors`) |
+| Edit + save in place (Ctrl+S) | pass: saved file keeps odd/even header and footer | **GUI**; reread with python-docx |
+| Export PDF (File > Save as > "Portable Document (*.pdf)") | pass: PDF page 1 starts `CUI (odd)`, page 8 `CUI (even)`, designation block on page 1, `Page 1` footer field; 8 pages; Producer `ONLYOFFICE/10.0.0.169` | **GUI** + `pdftotext` |
+| Same for xlsx (odd/even header + footer "CUI", designation block in rows 1-4, 200 rows, repeating title row) | pass: saved xlsx keeps `differentOddEven` and all four header/footer parts; PDF (5 pages) has `CUI` as first and last line of every page checked (1, 2, 5) | **GUI** + openpyxl + `pdftotext` |
+| Headless conversion (`x2t`, no GUI) | pass **after the GUI has run once** (see limit 3): docx and xlsx to PDF give the same pages and banners as the GUI; docx and xlsx round-trips work | **CLI** (`logs/81`) |
+
+GUI driving: ONLYOFFICE ran under Xvfb (display :77) on the workstation, with keystrokes and clicks sent through
+XTest and screenshots read from the Xvfb framebuffer (`editor/xinput.py`, `xin.sh`, `shot.sh`, `xwd2png.py`).
+**GDM's real desktop session was not used.** What was not exercised in the GUI: Print > PDF, comments and tracked
+changes, templates inside the editor (the CUI template library is Plan 2 work), macros.
+
+### Package and signature
+- The "latest" direct link `download.onlyoffice.com/install/desktop/editors/linux/onlyoffice-desktopeditors.x86_64.rpm`
+  is **not signed** (`rpm -Kv`: header and payload digests only, no OpenPGP signature; sha256 `2572599736765cef...c6bf`).
+  The **same version in the vendor's yum repository is signed**: `https://download.onlyoffice.com/repo/centos/main/noarch/onlyoffice-desktopeditors-10.0.0.x86_64.rpm`
+  (the path says noarch; the file is x86_64), sha256 `2e63445620f8df8449e5c485754861bdfc662482b711024e2d38f2ec545c2df9`
+  (equals the checksum in the repo's `primary.xml`, whose own checksum is in `repomd.xml`, which carries a good detached
+  signature `repomd.xml.asc` by the key below). That signed file is the one installed.
+- **Signing key:** Ascensio System Limited (ONLYOFFICE) <support@onlyoffice.com>, RSA 4096, created 2016-12-15,
+  **fingerprint `E09C A29F 6E17 8040 EF22 B409 8320 CA65 CB2D E8E5`** (key id `8320CA65CB2DE8E5`; rpm shows `cb2de8e5`).
+  The key was fetched from `download.onlyoffice.com/GPG-KEY-ONLYOFFICE` and the same fingerprint was served by
+  keyserver.ubuntu.com (that is a second source, not a web-of-trust check: first use is trust-on-first-use).
+- **Plan 2 should re-sign:** the spec says "ships in our repo as a signed package". Our repo would carry the vendor RPM
+  under our key (or the vendor key as a second trusted key in the stick), with the sha256 above pinned in the build.
+  Pull the vendor's RPM from the repo path, **not** the "latest" link, and verify before re-signing.
+- Package facts: 291 MB RPM, 1.2 GB installed under `/opt/onlyoffice/desktopeditors`, requires
+  `boost-filesystem`, `libXScrnSaver`, five `xcb-util-*` and `liberation-narrow-fonts` beyond the CUI image (all from
+  Rocky BaseOS/AppStream; they came in with the install: `boost-system` too). No `%post` scriptlet (only `%postun`).
+  `rpm -V` is clean. Launcher `/usr/bin/onlyoffice-desktopeditors` sets `LD_LIBRARY_PATH` to the app directory.
+  Running `/opt/.../DesktopEditors` directly (without the launcher) aborts: Qt cannot find its platform plugins.
+  Dependencies cannot be resolved without a repo: Plan 2 must ship the six extra packages in the stick repo.
+
+### Under the CUI profile (SELinux, fapolicyd)
+- **SELinux:** files are `usr_t`, processes run `unconfined_t` (the user is unconfined): **zero AVC denials** from the
+  application. SELinux therefore constrains it by nothing; this is a property of the user, not of the package.
+- **fapolicyd:** the RPM's files are trusted through the rpmdb backend (fapolicyd's trust DB had 2235 ONLYOFFICE
+  entries after the sync); the application, the CEF helpers and `x2t` ran with **0 denials** (after the daemon
+  restart noted below: `fapolicyd-cli --check-status` `Denied accesses: 0`, `Permissive: false`; `ausearch -m FANOTIFY`
+  shows only my own `ldd` runs (ld.so exec is refused: `logs/79`) and one Xvfb exec, below). Both counters were read,
+  as Task 1 requires.
+- **All ONLYOFFICE processes share the host mount namespace** (`mnt:[4026531841]` for the main process and the
+  helpers), so Task 1 finding 1 (own mount namespace is not checked while `allow_filesystem_mark = 0`) does not apply
+  to it: its file opens were genuinely checked, and passed. It does not bypass the policy; it also does not rely on it.
+  (I could not read `/etc/fapolicyd/fapolicyd.conf` as chpadmin; the setting is the RHEL default per Task 1.)
+- **fapolicyd daemon failure during package install (not ONLYOFFICE-specific, but seen while installing it):** the
+  second `rpm` transaction (installing Xvfb for GUI testing, 1 minute after the ONLYOFFICE install) triggered fapolicyd's
+  rpm-plugin trust sync, which logged `Cannot delete database (1)` / `Cannot update trust database!` and the daemon
+  **exited (failed)** at 18:51:47; the freshly installed `/usr/bin/Xvfb` was denied (`obj_trust=no`) in that window;
+  `systemctl start fapolicyd` rebuilt the DB and fixed it. The first sync (the ONLYOFFICE install) was fine. Not
+  reproduced; cause not isolated (two syncs 90 s apart, with my `fapolicyd-cli --dump-db` run concurrently is the
+  only unusual thing). **A failed fapolicyd leaves the host unprotected until someone notices** (the monitoring should
+  alarm on `fapolicyd.service` failed); Plan 2 should test "install two packages back to back" on the workstation role.
+- **User data (all under `~/.local/share/onlyoffice` and `~/.config/onlyoffice`, 14 MB):** font cache, Chromium profile,
+  recents list and an **auto-recovery copy of every open document** under `data/recover/` (`Editor.bin` + a copy of the
+  file). These copies are CUI and stay in the user's home (LUKS2); the CUI-folder rules and the working-folder
+  cleanup (`chp-site doc`) must treat that directory as CUI too (not examined: when `recover/` is emptied).
+
+### FIPS (what can and cannot be determined)
+`fips-mode-setup --check`: "FIPS mode is enabled."; `/proc/sys/crypto/fips_enabled` = 1; crypto policy `FIPS`
+(`logs/83`). No crypto, TLS or FIPS error anywhere: not in the application's stderr (only a harmless `libva` GPU-driver
+line), not in the journal, no core dumps. **Findings:**
+1. The package bundles **no separate OpenSSL, NSS, GnuTLS or curl library.** It bundles **Chromium (CEF `libcef.so`,
+   313 MB) with BoringSSL statically linked** (strings: `third_party/boringssl`, `fipsmodule`). BoringSSL does **not**
+   read the system's FIPS mode, crypto policy or OpenSSL FIPS provider; it is not the system's validated module.
+   `libooxmlsignature.so` (document digital signatures) has `fips_mode` strings; document signing was **not tested**.
+2. The processes also map the **system's** `libcrypto.so.3.5.5`, `libgnutls`, `libnss3`, `libgcrypt`, `libnettle`
+   (through GTK/glib and similar). I could not establish which of the two stacks a given TLS connection would use;
+   Chromium's network service (`NetworkService` helper present) uses BoringSSL for TLS.
+3. In this workflow **nothing in the application makes a TLS connection**: the workstation opens and saves local files in
+   the working folder, and `chp-site doc` (the Task 2 prototype, Python and the system's OpenSSL) does the NextCloud
+   transport. So the editor's own TLS is out of the data path, and the FIPS posture of the working path is the system's.
+   If ONLYOFFICE's network features were ever used (Clouds, Templates, update), they would use BoringSSL: **not
+   FIPS-validated crypto outside the system policy.** This is a POA&M line (like the bundled OpenSSL 3.5.1 one):
+   "ONLYOFFICE bundles a non-validated TLS stack (Chromium BoringSSL); network features are blocked".
+4. `x2t` crashed once with a V8 trap (`invalid opcode in libdoctrenderer.so`, journal `18:51:20`): not crypto: see limit 3.
+
+### Vendor calls (observed) and how they were blocked (`logs/82`, `logs/86`)
+Captured on aero (`tcpdump` on the workstation's tap) during the edit sessions, plus `strace -e connect`:
+- **Observed vendor traffic (default config, no block):** a DNS lookup of **`download.onlyoffice.com`** (the update
+  check, `appcast.json`) at the first launch and again when the second file was opened; **`templates-embed.onlyoffice.com`**
+  when the Templates page is opened (user action). The binary also contains `templates.onlyoffice.com`,
+  `onlyoffice.com/registration`, `docspace.onlyoffice.com` and `download.onlyoffice.com/.../help/` (Help). All of these
+  are plain names resolved over the site's DNS. On the lab nothing can leave anyway (no route and the site DNS
+  answers REFUSED for outside names): **0 packets** left 192.168.100.0/24 in run 1 (excluding mDNS multicast); 5,954
+  packets from the workstation, all to the lab's server (Wazuh, Kanidm, DNS) or mDNS.
+- **Product-level block (what Plan 2 ships):** (a) `/etc/hosts` mapping the eight vendor names to `0.0.0.0` (a
+  firewall/DNS block on the site gives the same: the site DNS must refuse them; the workstation's resolver is the
+  site server). With that, a full edit session (open, edit, save, PDF) produced **0 DNS queries and 0 packets out of
+  the lab net**; a launch under `strace` shows the app's connection attempt go to `0.0.0.0:443` (never leaves the host)
+  and one Chromium UDP probe to Google DNS over IPv6 that fails with `ENETUNREACH` (a route probe; **no packet is
+  sent**). (b) `~/.config/onlyoffice/DesktopEditors.conf` keys `autoUpdateMode=disabled`, `pluginsDisabled=true`,
+  `lockPortals=true` (names found in the binary; values guessed, not vendor-documented): with the file in place, the
+  launch showed no update-check DNS. **`pluginsDisabled` and `lockPortals` had no visible effect** (the Plugins
+  and AI Tools tabs stayed; run 3 reverted the file and a clean launch also showed no update lookup within 40 s,
+  so I cannot separate `autoUpdateMode`'s effect from the "once per interval" behaviour: the hosts block is the
+  control that is **proven**, the conf keys are not).
+- **AI features:** the editor ships an **"AI Tools" plugin** (`editors/sdkjs-plugins/{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}`)
+  whose agent tools include `run_script` and `file_opener` (it can run commands for a model). It needs a model
+  provider configured (none is; without a network it cannot reach one). **Removing that plugin directory removed the
+  "AI Tools" tab from every editor** (screenshot-verified, plugin directory restored afterwards; the removal is a
+  change to an RPM-owned directory, so `rpm -V` would flag it: ship it as a post-install step or a package patch).
+  The start page still offers "AI Chat" and "AI Tools" entries that open an "Accept & Install" offer (a vendor
+  download, blocked); **"Don't show me ONLYOFFICE AI Tools" removes both entries** but is a per-user setting
+  stored in the Chromium profile (Local Storage), not in `DesktopEditors.conf`: the first-run needs it pre-seeded, or
+  the entries stay (harmless without the network, but visible). `--lock-portals` exists on the command line.
+
+### Limits (the list behind "works with limits")
+1. **Vendor RPM from the "latest" link is unsigned;** only the yum-repo copy is signed (above). Re-signing under our key
+   is needed (spec already says signed).
+2. **Bundled non-validated crypto (BoringSSL in Chromium)** outside the system FIPS policy; harmless on the data path
+   (no TLS used) but a POA&M item, and the vendor-call block must be shipped, not optional.
+3. **First GUI run is needed before headless conversion works:** `x2t` PDF export failed with `DoctRenderer
+   <error code="open"/>` / a V8 `ToLocalChecked` abort (a `ud2` trap in the journal) because `editors/sdkjs/common/AllFonts.js`
+   does not exist in the package; the GUI generates it into `~/.local/share/onlyoffice/desktopeditors/data/fonts/`
+   on first launch. With `<m_sAllFontsPath>` pointing there, `x2t` converted correctly. So `chp-site doc publish`'s
+   PDF step can use `x2t`, but only after a first launch (or after running ONLYOFFICE's font generator; not shipped).
+   `x2t` is also an unsupported interface (no documented CLI). `desktopeditors` has no `--convert-to`.
+4. **Start page shows vendor features (AI Chat, AI Tools, Templates, Clouds, registration, update);** they fail
+   quietly when blocked (Templates is an empty page). They need the pre-seeded setting above, and the Help menu would
+   try `download.onlyoffice.com`.
+5. **Chromium's sandbox is off** (`--no-sandbox` in the helper command lines; `chrome-sandbox` is not setuid). The
+   embedded browser shows only local app content here, so the exposure is small, but it is an unsandboxed
+   Chromium on a CUI workstation: owner-level risk statement.
+6. **Heavy and not constrained by SELinux:** 1.2 GB, runs `unconfined_t`; it uses `~/.local/share/onlyoffice` for
+   an autosave copy of every open CUI document.
+7. **The fapolicyd daemon failed once during back-to-back package installs** (not ONLYOFFICE's fault; see above).
+8. **GUI tested under Xvfb, not under GDM,** and on the minimum feature set (open/edit/save/PDF; header/footer;
+   odd/even; designation block; page-number field).
+
+### Not done
+- LibreOffice comparison: **not run**, because the verdict is not "does not work".
+- ONLYOFFICE digital signatures, macros, comment/track-changes round trip, PDF/A, printing, the `.docxf`/`.oform` form
+  formats, and any use of the vendor's cloud features.
+- Reboot persistence of the `/etc/hosts` block (the lab host's `/etc/hosts` was restored after the test).
+
+### Cleanup / lab state
+iso5-dcli keeps ONLYOFFICE 10.0.0-169 and `xorg-x11-server-Xvfb` installed (plus its Rocky dependencies); the vendor key
+is in the rpm database; test files are in `~/oo-test`; `/etc/hosts`, the AI plugin directory and the DVD were restored
+or detached; the Xvfb and ONLYOFFICE processes were stopped; `DesktopEditors.conf` is back to `titlebar=system` only (the test
+version is `~/conf.keep`); the "Don't show AI Tools" click remains in the profile. Vendor package and key are cached on the Mac in `~/idm-lab-inputs/onlyoffice/`
+(`repo-copy.rpm` = the signed one; `onlyoffice-desktopeditors.x86_64.rpm` = the unsigned "latest" link).
 
 ## For Plan 2 (decisions and work the spike surfaced)
 

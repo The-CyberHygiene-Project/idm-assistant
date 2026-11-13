@@ -1,0 +1,61 @@
+#!/bin/sh
+
+copy_templates() {
+  TEMPLATE_LANG="default"
+  NEW_DOCX="New document"
+  NEW_XLSX="New spreadsheet"
+  NEW_PPTX="New presentation"
+  NEW_PDFF="New PDF"
+  case $LANG in
+    ar_* )
+      TEMPLATE_LANG="ar-SA"
+      NEW_DOCX="مستند جديد"
+      NEW_XLSX="جدول بياني جديد"
+      NEW_PPTX="عرض تقديمي جديد"
+      NEW_PDFF="PDF جديد"
+      ;;
+    be_* )
+      NEW_DOCX="Новы дакумент"
+      NEW_XLSX="Новая электронная табліца"
+      NEW_PPTX="Новая прэзентацыя"
+      NEW_PDFF="Новы PDF"
+      ;;
+    bg_* )
+      TEMPLATE_LANG="bg-BG"
+      NEW_DOCX="Нов документ"
+      NEW_XLSX="Нова електронна таблица"
+      NEW_PPTX="Нова презентация"
+      NEW_PDFF="Нов PDF"
+      ;;
+    ca_* )
+      TEMPLATE_LANG="ca-ES"
+      NEW_DOCX="Nou document"
+      NEW_XLSX="Nou full de càlcul"
+      NEW_PPTX="Nova presentació"
+      NEW_PDFF="Nou PDF"
+      ;;
+    cs_* )
+      TEMPLATE_LANG="cs-CZ"
+      NEW_DOCX="Nový dokument"
+      NEW_XLSX="Nový sešit"
+== boringssl in cef
+UseBoringSSLForRandBytes
+../../third_party/boringssl/src/ssl/internal.h
+../../third_party/webrtc/rtc_base/boringssl_identity.cc
+../../third_party/boringssl/src/ssl/ssl_privkey.cc
+../../third_party/boringssl/src/ssl/ssl_aead_ctx.cc
+libssl.*
+libcrypto.*
+== x2t run
+
+
+-------------------------------------------------------------------------------
+		OOX/binary file converter. Version: 10.0.0.169
+-------------------------------------------------------------------------------
+rc=0
+== fap
+Permissive: false
+q_size: 800
+Allowed accesses: 491266
+Denied accesses: 7
+<no matches>
