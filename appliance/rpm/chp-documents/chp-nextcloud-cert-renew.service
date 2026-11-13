@@ -1,0 +1,7 @@
+[Unit]
+Description=Renew the NextCloud TLS certificate (step-ca; ACME re-issue if it already expired)
+ConditionPathExists=/etc/chp/documents.conf
+After=step-ca.service
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/chp/cert-renew-nextcloud

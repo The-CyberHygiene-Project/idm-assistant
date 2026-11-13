@@ -1,0 +1,10 @@
+[Unit]
+Description=NextCloud background jobs
+ConditionPathExists=/etc/chp/documents.conf
+BindsTo=chp-nextcloud-egress.service
+After=postgresql.service chp-nextcloud-egress.service
+[Service]
+Type=oneshot
+User=apache
+ExecStartPre=/usr/sbin/nft list table inet chp_nextcloud_egress
+ExecStart=/usr/bin/php -d apc.enable_cli=1 -f /usr/lib/nextcloud/cron.php

@@ -1,0 +1,26 @@
+# /etc/nftables/chp-nextcloud-egress.nft (chp-documents): NextCloud runs as the web server user (apache: php-fpm
+# workers, cron, occ). That user may open connections ONLY to loopback and this server itself; anything else is logged
+# (CHP-NC-EGRESS) and refused, and NO DNS at all (a site whose resolver forwards to the internet gives NextCloud no DNS
+# channel out; NextCloud's own names come from /etc/hosts rendered by chp-site).
+# SITE-INDEPENDENT: the server address comes from /etc/chp/nextcloud-egress-addr.nft, rendered by
+# `chp-site documents enable` as one line:  define CHP_NC_SERVER_IP = 192.0.2.10
+# Without that file `nft -f` fails and chp-nextcloud-egress.service refuses to start (php-fpm and httpd BindsTo it).
+# A separate table: firewalld's own table is left alone. A positive match on the socket owner: packets with no socket
+# (the kernel's own IGMP/MLD/ND) never match.
+include "/etc/chp/nextcloud-egress-addr.nft"
+table inet chp_nextcloud_egress
+delete table inet chp_nextcloud_egress
+table inet chp_nextcloud_egress {
+    chain output {
+        type filter hook output priority filter; policy accept;
+        meta skuid "apache" jump apache_out
+    }
+    chain apache_out {
+        meta l4proto { tcp, udp } th dport 53 log prefix "CHP-NC-EGRESS-DNS " level warn flags skuid counter reject
+        oifname "lo" accept
+        ip daddr { 127.0.0.0/8, $CHP_NC_SERVER_IP } accept
+        ip6 daddr ::1 accept
+        ct state established,related accept
+        log prefix "CHP-NC-EGRESS " level warn flags skuid counter reject
+    }
+}

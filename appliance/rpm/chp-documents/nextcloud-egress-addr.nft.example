@@ -1,0 +1,2 @@
+# Example of /etc/chp/nextcloud-egress-addr.nft (rendered by chp-site documents enable from SERVER_IP):
+define CHP_NC_SERVER_IP = 192.0.2.10

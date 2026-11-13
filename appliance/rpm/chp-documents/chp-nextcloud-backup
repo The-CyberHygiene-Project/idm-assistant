@@ -1,0 +1,49 @@
+#!/bin/bash
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+# chp-nextcloud-backup [backup|restore DIR|keep-days] (root; chp-nextcloud-backup.timer nightly):
+#   backup     maintenance mode on -> pg_dump (peer auth) + rsync of the data directory and /etc/nextcloud into
+#              /backup/nextcloud/<UTC stamp>/ -> maintenance off; keeps DOCUMENTS_BACKUP_DAYS days (from
+#              /etc/chp/documents.conf, default 14); MANIFEST with sha256. The copies hold CUI: mode 0700, root only.
+#   restore    the reverse onto a reset server (nextcloud-chp installed, database empty or absent); verifies MANIFEST
+#   keep-days  print the retention in force
+set -Eeuo pipefail
+CONF=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
+B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=/data/nextcloud/data
+keep_days() {
+  local v; v=$(sed -n 's/^DOCUMENTS_BACKUP_DAYS=//p' "$CONF" 2>/dev/null | head -1)
+  case $v in ''|*[!0-9]*|0) v=14 ;; esac
+  echo "$v"
+}
+KEEP=$(keep_days)
+occ() { /usr/bin/occ "$@"; }
+log() { logger -t chp-nextcloud-backup -- "$*"; echo "$*"; }
+case ${1:-backup} in
+  keep-days) echo "$KEEP" ;;
+  backup)
+    t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t; install -d -m 0700 "$B" "$o"
+    trap 'occ maintenance:mode --off >/dev/null 2>&1 || true' EXIT
+    occ maintenance:mode --on >/dev/null
+    runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
+    rsync -aHAX --numeric-ids "$D/" "$o/data/"
+    rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
+    occ maintenance:mode --off >/dev/null; trap - EXIT
+    (cd "$o" && find . -type f ! -name MANIFEST -print0 | sort -z | xargs -0 sha256sum > MANIFEST)
+    find "$B" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP" -exec rm -rf {} +
+    log "backup $t: $(du -sh "$o" | cut -f1), $(wc -l < "$o/MANIFEST") files, keeping $KEEP days" ;;
+  restore)
+    o=${2:?restore DIR}; [ -s "$o/MANIFEST" ] || { echo "no MANIFEST in $o"; exit 1; }
+    (cd "$o" && sha256sum --quiet -c MANIFEST) || { echo "MANIFEST check FAILED: not restoring"; exit 1; }
+    systemctl stop httpd php-fpm nextcloud-cron.timer
+    runuser -u postgres -- psql -qc "DROP DATABASE IF EXISTS nextcloud" -c "CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING 'UTF8'"
+    runuser -u postgres -- pg_restore -d nextcloud --no-owner --role=apache < "$o/nextcloud.pgdump"   # stdin: the dir is root-only
+    install -d -m 0750 -o apache -g apache /data/nextcloud "$D"
+    rsync -aHAX --numeric-ids --delete "$o/data/" "$D/"
+    rsync -aHAX --numeric-ids "$o/etc-nextcloud/" /etc/nextcloud/
+    restorecon -R /data/nextcloud /etc/nextcloud
+    systemctl start php-fpm httpd nextcloud-cron.timer
+    occ maintenance:mode --off >/dev/null; occ maintenance:data-fingerprint >/dev/null
+    log "restored from $o" ;;
+  *) echo "usage: chp-nextcloud-backup [backup|restore DIR|keep-days]"; exit 2 ;;
+esac

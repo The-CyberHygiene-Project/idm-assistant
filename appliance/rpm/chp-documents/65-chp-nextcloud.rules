@@ -1,0 +1,9 @@
+# 65-chp-nextcloud.rules (chp-documents): NextCloud may READ (open, never execute) users' files of any type in its data
+# directory, including script types fapolicyd would otherwise deny (a .py or .php a user stored is a document here).
+# Needed once allow_filesystem_mark = 1 (otherwise php-fpm's private mount namespace escapes fapolicyd entirely).
+allow perm=open exe=/usr/sbin/php-fpm : dir=/data/nextcloud/data/ ftype=%languages
+allow perm=open exe=/usr/bin/php : dir=/data/nextcloud/data/ ftype=%languages
+# the nightly backup copies users' files (any type) into /backup/nextcloud and back on a restore
+allow perm=open exe=/usr/bin/rsync : dir=/data/nextcloud/data/ ftype=%languages
+allow perm=open exe=/usr/bin/rsync : dir=/backup/nextcloud/ ftype=%languages
+allow perm=open exe=/usr/bin/sha256sum : dir=/backup/nextcloud/ ftype=%languages

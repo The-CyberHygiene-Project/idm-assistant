@@ -1,0 +1,16 @@
+[Unit]
+Description=CHP: NextCloud (the apache user) may reach only this server
+Documentation=file:///usr/share/doc/chp-documents/README.md
+# refuse to start (not skip) until chp-site documents enable has rendered the server address
+AssertPathExists=/etc/chp/nextcloud-egress-addr.nft
+After=firewalld.service
+Before=php-fpm.service httpd.service nextcloud-cron.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables/chp-nextcloud-egress.nft
+# the snapshot check 79 compares the live table with
+ExecStartPost=/usr/libexec/chp/nextcloud-egress-snapshot
+ExecStop=/usr/sbin/nft delete table inet chp_nextcloud_egress
+[Install]
+WantedBy=multi-user.target
