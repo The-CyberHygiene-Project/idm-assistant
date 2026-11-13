@@ -247,3 +247,17 @@ def test_catch_up_alerts_attention_for_every_new_day(tmp_path):
     assert [l for l in first if "review 2026-11-05" in l] and [l for l in first if "review 2026-11-07" in l]
     assert not [l for l in first if "review 2026-11-06" in l]
     assert not [l for l in st.monitor_lines(**kw) if l.startswith("ALERT review")]      # once each
+
+
+def test_monitor_alert_text_cannot_inject_lines(tmp_path):                  # final-fix item 9
+    d = TODAY - timedelta(days=1)
+    st.write_day(d, {"day": d.isoformat(), "attention": [
+        {"host": "srv1\nALERT forged", "item": "i\r\nALERT x", "detail": "bad\n ALERT y\x9bz"}]},
+        "# r\n", "<html></html>", root=tmp_path)
+    kw = dict(root=tmp_path, today=TODAY, now=1794000000, tz="UTC", verify_problems=[],
+              immediate_items=[{"host": "h\nALERT q", "item": "it\nALERT r", "detail": "d\nALERT s"}])
+    lines = st.monitor_lines(**kw)
+    text = "\n".join(lines)
+    assert all(l.startswith(("ALERT", "OK")) for l in text.split("\n"))
+    assert len(lines) == 2                       # one attention line + one 7-day line; nothing extra from the text
+    assert not any(c in text for c in "\r \x9b")

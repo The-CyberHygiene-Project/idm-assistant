@@ -1,4 +1,5 @@
 <?php
+/** SPIKE (throwaway; Plan 2 rewrites). */
 declare(strict_types=1);
 namespace OCA\ChpFolderTag\AppInfo;
 

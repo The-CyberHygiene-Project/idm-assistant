@@ -1,4 +1,5 @@
 import ipaddress
+import pytest
 import json
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -243,3 +244,9 @@ def test_report_text_has_no_python_literals():                            # quie
     row = [ln for ln in md.splitlines() if "promiscuous" in ln][0]
     assert "None" not in row and "| ? |" in row, row
     assert "None" not in html
+
+
+@pytest.mark.parametrize("bad", ["\x9b", " ", " ", "\x80", "\x9f"])
+def test_cell_replaces_c1_controls_and_line_separators(bad):                # final-fix item 8
+    out = rr._cell(f"a{bad}b")
+    assert out == "a b"

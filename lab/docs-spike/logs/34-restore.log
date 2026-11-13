@@ -14,12 +14,12 @@ Nextcloud is not installed - only a limited number of commands are available
                                                                    
 
 Traceback (most recent call last):
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 114, in <module>
+  File "<repo>/lab/docs-spike/proofs.py", line 114, in <module>
     fid = fileid("lab01", p); st, t = tags_of("lab01", fid)
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 62, in fileid
+  File "<repo>/lab/docs-spike/proofs.py", line 62, in fileid
     st, data = req(u, "PROPFIND", dav(u, p), body, {"Depth": "0", "Content-Type": "application/xml"})
                ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 27, in req
+  File "<repo>/lab/docs-spike/proofs.py", line 27, in req
     c.sock = CTX.wrap_socket(socket.create_connection(("127.0.0.1", PORT), 60), server_hostname=FILES)
              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 455, in wrap_socket
@@ -40,13 +40,13 @@ Traceback (most recent call last):
     ~~~~~~~~~~~~~~~~~~~~~~~~~^^
 ConnectionResetError: [Errno 54] Connection reset by peer
 Traceback (most recent call last):
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 134, in <module>
+  File "<repo>/lab/docs-spike/proofs.py", line 134, in <module>
     st, l3 = listing("lab03"); print(f"  lab03 (doc-reviewers, NOT cui-users) sees: {l3}")
              ~~~~~~~^^^^^^^^^
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 70, in listing
+  File "<repo>/lab/docs-spike/proofs.py", line 70, in listing
     st, data = req(u, "PROPFIND", dav(u, p), None, {"Depth": "1"})
                ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 27, in req
+  File "<repo>/lab/docs-spike/proofs.py", line 27, in req
     c.sock = CTX.wrap_socket(socket.create_connection(("127.0.0.1", PORT), 60), server_hostname=FILES)
              ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 455, in wrap_socket

@@ -5,6 +5,15 @@
 Plan 2 is written from this section. Each item cites the section or log below that holds the evidence. Nothing
 here is new testing: it summarises Tasks 1-3.
 
+### Spec amendments (the design spec changes in these ways)
+
+- **§4 freshness marker:** the sha256 of the canonical bytes plus the file id, not NextCloud's change marker (ETag
+  is only a pre-check and `If-Match`).
+- **Publish is server-side:** the spec said publish uploads; in Plan 2 `chp_ledger` (or the appender) receives the
+  bytes and writes the canonical copy (M1).
+- **Per-cycle author definition:** Authors(cycle) = creator + everyone who checked out in the cycle + the publisher.
+  **Owner confirmation needed.**
+
 ### What was chosen
 
 - **Packages** (§Packages, `logs/42`). Everything below comes from the Rocky 9.8 DVD and is Rocky-signed:
@@ -40,6 +49,10 @@ here is new testing: it summarises Tasks 1-3.
   the creator + everyone who checked the file out in the cycle + the publisher. An approver must be outside
   Authors(cycle), must approve after the cycle's last checkout, and must approve that exact sha256. The publisher must
   be in Authors(cycle).
+  **Residual (final review):** whoever controls NextCloud's PHP process can submit requests as anyone. Every user's
+  15-minute `chp-doc` Bearer passes through apache, so a compromised NextCloud can **replay an approver's live
+  token** and get a forged approval appended with Kanidm-verified evidence. The ledger detects later tampering of
+  its entries; it does not detect this. See owner decision 9.
 - **Server-side publish is a MUST** (review fix 1). The prototype's PUT by the author lets anyone with write access
   skip every rule. In Plan 2 the Compliance areas are read-only to all users (ACL), and `chp_ledger` (or the
   appender) receives the bytes. Under a lock, it compares and writes in one step: the received sha256 must equal the
@@ -97,6 +110,7 @@ here is new testing: it summarises Tasks 1-3.
 ### Plan 2 MUST / gate items (deduplicated)
 
 1. **M1 Server-side publish** (review fix 1): Compliance read-only to users; atomic compare-and-write by sha256 under a lock.
+   The server computes and records the checkout sha256 itself; the client's value is never trusted.
 2. **M2 Ledger hardening** (fixes 3-5, round 2, deferred minors): Kanidm userinfo re-validation; approve and override
    need a Bearer; per-cycle author rule; quarantine on any failure, and the quarantine writes a record without `bearer_token`; an unparsable file is recorded only by size and sha256; the spool file is always deleted (round 2, `logs/75-76`); finite start limits with `OnFailure` alert on the
    service **and** the path unit; a per-user rate limit in the app; Compliance-only file ids, with the team-folder
@@ -106,6 +120,12 @@ here is new testing: it summarises Tasks 1-3.
    minors (ledger, Task 2): root check on `purge-quarantine`; non-dict JSON in quarantine; the appender's
    team-folder re-check trusts apache-side fields; `O_TRUNC` filename collision; unlink failure in `finally`; a
    requester told "refused" after a successful append.
+   **Spike-appender items triaged as must-fix for Plan 2:** (a) `purge-quarantine` checks it runs as root;
+   (b) non-dict JSON is quarantined, not crashed on; (c) quarantine filenames never collide (no `O_TRUNC` overwrite);
+   (d) an unlink failure in `finally` cannot crash `process()`; (e) the requester is never told "refused" after a
+   successful append (retries are idempotent); (f) ContainListener allows CUI to Archive per owner decision 3
+   (pending), with tests for rename and subfolder move inside CUI and for trash and version restore across
+   folders; (g) decide the `verify --stick` exit codes before the doc-ledger verify copies the pattern.
 3. **M3 Transport**: bind port 0 and keep listening until the right `state` arrives; linger off for these users;
    test a refresh near the 8 h limit and read the expiry from Kanidm (fix 6); the login rewrite.
 4. **M4 Egress**: ship the no-DNS variant and `/etc/hosts` from the site; BindsTo + pre-check; a monitor check for the
@@ -116,7 +136,7 @@ here is new testing: it summarises Tasks 1-3.
 6. **M6 Package**: our signed RPM from a decided build host; `occ upgrade` in `%post`; the `config.php` trust entry;
    rule 65; stock listeners off; `SUBNET_CIDR`; `files` in the site zone; certificate renewal timer (ACME opens
    :80 per issue, like Kanidm's); backup timer; Wazuh rules (+ a Kanidm failed-TOTP rule); 8 GiB server default.
-7. **M7 fapolicyd** (findings 1-2): trial `allow_filesystem_mark = 1` per role before shipping; decide the gate
+7. **M7 fapolicyd** (findings 1-2): if decision 1 turns `allow_filesystem_mark` on, trial it per host role first; decide the gate
    (FANOTIFY count vs `--check-status`, read after a fapolicyd restart, because a rule reload keeps cached
    decisions).
 8. **G1 fapolicyd health** (editor gate 1): alarm on `fapolicyd.service` failed; a "two package installs back to
@@ -162,6 +182,11 @@ here is new testing: it summarises Tasks 1-3.
    non-validated BoringSSL (POA&M line), `--no-sandbox`, `unconfined_t`, autosave copies of CUI outside the CUI
    rules (G2), and a vendor RPM we must re-sign. *Options (design §4):* accept with the POA&M line and G1-G4;
    LibreOffice from Rocky (not tested); or ship the store without a desktop editor. *Spike:* no recommendation.
+9. **Ledger forgery by a compromised NextCloud** (§Ledger). *Problem:* whoever controls NextCloud's PHP process can
+   replay an approver's live Bearer (it passes through apache) and have a forged approval appended with
+   Kanidm-verified evidence; the ledger detects later tampering, not this. *Options:* accept with detection only;
+   or reduce exposure: alert on every approval and override through `ALERT_HOOK`, narrow who can approve, or
+   require a second channel for approvals. *Spike:* no recommendation.
 
 Smaller policy points that Plan 2 should confirm with the owner: repeated checkouts void pending approvals, and
 `create` makes the caller an author (round 2).

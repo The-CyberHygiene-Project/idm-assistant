@@ -171,6 +171,7 @@ def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_
     review's attention items (once per day), a ledger problem, and the 'at once' items."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
+    from .review_report import _cell         # untrusted alert text must not add ALERT lines
     lines, base = [], _dir(root)
     days = _days(root)
     yesterday = today - timedelta(days=1)
@@ -197,11 +198,12 @@ def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_
             att = json.loads((base / name / "data.json").read_text()).get("attention", [])
         except (OSError, ValueError):
             att = []
-        lines += [f"ALERT review {name}: {a['host']}: {a['item']}: {a['detail']}" for a in att]
+        lines += [f"ALERT review {name}: {_cell(a['host'])}: {_cell(a['item'])}: {_cell(a['detail'])}" for a in att]
         fd = os.open(marker, os.O_WRONLY | os.O_CREAT, 0o600)
         os.close(fd)
     if verify_problems:
         lines.append(f"ALERT the review ledger check failed: {verify_problems[0]}"
                      + (f" (+{len(verify_problems) - 1} more; chp-site review verify)" if len(verify_problems) > 1 else ""))
-    lines += [f"ALERT {i['host']}: {i['item']}: {i['detail']} (within 7 days of expiry)" for i in immediate_items]
+    lines += [f"ALERT {_cell(i['host'])}: {_cell(i['item'])}: {_cell(i['detail'])} (within 7 days of expiry)"
+              for i in immediate_items]
     return lines or ["OK daily review: built, signed, nothing waiting"]

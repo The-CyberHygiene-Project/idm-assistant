@@ -255,8 +255,8 @@ def _t(epoch):
 
 def _cell(x):
     """One table cell: untrusted alert text (signatures, descriptions, user names) must not break the signed report's
-    layout or a terminal: control characters (incl. ESC) become spaces, backticks are dropped (final review)."""
-    s = "".join(" " if (ord(ch) < 32 or ord(ch) == 127) else ch for ch in str(x))
+    layout or a terminal: control characters (C0, DEL, C1, U+2028/9) become spaces, backticks are dropped (final review)."""
+    s = "".join(" " if (ord(ch) < 32 or 127 <= ord(ch) <= 159 or ch in "\u2028\u2029") else ch for ch in str(x))
     return s.replace("`", "")
 
 
