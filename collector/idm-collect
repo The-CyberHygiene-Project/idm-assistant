@@ -263,6 +263,13 @@ if command -v fapolicyd-cli >/dev/null 2>&1; then
   fpm=$(sed -n 's/^[[:space:]]*permissive[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$FAPCONF" 2>/dev/null | tail -n 1)
   case "$fpm" in 1) fpj=true ;; 0) fpj=false ;; *) fpj=null ;; esac
   fdok=1; fapolicyd-cli -D > "$W/fapolicyd.dump" 2>/dev/null || fdok=0
+  # The authoritative denial count is fapolicyd's own counter ("Denied accesses:"; it counts since the last fapolicyd
+  # start). The audit-log FANOTIFY count below is only a LOWER BOUND: it misses denials that never reach the audit
+  # log, and it survives restarts the counter does not. Report both, labelled.
+  fdn=$(fapolicyd-cli --check-status 2>/dev/null </dev/null | awk '/^Denied accesses:/ {print $3; exit}') || fdn=""
+  case "$fdn" in ''|*[!0-9]*) fdnj=null ;; *) fdnj=$fdn ;; esac
+  ffan=$(ausearch --input-logs -m FANOTIFY -ts recent 2>/dev/null </dev/null | grep -Ec 'type=FANOTIFY.* resp=(2|deny)') || ffan=0
+  case "$ffan" in ''|*[!0-9]*) ffan=0 ;; esac
   fgrp=$(ausearch --input-logs -m FANOTIFY -ts recent 2>/dev/null </dev/null | awk '
       function flush() { if (fan && sc && p != "") printf "%s|%s|%s\n", t, u, p; fan = sc = 0; p = u = t = "" }
       /^----/ { flush(); next }
@@ -310,7 +317,7 @@ EOF
     fpt=$(cat "$FAPDIR/fapolicyd.trust" "$FAPDIR"/trust.d/* 2>/dev/null | sed 's/#.*//' \
           | awk 'NR == FNR {d[$1] = 1; next} NF && !($1 in d) {n++} END {print n + 0}' "$W/fap.trusted" -) || fpt=null
   fi
-  fap="{\"active\":$(json_str "$fact"),\"permissive\":$fpj,\"denials\":[${fl%,}],\"pending\":$fpend,\"file_trust_pending\":$fpt}"
+  fap="{\"active\":$(json_str "$fact"),\"permissive\":$fpj,\"denied_counter\":$fdnj,\"fanotify_denials_lower_bound\":$ffan,\"denials\":[${fl%,}],\"pending\":$fpend,\"file_trust_pending\":$fpt}"
 fi
 # <<< fapolicyd
 

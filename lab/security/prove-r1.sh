@@ -55,7 +55,7 @@ case ${1:-} in
       check "$h: record log present 0640" "$(X $h 'sudo stat -c %a /var/log/chp-review.json')" "640"
       check "$h: no new listener" "$(X $h 'sudo ss -ltnup | sed -E "s/pid=[0-9]+,//g; s/fd=[0-9]+//g" | sort | sudo diff /root/r1-ss-before - >/dev/null && echo same || echo changed')" "same"
       check "$h: 0 AVCs since enable" "$(X $h "sudo ausearch -m AVC -ts \"$T0\" 2>/dev/null | grep -c denied")" "0"
-      check "$h: 0 fapolicyd denials since enable" "$(X $h "sudo ausearch -m FANOTIFY -ts \"$T0\" 2>/dev/null | grep -c 'type=FANOTIFY'")" "0"
+      check "$h: 0 fapolicyd denials (--check-status counter since its last start)" "$(X $h "sudo fapolicyd-cli --check-status 2>/dev/null | awk '/^Denied accesses:/ {print \$3}'")" "0"
       check "$h: agent keys unchanged" "$(X $h '[ "$(sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16)" = "$(sudo cat /root/r1-keys-before)" ] && echo same || echo changed')" "same"
     done
     check "srv: build timer enabled" "$(X srv 'systemctl is-enabled chp-review-build.timer')" "enabled"

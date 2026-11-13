@@ -68,7 +68,7 @@ case ${1:-} in
     check "three recovery secrets pending on the server" "$(Rv 'ls /root/chp-escrow-pending | tr "\n" " "')" "kanidm-admins.json root_ca_key step-ca-password "
     al=$(Rv 'for c in /usr/lib/chp/monitor.d/*; do "$c"; done | grep ^ALERT')
     [[ $(grep -c . <<<"$al") == 1 && $al == *"recovery secrets still on the server"* ]] && pass "monitor alerts only: secrets still on the server" || fail "monitor alerts" "$al"
-    check "fapolicyd: no denials" "$(Rv 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
+    check "fapolicyd: no denials (--check-status counter)" "$(Rv 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
     check "SELinux: no AVC since boot" "$(Rv 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0" ;;
   reboot)
     A "sudo virsh reboot $VM >/dev/null"; sleep 20
@@ -129,7 +129,7 @@ case ${1:-} in
     check "audit log: 2 revoke records for $U" "$(Rv "ausearch --input-logs -m USER </dev/null 2>/dev/null | grep -c 'chp-site revoke[.a-z]* user=\"$U\"'")" "2"
     check "journal (authpriv): the same 2 unexpire records" "$(( $(Rv "journalctl -t chp-site --no-pager -o cat | grep -c '^chp-site unexpire[.a-z]* user=\"$U\"'") - j0 ))" "2"
     Rv 'kanidm logout -D idm_admin' >/dev/null
-    check "fapolicyd: no denials" "$(Rv 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
+    check "fapolicyd: no denials (--check-status counter)" "$(Rv 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
     check "SELinux: no AVC since boot" "$(Rv 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0" ;;
   renew)
     Rv "systemctl stop cert-renew-kanidm.timer; export STEPPATH=/root/.step; firewall-cmd -q --add-service=http; step-cli ca certificate idm.$D /etc/pki/kanidm/chain.pem /etc/pki/kanidm/key.pem --provisioner acme --kty EC --crv P-384 --not-after 5m --force >/dev/null 2>&1; firewall-cmd -q --remove-service=http; chmod 600 /etc/pki/kanidm/*.pem; systemctl restart kanidmd" >/dev/null

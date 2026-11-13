@@ -479,7 +479,7 @@ SIGS_QA = ("google-authenticator|RSA/SHA256, Mon, Key ID 8a3872bf3228467c||\n"
 
 def _fap(tmp, ausearch=AUSEARCH, conf="permissive = 0\n", active="active", has_cli=True, dump_ok=True,
          exists=("/usr/local/bin/chp-helper", "/usr/bin/google-authenticator"), files_qa=FILES_QA, sigs_qa=SIGS_QA,
-         trust="", dump="rpmdb /usr/bin/true 27936 aa\nrpmdb /usr/bin/ls 1 bb\nrpmdb /usr/sbin/kanidm_unixd 1 cc\n"):
+         trust="", status="Permissive: false\nAllowed accesses: 60165\nDenied accesses: 7\n", dump="rpmdb /usr/bin/true 27936 aa\nrpmdb /usr/bin/ls 1 bb\nrpmdb /usr/sbin/kanidm_unixd 1 cc\n"):
     import json as _j
     lines = SCRIPT.read_text().splitlines()
     i, j = lines.index("# >>> json-helpers"), lines.index("# <<< json-helpers")
@@ -493,7 +493,9 @@ def _fap(tmp, ausearch=AUSEARCH, conf="permissive = 0\n", active="active", has_c
     (tmp / "bin").mkdir(exist_ok=True)
     if has_cli:
         cli = tmp / "bin" / "fapolicyd-cli"
-        cli.write_text(f'#!/bin/sh\ncat "{tmp / "dump.out"}"\n' if dump_ok else "#!/bin/sh\nexit 1\n")
+        (tmp / "status.out").write_text(status)
+        cli.write_text(f'#!/bin/sh\ncase "$*" in *check-status*) cat "{tmp / "status.out"}" ;; *) cat "{tmp / "dump.out"}" ;; esac\n'
+                       if dump_ok else '#!/bin/sh\ncase "$*" in *check-status*) cat "' + str(tmp / "status.out") + '" ;; *) exit 1 ;; esac\n')
         cli.chmod(0o755)
     stubs = (
         f'W={tmp}\n'
@@ -549,6 +551,16 @@ def test_fapolicyd_removed_file_reported_as_not_existing(tmp_path):
 
 def test_fapolicyd_not_installed_is_null(tmp_path):
     assert _fap(tmp_path, has_cli=False) is None
+
+
+def test_fapolicyd_reports_counter_and_labelled_fanotify_lower_bound(tmp_path):
+    f = _fap(tmp_path)
+    assert f["denied_counter"] == 7                      # fapolicyd-cli --check-status "Denied accesses"
+    assert f["fanotify_denials_lower_bound"] == 5        # audit-log FANOTIFY resp=2 records: a lower bound only
+
+
+def test_fapolicyd_counter_unreadable_is_null_not_zero(tmp_path):
+    assert _fap(tmp_path, status="")["denied_counter"] is None
 
 
 def test_report_emits_fapolicyd():

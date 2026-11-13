@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -16,6 +16,10 @@ Source6:        20-clock.sh
 Source7:        LICENSE
 Source8:        05-firstboot.sh
 Source9:        76-disk-space.sh
+Source10:       80-fapolicyd.sh
+Source11:       fapolicyd-fsmark.sh
+Source12:       fapolicyd-fsmark.conf
+Source13:       66-chp-fsmark.rules
 Requires:       mokutil
 Requires:       chp-site, clevis, clevis-luks, clevis-dracut, clevis-systemd, tpm2-tools, cryptsetup, policycoreutils, chrony, util-linux
 BuildRequires:  systemd-rpm-macros
@@ -35,6 +39,10 @@ install -Dm0755 %{SOURCE8} %{buildroot}%{_prefix}/lib/chp/monitor.d/05-firstboot
 install -Dm0755 %{SOURCE5} %{buildroot}%{_prefix}/lib/chp/monitor.d/10-restorecon.sh
 install -Dm0755 %{SOURCE6} %{buildroot}%{_prefix}/lib/chp/monitor.d/20-clock.sh
 install -Dm0755 %{SOURCE9} %{buildroot}%{_prefix}/lib/chp/monitor.d/76-disk-space.sh
+install -Dm0755 %{SOURCE10} %{buildroot}%{_prefix}/lib/chp/monitor.d/80-fapolicyd.sh
+install -Dm0755 %{SOURCE11} %{buildroot}%{_libexecdir}/chp/fapolicyd-fsmark
+install -Dm0644 %{SOURCE12} %{buildroot}%{_sysconfdir}/chp/fapolicyd-fsmark.conf
+install -Dm0644 %{SOURCE13} %{buildroot}%{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/firstboot
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/monitor
 install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
@@ -43,6 +51,10 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %systemd_post chp-firstboot-common.service chp-monitor.timer
 %preun
 %systemd_preun chp-firstboot-common.service chp-monitor.timer
+
+%posttrans
+# Apply the fapolicyd allow_filesystem_mark flag (shipped OFF = no change); idempotent, safe on every transaction.
+%{_libexecdir}/chp/fapolicyd-fsmark || :
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -58,10 +70,19 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/10-restorecon.sh
 %{_prefix}/lib/chp/monitor.d/20-clock.sh
 %{_prefix}/lib/chp/monitor.d/76-disk-space.sh
+%{_prefix}/lib/chp/monitor.d/80-fapolicyd.sh
+%{_libexecdir}/chp/fapolicyd-fsmark
+%dir %{_sysconfdir}/chp
+%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf
+%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/firstboot
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-6.chp
+- Monitor check 80: fapolicyd not running or in permissive mode (alerts once per state change, again after 24 h).
+- allow_filesystem_mark mechanism: flag /etc/chp/fapolicyd-fsmark.conf (FSMARK=0, shipped OFF), /usr/libexec/chp/fapolicyd-fsmark, empty rules file 66-chp-fsmark.rules.
+
 * Thu Nov 12 2026 The CyberHygiene Project - 0.1.0-5.chp
 - Monitor check 76: mount points with spaces, partial df output, lvextend hint only on LVM, clock-step and garbage-state handling.
 

@@ -39,6 +39,6 @@ for h in srv1 client2; do echo "$h findings: $(cd "$here" && uv run python -m en
 for h in srv1 client2; do
   echo "== $h: signatures + fapolicyd"
   ssh "$h" 'for p in $(rpm -qa --qf "%{NAME}\n" | grep -E "^(kanidm|step|idm-collect)"); do rpm -q --qf "%{NAME}-%{VERSION}-%{RELEASE} %{RSAHEADER:pgpsig}\n" $p; done'
-  ssh "$h" "sudo ausearch --input-logs -m FANOTIFY -ts $start </dev/null 2>/dev/null | grep -c type=FANOTIFY || true"
+  ssh "$h" "sudo fapolicyd-cli --check-status 2>/dev/null | awk '/^Denied accesses:/ {print \$3}' || true"
 done
 

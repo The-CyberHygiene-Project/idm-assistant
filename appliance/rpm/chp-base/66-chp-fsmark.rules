@@ -1,0 +1,4 @@
+# chp-base: trust rules needed once allow_filesystem_mark = 1 (flag: /etc/chp/fapolicyd-fsmark.conf, FSMARK=1).
+# Initially EMPTY: the per-role trial (ISO 0.7.0 Plan 2 Task 9) fills it. Inactive while FSMARK=0 (these rules
+# only matter for the mount-namespace checks that allow_filesystem_mark enables). Position 66 sorts after the stock
+# 60-90 numbering gaps CHP rules use; compile with fagenrules --load, then restart fapolicyd.

@@ -52,7 +52,7 @@ case ${1:-} in
       check "$h: YARA log present before any scan" "$(X $h 'sudo test -f /var/log/chp-yara.json && echo yes')" "yes"
       check "$h: 0 'No such tag' since enable" "$(X $h 'sudo awk -v t="$(sudo cat /root/y1-t0 | tr - /)" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "No such tag"')" "0"
       check "$h: 0 YARA/Wazuh AVCs since enable" "$(X $h 'sudo ausearch -m AVC -ts "$(sudo cat /root/y1-t0 | awk "{split(\$1,d,\"-\"); print d[2]\"/\"d[3]\"/\"d[1], \$2}")" 2>/dev/null | grep denied | grep -c -E "yara|ossec|wazuh"')" "0"
-      check "$h: 0 fapolicyd denials since enable" "$(X $h 'sudo ausearch -m FANOTIFY -ts "$(sudo cat /root/y1-t0 | awk "{split(\$1,d,\"-\"); print d[2]\"/\"d[3]\"/\"d[1], \$2}")" 2>/dev/null | grep -c "type=FANOTIFY"')" "0"
+      check "$h: 0 fapolicyd denials (fapolicyd-cli --check-status counter since its last start; FANOTIFY records are only a lower bound)" "$(X $h "sudo fapolicyd-cli --check-status 2>/dev/null | awk '/^Denied accesses:/ {print \$3}'")" "0"
       check "$h: agent keys unchanged" "$(X $h '[ "$(sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16)" = "$(sudo cat /root/y1-keys-before)" ] && echo same || echo changed')" "same"
     done
     check "srv: YARA alert rules present" "$(X srv 'sudo test -f /var/ossec/etc/rules/chp_yara_rules.xml && echo yes')" "yes"

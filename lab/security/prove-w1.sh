@@ -47,7 +47,7 @@ case ${1:-} in
         echo vuln-scanner-starts: \$(sudo grep -c 'vulnerability-scanner: INFO: Vulnerability scanner module started' /var/ossec/logs/ossec.log); \
         echo data: \$(sudo du -sh /var/ossec | cut -f1); \
         echo wazuh-AVC: \$(sudo ausearch -m AVC -ts '$T0' --input-logs 2>/dev/null | grep denied | grep -v kanidm_unixd | grep -c denied); \
-        echo fapolicyd-deny: \$(sudo ausearch -m FANOTIFY -ts '$T0' --input-logs 2>/dev/null | grep -c 'type=FANOTIFY')"
+        echo fapolicyd-deny-counter: \$(sudo fapolicyd-cli --check-status 2>/dev/null | awk '/^Denied accesses:/ {print \$3}')"
     done
     echo "== server firewall rich rules"; X srv 'sudo firewall-cmd --permanent --list-rich-rules' ;;
   *) sed -n '5,9p' "$0"; exit 2 ;;

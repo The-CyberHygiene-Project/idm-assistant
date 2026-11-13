@@ -49,7 +49,7 @@ enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled h
   check "$3: sshd methods (user / chpadmin)" "$(Rh "$1" "$2" 'for u in alice chpadmin; do sshd -T -C user=$u,host=x,addr=1.1.1.1 | awk "\$1==\"authenticationmethods\"{print \$2}"; done | tr "\n" " "')" "publickey,keyboard-interactive:pam publickey "
   check "$3: unixd token 600 root" "$(Rh "$1" "$2" 'stat -c "%a %U" /etc/kanidm/token')" "600 root"
   check "$3: chp_kanidm loaded, socket dir labelled" "$(Rh "$1" "$2" 'semodule -l | grep -c "^chp_kanidm"; ls -Zd /run/kanidm-unixd | grep -c kanidm_unixd_var_run_t' | tr '\n' ' ')" "1 1 "
-  check "$3: fapolicyd no denials" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
+  check "$3: fapolicyd no denials (--check-status counter)" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
   check "$3: SELinux no AVC since boot" "$(Rh "$1" "$2" 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0"
 }
 
@@ -184,7 +184,7 @@ case ${1:-} in
     for ip in $SIP $C1IP $C2IP; do check "chpadmin key-only break-glass on $ip" "$(Vh "$ip" 'echo ok')" "ok"; done
     Rv 'kanidm logout -D idm_admin' >/dev/null
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
-      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
+      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
     done ;;
   ga)
     # ISO Plan 4b. GA is on everywhere from install (0.5.0). The lab stand-in for each user's phone is the token's secret,
@@ -298,7 +298,7 @@ case ${1:-} in
     Rv 'kanidm logout -D idm_admin' >/dev/null
     for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $v
       check "$1: monitors quiet" "$(Rh "$1" "$2" '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0"
-      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
+      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
     done
     A "sudo rm -f /tmp/iso2/*.ga" ;;
   negtrust)

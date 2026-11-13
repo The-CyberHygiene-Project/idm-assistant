@@ -80,7 +80,7 @@ enrolled_checks() {   # enrolled_checks VM IP LABEL: the checks every enrolled h
   check "$3: sshd methods (user / chpadmin)" "$(Rh "$1" "$2" 'for u in alice chpadmin; do sshd -T -C user=$u,host=x,addr=1.1.1.1 | awk "\$1==\"authenticationmethods\"{print \$2}"; done | tr "\n" " "')" "publickey,keyboard-interactive:pam publickey "
   check "$3: unixd token 600 root" "$(Rh "$1" "$2" 'stat -c "%a %U" /etc/kanidm/token')" "600 root"
   check "$3: chp_kanidm loaded, socket dir labelled" "$(Rh "$1" "$2" 'semodule -l | grep -c "^chp_kanidm"; ls -Zd /run/kanidm-unixd | grep -c kanidm_unixd_var_run_t' | tr '\n' ' ')" "1 1 "
-  check "$3: fapolicyd no denials" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY')" "0"
+  check "$3: fapolicyd no denials (--check-status counter)" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
   check "$3: SELinux no AVC since boot" "$(Rh "$1" "$2" 'ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC')" "0"
   # ISSO 2026-10-10 scan fixes: boot-loader password (hashed) and Rocky's release key in the rpm database
   check "$3: boot-loader password set" "$(Rh "$1" "$2" 'grep -c "^GRUB2_PASSWORD=grub.pbkdf2.sha512.10000." /boot/grub2/user.cfg')" "1"
@@ -167,7 +167,7 @@ case ${1:-} in
       want=1; [[ $1 == "$SRV" ]] && want=2   # the server also runs client-enrol for itself (its step does nothing)
       check "$1: security step done" "$(Rh "$1" "$2" 'ls /var/lib/chp/firstboot/security.done /var/lib/chp/firstboot/client-security.done 2>/dev/null | wc -l')" "$want"
       check "$1: 0 Wazuh SELinux denials" "$(Rh "$1" "$2" 'ausearch -m AVC --input-logs 2>/dev/null | grep denied | grep -v kanidm_unixd | grep -c denied')" "0"
-      check "$1: 0 fapolicyd denials" "$(Rh "$1" "$2" 'ausearch -m FANOTIFY --input-logs 2>/dev/null | grep -c type=FANOTIFY')" "0"
+      check "$1: 0 fapolicyd denials (--check-status counter)" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
       check "$1: AIDE baseline includes Wazuh (no Wazuh path in the next check)" "$(Rh "$1" "$2" 'systemctl start chp-aide-check; while systemctl is-active -q chp-aide-check; do sleep 5; done; grep -c -E "^(added|changed|removed)?.*(/var/ossec|wazuh)" "$(sed -n s/^REPORT=//p /var/lib/chp/aide/last-result)"')" "0"
     done
     for h in "$C1 $C1IP" "$C2 $C2IP"; do set -- $h
@@ -361,7 +361,7 @@ case ${1:-} in
     Rv 'kanidm logout -D idm_admin' >/dev/null
     for v in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $v
       check "$1: monitors quiet" "$(Rh "$1" "$2" '/usr/libexec/chp/monitor >/dev/null; echo $?')" "0"
-      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'ausearch --input-logs -m FANOTIFY </dev/null 2>/dev/null | grep -c type=FANOTIFY; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
+      check "$1: fapolicyd 0 / AVC 0" "$(Rh "$1" "$2" 'fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"; ausearch --input-logs -m AVC -ts boot </dev/null 2>/dev/null | grep -c type=AVC' | tr '\n' ' ')" "0 0 "
     done
     A "sudo rm -f /tmp/iso2/*.ga" ;;
   negtrust)

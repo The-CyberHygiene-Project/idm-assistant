@@ -57,7 +57,7 @@ case ${1:-} in
       check "$h: logrotate file is ours (RETENTION_DAYS)" "$(X $h 'sudo grep -c -e "Managed by chp-security" -e "rotate 90" /etc/logrotate.d/suricata')" "2"
       check "$h: logrotate accepts it" "$(X $h 'sudo logrotate -d /etc/logrotate.conf 2>&1 | grep -v "error opening state file" | grep -c -i "duplicate\|error"')" "0"   # a fresh host has no state file yet
       check "$h: 0 Suricata/Wazuh AVCs since enable" "$(X $h "sudo ausearch -m AVC -ts \"$T0\" 2>/dev/null | grep denied | grep -c -E 'suricata|ossec|wazuh'")" "0"
-      check "$h: 0 fapolicyd denials since enable" "$(X $h "sudo ausearch -m FANOTIFY -ts \"$T0\" 2>/dev/null | grep -c 'type=FANOTIFY'")" "0"
+      check "$h: 0 fapolicyd denials (--check-status counter since its last start)" "$(X $h "sudo fapolicyd-cli --check-status 2>/dev/null | awk '/^Denied accesses:/ {print \$3}'")" "0"
       check "$h: 0 'No such tag' since enable" "$(X $h 'sudo awk -v t="$(sudo cat /root/s1-t0 | tr - /)" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "No such tag"')" "0"
       check "$h: agent keys unchanged" "$(X $h '[ "$(sudo sha256sum /var/ossec/etc/client.keys | cut -c1-16)" = "$(sudo cat /root/s1-keys-before)" ] && echo same || echo changed')" "same"
       check "$h: monitor 74 OK" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
@@ -118,7 +118,7 @@ case ${1:-} in
       check "$h: monitor 74 OK after boot" "$(X $h 'sudo bash /usr/lib/chp/monitor.d/74-suricata.sh | cut -c1-2')" "OK"
       check "$h: Wazuh reads eve.json since boot" "$(X $h 'b=$(date -d "@$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))" "+%Y/%m/%d %H:%M:%S"); sudo awk -v t="$b" "\$0 >= t" /var/ossec/logs/ossec.log | grep -c "Analyzing file: .*/var/log/suricata/eve.json" | awk "{print (\$1>0)?\"yes\":\"no\"}"')" "yes"
       check "$h: 0 Suricata/Wazuh AVCs since boot" "$(X $h 'sudo ausearch -m AVC -ts boot 2>/dev/null | grep denied | grep -c -E "suricata|ossec|wazuh"')" "0"
-      check "$h: 0 fapolicyd denials since boot" "$(X $h 'sudo ausearch -m FANOTIFY -ts boot 2>/dev/null | grep -c "type=FANOTIFY"')" "0"
+      check "$h: 0 fapolicyd denials (--check-status counter since its last start)" "$(X $h 'sudo fapolicyd-cli --check-status 2>/dev/null | awk "/^Denied accesses:/ {print \$3}"')" "0"
     done
     check "srv: both agents Active after the reboots" "$(sleep 30; X srv 'sudo /var/ossec/bin/agent_control -l | grep -c ", Active$"')" "2"
     done_ reboot ;;
