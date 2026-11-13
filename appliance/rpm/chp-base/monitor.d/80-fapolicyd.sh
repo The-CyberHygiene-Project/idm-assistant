@@ -29,19 +29,32 @@ flag() {
   emitted=$((emitted + 1))
 }
 
-# A CHP host always runs fapolicyd, so a missing unit is an ALERT (only a missing unit AND cli AND conf is "absent").
+STUCK=1800
+pend=${CHP_FSMARK_PENDING:-/var/lib/chp/fapolicyd-restart-pending}
+# first-seen epoch of a transient state, kept in the state file (key "transient <state>") until the service is active
+seen() { awk -v k="$1" '{ e = $NF; sub(/ [^ ]*$/, ""); if ($0 == k) { print e; exit } }' "$sf" 2>/dev/null; }
+
+# A CHP host always runs fapolicyd, so a missing unit is an ALERT.
 st=$(systemctl is-active fapolicyd 2>/dev/null); st=${st:-unknown}
 case "$st" in
   active) ;;
-  activating|reloading) echo "OK fapolicyd is $st (transient)"; emitted=$((emitted + 1)) ;;   # re-checked next run
+  activating|reloading)
+    t=$(seen "transient $st"); case $t in ''|*[!0-9]*|0) t=$now ;; esac
+    [ "$now" -lt "$t" ] && t=$now
+    new="${new}transient $st $t"$'\n'
+    if [ $((now - t)) -ge $STUCK ]; then
+      flag "stuck $st" "fapolicyd.service has been $st since $(when "$t"): it never reached active (systemctl status fapolicyd; journalctl -u fapolicyd)"
+    else
+      echo "OK fapolicyd is $st (transient, since $(when "$t"))"; emitted=$((emitted + 1))
+    fi ;;
   *) flag "service $st" "fapolicyd.service is $st: nothing is checking file execution (systemctl status fapolicyd; journalctl -u fapolicyd)" ;;
 esac
 # Mode: the runtime "Permissive:" line of fapolicyd-cli --check-status wins (what the daemon is doing now); the conf
 # file is the fallback. Neither readable: say so, never a false all-clear.
 pm=""
 if [ "$st" = active ]; then
-  rt=$(fapolicyd-cli --check-status 2>/dev/null </dev/null | sed -n 's/^Permissive:[[:space:]]*\([A-Za-z0-9]*\).*/\1/p' | head -n 1)
-  case "$rt" in true|1) pm=1 ;; false|0) pm=0 ;; esac
+  rt=$(fapolicyd-cli --check-status 2>/dev/null </dev/null | sed -n 's/^[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Vv][Ee]:[[:space:]]*\([A-Za-z0-9]*\).*/\1/p' | head -n 1 | tr 'A-Z' 'a-z')
+  case "$rt" in true|yes|1) pm=1 ;; false|no|0) pm=0 ;; esac
 fi
 if [ -z "$pm" ]; then
   pm=$(sed -n 's/^[[:space:]]*permissive[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/p' "$conf" 2>/dev/null | tail -n 1)
@@ -50,6 +63,17 @@ if [ "$pm" = 1 ]; then
   flag "permissive" "fapolicyd is in permissive mode (Permissive: true / permissive = 1 in $conf): it logs but denies nothing"
 elif [ "$pm" != 0 ] && [ "$st" = active ]; then
   flag "mode unknown" "cannot determine fapolicyd mode (no Permissive: line from fapolicyd-cli --check-status, no permissive= in $conf)"
+fi
+# A recorded allow_filesystem_mark change (pending marker) that the daemon has not picked up: it restarted before the
+# marker was written (or its start time is unknown). The fsmark helper clears the marker once the daemon restarts.
+if [ -f "$pend" ]; then
+  mt=$(stat -c %Y "$pend" 2>/dev/null || stat -f %m "$pend" 2>/dev/null)
+  ds=${CHP_FAPOLICYD_START:-$(d=$(systemctl show fapolicyd -p ActiveEnterTimestamp --value 2>/dev/null); [ -n "$d" ] && date -d "$d" +%s 2>/dev/null)}
+  case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
+  case "$ds" in ''|*[!0-9]*) ds=0 ;; esac
+  if [ "$ds" -lt "$mt" ]; then
+    flag "restart pending" "fapolicyd restart pending since $(when "$mt") (allow_filesystem_mark change not applied): systemctl restart fapolicyd"
+  fi
 fi
 mkdir -p "$sd" 2>/dev/null
 printf '%s' "$new" > "$sf.tmp" 2>/dev/null && mv "$sf.tmp" "$sf"

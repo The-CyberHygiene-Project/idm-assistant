@@ -9,7 +9,7 @@ S = B / "fapolicyd-fsmark.sh"
 CONF = "# fapolicyd\npermissive = 0\nallow_filesystem_mark = 0\nintegrity = none\n"
 
 
-def apply(tmp_path, flag, conf=CONF, runs=1, no_restart=False):
+def apply(tmp_path, flag, conf=CONF, runs=1, no_restart=False, start=None):
     (tmp_path / "flag").write_text(f"FSMARK={flag}\n" if flag is not None else "# nothing\n")
     (tmp_path / "fapolicyd.conf").write_text(conf)
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
@@ -19,6 +19,8 @@ def apply(tmp_path, flag, conf=CONF, runs=1, no_restart=False):
                CHP_FSMARK_PENDING=str(tmp_path / "pending"))
     if no_restart:
         env["CHP_NO_RESTART"] = "1"
+    if start is not None:
+        env["CHP_FAPOLICYD_START"] = str(start)
     for _ in range(runs):
         assert subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True).returncode == 0
     calls = (tmp_path / "calls").read_text() if (tmp_path / "calls").exists() else ""
@@ -62,7 +64,7 @@ def test_rules_file_ships_empty_of_rules():
 
 def test_spec_ships_mechanism_check_80_and_bumps_release():
     s = (B / "chp-base.spec").read_text()
-    assert "Release:        7.chp" in s
+    assert "Release:        8.chp" in s
     for needle in ("80-fapolicyd.sh", "%{_libexecdir}/chp/fapolicyd-fsmark", "%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf",
                    "%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules", "%posttrans"):
         assert needle in s
@@ -100,3 +102,41 @@ def test_spec_posttrans_runs_helper_by_bash_without_restart_and_requires_fapolic
     s = (B / "chp-base.spec").read_text()
     assert "CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark" in s
     assert re.search(r"^Requires:\s+fapolicyd$", s, re.M)
+
+
+def test_stale_pending_marker_is_cleared_once_daemon_restarted(tmp_path):
+    (tmp_path / "pending").write_text("")
+    os.utime(tmp_path / "pending", (1000, 1000))
+    apply(tmp_path, 0, start=2000)
+    assert not (tmp_path / "pending").exists()
+
+
+def test_pending_marker_kept_while_daemon_older(tmp_path):
+    (tmp_path / "pending").write_text("")
+    os.utime(tmp_path / "pending", (1000, 1000))
+    apply(tmp_path, 0, start=500)
+    assert (tmp_path / "pending").exists()
+
+
+def test_write_failure_is_clean(tmp_path):
+    import pytest
+    if os.geteuid() == 0:
+        pytest.skip("root ignores read-only directories")
+    d = tmp_path / "ro"; d.mkdir()
+    (tmp_path / "flag").write_text("FSMARK=1\n"); (d / "fapolicyd.conf").write_text(CONF)
+    d.chmod(0o500)
+    try:
+        env = dict(os.environ, CHP_FSMARK_CONF=str(tmp_path / "flag"), CHP_FAPOLICYD_CONF=str(d / "fapolicyd.conf"),
+                   CHP_FSMARK_PENDING=str(tmp_path / "pending"), CHP_NO_RESTART="1")
+        r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
+    finally:
+        d.chmod(0o700)
+    assert r.returncode == 0 and "could not write" in r.stderr
+    assert (d / "fapolicyd.conf").read_text() == CONF and not (tmp_path / "pending").exists()
+    assert list(d.glob(".fapolicyd.conf.chp.*")) == []
+
+
+def test_rewrite_keeps_mode(tmp_path):
+    (tmp_path / "fapolicyd.conf").write_text(CONF); (tmp_path / "fapolicyd.conf").chmod(0o640)
+    apply(tmp_path, 1, conf=CONF)
+    assert oct((tmp_path / "fapolicyd.conf").stat().st_mode & 0o777) == "0o640"

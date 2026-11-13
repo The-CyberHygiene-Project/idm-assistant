@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 S = ROOT / "appliance" / "rpm" / "chp-base" / "monitor.d" / "80-fapolicyd.sh"
 
 
-def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, state_text=None, cli=True, runtime="false"):
+def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, state_text=None, cli=True, runtime="false", pending=None, start=None):
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
     (b / "systemctl").write_text(f"#!/bin/bash\necho {active}\n[ {active} = active ]\n"); (b / "systemctl").chmod(0o755)
     if cli:
@@ -20,6 +20,12 @@ def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, s
         (sd / "80-fapolicyd.state").write_text(state_text)
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_STATE_DIR=str(sd), CHP_NOW=str(now),
                CHP_FAPOLICYD_CONF=str(cf))
+    if pending is not None:
+        pf = tmp_path / "pending"; pf.write_text(""); os.utime(pf, (pending, pending))
+        env["CHP_FSMARK_PENDING"] = str(pf)
+    else:
+        env["CHP_FSMARK_PENDING"] = str(tmp_path / "nopending")
+    env["CHP_FAPOLICYD_START"] = str(start if start is not None else 0)
     r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     return r.stdout
@@ -97,3 +103,26 @@ def test_80_activating_is_transient_ok(tmp_path):
 def test_80_missing_unit_is_an_alert_on_a_chp_host(tmp_path):
     a = alerts(run(tmp_path, active="inactive", conf=None, cli=False, runtime=""))
     assert len(a) == 1 and "fapolicyd.service is inactive" in a[0]
+
+
+def test_80_stuck_activating_alerts_after_30_minutes_and_clears_when_active(tmp_path):
+    t0 = 1_000_000_000
+    assert alerts(run(tmp_path, active="activating", now=t0)) == []
+    assert alerts(run(tmp_path, active="activating", now=t0 + 900)) == []
+    a = alerts(run(tmp_path, active="activating", now=t0 + 1800))
+    assert len(a) == 1 and "activating since 2001-09-09T01:46:40Z" in a[0]
+    assert run(tmp_path, now=t0 + 1900).startswith("OK fapolicyd active")
+    assert alerts(run(tmp_path, active="activating", now=t0 + 2000)) == []      # first-seen restarts
+
+
+def test_80_case_insensitive_permissive(tmp_path):
+    assert len(alerts(run(tmp_path, runtime="True"))) == 1
+    d = tmp_path / "y"; d.mkdir()
+    assert len(alerts(run(d, runtime="YES"))) == 1
+
+
+def test_80_pending_restart_alerts_until_daemon_restarted(tmp_path):
+    a = alerts(run(tmp_path, pending=2000, start=1000))
+    assert len(a) == 1 and "restart pending since" in a[0] and "systemctl restart fapolicyd" in a[0]
+    d = tmp_path / "z"; d.mkdir()
+    assert run(d, pending=2000, start=3000).startswith("OK fapolicyd active")

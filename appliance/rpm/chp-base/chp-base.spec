@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        7.chp%{?dist}
+Release:        8.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,10 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-8.chp
+- Check 80: a service stuck activating/reloading past 30 min alerts; an unapplied allow_filesystem_mark restart (pending marker) alerts; case-insensitive Permissive parse.
+- fapolicyd-fsmark: atomic conf rewrite (same mode/owner/label), clears a stale pending marker once the daemon restarted, clear message on write failure.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-7.chp
 - Check 80: runtime Permissive: line first, conf fallback, "cannot determine mode" alert, transient activating/reloading, missing unit alerts; Requires fapolicyd.
 - fapolicyd-fsmark: no restart in the transaction (pending marker), never takes over an admin-set value, changed only on a successful write.
