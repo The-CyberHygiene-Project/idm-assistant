@@ -15,11 +15,13 @@ mkdir -p "$sd" 2>/dev/null && chmod 0700 "$sd" 2>/dev/null
 new=""
 emitted=0
 # due KEY: succeed when KEY should alert now; either way carry its alert time into the new state.
+# State lines are "<mount> <epoch>"; the mount may contain spaces, so the epoch is the LAST field.
+# A missing, non-numeric or future (clock stepped back) time counts as due.
 due() {
   local t
-  t=$(awk -v k="$1" '$1 == k { print $2; exit }' "$sf" 2>/dev/null)
+  t=$(awk -v k="$1" '{ e = $NF; sub(/ [^ ]*$/, ""); if ($0 == k) { print e; exit } }' "$sf" 2>/dev/null)
   case $t in ''|*[!0-9]*) new="$new$1 $now"$'\n'; return 0 ;; esac
-  if [ $((now - t)) -ge $REPEAT ]; then new="$new$1 $now"$'\n'; return 0; fi
+  if [ "$now" -lt "$t" ] || [ $((now - t)) -ge $REPEAT ]; then new="$new$1 $now"$'\n'; return 0; fi
   new="$new$1 $t"$'\n'; return 1
 }
 emit() { echo "ALERT $1"; emitted=$((emitted + 1)); }
@@ -32,26 +34,31 @@ if [ -f "$C" ]; then
 fi
 
 free=""
-if v=$(vgs --noheadings --units g --nosuffix -o vg_free chp 2>/dev/null) && [ -n "$(echo $v)" ]; then
+if v=$(LC_ALL=C vgs --noheadings --units g --nosuffix -o vg_free chp 2>/dev/null) && [ -n "$(echo $v)" ]; then
   g=$(echo $v | cut -d. -f1 | tr -dc '0-9')
   [ -n "$g" ] && free="; grow with lvextend -r; $g GB free in chp"
 fi
 
-if ! out=$(df --output=target,fstype,pcent -x tmpfs -x devtmpfs 2>/dev/null); then
-  # df unreadable: keep the other mounts' state, handle only the _df key
-  new=$(awk '$1 != "_df"' "$sf" 2>/dev/null)
-  [ -n "$new" ] && new="$new"$'\n'
-  if due _df; then emit "cannot read disk use (df failed)"; fi
-else
-  n=0
-  while read -r target fstype pct; do
-    n=$((n + 1)); [ "$n" -eq 1 ] && continue
-    [ "$fstype" = xfs ] || continue
-    [ "$target" = "$skip" ] && continue
-    pct=$(echo "$pct" | tr -dc '0-9')
-    [ -n "$pct" ] && [ "$pct" -ge $LIMIT ] || continue
-    if due "$target"; then emit "$target is $pct% full (limit $LIMIT%)$free"; fi
-  done <<< "$out"
+# target is the LAST column so a mount point with spaces survives; a non-zero df exit with some output is partial.
+out=$(df --output=source,fstype,pcent,target -x tmpfs -x devtmpfs 2>/dev/null); rc=$?
+n=0
+while read -r src fstype pct target; do
+  n=$((n + 1)); [ "$n" -eq 1 ] && continue
+  [ "$fstype" = xfs ] || continue
+  [ "$target" = "$skip" ] && continue
+  pct=$(echo "$pct" | tr -dc '0-9')
+  [ -n "$pct" ] && [ "$pct" -ge $LIMIT ] || continue
+  hint=""
+  case $src in /dev/mapper/*) hint=$free ;; esac
+  if due "$target"; then emit "$target is $pct% full (limit $LIMIT%)$hint"; fi
+done <<< "$out"
+if [ "$rc" -ne 0 ]; then
+  if [ "$n" -le 1 ]; then
+    # nothing readable: keep the other mounts' state
+    new=$(awk '{ l = $0; sub(/ [^ ]*$/, "", l); if (l != "_df") print }' "$sf" 2>/dev/null)
+    [ -n "$new" ] && new="$new"$'\n'
+  fi
+  if due _df; then emit "cannot read disk use (df reported an error)"; fi
 fi
 
 mkdir -p "$sd" 2>/dev/null

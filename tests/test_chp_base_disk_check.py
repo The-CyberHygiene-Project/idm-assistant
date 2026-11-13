@@ -6,21 +6,26 @@ S = Path(__file__).resolve().parents[1] / "appliance" / "rpm" / "chp-base" / "mo
 VGS = "grow with lvextend -r; 342 GB free in chp"
 
 
-def run(tmp_path, mounts, conf=None, wazuh_target="/var", df_fail=False, vgs=True, now=1_000_000_000):
-    """mounts: list of (target, fstype, pct). Fake df answers both the listing and the --output=target query."""
+def run(tmp_path, mounts, conf=None, wazuh_target="/var", df_fail=False, vgs=True, now=1_000_000_000,
+        df_partial=False, state_dir=None, state_text=None):
+    """mounts: list of (target, fstype, pct[, source]); source defaults to an LVM device. Fake df answers both the
+    listing (source,fstype,pcent,target) and the --output=target query."""
     b = tmp_path / "bin"; b.mkdir(exist_ok=True)
-    rows = "".join(f"echo '{t} {f} {p}%'\n" for t, f, p in mounts)
+    rows = "".join(f"echo '{(m[3] if len(m) > 3 else '/dev/mapper/chp-x')} {m[1]} {m[2]}% {m[0]}'\n" for m in mounts)
     (b / "df").write_text(
         "#!/bin/bash\n" + ("exit 1\n" if df_fail else
         'case "$*" in *--output=target\\ *|"--output=target "*) echo Mounted; echo ' + wazuh_target + '; exit 0;; esac\n'
-        "echo 'Mounted Type Use%'\n" + rows))
+        "echo 'Filesystem Type Use% Mounted on'\n" + rows + ("exit 1\n" if df_partial else "")))
     (b / "df").chmod(0o755)
     if vgs:
         (b / "vgs").write_text("#!/bin/bash\necho '  342.00g'\n"); (b / "vgs").chmod(0o755)
     else:
         (b / "vgs").write_text("#!/bin/bash\nexit 5\n"); (b / "vgs").chmod(0o755)
-    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_STATE_DIR=str(tmp_path / "state"),
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_STATE_DIR=str(state_dir or tmp_path / "state"),
                CHP_NOW=str(now), CHP_SECURITY_CONF=str(tmp_path / "security.conf"))
+    if state_text is not None:
+        (tmp_path / "state").mkdir(exist_ok=True)
+        (tmp_path / "state" / "76-disk.state").write_text(state_text)
     if conf is not None:
         (tmp_path / "security.conf").write_text(conf)
     r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
@@ -86,3 +91,42 @@ def test_76_clears_when_below(tmp_path):
 def test_76_df_failure_is_also_deduplicated(tmp_path):
     assert len(alerts(run(tmp_path, [], df_fail=True))) == 1
     assert alerts(run(tmp_path, [], df_fail=True, now=1_000_000_900)) == []
+
+
+def test_76_mount_with_spaces_is_checked(tmp_path):
+    a = alerts(run(tmp_path, [("/srv/a b", "xfs", 90)]))
+    assert len(a) == 1 and "/srv/a b is 90%" in a[0]
+    assert alerts(run(tmp_path, [("/srv/a b", "xfs", 90)], now=1_000_000_900)) == []
+
+
+def test_76_partial_df_output_still_checks_other_mounts(tmp_path):
+    a = alerts(run(tmp_path, [("/var", "xfs", 90)], df_partial=True))
+    assert len(a) == 2
+    assert "/var is 90%" in a[0]
+    assert "cannot read disk use (df reported an error)" in a[1]
+    assert alerts(run(tmp_path, [("/var", "xfs", 90)], df_partial=True, now=1_000_000_900)) == []
+
+
+def test_76_lvextend_hint_only_on_lvm(tmp_path):
+    a = alerts(run(tmp_path, [("/boot", "xfs", 90, "/dev/vda2"), ("/var", "xfs", 90, "/dev/mapper/chp-var")]))
+    assert len(a) == 2
+    assert "/boot is 90%" in a[0] and "lvextend" not in a[0]
+    assert "/var is 90%" in a[1] and "grow with lvextend" in a[1]
+
+
+def test_76_clock_stepped_back_is_due(tmp_path):
+    m = [("/var", "xfs", 90)]
+    run(tmp_path, m, now=1_000_000_000)
+    assert len(alerts(run(tmp_path, m, now=1_000_000_000 - 3600))) == 1
+
+
+def test_76_garbage_state_line_is_due(tmp_path):
+    m = [("/var", "xfs", 90)]
+    assert len(alerts(run(tmp_path, m, state_text="/var notanumber\n"))) == 1
+
+
+def test_76_unwritable_state_dir_alerts_every_run(tmp_path):
+    f = tmp_path / "afile"; f.write_text("x")
+    m = [("/var", "xfs", 90)]
+    assert len(alerts(run(tmp_path, m, state_dir=f / "sub"))) == 1
+    assert len(alerts(run(tmp_path, m, state_dir=f / "sub", now=1_000_000_900))) == 1

@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -62,6 +62,9 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Thu Nov 12 2026 The CyberHygiene Project - 0.1.0-5.chp
+- Monitor check 76: mount points with spaces, partial df output, lvextend hint only on LVM, clock-step and garbage-state handling.
+
 * Mon Nov 09 2026 The CyberHygiene Project - 0.1.0-4.chp
 - Monitor check 76: any XFS file system at or above 85% full (alerts once per crossing, again after 24 h).
 
