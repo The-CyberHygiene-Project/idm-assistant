@@ -283,9 +283,11 @@ def test_documents_status_rows_when_enabled():
     bad = nc(build(with_docs(svc={"httpd": "active", "php-fpm": "failed", "postgresql": "active",
                                   "nextcloud-cron.timer": "active"})))
     assert bad["nextcloud services"]["state"] == "ATTENTION" and "php-fpm" in bad["nextcloud services"]["detail"]
-    deg = nc(build(with_docs(chk={"at": END - 4 * H, "ok": True, "kinds": {}, "deg": True, "can": ["refused", "refused"]})))
+    d_deg = build(with_docs(chk={"at": END - 4 * H, "ok": True, "kinds": {}, "deg": True, "can": ["refused", "refused"]}))
+    deg = nc(d_deg)
     m = deg["nextcloud database MD5"]
-    assert m["state"] == "ATTENTION" and "known limitation, see POA&M" in m["detail"] and m["owner"] is None
+    assert m["state"] == "ATTENTION" and "known limitation, see POA&M" in m["detail"] and m["owner"]
+    assert not [x for x in d_deg["attention"] if x["item"] == "nextcloud database MD5"]      # shown, not counted
     old = nc(build(with_docs(chk={"at": END - 40 * H, "ok": True, "kinds": {}, "deg": False, "can": ["refused", "refused"]})))
     assert old["nextcloud nightly check"]["state"] == "STALE"
     alerts = nc(build(with_docs(chk={"at": END - H, "ok": False, "kinds": {"untagged": 3}, "deg": False,
@@ -340,6 +342,41 @@ def test_nextcloud_text_goes_through_cell():
     assert "`" not in md and "x\nx" not in md
 
 
-def test_old_records_render_exactly_as_before():
-    base = healthy()
-    assert rr.render_md(build(base)) == rr.render_md(build([a for a in base]))
+def test_old_records_render_byte_for_byte_as_before(monkeypatch):
+    import os, time
+    from pathlib import Path
+    monkeypatch.setenv("TZ", "America/Denver")
+    time.tzset()
+    try:
+        a = healthy([suri("203.0.113.9", "192.0.2.21", 1, 1, START + 4000)])
+        out = rr.render_md(build(a))
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+    assert out == (Path(__file__).parent / "fixtures" / "review_no_documents.md").read_text()
+    assert "nextcloud" not in out.lower()
+
+
+def test_record_lacking_chk_ok_is_skipped_not_a_crash():
+    late = END - 600
+    bad = docs(late)
+    del bad["chk"]["ok"]
+    d = build(healthy([record("srv1", late, documents=bad)]))
+    assert d["sources"]["bad_records"].get("srv1") == 1
+
+
+def test_old_check_makes_canary_and_degraded_stale_and_future_times_attention():
+    old = nc(build(with_docs(chk={"at": END - 40 * H, "ok": True, "kinds": {}, "deg": True, "can": ["refused", "refused"]})))
+    assert old["nextcloud share canary"]["state"] == "STALE" and old["nextcloud database MD5"]["state"] == "STALE"
+    late = END - 600
+    fut = nc(build(healthy([record("srv1", late, documents=docs(
+        late, bk={"st": "OK", "at": late + 3600}, chk={"at": late + 3600, "ok": True, "kinds": {}, "deg": False,
+                                                       "can": ["refused", "refused"]}))])))
+    assert fut["nextcloud backup"]["state"] == "ATTENTION" and fut["nextcloud nightly check"]["state"] == "ATTENTION"
+
+
+def test_only_listed_nextcloud_rules_are_nextcloud_intrusions():
+    a = [alert("100650", 12, "srv1", START + 3600, {"remoteAddr": "192.0.2.50"}, desc="other", groups=("nextcloud",)),
+         alert("100609", 12, "srv1", START + 3700, {"remoteAddr": "192.0.2.51"}, desc="canary enabled")]
+    d = build(healthy(a))
+    assert {i["source"]: i["kind"] for i in d["intrusions"] if i["target"] == "srv1"} == {None: "wazuh", "192.0.2.51": "nextcloud"}

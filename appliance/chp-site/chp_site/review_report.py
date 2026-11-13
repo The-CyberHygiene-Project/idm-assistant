@@ -20,6 +20,8 @@ DAY = 86400
 # Items an existing monitor check already alerts on: shown in the report, never alerted again (spec §6).
 SCANS = (("yara_recent", 300, "73-yara-scan"), ("yara_full", 7 * DAY, "73-yara-scan"),
          ("suricata_stats", 60, "74-suricata"), ("aide_check", DAY, "61-aide-stale"))
+NC_RULES = {str(i) for i in range(100601, 100620)}            # wazuh.py NEXTCLOUD_RULES (incl. the canary rules)
+FUTURE = 300                                                    # a timestamp this far ahead is a clock fault
 KANIDM_CERTS = "/etc/pki/kanidm/"
 
 
@@ -99,10 +101,11 @@ def _valid_docs(x):
             return False
         if bk is not None and not (isinstance(bk, dict) and isinstance(bk["st"], str) and _num_or_none(bk["at"])):
             return False
-        if ck is not None and not (isinstance(ck, dict) and _num_or_none(ck["at"]) and isinstance(ck["kinds"], dict)
+        if ck is not None and not (isinstance(ck, dict) and _num_or_none(ck["at"]) and isinstance(ck["ok"], bool) and
+                                   isinstance(ck.get("deg", False), bool) and isinstance(ck["kinds"], dict)
                                    and isinstance(ck["can"], list)):
             return False
-        return _num_or_none(x.get("cr")) and _num_or_none(x.get("sa"))
+        return all(_num_or_none(x.get(k)) for k in ("cr", "sa", "ca"))
     except (KeyError, TypeError, AttributeError):
         return False
 
@@ -137,7 +140,7 @@ def _intrusions(alerts, site, ip_host):
         if rid == RECORD_RULE or rid in YARA_OTHER:
             continue
         al = d.get("alert") if isinstance(d.get("alert"), dict) else None
-        if rid.startswith("1006") and "nextcloud" in r.get("groups", []) and lvl >= LEVEL_FLOOR:
+        if rid in NC_RULES and lvl >= LEVEL_FLOOR:
             kind, src, target, sig = "nextcloud", d.get("remoteAddr"), host, r.get("description", "?")
         elif rid in SURICATA_RULES or (al and "suricata" in r.get("groups", [])):
             kind, src, target, sig = "suricata", d.get("src_ip"), d.get("dest_ip"), (al or {}).get("signature", "?")
@@ -256,7 +259,9 @@ def _documents_items(hosts, recs, end):
             out.append(_item(name, "nextcloud backup", rr.STALE, "no backup status", "77-nextcloud-services"))
         else:
             age = at - bk["at"]
-            if bk["st"] != "OK":
+            if age < -FUTURE:
+                st, det = rr.ATTENTION, "backup time is in the future (clock fault?)"
+            elif bk["st"] != "OK":
                 st, det = rr.ATTENTION, f"backup {bk['st']} {_span_h(age)} ago"
             elif age > 26 * 3600:
                 st, det = rr.ATTENTION, f"last backup {_span_h(age)} ago (older than 26 h)"
@@ -269,7 +274,9 @@ def _documents_items(hosts, recs, end):
         else:
             age = at - ck["at"]
             kinds = ", ".join(f"{k} {n}" for k, n in sorted(ck["kinds"].items()))
-            if age > 26 * 3600:
+            if age < -FUTURE:
+                st, det = rr.ATTENTION, "check time is in the future (clock fault?)"
+            elif age > 26 * 3600:
                 st, det = rr.STALE, f"last check {_span_h(age)} ago (older than 26 h)"
             elif not ck["ok"]:
                 st, det = rr.ATTENTION, f"alerts: {kinds or 'unspecified'}"
@@ -278,17 +285,21 @@ def _documents_items(hosts, recs, end):
             out.append(_item(name, "nextcloud nightly check", st, det, "81-documents-tags"))
             can = ck["can"]
             ok = len(can) == 2 and all(x == "refused" for x in can)
-            out.append(_item(name, "nextcloud share canary", rr.OK if ok else rr.ATTENTION,
+            old = age > 26 * 3600
+            out.append(_item(name, "nextcloud share canary", rr.STALE if old else (rr.OK if ok else rr.ATTENTION),
+                             "last result is older than 26 h" if old else
                              "public link and internal share refused" if ok else
                              "public " + str(can[0]) + ", internal " + str(can[1] if len(can) > 1 else "?"),
                              "81-documents-tags"))
             if ck.get("deg"):
-                out.append(_item(name, "nextcloud database MD5", rr.ATTENTION,
+                out.append(_item(name, "nextcloud database MD5", rr.STALE if old else rr.ATTENTION,
                                  "DEGRADED: database MD5 unavailable, folder moves/renames/deletes refused; "
-                                 "known limitation, see POA&M"))
+                                 "known limitation, see POA&M", "known limitation (POA&M)"))
         cr = sum(int(x["documents"].get("cr") or 0) for x in withdoc)
         sa = sum(int(x["documents"].get("sa") or 0) for x in withdoc)
-        out.append(_item(name, "nextcloud refusals", rr.OK, f"{cr} contain refusals, {sa} share attempts today",
+        ca = sum(int(x["documents"].get("ca") or 0) for x in withdoc)
+        out.append(_item(name, "nextcloud refusals", rr.OK,
+                         f"{cr} contain refusals, {sa} share attempts today; canary: {ca} refused as expected",
                          "100601-100611"))
     return out
 

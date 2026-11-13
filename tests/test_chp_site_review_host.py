@@ -190,3 +190,24 @@ def test_documents_block_size_before_and_after(tmp_path):
     before = len(json.dumps(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r)))
     print(f"RECORD SIZE before={before} after={after}")
     assert after - before < 700 and after < rh.MAX_RECORD // 10
+
+
+def test_canary_refusals_are_not_share_attempts(tmp_path):
+    r = docs_root(tmp_path)
+    t = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(NOW - 50))
+    with open(r / "var/log/nextcloud/audit.log", "a") as f:
+        f.write(json.dumps({"time": t, "app": "admin_audit",
+                            "message": "ShareAction from user chp-canary on 9 to x is restricted"}) + "\n")
+        f.write(json.dumps({"time": t, "app": "admin_audit",
+                            "message": "ShareAction from user chp-canaryx on 9 to x is restricted"}) + "\n")
+    dc = body(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r))["documents"]
+    assert (dc["sa"], dc["ca"]) == (2, 1)
+
+
+@pytest.mark.parametrize("which", ["check.json", "backup.status", "chain.pem"])
+def test_corrupt_documents_files_do_not_break_the_record(tmp_path, which):
+    r = docs_root(tmp_path)
+    p = r / ("etc/pki/nextcloud/chain.pem" if which == "chain.pem" else f"var/lib/chp/documents/{which}")
+    p.write_bytes(b"\xff\x00garbage {")
+    dc = body(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r))["documents"]
+    assert dc[{"check.json": "chk", "backup.status": "bk", "chain.pem": "cert"}[which]] is None

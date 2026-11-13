@@ -121,7 +121,7 @@ DOCS_UNITS = ("httpd", "php-fpm", "postgresql", "nextcloud-cron.timer")
 DOCS_CURSOR = "var/lib/chp/documents/review.cursor"       # when the last record was appended (counts are "since" it)
 DOCS_TAIL = 2_000_000                                     # the audit log is read from its last 2 MB at most
 SHARE_REFUSED = "is restricted"                           # admin_audit: "ShareAction from user X on N to Y is restricted"
-SHARE_MADE = ("ShareAction", "shared")
+CANARY_USER = "chp-canary"                                # = documents.CANARY_USER (not imported: no cycle)
 
 
 def _json_file(path):
@@ -140,7 +140,7 @@ def _docs_enabled(root):
 
 
 def docs_counts(root, since, now):
-    """(contain refusals, share attempts) in NextCloud's audit log between `since` and `now`. Share attempts = shares
+    """(contain refusals, share attempts, canary refusals) in NextCloud's audit log between `since` and `now`. Share attempts = shares
     refused on a controlled folder (rule 100601) or made on one (100602 would be a bug)."""
     p = _p(root, "var/log/nextcloud/audit.log")
     try:
@@ -149,8 +149,8 @@ def docs_counts(root, since, now):
             f.seek(max(0, size - DOCS_TAIL))
             lines = f.read().decode("utf-8", "replace").splitlines()
     except OSError:
-        return 0, 0
-    cr = sa = 0
+        return 0, 0, 0
+    cr = sa = ca = 0
     for ln in lines:
         try:
             e = json.loads(ln)
@@ -163,8 +163,11 @@ def docs_counts(root, since, now):
         if e.get("app") == "chp_foldertag" and str(e.get("event", e.get("message", ""))).startswith("chp.contain.refused"):
             cr += 1
         elif e.get("app") == "admin_audit" and msg.startswith("ShareAction from user ") and SHARE_REFUSED in msg:
-            sa += 1
-    return cr, sa
+            if msg.startswith(f"ShareAction from user {CANARY_USER} "):
+                ca += 1                      # the nightly canary's expected refusal: not a share attempt
+            else:
+                sa += 1
+    return cr, sa, ca
 
 
 def docs_block(root, run, now):
@@ -199,8 +202,8 @@ def docs_block(root, run, now):
         chk = {"at": int(c["epoch"]), "ok": bool(c.get("ok")), "kinds": kinds, "deg": bool(c.get("degraded")),
                "can": [str(can.get("public", "?"))[:24], str(can.get("internal", "?"))[:24]]}
     cur = _num(_p(root, DOCS_CURSOR))
-    cr, sa = docs_counts(root, cur if cur is not None else now - 600, now)
-    return {"svc": svc, "cert": cert, "bk": bk, "chk": chk, "cr": cr, "sa": sa}
+    cr, sa, ca = docs_counts(root, cur if cur is not None else now - 600, now)
+    return {"svc": svc, "cert": cert, "bk": bk, "chk": chk, "cr": cr, "sa": sa, "ca": ca}
 
 
 def docs_cursor_save(root, now):
