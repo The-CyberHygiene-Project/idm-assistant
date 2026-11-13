@@ -127,3 +127,48 @@ class Kanidm:
 
     def clear_expiry(self, name):
         self._k("person", "validity", "expire-at", _name(name), "clear")
+
+    # ---- groups and OAuth2/OIDC clients (documents enable, ISO 0.7.0 Plan 2 Task 5) ----
+    # Group names here may hold a hyphen (cui-users, doc-reviewers): checked with the service-account pattern.
+
+    def group(self, name):
+        return parse_entry(self._k("group", "get", _sa(name)))
+
+    def create_group(self, name):
+        self._k("group", "create", _sa(name))
+
+    def oauth2(self, name):
+        return parse_entry(self._k("system", "oauth2", "get", _sa(name)))
+
+    def oauth2_create(self, name, display, origin):
+        self._k("system", "oauth2", "create", _sa(name), display, _url(origin))
+
+    def oauth2_add_redirect(self, name, url):
+        self._k("system", "oauth2", "add-redirect-url", _sa(name), _url(url))
+
+    def oauth2_scope_map(self, name, group, scopes):
+        self._k("system", "oauth2", "update-scope-map", _sa(name), _sa(group), *[_sa(s) for s in scopes])
+
+    def oauth2_prefer_short_username(self, name):
+        self._k("system", "oauth2", "prefer-short-username", _sa(name))
+
+    def oauth2_claim_map(self, name, claim, group, *values):
+        self._k("system", "oauth2", "update-claim-map", _sa(name), _sa(claim), _sa(group), *[_sa(v) for v in values])
+
+    def oauth2_claim_join(self, name, claim, join="array"):
+        if join not in ("array", "csv", "ssv"):
+            raise SiteError(f"claim join must be array, csv or ssv, not {join!r}")
+        self._k("system", "oauth2", "update-claim-map-join", _sa(name), _sa(claim), join)
+
+    def oauth2_basic_secret(self, name):
+        """The confidential client's secret. Returned to the caller only: never logged, never in an argv."""
+        lines = [ln.strip() for ln in self._k("system", "oauth2", "show-basic-secret", _sa(name)).splitlines() if ln.strip()]
+        if not lines or not re.fullmatch(r"[A-Za-z0-9_.~+/=-]{16,}", lines[-1]):
+            raise SiteError(f"no client secret in the kanidm output for {name}")
+        return lines[-1]
+
+
+def _url(u):
+    if not re.fullmatch(r"https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/%-]*)?", u or ""):
+        raise SiteError(f"{u!r} is not an https URL chp-site would give Kanidm")
+    return u

@@ -2,7 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
-aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | alerts | wazuh-forward."""
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | documents | alerts | wazuh-forward."""
 import argparse
 import os
 import sys
@@ -105,6 +105,11 @@ def _export_to(a, site, hosts, text, pem, pub, stick):
     wk = move_wazuh_keys(pending / "wazuh", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
         if (pending / "wazuh").is_dir() else []
     print("Wazuh agent keys moved to the stick: " + ", ".join(wk) if wk else "no Wazuh agent keys pending")
+    from .escrow import move_documents_secrets          # ISO 0.7.0: the NextCloud break-glass secret, if pending
+    ds = move_documents_secrets(pending / "documents", stick, time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())) \
+        if (pending / "documents").is_dir() else []
+    if ds:
+        print("NextCloud break-glass secret moved to the stick: escrow/" + ", ".join(f"{x}.secret" for x in ds))
     from . import aide
     base = aide.read_record(aide.STATE / "baseline")
     if base.get("DB_SHA512"):
@@ -279,6 +284,25 @@ def _security(a):
     print("\n".join(f"- {x}" for x in done))
     if me.role == "server":
         print("next: run `chp-site security enable` on each client, with the site stick")
+    return 0
+
+
+def _documents(a):
+    import subprocess
+    from . import documents
+    from .kanidm import Kanidm
+    from .usbstick import site_stick
+    if a.action == "status":
+        print("\n".join(documents.status(Path("/"), subprocess.run)))
+        return 0
+    site, hosts = _load(a.site)
+    me = next((h for h in hosts if h.hostname == _host()), None)
+    if me is None:
+        raise SiteError(f"this host ({_host()}) is not in the hosts table")
+    k = Kanidm(a.as_)
+    with site_stick(getattr(a, "stick", None)) as s:     # USBGuard: ONLY the pinned stick, temporarily
+        done = documents.enable(me.hostname, site, hosts, run=subprocess.run, occ=documents.occ_run, kanidm=k, stick=s)
+    print("\n".join(f"- {x}" for x in done))
     return 0
 
 
@@ -545,6 +569,10 @@ def main(argv=None):
     se = sub.add_parser("security", help="security add-on: enable Wazuh on this host (server first), or show status")
     se.add_argument("action", choices=("enable", "status")); se.add_argument("--stick"); se.add_argument("--site", default="/etc/chp")
     se.add_argument("--firstboot", action="store_true", help="first boot: no site stick (keys via the pending folder / the staged key)")
+    dm = sub.add_parser("documents", help="document server (NextCloud) on the CHP server: enable (DOCUMENTS=yes; "
+                                          "after security enable; with the site stick) or show status")
+    dm.add_argument("action", choices=("enable", "status")); dm.add_argument("--stick"); dm.add_argument("--site", default="/etc/chp")
+    dm.add_argument("--as", dest="as_", default="idm_admin", help="your Kanidm admin session (kanidm login -D NAME)")
     al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
     al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)
     sub.add_parser("wazuh-forward", help="(service) send important Wazuh alerts to the log and ALERT_HOOK")
@@ -571,7 +599,7 @@ def main(argv=None):
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
-         "security": _security, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review}[a.cmd](a)
+         "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

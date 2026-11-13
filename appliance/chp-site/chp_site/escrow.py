@@ -118,3 +118,10 @@ def move_tokens(pending_tokens, stick, now):
 def move_wazuh_keys(pending_wazuh, stick, now):
     """Security bundle W2: per-client Wazuh agent keys -> stick/wazuh/<host>.key, exactly like the client tokens."""
     return _move_files(pending_wazuh, stick, "wazuh", ".key", now, "Wazuh agent keys")
+
+
+def move_documents_secrets(pending_documents, stick, now):
+    """documents enable: the NextCloud break-glass secret (<host>-nextcloud-admin.secret) -> stick/escrow/, with the
+    escrow guarantee (written, fsync'd, read back from the device, then shredded here). A file of its own: never
+    merged into <host>-server.txt."""
+    return _move_files(pending_documents, stick, "escrow", ".secret", now, "NextCloud break-glass secret")

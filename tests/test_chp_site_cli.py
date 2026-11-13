@@ -333,3 +333,21 @@ def test_site_today_helper_used_by_build_and_monitor(monkeypatch):
     assert cli.main(["review", "build"]) == 0
     assert cli.main(["review", "monitor"]) == 0
     assert calls == [now, now]
+
+
+def test_export_client_moves_the_pending_nextcloud_secret(tmp_path):          # ISO 0.7.0 Plan 2 Task 5
+    d = site(tmp_path); stick = tmp_path / "stick"; stick.mkdir()
+    pend = tmp_path / "pend"; (pend / "documents").mkdir(parents=True)
+    pw = "x" * 40
+    (pend / "documents" / "iso2-srv-nextcloud-admin.secret").write_text(f"NEXTCLOUD_ADMIN_PASSWORD={pw}\n")
+    r = cli("export-client", "--stick", str(stick), "--site", str(d / "site.conf"), "--pending", str(pend),
+            "--root", str(FX / "root_ca.crt"), "--ssh-ca", str(FX / "user_ca.pub"), "--cache-key", str(FX / "cache_key.pub"))
+    assert r.returncode == 0, r.stderr
+    assert "escrow/iso2-srv-nextcloud-admin.secret" in r.stdout and pw not in r.stdout
+    assert pw in (stick / "escrow" / "iso2-srv-nextcloud-admin.secret").read_text()
+    assert not (pend / "documents" / "iso2-srv-nextcloud-admin.secret").exists()
+
+
+def test_documents_help_and_status_when_off(capsys):
+    r = cli("documents", "--help")
+    assert r.returncode == 0 and "enable" in r.stdout and "--as" in r.stdout

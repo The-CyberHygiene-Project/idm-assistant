@@ -137,3 +137,33 @@ def test_service_account_names_allow_a_hostname():
 def test_api_token_missing_is_an_error():
     with pytest.raises(SiteError, match="no API token"):
         Kanidm("idm_admin", run=Fake((0, "odd\n", ""))).api_token("unixd-cli1", "cli1-unixd")
+
+
+def test_oauth2_helpers_argv_and_secret():                                    # ISO 0.7.0 Plan 2 Task 5
+    from chp_site.kanidm import Kanidm
+    calls = []
+
+    def run(argv):
+        calls.append(argv)
+        if "show-basic-secret" in argv:
+            return 0, "Some banner\nAbCdEf0123456789xyzXYZ\n", ""
+        return 0, "", ""
+    k = Kanidm("idm_admin", run=run)
+    k.oauth2_create("nextcloud", "NextCloud", "https://files.x.test:8443")
+    k.oauth2_claim_map("nextcloud", "chp_groups", "cui-users", "cui-users")
+    k.create_group("doc-reviewers")
+    assert calls[0] == ["system", "oauth2", "create", "nextcloud", "NextCloud", "https://files.x.test:8443", "-D", "idm_admin"]
+    assert calls[1][:7] == ["system", "oauth2", "update-claim-map", "nextcloud", "chp_groups", "cui-users", "cui-users"]
+    assert calls[2] == ["group", "create", "doc-reviewers", "-D", "idm_admin"]
+    assert k.oauth2_basic_secret("nextcloud") == "AbCdEf0123456789xyzXYZ"
+
+
+def test_oauth2_refuses_bad_urls_and_empty_secret():
+    import pytest
+    from chp_site.kanidm import Kanidm
+    from chp_site.sitefile import SiteError
+    k = Kanidm("idm_admin", run=lambda argv: (0, "\n", ""))
+    with pytest.raises(SiteError):
+        k.oauth2_create("nextcloud", "NextCloud", "http://files.x.test")
+    with pytest.raises(SiteError):
+        k.oauth2_basic_secret("nextcloud")

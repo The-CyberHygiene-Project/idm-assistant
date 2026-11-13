@@ -181,3 +181,151 @@ def test_review_rule_stores_records_at_level_3():                          # man
 
 def test_review_rule_only_from_the_record_log():                             # final review I4
     assert "<location>/var/log/chp-review.json</location>" in w.REVIEW_RULES
+
+
+# ---------- NextCloud rules (ISO 0.7.0 Plan 2 Task 5) ----------
+import re as _re
+
+NC_LOG = "/var/log/nextcloud/audit.log"
+
+
+def _flat(d, pre=""):
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            out.update(_flat(v, f"{pre}{k}."))
+        else:
+            out[f"{pre}{k}"] = str(v)
+    return out
+
+
+def _rx(pattern, kind, text):
+    if kind == "pcre2":
+        return _re.search(pattern, text) is not None
+    p = pattern.replace("\\.+", ".+").replace("\\S+", r"\S+").replace("\\d+", r"\d+")   # OS_Regex subset used here
+    return _re.search(p, text) is not None
+
+
+def _matches(rule, ev, fired):
+    for c in rule:
+        t = c.tag
+        if t == "if_sid" and not set(c.text.split(",")) & fired:
+            return False
+        if t == "decoded_as" and ev.get("decoder") != c.text:
+            return False
+        if t == "location" and ev.get("location") != c.text:
+            return False
+        if t == "program_name" and not _rx(c.text, c.get("type"), ev.get("program_name", "")):
+            return False
+        if t == "match" and c.text not in ev.get("log", ""):
+            return False
+        if t == "regex" and not _rx(c.text, c.get("type"), ev.get("log", "")):
+            return False
+        if t == "field" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get(c.get("name"), "\0")):
+            return False
+    return True
+
+
+def _level(xml, ev, now_ignored=()):
+    """The level Wazuh would give (simplified): the first matching rule without if_sid (or a pre-fired stock rule),
+    then repeatedly the first matching child of the current rule, in file order; an ignored child falls back."""
+    import xml.etree.ElementTree as ET
+    rules = [r for g in ET.fromstring("<x>" + _re.sub(r"<!--.*?-->", "", xml, flags=_re.S) + "</x>")
+             for r in g.findall("rule")]
+    cur, best = None, (None, None)
+    pre = set(ev.get("pre_fired", ()))
+    if pre:
+        cur = next(iter(pre))
+    else:
+        for r in rules:
+            if r.find("if_sid") is None and _matches(r, ev, set()):
+                cur, best = r.get("id"), (r.get("id"), int(r.get("level")))
+                break
+    while cur is not None:
+        nxt = next((r for r in rules if r.find("if_sid") is not None and r.get("id") not in now_ignored
+                    and _matches(r, ev, {cur})), None)
+        if nxt is None:
+            break
+        cur, best = nxt.get("id"), (nxt.get("id"), int(nxt.get("level")))
+    return best
+
+
+def _nc(message, user="lab01", app="admin_audit", data=None):
+    return {"decoder": "json", "location": NC_LOG,
+            "json": {"app": app, "user": user, "message": message, "data": data or {"app": app}}}
+
+
+def _ft(event, **data):
+    return {"decoder": "json", "location": NC_LOG,
+            "json": {"app": "chp_foldertag", "message": f"{event}: x", "data": {"app": "chp_foldertag", "event": event, **data}}}
+
+
+def test_wazuh_rules_levels():
+    x = w.NEXTCLOUD_RULES
+    cases = [
+        (_nc("Interaction OCP\\Interaction\\Actions\\ShareAction from user lab01 on 47 to lab02 is restricted: "
+             "Node is not shareable."), 12),                                                    # share attempt on CUI
+        (_nc('The file "/CUI/plan.docx" with ID "47" has been shared via link with permissions "1" (Share ID: 3)'), 12),
+        (_ft("chp.contain.refused", op="move", source_folder="1", target_folder="4"), 12),
+        (_ft("chp.app.disabled", app_id="chp_foldertag", control="true"), 12),
+        (_nc('App "chp_foldertag" disabled', user="--"), 12),
+        (_ft("chp.tag.failed", op="create"), 12),
+        ({"decoder": "kernel", "location": "journald", "program_name": "kernel",
+          "log": "kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.30 DST=1.1.1.1 UID=48"}, 12),
+        (_nc('Login failed: "lab02"', user="--"), 7),                                              # failed sign-in
+        (_nc('File with id "47" deleted: "/lab01/files/CUI/plan.docx"'), 7),                      # CUI delete
+        (_nc('File with id "48" deleted: "/lab01/files/FCI/x.pdf"'), 7),
+        (_nc('File with id "47" accessed: "/lab01/files/CUI/plan.docx"'), 3),                     # CUI download
+        (_ft("chp.folderop.refused", op="move"), 7),                                               # the first refusal
+        ({"decoder": "kanidmd", "location": "journald", "program_name": "kanidmd",
+          "log": "kanidmd: authentication failed: incorrect totp for lab03"}, 7),               # Kanidm failed TOTP
+    ]
+    for ev, want in cases:
+        rid, lvl = _level(x, ev)
+        assert lvl == want, (ev, rid, lvl)
+    # after the first refusal fired, the once-rule is ignored: further refusals stay at level 3
+    assert _level(x, _ft("chp.folderop.refused", op="move"), now_ignored=(w.FOLDEROP_FIRST_RULE,))[1] == 3
+    # noise: a tag applied is not stored; an ordinary audit line is not an alert; deletes outside CUI/FCI are not 7
+    assert (_level(x, _ft("chp.tag.applied", op="create"))[1] or 0) <= 3
+    assert (_level(x, _nc('Login successful: "lab01"'))[1] or 0) < 3
+    assert (_level(x, _nc('File with id "9" deleted: "/lab01/files/Operations/x"'))[1] or 0) < 7
+
+
+def test_first_refusal_rule_fires_once_then_ignores():
+    import xml.etree.ElementTree as ET
+    g = ET.fromstring(w.NEXTCLOUD_RULES)
+    r = next(x for x in g.findall("rule") if x.get("id") == w.FOLDEROP_FIRST_RULE)
+    assert int(r.get("level")) >= 7 and int(r.get("ignore")) >= 86400
+    assert r.findtext("if_sid") == "100615"
+
+
+def test_failed_sign_in_also_hangs_off_the_generic_rule():         # spike: 2501 takes "Login failed" first
+    rid, lvl = _level(w.NEXTCLOUD_RULES, {**_nc('Login failed: "lab02"', user="--"), "pre_fired": {"2501"}})
+    assert lvl == 7
+
+
+def test_egress_rule_only_from_the_kernel():                        # a forwarded alert text must not loop to level 12
+    rid, lvl = _level(w.NEXTCLOUD_RULES, {"decoder": "x", "location": "journald", "program_name": "chp-wazuh",
+                                          "log": "chp-wazuh: level 12 CHP-NC-EGRESS"})
+    assert lvl is None or lvl < 12
+
+
+def test_nextcloud_rule_ids_are_their_own_range():
+    ids = set(_re.findall(r'rule id="(\d+)"', w.NEXTCLOUD_RULES))
+    assert ids and all(100600 <= int(i) < 100700 for i in ids)
+    for other in (w.YARA_RULES, w.SURICATA_RULES, w.REVIEW_RULES):
+        assert not ids & set(_re.findall(r'rule id="(\d+)"', other))
+
+
+def test_nextcloud_rules_parse_and_use_pcre2_for_alternation():
+    import xml.etree.ElementTree as ET
+    g = ET.fromstring(w.NEXTCLOUD_RULES)
+    for f in g.iter("field"):
+        if "|" in (f.text or ""):
+            assert f.get("type") == "pcre2", f.text
+
+
+def test_manager_reads_the_audit_log_once():
+    for out in (w.documents_manager(MGR), w.documents_manager(w.documents_manager(MGR))):
+        locs = [e for x in w.parse_conf(out) for e in x.findall("localfile") if e.findtext("location") == NC_LOG]
+        assert len(locs) == 1 and locs[0].findtext("log_format") == "json"

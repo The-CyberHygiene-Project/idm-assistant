@@ -217,3 +217,135 @@ def fstab_line(d):
 def rich_rules(hosts):
     return [f'rule family="ipv4" source address="{h.ip}/32" port port="1514" protocol="tcp" accept'
             for h in hosts if h.role == "client"]
+
+
+# ---------- NextCloud (ISO 0.7.0 Plan 2 Task 5; design §6, §12; owner decisions 2, 3, 7) ----------
+NC_AUDIT = "/var/log/nextcloud/audit.log"
+NC_RULES_FILE = "chp_nextcloud_rules.xml"
+FOLDEROP_FIRST_RULE = "100616"
+_CTRL = "(CUI|FCI|Archive)"                              # the controlled team folders (share off, contained)
+
+# Decoder: Wazuh's built-in JSON decoder reads each audit line (`log_format json`); a custom decoder would add nothing.
+# Nested keys arrive flattened (data.event). Every alternation is pcre2 (OS_Regex has none; a bad rule stops the
+# manager, so enable runs wazuh-analysisd -t first). Level 0 = matched but not stored; 3 = stored, in the review;
+# 7 = the daily summary; 12 = ALERT_HOOK at once.
+NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 design §6): NextCloud admin_audit + chp_foldertag -->
+<group name="chp,nextcloud,">
+  <rule id="100600" level="0">
+    <decoded_as>json</decoded_as>
+    <location>{NC_AUDIT}</location>
+    <field name="app">^admin_audit$</field>
+    <description>NextCloud audit: $(message)</description>
+  </rule>
+  <rule id="100601" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">ShareAction from user \\S+ on \\d+ to \\S+ is restricted</field>
+    <description>NextCloud: share REFUSED on a no-share team folder (CUI/FCI/Archive): $(message)</description>
+    <group>chp_share_refused,</group>
+  </rule>
+  <rule id="100602" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^The (file|folder) "/{_CTRL}(/[^"]*)?" with ID "\\d+" has been shared</field>
+    <description>NextCloud: a share was MADE on a controlled team folder (must never happen): $(message)</description>
+    <group>chp_share_made,</group>
+  </rule>
+  <rule id="100603" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^App .(chp_foldertag|chp_ledger|admin_audit|groupfolders|files_accesscontrol|user_oidc|systemtags|workflowengine). disabled</field>
+    <description>NextCloud: a CUI control app was switched OFF: $(message)</description>
+  </rule>
+  <rule id="100604" level="7">
+    <if_sid>100600</if_sid>
+    <field name="message">^Login failed: </field>
+    <description>NextCloud: failed sign-in: $(message) from $(remoteAddr)</description>
+    <group>authentication_failed,</group>
+  </rule>
+  <rule id="100606" level="7">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">(deleted: |has been deleted).*/(files/)?{_CTRL}(/|"|$)</field>
+    <description>NextCloud: deletion in a controlled team folder: $(message)</description>
+  </rule>
+  <rule id="100607" level="3">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">accessed: ".*/(files/)?{_CTRL}/</field>
+    <description>NextCloud: download from a controlled team folder (owner decision 2: audited): $(message)</description>
+  </rule>
+  <!-- a "Login failed" line is taken first by Wazuh's generic rule 2501 ("authentication failure") (spike) -->
+  <rule id="100605" level="7">
+    <if_sid>2501</if_sid>
+    <location>{NC_AUDIT}</location>
+    <field name="app">^admin_audit$</field>
+    <field name="message">^Login failed: </field>
+    <description>NextCloud: failed sign-in: $(message) from $(remoteAddr)</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <rule id="100610" level="0">
+    <decoded_as>json</decoded_as>
+    <location>{NC_AUDIT}</location>
+    <field name="app">^chp_foldertag$</field>
+    <description>chp_foldertag: $(message)</description>
+  </rule>
+  <rule id="100611" level="12">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.contain.refused$</field>
+    <description>NextCloud: copy/move OUT of a controlled team folder refused: $(message)</description>
+    <group>chp_contain_refused,</group>
+  </rule>
+  <rule id="100612" level="12">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.app.disabled$</field>
+    <field name="data.control">^true$</field>
+    <description>NextCloud: a CUI control app was switched OFF: $(message)</description>
+  </rule>
+  <rule id="100617" level="3">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.app.disabled$</field>
+    <description>NextCloud: an app was switched off: $(message)</description>
+  </rule>
+  <rule id="100613" level="12">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.tag.failed$</field>
+    <description>NextCloud: a CUI/FCI tag could NOT be applied: $(message)</description>
+    <group>chp_tag_failed,</group>
+  </rule>
+  <rule id="100614" level="2">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.tag.applied$</field>
+    <description>NextCloud: tag applied: $(message)</description>
+  </rule>
+  <!-- §12 DEGRADED (database MD5 unavailable): each refusal is level 3. The FIRST one is raised to 7 by 100616:
+       Wazuh's rule option ignore="86400" makes the rule fire once and then fall back to its parent (100615) for a
+       day, so the first refusal of each day (and the first after a manager restart) reaches the daily summary. -->
+  <rule id="100615" level="3">
+    <if_sid>100610</if_sid>
+    <field name="data.event">^chp.folderop.refused$</field>
+    <description>NextCloud: folder move/rename/delete refused (database MD5 unavailable): $(message)</description>
+  </rule>
+  <rule id="{FOLDEROP_FIRST_RULE}" level="7" ignore="86400">
+    <if_sid>100615</if_sid>
+    <description>NextCloud is DEGRADED: database MD5 unavailable, folder moves/renames/deletes are refused (first refusal): $(message)</description>
+    <group>chp_degraded,</group>
+  </rule>
+
+  <rule id="100620" level="12">
+    <program_name>^kernel$</program_name>
+    <match>CHP-NC-EGRESS</match>
+    <description>NextCloud egress block tripped (the apache user tried to leave the server)</description>
+    <group>chp_egress,</group>
+  </rule>
+  <rule id="100630" level="7">
+    <program_name>^kanidmd$</program_name>
+    <regex type="pcre2">(?i)((incorrect|invalid|wrong)\\W+totp|totp\\W+(fail|denied|incorrect|invalid))</regex>
+    <description>Kanidm: failed sign-in (authenticator code refused)</description>
+    <group>authentication_failed,</group>
+  </rule>
+</group>
+"""
+
+
+def documents_manager(text):
+    """The manager's ossec.conf with NextCloud's audit log read as JSON (once); everything else unchanged."""
+    blocks = parse_conf(text)
+    _json_log(blocks, NC_AUDIT)
+    return _render(blocks)
