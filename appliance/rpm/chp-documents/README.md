@@ -50,6 +50,12 @@ Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron
   canary's expected refusal is lowered to level 3 only for the canary file's id (rule 100608 in
   `/var/ossec/etc/rules/chp_nextcloud_rules_canary.xml`, written by the check). Alert text can carry CUI file names
   (they stay on the appliance: monitor, Wazuh, daily review). Trash and old versions are not checked for names.
+  **Two consequences, by design:** (1) running `chp-site documents check` by hand outside 03:05-03:45 enables
+  `chp-canary` outside the window, which pages at **level 12** (rule 100609) exactly like an intrusion; tell the ISSO
+  first, or run it inside the window. (2) A missed night (server off at 03:10) is not caught up: there is **no tag
+  check and no canary for up to about 48 h**, and check 81 alerts that the result is stale once it is older than
+  26 h. `canary-off` fails (unit failed, in the journal) when occ cannot tell whether the account exists; it never
+  takes an occ error as "no account".
   Check 77 also alerts when the last backup failed. Each alerts once per change and again after 24 h (state in
   `/var/lib/chp/documents/`); while an alert is held back the check prints `OK ... still failing (alerted <time>)`.
 

@@ -1704,3 +1704,28 @@ def test_duplicate_tag_names_alert(tmp_path):
     db.c.execute("INSERT INTO oc_systemtag VALUES (9, 'CUI', 1, 0)")
     _, res, _ = do_check(tmp_path, db=db)
     assert "tag:CUI:duplicate" in keys(res)
+
+
+# ---------- Task 6 fix round 2 ----------
+
+class BrokenOcc(CanaryOcc):
+    def __call__(self, argv, env=None):
+        if argv[0] == "user:info":
+            self.calls.append(list(argv))
+            return 1, "", "Nextcloud is in maintenance mode, no apps are loaded."
+        return super().__call__(argv, env)
+
+
+def test_canary_off_fails_loudly_when_occ_is_broken(tmp_path):
+    r = check_root(tmp_path)
+    occ = BrokenOcc()
+    occ.enabled, occ.tokens = True, [{"id": 3, "name": "x"}]
+    with pytest.raises(SiteError, match="maintenance mode"):
+        D.canary_off(r, occ)
+    assert "no canary account" in D.canary_off(r, CanaryOcc(exists=False))[0]   # only "user not found" is absent
+
+
+def test_check_never_tries_to_make_the_account_when_occ_is_broken(tmp_path):
+    occ = BrokenOcc()
+    _, res, _ = do_check(tmp_path, occ=occ)
+    assert "canary:error" in keys(res) and not any(c[0] == "user:add" for c in occ.calls)

@@ -959,12 +959,25 @@ def _jl(text):
         raise _CanaryError(f"occ did not return JSON: {text.strip()[:80]!r}") from None
 
 
+def _canary_info(occ):
+    """user:info for the canary: (rc, output) when it exists, None ONLY when NextCloud says the user is not there.
+    Any other failure (occ broken, database down, maintenance mode) raises _CanaryError: never taken as 'absent'."""
+    rc, out, err = occ(["user:info", CANARY_USER, "--output=json"])
+    if rc == 0:
+        return out or ""
+    text = f"{out or ''} {err or ''}"
+    if re.search(r"(?i)user (was )?not found|does not exist|no such user", text):
+        return None
+    why = (err or out or f"exit {rc}").strip().splitlines()
+    raise _CanaryError(f"occ user:info {CANARY_USER} failed: {(why[-1] if why else '')[:160]}")
+
+
 def _canary_account(occ):
     """The canary account: local, in cui-users, a random password nobody keeps (sign-in only by a per-run token).
     Returns (user:info as a dict, True when it was made just now)."""
     import secrets as _s
-    rc, out, _ = occ(["user:info", CANARY_USER, "--output=json"])
-    made = rc != 0
+    out = _canary_info(occ)
+    made = out is None
     if made:
         _o(occ, "user:add", "--password-from-env", "--display-name", "CHP share canary (nightly check)", "--group",
            "cui-users", CANARY_USER, env={"OC_PASS": _s.token_urlsafe(32)})
@@ -1003,14 +1016,13 @@ def canary_off(root, occ, lock=True):
         if fd is None:
             return ["OK canary-off: a check is running; it switches the canary off itself"]
     try:
-        rc, _, _ = occ(["user:info", CANARY_USER, "--output=json"])
-        if rc != 0:
-            return ["OK canary-off: no canary account"]
         try:
+            if _canary_info(occ) is None:
+                return ["OK canary-off: no canary account"]
             _drop_tokens(occ)
             _o(occ, "user:disable", CANARY_USER)
-        except _CanaryError as e:
-            raise SiteError(f"canary-off: {e}") from None
+        except _CanaryError as e:                     # the unit shows failed (journal); the next run alerts canary:leftover
+            raise SiteError(f"canary-off: {e}; the canary account may still be enabled") from None
         return ["OK canary-off: canary account disabled, its app tokens deleted"]
     finally:
         if fd is not None:
