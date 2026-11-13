@@ -2,6 +2,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """Derived site values for the shell (first-boot scripts use `chp-site get KEY`; they never parse site files)."""
+from .documents_render import fqdn
 from .hosts import server_of
 
 ANCHOR = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
@@ -19,7 +20,7 @@ def values(site, hosts, client=None):
          "SECURITY_ADDONS": site.get("SECURITY_ADDONS", "no"),
          "SECURITY_ALERT_LEVEL": str(site.get("SECURITY_ALERT_LEVEL", 10)),
          "DOCUMENTS": site.get("DOCUMENTS", "no"), "DOCUMENTS_BACKUP_DAYS": str(site.get("DOCUMENTS_BACKUP_DAYS", 14)),
-         "FILES_FQDN": f"files.{d}"}
+         "FILES_FQDN": fqdn(site)}
     if client:
         v.update({k: client[k] for k in ("CA_ROOT_SHA256", "SSH_CA_PUBKEY", "SSH_CA_FPR", "CACHE_PUBKEY", "KANIDM_URL")})
     return v
