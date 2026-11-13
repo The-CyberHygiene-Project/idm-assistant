@@ -1,0 +1,20 @@
+# logs/70 (fix 5, 2026-11-13T01:32:23Z): bad spool files are quarantined, the path unit stays up, the ledger is unchanged
+verify: OK, 13 entries, head 13 01d2b4a44461ebb0...
++ (root, standing in for a broken or hostile web server) three bad requests into the spool
+spool aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json: QUARANTINED (ValueError: not a request)
+spool bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json: QUARANTINED (ValueError: missing action)
+spool cccccccccccccccccccccccccccccccc.json: QUARANTINED (ValueError: not a controlled document (Compliance area only))
++ spool now:
+0
++ quarantine:
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json
+cccccccccccccccccccccccccccccccc.json
++ results for the two with an id+user:
+{"id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "user": "lab01", "ok": false, "reason": "refused: missing action", "seq": null, "entry": null}
+-rw-r-----. 1 root apache 171 Nov 12 18:32 /var/lib/chp-docs/out/cccccccccccccccccccccccccccccccc.json
+active
+verify: OK, 13 entries, head 13 01d2b4a44461ebb0...
+## a home-folder file id through the app (lab01, app password): refused before the spool
+PUT home file notes-fix5.txt -> 201
+chp_ledger checkout of home file 279 -> 403 {'error': 'not a controlled document (Compliance area only)'}

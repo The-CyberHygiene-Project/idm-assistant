@@ -17,20 +17,23 @@ case ${1:-} in
       sudo cp -r chp_ledger /usr/lib/nextcloud/apps/ && sudo chown -R root:root /usr/lib/nextcloud/apps/chp_ledger
       sudo find /usr/lib/nextcloud/apps/chp_ledger -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
       sudo install -d -m 0755 /usr/local/libexec/chp-spike && sudo install -m 0644 docs_ledger.py /usr/local/libexec/chp-spike/
-      sudo install -m 0644 units/chp-docs-ledger.path units/chp-docs-ledger.service /etc/systemd/system/
+      sudo install -m 0644 units/chp-docs-ledger.path units/chp-docs-ledger.service units/chp-docs-ledger-alert.service /etc/systemd/system/
       sudo install -d -m 0755 -o root -g root /var/lib/chp-docs
       sudo install -d -m 1730 -o root -g apache /var/lib/chp-docs/spool     # apache may add (and rename its own); not list
-      sudo install -d -m 0755 -o root -g root /var/lib/chp-docs/out         # results: apache reads, cannot write
+      sudo install -d -m 0750 -o root -g apache /var/lib/chp-docs/out        # results (0640 root:apache): apache reads, cannot write
+      sudo install -d -m 0700 -o root -g root /var/lib/chp-docs/quarantine  # fix 5: requests that failed
       sudo install -d -m 0700 -o root -g root /var/lib/chp-docs/ledger      # the ledger: apache cannot even read it
       echo "+ semanage fcontext: spool = httpd_sys_rw_content_t, out = httpd_sys_content_t"
       sudo semanage fcontext -a -t httpd_sys_rw_content_t "/var/lib/chp-docs/spool(/.*)?" 2>/dev/null || true
       sudo semanage fcontext -a -t httpd_sys_content_t "/var/lib/chp-docs/out(/.*)?" 2>/dev/null || true
       sudo restorecon -RF /var/lib/chp-docs /usr/lib/nextcloud/apps/chp_ledger /usr/local/libexec/chp-spike
       echo "+ fapolicyd-cli --file add (trust file chp-spike) + --update"
-      sudo fapolicyd-cli --file add /usr/lib/nextcloud/apps/chp_ledger/ --trust-file chp-spike 2>&1 | tail -1
-      sudo fapolicyd-cli --file add /usr/local/libexec/chp-spike/docs_ledger.py --trust-file chp-spike 2>&1 | tail -1
+      for f in /usr/lib/nextcloud/apps/chp_ledger/ /usr/local/libexec/chp-spike/docs_ledger.py; do
+        sudo fapolicyd-cli --file add $f --trust-file chp-spike >/dev/null 2>&1 || true
+        sudo fapolicyd-cli --file update $f --trust-file chp-spike 2>&1 | tail -1   # a changed file needs its new hash
+      done
       sudo fapolicyd-cli --update
-      sudo systemctl daemon-reload && sudo systemctl enable --now chp-docs-ledger.path
+      sudo systemctl daemon-reload && sudo systemctl reset-failed chp-docs-ledger.path chp-docs-ledger.service 2>/dev/null; sudo systemctl enable chp-docs-ledger.path && sudo systemctl restart chp-docs-ledger.path
       ls -laZ /var/lib/chp-docs; systemctl is-active chp-docs-ledger.path; rm -rf ~/l1'
     O app:enable chp_ledger ;;
   l2)

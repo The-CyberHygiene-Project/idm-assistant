@@ -25,7 +25,9 @@ from pathlib import Path
 
 BASE = Path(os.environ.get("CHP_DOCS_BASE", "/var/lib/chp-docs"))
 LEDGER, HEAD = BASE / "ledger" / "ledger.jsonl", BASE / "ledger" / "ledger.head"
-SPOOL, OUT = BASE / "spool", BASE / "out"
+SPOOL, OUT, QUAR = BASE / "spool", BASE / "out", BASE / "quarantine"
+DOMAIN, CLI_CLIENT = "docs.lab.test", "chp-doc"
+COMPLIANCE = re.compile(r"^/[^/]+/files/(CUI/|Internal/)?Compliance/")
 APPROVERS = ["lab03", "lab04"]          # spike stand-ins for the new site keys (Kanidm account names)
 ISSO = "lab04"
 GENESIS = "0" * 64
@@ -79,19 +81,28 @@ def head():
 
 
 def decide(entries, r):
-    """None = allowed, else the reason for refusing. r: the request (identity already authenticated)."""
+    """None = allowed, else the reason for refusing (fix 4: the per-cycle rule). A cycle of a document (fileid) runs
+    from its last successful publish (or its creation) to now. Authors(cycle) = whoever created it in the cycle, every
+    user who checked it out in the cycle, and the publisher (who must be one of them). An approval counts only if it
+    was made after the cycle's last checkout/create, of that exact sha256, by a listed approver outside Authors(cycle),
+    signed in by a Kanidm-verified Bearer. Reviewers read with a plain fetch, which records nothing."""
     mine = [e for e in entries if e["fileid"] == r["fileid"]]
-    co = [e for e in mine if e["action"] == "checkout"]
-    author = co[-1]["user"] if co else None
-    since = mine[mine.index(co[-1]) + 1:] if co else mine
+    pubs = [i for i, e in enumerate(mine) if e["action"] == "publish"]
+    cycle = mine[pubs[-1] + 1:] if pubs else mine
+    starts = [i for i, e in enumerate(cycle) if e["action"] in ("create", "checkout")]
+    authors = {e["user"] for e in cycle if e["action"] in ("create", "checkout")}
     a = r["action"]
+    if a == "create":
+        return "this document already has ledger entries; use checkout" if mine else None
     if a == "checkout":
         return None
+    if a in ("approve", "override") and r["auth"] != "bearer":
+        return f"{a} needs a Kanidm-verified Bearer sign-in (this request: {r['auth']})"
     if a == "approve":
-        if author is None:
-            return "no checkout recorded for this document"
-        if r["user"] == author:
-            return f"{r['user']} is the author (the user who checked it out); an approver must be someone else"
+        if not starts:
+            return "no checkout (or create) in this cycle"
+        if r["user"] in authors:
+            return f"{r['user']} is an author of this cycle ({', '.join(sorted(authors))}); an approver must be someone else"
         if r["user"] not in APPROVERS:
             return f"{r['user']} is not an approver"
         return None
@@ -105,12 +116,17 @@ def decide(entries, r):
             return f"not a one-person site: other approver(s) exist ({', '.join(others)})"
         return None
     if a == "publish":
-        ok = [e for e in since if e["action"] in ("approve", "override") and e["sha256"] == r["sha256"]
-              and (e["user"] != r["user"] or e["action"] == "override")]
+        if r["user"] not in authors:
+            return f"{r['user']} is not an author of this cycle (only {', '.join(sorted(authors)) or 'nobody'} may publish)"
+        after = cycle[starts[-1] + 1:]
+        ok = [e for e in after if e["sha256"] == r["sha256"] and
+              ((e["action"] == "approve" and e["user"] not in authors) or e["action"] == "override")]
         if not ok:
-            return "no approval of this exact file (sha256) since the checkout, by someone other than the publisher"
+            return ("no valid approval of this exact file (sha256) after the cycle's last checkout, "
+                    "by an approver who is not an author")
         return None
     return "unknown action"
+
 
 
 def append(r, route):
@@ -146,27 +162,67 @@ def _result(r, e, why):
     OUT.mkdir(exist_ok=True)
     tmp = OUT / f"{r['id']}.tmp"
     tmp.write_text(json.dumps(res))
-    os.chmod(tmp, 0o644)
+    import grp
+    os.chown(tmp, 0, grp.getgrnam("apache").gr_gid)
+    os.chmod(tmp, 0o640)                  # minor: only the web server group reads results
     os.replace(tmp, OUT / f"{r['id']}.json")
     return res
 
 
+def verify_bearer(r):
+    """fix 3: the app forwards the raw Bearer; ask Kanidm's chp-doc userinfo (only chp-doc tokens pass there, logs/65).
+    Returns (auth, kanidm-evidence) or raises ValueError when a Bearer was sent but does not check out."""
+    tok = r.pop("bearer_token", None)
+    if r.get("auth") != "bearer-claimed":
+        return r.get("auth"), None
+    import ssl
+    import urllib.error
+    import urllib.request
+    q = urllib.request.Request(f"https://idm.{DOMAIN}/oauth2/openid/{CLI_CLIENT}/userinfo",
+                               headers={"Authorization": "Bearer " + (tok or "")})
+    try:
+        with urllib.request.urlopen(q, context=ssl.create_default_context(), timeout=10) as f:
+            ui = json.load(f)
+    except (urllib.error.URLError, ValueError) as err:
+        raise ValueError(f"the Bearer sent with this request did not validate at Kanidm ({err})")
+    if ui.get("preferred_username") != r["user"]:
+        raise ValueError(f"the Bearer belongs to {ui.get('preferred_username')!r}, NextCloud authenticated {r['user']!r}")
+    if CLI_CLIENT not in ([ui.get("aud")] if isinstance(ui.get("aud"), str) else ui.get("aud") or []) and ui.get("azp") != CLI_CLIENT:
+        raise ValueError("the Bearer was not issued to chp-doc")
+    return "bearer", {"sub": ui.get("sub"), "auth_time": ui.get("auth_time"), "client": CLI_CLIENT,
+                      "verified": "kanidm userinfo"}
+
+
 def process():
-    """Route L1: every request in the spool, oldest first."""
+    """Route L1: every request in the spool, oldest first. fix 5: ANY failure moves the request to quarantine/, so a
+    bad request can never re-trigger the path unit forever; the result tells the sender why."""
+    QUAR.mkdir(mode=0o700, exist_ok=True)
     for p in sorted(SPOOL.glob("*.json"), key=lambda x: x.stat().st_mtime):
+        r = None
         try:
             r = json.loads(p.read_text())
-            if not re.fullmatch(r"[0-9a-f]{32}", r.get("id", "")) or p.stem != r["id"]:
-                raise ValueError("bad id")
-        except (ValueError, KeyError) as err:
-            print(f"spool {p.name}: refused ({err})"); p.unlink(); continue
-        e, why = append(r, "L1-ocs")
-        res = _result(r, e, why)
-        print(f"L1 {r['action']} by {r['user']} ({r['auth']}) fileid {r['fileid']}: "
-              f"{'APPENDED seq ' + str(res['seq']) if e else 'REFUSED: ' + why}")
-        if e and r["action"] == "override":
-            print("  ALERT (ALERT_HOOK in the product): ISSO override recorded")
-        p.unlink()
+            if not isinstance(r, dict) or not re.fullmatch(r"[0-9a-f]{32}", str(r.get("id", ""))) or p.stem != r["id"]:
+                raise ValueError("not a request")
+            for k in ("action", "user", "auth", "fileid", "path", "sha256"):
+                if k not in r:
+                    raise ValueError(f"missing {k}")
+            if not COMPLIANCE.match(str(r["path"])):
+                raise ValueError("not a controlled document (Compliance area only)")
+            r["auth"], r["kanidm"] = verify_bearer(r)
+            e, why = append(r, "L1-ocs")
+            res = _result(r, e, why)
+            print(f"L1 {r['action']} by {r['user']} ({r['auth']}) fileid {r['fileid']}: "
+                  f"{'APPENDED seq ' + str(res['seq']) if e else 'REFUSED: ' + why}")
+            if e and r["action"] == "override":
+                print("  ALERT (ALERT_HOOK in the product): ISSO override recorded")
+            p.unlink()
+        except Exception as err:          # noqa: BLE001 - quarantine on anything
+            print(f"spool {p.name}: QUARANTINED ({type(err).__name__}: {err})")
+            if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{32}", str(r.get("id", ""))) and isinstance(r.get("user"), str):
+                r.pop("bearer_token", None)
+                _result(r, None, f"refused: {err}")
+            os.replace(p, QUAR / p.name)
+
 
 
 def uploader(fileid, name):

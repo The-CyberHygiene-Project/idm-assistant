@@ -114,7 +114,8 @@ def describe(p, s):
         out["access_token_expires"] = time.strftime("%FT%TZ", time.gmtime(s["expires_at"]))
         out["access_token_shape"] = f"{s['access_token'].count('.') + 1} dot-separated parts, {len(s['access_token'])} chars"
         out["refresh_token"] = "present" if s.get("refresh_token") else "absent"
-        out["refresh_expires_by"] = time.strftime("%FT%TZ", time.gmtime(s["stored_at"] + 28800)) + " (Kanidm client setting)"
+        out["refresh_expires_by"] = (time.strftime("%FT%TZ", time.gmtime(s["stored_at"] + 28800)) +
+                                     " (COMPUTED here from the Kanidm client setting 28800 s; not read from Kanidm, untested)")
     else:
         out["app_password"] = f"{len(s['app_password'])} chars; no expiry at the server (valid until revoked)"
     return out
@@ -241,11 +242,12 @@ def oidc_refresh(p, s, log):
         log(f"  refresh refused: {st} {data[:160]!r}")
         return None
     tok = json.loads(data)
-    s.update(access_token=tok["access_token"], refresh_token=tok.get("refresh_token", s["refresh_token"]),
+    old_rt = s["refresh_token"]           # fix 6: compare old vs new BEFORE overwriting (the first version compared after)
+    s.update(access_token=tok["access_token"], refresh_token=tok.get("refresh_token", old_rt),
              expires_at=time.time() + int(tok.get("expires_in", 300)))
     _write(p, s)
-    log(f"  refreshed: new access token, expires_in={tok.get('expires_in')}; refresh token rotated: "
-        f"{tok.get('refresh_token') not in (None, s['refresh_token']) or 'refresh_token' in tok}")
+    log(f"  refreshed: new access token, expires_in={tok.get('expires_in')}; refresh token in the response: "
+        f"{'refresh_token' in tok}; rotated (new != old): {tok.get('refresh_token') not in (None, old_rt)}")
     return s
 
 

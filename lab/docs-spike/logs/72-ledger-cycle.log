@@ -1,0 +1,52 @@
+# logs/72 (fix 4, 2026-11-13T01:35:23Z): the per-cycle author rule (docs_ledger.py decide), on two new controlled documents in Internal/Compliance
+## 0. lab02 writes a new controlled document and records its creation
+put Internal/Compliance/Internal_spike-cycle_v1.0.docx as lab02: PUT -> 201
+L1 create as lab02: POST -> 200 {'id': 'd7f85ffdbfc1d86e21660eda69bc97d0'}
+  result after 0.2s: ok=True seq=14 reason=None
+## A. the self-approval sequence (A = lab04, an approver, authors; C = lab02 checks out after; A approves A's own hash)
+L1 checkout as lab04: POST -> 200 {'id': '0547ec1801a215ed9976b0dd86127bce'}
+  result after 0.2s: ok=True seq=15 reason=None
+L1 checkout as lab02: POST -> 200 {'id': 'ce9adbff23a0a949203c5c78f7b64083'}
+  result after 0.2s: ok=True seq=16 reason=None
+L1 approve as lab04: POST -> 200 {'id': '2cc21c9e5a6451f23c063166640a17bf'}
+  result after 0.2s: ok=False seq=None reason='lab04 is an author of this cycle (lab02, lab04); an approver must be someone else'
+   (the first rule, 'author = the latest checkout', said author = lab02 here and would have let lab04 approve)
+## B. a non-author cannot publish; an approval made BEFORE the cycle's last checkout does not count
+L1 publish as lab01: POST -> 200 {'id': '9d4f5f12a999844ffd0c8868bca4c7f5'}
+  result after 0.2s: ok=False seq=None reason='lab01 is not an author of this cycle (only lab02, lab04 may publish)'
+## C. a clean cycle: publish by lab02 (an author) after the approver ... but lab04 is an author of THIS cycle, so
+##    the cycle must close first: nobody can approve it now (lab04 is the only CUI-free approver who can see it)
+L1 publish as lab02: POST -> 200 {'id': '88331f7fd1a0808c4a340a087397244c'}
+  result after 0.2s: ok=False seq=None reason="no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author"
+## D. reviewers read with a plain fetch (GET), which records nothing; then a fresh document shows the clean path
+put Internal/Compliance/Internal_spike-cycle2_v1.0.docx as lab02: PUT -> 201
+L1 create as lab02: POST -> 200 {'id': 'e4e04d45d899b5c4b4d987e6fb96f22b'}
+  result after 0.2s: ok=True seq=17 reason=None
+L1 approve as lab04: POST -> 200 {'id': 'cc51de87489b7bb76f10162f847f3fad'}
+  result after 0.2s: ok=True seq=18 reason=None
+## E. lab02 checks out again AFTER the approval: the approval no longer counts
+L1 checkout as lab02: POST -> 200 {'id': '612c5537e1d42ad18fd10706049f95af'}
+  result after 0.2s: ok=True seq=19 reason=None
+L1 publish as lab02: POST -> 200 {'id': '00cdadc1ee74648a2a9510a7cd7e2fbf'}
+  result after 0.2s: ok=False seq=None reason="no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author"
+## F. lab04 approves again after that checkout; lab02 publishes
+L1 approve as lab04: POST -> 200 {'id': '920b253ad5dd6abe522a298a5b533869'}
+  result after 0.2s: ok=True seq=20 reason=None
+L1 publish as lab02: POST -> 200 {'id': '93a031e59780a098bc210f61a0e4c21a'}
+  result after 0.2s: ok=True seq=21 reason=None
+## G. approve without a Bearer (lab04 by app password): refused
+lab04 approve by app password -> {'id': 'a77702cee6a278531d3bdbfd136c8874', 'user': 'lab04', 'ok': False, 'reason': 'approve needs a Kanidm-verified Bearer sign-in (this request: app-password)', 'seq': None, 'entry': None}
++ (root) docs_ledger.py show | tail -12
+ 10 2026-11-13T01:15:56Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+ 11 2026-11-13T01:16:03Z L2-drop  approve  lab04  auth=nextcloud audit log kanidm_sub=None file 119 a92642ca6466 
+ 12 2026-11-13T01:29:31Z L1-ocs   checkout lab01  auth=session        kanidm_sub=None file 119 000000000000 
+ 13 2026-11-13T01:29:31Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=00000000 file 119 000000000000 
+ 14 2026-11-13T01:35:17Z L1-ocs   create   lab02  auth=bearer         kanidm_sub=8e26cd6e file 281 f3534c825dbb 
+ 15 2026-11-13T01:35:19Z L1-ocs   checkout lab04  auth=bearer         kanidm_sub=d46fdb47 file 281 f3534c825dbb 
+ 16 2026-11-13T01:35:20Z L1-ocs   checkout lab02  auth=bearer         kanidm_sub=8e26cd6e file 281 f3534c825dbb 
+ 17 2026-11-13T01:35:27Z L1-ocs   create   lab02  auth=bearer         kanidm_sub=8e26cd6e file 282 f3534c825dbb 
+ 18 2026-11-13T01:35:28Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 282 f3534c825dbb 
+ 19 2026-11-13T01:35:30Z L1-ocs   checkout lab02  auth=bearer         kanidm_sub=8e26cd6e file 282 f3534c825dbb 
+ 20 2026-11-13T01:35:33Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 282 f3534c825dbb 
+ 21 2026-11-13T01:35:34Z L1-ocs   publish  lab02  auth=bearer         kanidm_sub=8e26cd6e file 282 f3534c825dbb 
+verify: OK, 21 entries, head 21 ee7fe0f39d51746b...

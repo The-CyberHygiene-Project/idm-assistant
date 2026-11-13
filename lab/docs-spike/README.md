@@ -45,9 +45,13 @@ session ends. The tunnel from step 5 is needed for the Mac-side scripts.
    (logs/56-60; needs four route-1 sessions, logs/55).
 
 Remove Task 2's state (iso5-docs): `occ app:disable chp_ledger` and `rm -rf /usr/lib/nextcloud/apps/chp_ledger`;
-`systemctl disable --now chp-docs-ledger.path`, remove the two units and `/usr/local/libexec/chp-spike`;
+`systemctl disable --now chp-docs-ledger.path`, remove the three units (`chp-docs-ledger.{path,service}`, `chp-docs-ledger-alert.service`) and `/usr/local/libexec/chp-spike`;
 `rm -rf /var/lib/chp-docs /root/spike/stick`; `semanage fcontext -d` the two `/var/lib/chp-docs` entries; `fapolicyd-cli
 --file delete` the trust file `chp-spike` entries + `--update`; `occ groupfolders:delete 7` (Approvals);
 `occ user_oidc:provider:delete kanidm-cli`, `occ config:system:delete user_oidc`; restore
 `/root/spike/nextcloud.conf.before-task2` to `/etc/httpd/conf.d/nextcloud.conf`; `kanidm system oauth2 delete chp-doc`.
 On iso5-dcli: `rm -rf ~/chp-docs-work ~/.config/chp-doc`.
+
+Review fixes (logs/66-74): `proto/forged_bearer.py` (Mac; fix 3), `bash proto/cycle-run.sh` (fix 4, needs route-1 sessions
+for lab01, lab02, lab04), `proto/open_redirect.py` (workstation, joined with doc_auth.py). chp_ledger is now 0.2.0: after
+copying a new version, run `occ upgrade` (logs/67).

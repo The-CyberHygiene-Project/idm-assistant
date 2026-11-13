@@ -1,0 +1,35 @@
+# logs/67 (fixes 3, 5, minor out/ mode; 2026-11-13T01:31:22Z): reinstall chp_ledger 0.2.0 + docs_ledger.py + units
++ semanage fcontext: spool = httpd_sys_rw_content_t, out = httpd_sys_content_t
+File context for /var/lib/chp-docs/spool(/.*)? already defined, modifying instead
+File context for /var/lib/chp-docs/out(/.*)? already defined, modifying instead
++ fapolicyd-cli --file add (trust file chp-spike) + --update
+Fapolicyd was notified
+drwxr-xr-x.  6 root root   system_u:object_r:var_lib_t:s0                62 Nov 12 18:31 .
+drwxr-xr-x. 64 root root   system_u:object_r:var_lib_t:s0              4096 Nov 12 18:06 ..
+drwx------.  2 root root   system_u:object_r:var_lib_t:s0                45 Nov 12 18:29 ledger
+drwxr-x---.  2 root apache system_u:object_r:httpd_sys_content_t:s0    4096 Nov 12 18:29 out
+drwx------.  2 root root   system_u:object_r:var_lib_t:s0                 6 Nov 12 18:31 quarantine
+drwx-wx--T.  2 root apache system_u:object_r:httpd_sys_rw_content_t:s0    6 Nov 12 18:29 spool
+active
++ occ app:enable chp_ledger
+Nextcloud or one of the apps require upgrade - only a limited number of commands are available
+You may use your browser or the occ upgrade command to do the upgrade
+chp_ledger already enabled
+Nextcloud or one of the apps require upgrade - only a limited number of commands are available
+You may use your browser or the occ upgrade command to do the upgrade
+  - chp_ledger: 0.1.0
+active
+OnFailure=chp-docs-ledger-alert.service
+StartLimitIntervalUSec=1min
+StartLimitBurst=300
+# logs/67 continued (2026-11-13T01:31:35Z): bumping the app's version (0.1.0 -> 0.2.0) put NextCloud into 'require upgrade' (only limited occ commands; the web answers 503 until then): occ upgrade
+status.php before: 200
+Finished code integrity check
+Update successful
+Turned off maintenance mode
+Resetting log level
+  - chp_ledger: 0.2.0
+  - maintenance: false
+  - needsDbUpgrade: false
+status.php after: 200
+# correction: status.php answered 200 before the upgrade too; the '503 until then' above was an assumption, not seen.

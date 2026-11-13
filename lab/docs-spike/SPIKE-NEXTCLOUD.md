@@ -369,7 +369,7 @@ workstation was not done.**
 
 | Route | What the workstation keeps | How long it is valid | After a Kanidm lock | Logs |
 |---|---|---|---|---|
-| **1. Kanidm public client `chp-doc`**: authorization code + PKCE S256, redirect to a one-shot listener on `127.0.0.1`; the access token is sent to NextCloud as `Authorization: Bearer` | access token (JWT `at+jwt`, ES256, 722 chars) + refresh token in `$XDG_RUNTIME_DIR/chp-doc/session.json` (tmpfs, 0600). Nothing in the home (a grep of `/home` found none) | access token 900 s; refresh token at most 8 h (`set-refresh-token-expiry chp-doc 28800`; it is replaced on every refresh). The file goes when the user's last session ends: logind removed `/run/user/1000` and the token with it | **next call 401; refresh `invalid_grant`** | 44, 45, 47, 48 |
+| **1. Kanidm public client `chp-doc`**: authorization code + PKCE S256, redirect to a one-shot listener on `127.0.0.1`; the access token is sent to NextCloud as `Authorization: Bearer` | access token (JWT `at+jwt`, ES256, 722 chars) + refresh token in `$XDG_RUNTIME_DIR/chp-doc/session.json` (tmpfs, 0600). Nothing in the home (a grep of `/home` found none) | access token 900 s; refresh token: the client is set to 8 h (`set-refresh-token-expiry chp-doc 28800`), but **that limit is untested** (computed client-side, fix 6); it is replaced on every refresh (`logs/68`). The file goes when the user's last session ends: logind removed `/run/user/1000` and the token with it | **next call 401; refresh `invalid_grant`** | 44, 45, 47, 48 |
 | **2. NextCloud Login Flow v2** (`POST /index.php/login/v2`, browser signs in through Kanidm and grants, CLI polls) | a 72-char **app password**: 0600 file in `~/.config/chp-doc/` (on the LUKS home) or tmpfs | **no expiry at the server** (`user:auth-tokens:list`: type 1 = permanent, `expires: None`; nothing in config expires it) until it is revoked | **still 200**: NextCloud checks an app password itself and never asks Kanidm | 46, 47, 48 |
 | 3. OIDC device flow (RFC 8628) | – | **not offered by Kanidm 1.11.2**: no `device_authorization_endpoint` in discovery, `POST /oauth2/device` 404 | – | 43 |
 
@@ -378,8 +378,8 @@ Both working routes sign out cleanly. Route 1 revokes at Kanidm (`/oauth2/token/
 password that is never signed out stays valid. A first Flow v2 run left one behind (id 30), and only an admin
 `occ user:auth-tokens:delete` removed it (`logs/48`).
 
-**Recommendation: route 1 (Kanidm public client + Bearer).** Nothing long-lived sits on the workstation: 15 min and
-at most 8 h, in RAM, and gone at logout. A lock or removal in Kanidm takes effect on the next request, because
+**Recommendation: route 1 (Kanidm public client + Bearer).** Nothing long-lived sits on the workstation: 15 min, and a refresh token set to 8 h (untested, fix 6), in RAM, and
+gone at logout. A lock or removal in Kanidm takes effect on the next request, because
 NextCloud asks Kanidm about the token on every call. The identity is the same Kanidm person NextCloud already uses,
 and the ledger can record that person's Kanidm `sub`, `session_id` and `auth_time` (§Ledger). Route 2 is rejected:
 its app password is a permanent bearer secret, and it keeps working for a person locked out in Kanidm (`logs/47`).
@@ -452,8 +452,9 @@ Shown: a fresh copy publishes. A colleague's same-size update with `X-OC-Mtime` 
 real publish moved the ETag, so the old checkout record is then refused too.
 
 **Recommendation: the freshness marker is the sha256 of the canonical bytes (with the fileid), recorded at checkout
-and compared at publish.** The ETag is used only as the `If-Match` on the final write, to close the gap between the
-check and the write, and as a cheap first look. With the central ledger (§Ledger), Plan 2 should also refuse when
+and compared at publish.** The ETag is used only as a cheap first look and as the `If-Match` on the final write. If-Match compares the same
+unreliable ETag, so it only **narrows** the gap between check and write (fix 2). The real close is a **server-side**
+compare-and-write by content hash (fix 1). With the central ledger (§Ledger), Plan 2 should also refuse when
 the ledger holds a publication of that fileid after the checkout entry. Ledger sequence numbers only grow, so this
 closes defect 2 without trusting NextCloud. **Cost:** one extra GET of the canonical copy at publish (controlled
 documents are small), a checkout record beside the working copy, and a hash. A LOCK by anyone makes the copy look
@@ -472,7 +473,8 @@ approval of that exact sha256 since the checkout, by someone else. The ledger is
 - **L1, through NextCloud's own HTTPS:** a small NextCloud app `chp_ledger` (`proto/chp_ledger/`, one OCS
   controller). `POST /ocs/v2.php/apps/chp_ledger/api/v1/request` stamps the request with the user NextCloud
   authenticated (`IUserSession`, never a name in the request), the kind of authentication (bearer / app password /
-  session) and, for a Bearer, the token's Kanidm `sub`, `session_id`, `auth_time`. It checks that this user can see
+  session) and, for a Bearer, the token's Kanidm `sub`, `session_id`, `auth_time`. **0.1.0 took those claims unverified; that was forgeable
+  (`logs/66`), and fix 3 replaces it with a check at Kanidm.** It checks that this user can see
   the file id, then drops the request in `/var/lib/chp-docs/spool` (`root:apache 1730`, `httpd_sys_rw_content_t`).
   `chp-docs-ledger.path` starts the root appender, which writes a result to `out/` (`httpd_sys_content_t`, read-only
   to the web server), and the CLI polls `GET …/result/<id>`.
@@ -494,7 +496,7 @@ approval of that exact sha256 since the checkout, by someone else. The ledger is
 | another user changes or deletes a waiting request | spool not listable by apache, not reachable by users | 403 / 403 (`logs/59` 3) |
 | users see others' waiting requests | no | **yes** (2 visible, `logs/59` 4) |
 | answer to the user | synchronous, 0.1-0.3 s (`logs/57`) | **none**: a refused request vanishes unseen (`logs/58` note) |
-| app password instead of Bearer | accepted, and the entry records `auth=app-password` (`logs/57` 12): policy can demand Bearer for approve | can't tell (the audit line doesn't say) |
+| app password instead of Bearer | accepted, and the entry records `auth=app-password` (`logs/57` 12). **Since fix 3, approve and override are refused without a verified Bearer** (`logs/72` G) | can't tell (the audit line doesn't say) |
 | new network port | none (8443, `logs/61`) | none |
 
 **Common to both:**
@@ -525,12 +527,116 @@ cannot see the Kanidm session.
 - Two defects to carry into Plan 2:
   - **Six requests in ten seconds tripped systemd's start limit** and stopped the appender for good
     (`unit-start-limit-hit`, `logs/56`): any user could have switched approvals off for the site. Fixed with
-    `StartLimitIntervalSec=0` and `TriggerLimitIntervalSec=0` (`logs/57`). Plan 2 should add a per-user rate limit in
+    `StartLimitIntervalSec=0` and `TriggerLimitIntervalSec=0` (`logs/57`), **superseded by fix 5** (finite limits +
+    quarantine + alert): unlimited restarts let a bad request loop forever as root. Plan 2 should add a per-user rate limit in
     the app and a monitor check that the path unit is active.
   - **FIPS refuses `hashlib.md5`** (`logs/58`): use SHA-256 for every id.
-- One rule to settle: "author = the user of the latest checkout" let a reviewer's own checkout (lab04, `logs/57`
+- One rule to settle (**settled by fix 4**): "author = the user of the latest checkout" let a reviewer's own checkout (lab04, `logs/57`
   entry 8) make them the author. Plan 2 must define the author per change cycle (for example the publisher and the
   checkout user of that cycle).
+
+### Review fixes (2026-11-13; `logs/66-73`)
+
+**1. The prototype's gate does not control the write (residual, IMPORTANT).** In the prototype, `publish` is a
+WebDAV PUT by the author, and the ledger's publish entry trusts the sha256 the client sends. Anyone with write
+access to the Compliance area (curl, or a modified client) can overwrite a controlled document and skip the
+approval, author and freshness rules entirely; the ledger then simply lacks a publish entry. **For Plan 2 this is a
+MUST: publish is server-side.**
+- The Compliance areas are read-only to every user through the ACL (no write, create or delete).
+- `chp_ledger` (or the root appender acting for it) receives the bytes.
+- Under a lock on the target, it does an atomic compare-and-write. It checks that sha256(the bytes received) equals
+  the approved entry's sha256, and that the canonical copy's current sha256 equals the checkout's. Only then does it
+  write and append the publish entry, in one step.
+
+The client-side checks in `proto/doc_fresh.py` stay as the user-facing early answer, not the control.
+
+**2. If-Match only narrows the window.** It compares the ETag, which §Freshness shows is unreliable, so it does not
+close the gap between check and write. It only makes the gap smaller. The real close is fix 1's server-side
+compare-and-write by content hash.
+
+**3. Kanidm evidence was forgeable (IMPORTANT; `logs/66`).** `chp_ledger` 0.1.0 base64-decoded the Bearer payload
+without checking the signature, and set `auth` from the Authorization header's prefix. Test: lab01 signed in with a
+browser (cookie session) and sent the same POST twice, once plain and once with a forged
+`Authorization: Bearer <hdr>.<claims>.bad-signature` (sub `00000000-forged-sub`, session `forged-session`,
+`auth_time 1`, `preferred_username lab04`).
+- NextCloud authenticated **lab01 by the cookie** both times. user_oidc's Bearer check failed silently and the
+  session won, so the uid was not forgeable.
+- The entry recorded **`auth=bearer` with the forged sub, session and auth time** (entry 13).
+
+Fix (`chp_ledger` 0.2.0 + `docs_ledger.py`, `logs/67`, `logs/69`):
+- The app no longer reads claims. It records `bearer-claimed` and forwards the raw token in the spool request.
+- The root appender asks **Kanidm's `chp-doc` userinfo** with it (stdlib `urllib`; only `chp-doc` tokens pass there,
+  `logs/65`). It checks `preferred_username == the NextCloud uid` and `aud`/`azp == chp-doc`, records only what
+  Kanidm returned (`sub`, `auth_time`, `verified: kanidm userinfo`), and never writes the token anywhere.
+- A Bearer that does not validate makes the whole request refused.
+- **approve and override require a verified Bearer.** An app password or browser session is refused (`logs/72` G).
+  Route L2 approvals are refused for the same reason.
+
+This partly mitigates the "compromised NextCloud submits as anyone" residual: a forged approval now also needs a
+live Kanidm token of that person for `chp-doc`. Two costs:
+- The spool briefly holds a 15-minute token. The spool is apache-written and only root reads it; apache had the
+  token anyway.
+- The app's version bump put NextCloud into "require upgrade" until `occ upgrade` ran (`logs/67`). Plan 2's RPM
+  `%post` must run it.
+
+**4. The author rule, per cycle (IMPORTANT; `logs/72`).** The first rule ("author = the user of the latest
+checkout") let an approver who authored a change approve it after anyone else checked it out, and let any
+`cui-users` member block approvals with a checkout. Adopted for Plan 2, and now in `decide()`:
+- A **cycle** of a fileid runs from its last successful publish (or its creation) to now.
+- **Authors(cycle)** = the creator (new action `create`) + every user who checked it out in the cycle + the
+  publisher.
+- An approval is refused if the approver ∈ Authors(cycle). It counts only if made **after the cycle's last
+  checkout**, of that exact sha256.
+- The publisher must ∈ Authors(cycle).
+- Reviewers read through a plain fetch (GET), which records nothing as authorship.
+
+Re-run on two new controlled documents in `Internal/Compliance`, as listed in `logs/72`:
+- The self-approval sequence (approver lab04 checks out, lab02 checks out after, lab04 approves) is refused.
+- A non-author publish is refused.
+- An approval followed by another checkout no longer counts.
+- The clean path (create → approve by a non-author → publish) is appended.
+
+**5. Failure loop and ledger growth (IMPORTANT; `logs/70`).**
+- With `StartLimitIntervalSec=0`, a spool file that raised would have re-triggered the path unit forever as root.
+  Now every exception moves the request to `quarantine/` (0700) and, where it has an id and user, writes a refusal
+  result.
+- The limits are finite again: 300 per 60 s on the service and on the path trigger, with
+  `OnFailure=chp-docs-ledger-alert.service` (logs at `auth.crit`, standing in for ALERT_HOOK).
+- The app and the appender accept only file ids under a Compliance area, so a user cannot grow the forever-ledger
+  with files from their own home.
+- Shown: three bad requests quarantined, the spool emptied, the path unit active, the ledger unchanged. A
+  home-folder file id gets 403 at the app.
+- **Plan 2 adds a per-user rate limit in the app** (and the monitor check that the path unit is active).
+
+**6. Refresh lifetime and rotation (IMPORTANT; `logs/68`).**
+- "Refresh at most 8 h" was **computed client-side** from the client setting. It is **untested**, and `stored` now
+  says so.
+- The "rotated: True" check compared after overwriting. It now compares old vs new, and **`logs/68` shows the
+  result**.
+- Plan 2 tests a refresh near the limit and reads the session expiry from Kanidm (introspection), not from a
+  constant.
+- Linger: the tokens die with the user's last session (`logs/45`). That is intended for a desktop user. With
+  `loginctl enable-linger` the runtime dir would outlive logout. Plan 2 must keep linger off for these users, or
+  stop relying on the runtime dir.
+
+**Minor fixes.**
+- **Loopback listener.** The prototype binds the fixed port 8400 and accepts the first request from any local user.
+  PKCE makes a stolen code useless, but another local user can still make a sign-in fail. Plan 2 binds port 0 (any
+  port is accepted, `logs/49`) and keeps answering until a request arrives with the right `state`.
+- **tmpfs can swap.** The workstation's swap is the `chp-swap` LV inside the LUKS2 (aes-xts-plain64, 512-bit)
+  volume group, so swapped token pages stay encrypted (`logs/71`).
+- **Open redirect through the rewrite:** checked and refused. user_oidc strips scheme and host from `redirectUrl`
+  and accepts only `/` + an alphanumeric (`LoginController::getRedirectResponse`). Live, after a real sign-in
+  (`logs/73`): `redirect_url=https://evil.example/pwn` ended at `https://files.docs.lab.test:8443/pwn` (the host
+  was dropped). `//evil.example/pwn` ended at NextCloud's base URL and was logged as "Rejected invalid redirect
+  url". Neither left the site.
+- **`auto_provision` vs `--bearer-provisioning=0`:** this is not a contradiction. In `Backend.php`,
+  `auto_provision` (default true) creates the NextCloud account (`getOrCreate`). `bearer-provisioning` only decides
+  whether attributes and groups are then updated from the token. So with `bearer-provisioning=0` a Bearer can still
+  create an account, with no groups. Not tested. Plan 2: set `auto_provision` deliberately.
+- **Results** in `out/` are now `0640 root:apache` (directory `0750 root:apache`, `logs/67`, `logs/70`).
+- **`logs/62`'s "before"** (two buttons on the login page) rests on the continued part of that log (the `?direct=1`
+  page still lists both). The first "before" line probed `/login`, which is a 404 here.
 
 **State left on iso5-docs** (for Plan 2; removal in `README.md`):
 
@@ -559,9 +665,20 @@ mismatch as finding 2, not explained.
    stock listeners, the boolean, the cert renewal timer, the backup timer, the Wazuh rules.
 6. Use `chp-site get SUBNET_CIDR` for the firewall rule; the site zone needs `files`.
 7. The nightly tag check outside the app; the canary (public link on a CUI test file expects 403) fits the same timer.
-8. Doc commands (Task 2, §Transport, §Ledger): sign in by the Kanidm public client + Bearer (route 1); freshness =
-   sha256 + fileid at checkout, ETag only as If-Match; ledger L1 (chp_ledger OCS app -> spool -> root appender),
-   with the start-limit fix, a per-user rate limit, the login-page rewrite and a per-cycle author rule.
+8. Doc commands (Task 2, §Transport, §Ledger, review fixes):
+   - Sign in by the Kanidm public client + Bearer (route 1); bind port 0, loop until the right state; linger off.
+   - Freshness = sha256 + fileid at checkout; the ETag only as a pre-check and If-Match.
+   - **MUST: publish is server-side.** The Compliance areas are read-only to users through the ACL. chp_ledger (or
+     the root appender) does an atomic compare-and-write under a lock: the bytes' sha256 must equal the approved
+     entry's, and the canonical copy's current sha256 must equal the checkout's (fix 1).
+   - Ledger L1 (chp_ledger OCS app -> spool -> root appender).
+   - Kanidm evidence is taken only from Kanidm's userinfo; approve and override need a verified Bearer (fix 3).
+   - The per-cycle author rule with `create` (fix 4).
+   - Quarantine on any failure, finite start limits + alert, Compliance-only file ids, a **per-user rate limit**, a
+     monitor check of the path unit (fix 5).
+   - Test a refresh near the limit; read the session expiry from Kanidm (fix 6).
+   - The login-page rewrite.
+   - `occ upgrade` in `%post` when an app's version changes.
 9. Egress: BindsTo + pre-check drop-in, a monitor check for the table, and the DNS decision (above).
 10. Copy-out containment (`ContainListener`) and its logging into the audit trail; the owner decides on the
     download/re-upload residual (§Copy out).

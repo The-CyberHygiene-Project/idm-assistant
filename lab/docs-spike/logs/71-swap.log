@@ -1,0 +1,20 @@
+# logs/71 (minor, 2026-11-13T01:32:34Z): is the workstation's swap encrypted? (tmpfs pages can be swapped out)
+NAME      TYPE      SIZE USED PRIO
+/dev/dm-2 partition   8G 816K   -2
+NAME                                          TYPE  FSTYPE      MOUNTPOINT
+vda                                           disk              
+├─vda1                                        part  vfat        /boot/efi
+├─vda2                                        part  xfs         /boot
+└─vda3                                        part  crypto_LUKS 
+  └─luks-3ba8e2f2-38fc-44af-a59a-3b92dc7992bb crypt LVM2_member 
+    ├─chp-root                                lvm   xfs         /
+    ├─chp-swap                                lvm   swap        [SWAP]
+    ├─chp-var_log_audit                       lvm   xfs         /var/log/audit
+    ├─chp-var_log                             lvm   xfs         /var/log
+    ├─chp-var_tmp                             lvm   xfs         /var/tmp
+    ├─chp-var                                 lvm   xfs         /var
+    ├─chp-tmp                                 lvm   xfs         /tmp
+    └─chp-home                                lvm   xfs         /home
+  type:    LUKS2
+  cipher:  aes-xts-plain64
+  keysize: 512 [bits]

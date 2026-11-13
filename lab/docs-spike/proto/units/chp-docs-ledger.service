@@ -1,7 +1,12 @@
 # SPIKE (Task 2, ledger route L1): append waiting requests to /var/lib/chp-docs/ledger/ledger.jsonl (root, 0600).
+# fix 5: a FINITE start limit again (logs/56 showed the default 5/10 s is far too low; StartLimitIntervalSec=0 made a
+# bad request loop forever as root). A bad request is now quarantined by docs_ledger.py itself, so the loop cannot
+# happen; if the limit is ever hit, OnFailure raises the alert (ALERT_HOOK in the product) instead of failing silently.
 [Unit]
 Description=CHP docs approval ledger appender (spike)
-StartLimitIntervalSec=0
+StartLimitIntervalSec=60
+StartLimitBurst=300
+OnFailure=chp-docs-ledger-alert.service
 
 [Service]
 Type=oneshot

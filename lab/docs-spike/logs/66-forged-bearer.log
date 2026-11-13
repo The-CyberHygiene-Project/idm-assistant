@@ -1,0 +1,9 @@
+# logs/66 (fix 3, 2026-11-13T01:29:19Z): a browser-session request carrying a forged Bearer, against chp_ledger 0.1.0 (claims taken unverified)
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+cookie session only: POST -> 200 {'id': 'eb184e2a2f079787ea45c18f72fbe0c0'}
+cookie session + forged Bearer: POST -> 200 {'id': 'c03019ddabbbd1ac68e3245179ae943a'}
++ (root) docs_ledger.py show | tail -2
+ 12 2026-11-13T01:29:31Z L1-ocs   checkout lab01  auth=session        kanidm_sub=None file 119 000000000000 
+ 13 2026-11-13T01:29:31Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=00000000 file 119 000000000000 
+{'seq': 12, 'user': 'lab01', 'auth': 'session', 'kanidm': None, 'notes': 'forged-bearer test'}
+{'seq': 13, 'user': 'lab01', 'auth': 'bearer', 'kanidm': {'auth_time': 1, 'client_id': 'chp-doc', 'session_id': 'forged-session', 'sub': '00000000-forged-sub'}, 'notes': 'forged-bearer test'}

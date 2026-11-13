@@ -31,7 +31,7 @@ class LedgerController extends OCSController {
 		if ($user === null) {
 			return new DataResponse(['error' => 'not signed in'], 401);
 		}
-		if (!in_array($action, ['checkout', 'approve', 'override', 'publish'], true)) {
+		if (!in_array($action, ['create', 'checkout', 'approve', 'override', 'publish'], true)) {
 			return new DataResponse(['error' => 'unknown action'], 400);
 		}
 		if (preg_match('/^[0-9a-f]{64}$/', $sha256) !== 1 || strlen($notes) > 2000 || strlen($reason) > 2000) {
@@ -42,21 +42,20 @@ class LedgerController extends OCSController {
 		if (count($nodes) === 0) {
 			return new DataResponse(['error' => 'no such document for this user'], 404);
 		}
+		// fix 3 (logs/66): never decode claims here. The header prefix says only what the CLIENT sent: a cookie session
+		// can carry any "Bearer" header and NextCloud still authenticates the cookie. The raw token goes to the root
+		// appender, which asks Kanidm's chp-doc userinfo endpoint and records only what Kanidm confirms.
 		$auth = $this->request->getHeader('Authorization');
-		$kind = stripos($auth, 'bearer ') === 0 ? 'bearer' : (stripos($auth, 'basic ') === 0 ? 'app-password' : 'session');
-		$kanidm = null;
-		if ($kind === 'bearer') {
-			// user_oidc already had Kanidm's userinfo endpoint accept this token, so its claims are Kanidm's own
-			$parts = explode('.', trim(substr($auth, 7)));
-			$claims = count($parts) === 3 ? json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true) : null;
-			if (is_array($claims)) {
-				$kanidm = ['sub' => $claims['sub'] ?? null, 'auth_time' => $claims['auth_time'] ?? null,
-					'session_id' => $claims['session_id'] ?? null, 'client_id' => $claims['client_id'] ?? null];
-			}
+		$kind = stripos($auth, 'bearer ') === 0 ? 'bearer-claimed' : (stripos($auth, 'basic ') === 0 ? 'app-password' : 'session');
+		$token = $kind === 'bearer-claimed' ? trim(substr($auth, 7)) : null;
+		// fix 5: only controlled documents (the Compliance areas) may be named, so nobody grows the ledger with home files
+		$path = $nodes[0]->getPath();
+		if (preg_match('#^/[^/]+/files/(CUI/|Internal/)?Compliance/#', $path) !== 1) {
+			return new DataResponse(['error' => 'not a controlled document (Compliance area only)'], 403);
 		}
 		$id = bin2hex(random_bytes(16));
-		$req = ['id' => $id, 'action' => $action, 'user' => $uid, 'auth' => $kind, 'kanidm' => $kanidm,
-			'fileid' => $fileid, 'path' => $nodes[0]->getPath(), 'sha256' => $sha256, 'notes' => $notes,
+		$req = ['id' => $id, 'action' => $action, 'user' => $uid, 'auth' => $kind, 'bearer_token' => $token,
+			'fileid' => $fileid, 'path' => $path, 'sha256' => $sha256, 'notes' => $notes,
 			'reason' => $reason, 'received' => gmdate('Y-m-d\TH:i:s\Z'), 'remote' => $this->request->getRemoteAddress()];
 		$tmp = self::SPOOL . "/$id.tmp";
 		if (file_put_contents($tmp, json_encode($req, JSON_UNESCAPED_SLASHES)) === false || !rename($tmp, self::SPOOL . "/$id.json")) {

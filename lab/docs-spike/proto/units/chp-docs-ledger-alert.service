@@ -1,0 +1,7 @@
+# SPIKE (fix 5): stand-in for ALERT_HOOK when the ledger appender fails or hits its start limit.
+[Unit]
+Description=CHP docs approval ledger: ALERT (spike)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -p auth.crit -t chp-docs-ledger "ALERT: the approval ledger appender failed or hit its start limit; approvals are not being recorded"

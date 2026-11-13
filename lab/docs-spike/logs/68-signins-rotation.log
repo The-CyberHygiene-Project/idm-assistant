@@ -1,0 +1,14 @@
+# logs/68 (fix 6, 2026-11-13T01:32:07Z): route-1 sign-ins for the fix re-runs; the refresh-rotation check corrected (old vs new)
+## lab01
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## lab02
+WHOAMI (Bearer): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}
+## lab04
+WHOAMI (Bearer): HTTP 200 {'id': 'lab04', 'groups': ['chp-users', 'cui-users', 'doc-reviewers'], 'backend': 'user_oidc'}
+## lab01: two forced refreshes
+  refreshed: new access token, expires_in=900; refresh token in the response: True; rotated (new != old): True
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+  refreshed: new access token, expires_in=900; refresh token in the response: True; rotated (new != old): True
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+ "refresh_token": "present",
+ "refresh_expires_by": "2026-11-13T09:33:01Z (COMPUTED here from the Kanidm client setting 28800 s; not read from Kanidm, untested)"

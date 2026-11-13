@@ -1,0 +1,14 @@
+# logs/74 (2026-11-13T01:37:34Z): end of the review-fix runs: revoke the route-1 sessions, close the held ssh session
+## lab01
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## lab02
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## lab04
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+held ssh session closed

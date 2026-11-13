@@ -1,0 +1,5 @@
+# logs/73 (minor, 2026-11-13T01:36:19Z): a hostile redirect_url through the /index.php/login rewrite (proto/open_redirect.py on iso5-dcli, lab01)
+redirect_url='https://evil.example/pwn': ended at https://files.docs.lab.test:8443/pwn  (hops: 9)
+redirect_url='//evil.example/pwn': ended at https://files.docs.lab.test:8443  (hops: 3)
+redirect_url='/index.php/apps/files/': ended at https://files.docs.lab.test:8443/index.php/apps/files/  (hops: 3)
+nextcloud.log: 2026-11-13T01:37:01+00:00 Rejected invalid redirect url '//evil.example/pwn'

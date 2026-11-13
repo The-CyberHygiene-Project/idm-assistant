@@ -91,6 +91,11 @@ if __name__ == "__main__":
         st = req(m, _dav(s, "Approvals/" + a[1]), b'{"action":"approve"}' if m == "PUT" else None,
                  {"Authorization": auth_header(s)})[0]
         print(f"{a[0]} as {s['user']}: {m} Approvals/{a[1]} -> {st}")
+    elif a[:1] == ["put"]:      # fix 4 re-run: make a new controlled document (MKCOL the folder, PUT the bytes)
+        s = _s()
+        req("MKCOL", _dav(s, a[1].rsplit("/", 1)[0]), None, {"Authorization": auth_header(s)})
+        st = req("PUT", _dav(s, a[1]), (a[2] if len(a) > 2 else "draft").encode(), {"Authorization": auth_header(s)})[0]
+        print(f"put {a[1]} as {s['user']}: PUT -> {st}")
     elif a[:1] == ["l2-list"]:
         s = _s()
         st, _, data = req("PROPFIND", _dav(s, "Approvals"), None, {"Authorization": auth_header(s), "Depth": "1"})

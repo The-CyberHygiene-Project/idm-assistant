@@ -1,0 +1,19 @@
+# logs/69 (fix 3, 2026-11-13T01:35:55Z): the logs/66 test against chp_ledger 0.2.0 + the re-validating appender; then what a VERIFIED Bearer entry holds
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+cookie session only: POST -> 200 {'id': '4932505e4ab36d92d9f4a79d865e8aa3'}
+cookie session + forged Bearer: POST -> 200 {'id': '71c55686a581a552d49b02d9ecc97d33'}
+L1 publish by lab02 (bearer) fileid 281: REFUSED: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+L1 create by lab02 (bearer) fileid 282: APPENDED seq 17
+L1 approve by lab04 (bearer) fileid 282: APPENDED seq 18
+L1 checkout by lab02 (bearer) fileid 282: APPENDED seq 19
+L1 publish by lab02 (bearer) fileid 282: REFUSED: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+L1 approve by lab04 (bearer) fileid 282: APPENDED seq 20
+L1 publish by lab02 (bearer) fileid 282: APPENDED seq 21
+L1 approve by lab04 (app-password) fileid 282: REFUSED: approve needs a Kanidm-verified Bearer sign-in (this request: app-password)
+L1 checkout by lab01 (session) fileid 119: APPENDED seq 22
+spool 71c55686a581a552d49b02d9ecc97d33.json: QUARANTINED (ValueError: the Bearer sent with this request did not validate at Kanidm (HTTP Error 401: Unauthorized))
++ the last ledger entries (JSON; a verified Bearer entry for comparison is seq 21, logs/72):
+{'seq': 21, 'action': 'publish', 'user': 'lab02', 'auth': 'bearer', 'kanidm': {'auth_time': 1794533641, 'client': 'chp-doc', 'sub': '8e26cd6e-3414-46d2-9a80-cfee8544a53e', 'verified': 'kanidm userinfo'}, 'notes': ''}
+{'seq': 22, 'action': 'checkout', 'user': 'lab01', 'auth': 'session', 'kanidm': None, 'notes': 'forged-bearer test'}
++ no raw token in any entry:
+0
