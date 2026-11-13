@@ -743,12 +743,12 @@ changes, templates inside the editor (the CUI template library is Plan 2 work), 
   second `rpm` transaction (installing Xvfb for GUI testing, 1 minute after the ONLYOFFICE install) triggered fapolicyd's
   rpm-plugin trust sync, which logged `Cannot delete database (1)` / `Cannot update trust database!` and the daemon
   **exited (failed)** at 18:51:47; the freshly installed `/usr/bin/Xvfb` was denied (`obj_trust=no`) in that window;
-  `systemctl start fapolicyd` rebuilt the DB and fixed it. The first sync (the ONLYOFFICE install) was fine. **Retried (`logs/87`): three back-to-back pairs of `dnf install` of small packages (no concurrent `--dump-db`) did not reproduce it; fapolicyd stayed active and synced cleanly each time.** Cause not isolated (two syncs 90 s apart, with my `fapolicyd-cli --dump-db` run concurrently is the
+  `systemctl start fapolicyd` rebuilt the DB and fixed it. The first sync (the ONLYOFFICE install) was fine. **Retried (`logs/87`): three trials of two back-to-back `dnf install`s of small packages (no concurrent `--dump-db`) did not reproduce it: fapolicyd stayed active, two of the three trials show a sync (trial 2's packages were probably already installed, so it was most likely a no-op) and no error line was seen. Spacing was ~1-2 s between the two installs and ~20 s between trials, against ~90 s in the original failure: not reproduced, not ruled out.** Cause not isolated (two syncs 90 s apart, with my `fapolicyd-cli --dump-db` run concurrently is the
   only unusual thing). **A failed fapolicyd leaves the host unprotected until someone notices** (the monitoring should
   alarm on `fapolicyd.service` failed); Plan 2 should test "install two packages back to back" on the workstation role.
 - **User data (all under `~/.local/share/onlyoffice` and `~/.config/onlyoffice`, 14 MB):** font cache, Chromium profile,
   recents list and an **auto-recovery copy of every open document** under `data/recover/` (`Editor.bin` + a copy of the
-  file). These copies are CUI. **Lifecycle measured (`logs/88`):** a clean tab close (discarding changes) empties `recover/`; **`kill -9` keeps the copy and the unsaved edit** (and the next launch offers "Recover"); **a killed or logged-out session keeps it**; no timeout was seen. `recents.xml` (paths of every opened file) and the Chromium profile also persist. **These copies sit outside the CUI folder's labelling and cleanup rules** (no `CUI_` name, no tag, not under `~/chp-docs-work`), and **a logged-off, locked-out or revoked user leaves them behind** in a home directory that survives (home is 0700, on LUKS2, but readable by root/backup and by the next admin). **PLAN 2 GATE item 2:** cleanup is a requirement (see below).
+  file). These copies are CUI. **Lifecycle measured (`logs/88`):** a clean tab close (discarding changes) empties `recover/`; **`kill -9` keeps the copy and the unsaved edit** (and the next launch offers "Recover"); **a session scope killed with SIGKILL after a `loginctl terminate-session` (a forced simulation of logout, not a real GDM logout) keeps it**; no timeout was seen over the ~5 minutes observed. `recents.xml` (paths of every opened file) and the Chromium profile also persist. **These copies sit outside the CUI folder's labelling and cleanup rules** (no `CUI_` name, no tag, not under `~/chp-docs-work`), and a logged-off, locked-out or revoked user would presumably leave them behind (only a forced session kill was measured; lock-out and revocation were not) in a home directory that survives (home is 0700, on LUKS2, but readable by root/backup and by the next admin). **PLAN 2 GATE item 2:** cleanup is a requirement (see below).
 
 ### FIPS (what can and cannot be determined)
 `fips-mode-setup --check`: "FIPS mode is enabled."; `/proc/sys/crypto/fips_enabled` = 1; crypto policy `FIPS`
@@ -801,14 +801,12 @@ Captured on aero (`tcpdump` on the workstation's tap) during the edit sessions, 
 
 ### Direct-resolver path and what the run-1 flows were (`logs/89`)
 The `strace` of a launch shows `connect()` to **2001:4860:4860::8888 port 53** (Google public DNS, IPv6) failing `ENETUNREACH`.
-That is Chromium's network probe; **no packet was ever sent** to any public address in any run (0 non-multicast
-packets addressed outside 192.168.100.0/24, IPv4 or IPv6, measured at the workstation's tap, so unroutable packets would
-still have shown), and the app **did** honour `/etc/hosts` (the vendor names went to `0.0.0.0`). But it is a
+It is most likely Chromium's network probe (a failed `connect()` emits nothing); **no packet to any public address appeared in the captures logged** (runs 1 and 2: 0 non-multicast packets addressed outside 192.168.100.0/24, IPv4 or IPv6, at the workstation's tap; runs 3-5 captured port 53 only), and the app **did** honour `/etc/hosts` (the vendor names went to `0.0.0.0`). But it is a
 **direct-to-public-resolver code path that does not go through `/etc/hosts` or the site resolver**; it failed only because
 the lab has no IPv6 route. The same applies to the first run's and the Templates page's lookups: they went through the site
 resolver (REFUSED), not directly. So **"0 DNS queries / 0 packets out of the lab net" holds for this lab's routing**; it
 is not a proof for a site with a default IPv6 route or open DNS egress. The 5,905 packets to 192.168.100.53 port 1514
-were the **Wazuh agent** (`wazuh-agentd`, `ss -tnp`), the 12 to port 443 were **kanidm-unixd** to `https://idm.docs.lab.test`
+were the **Wazuh agent** (`wazuh-agentd`, `ss -tnp`), the 12 to port 443 were, by inference from `/etc/kanidm/config` and timing (not a socket owner at capture), **kanidm-unixd** to `https://idm.docs.lab.test`
 (login/identity, the same second as the kanidm AVC), and the 20 DNS/12 mDNS/3 NetBIOS packets were the system resolver and
 the GTK file dialog: none were ONLYOFFICE's.
 
@@ -847,7 +845,7 @@ the GTK file dialog: none were ONLYOFFICE's.
    `recover/DE__*` older than N hours when no ONLYOFFICE process of that user runs, and at logout/revocation), because
    the measurements show the close path alone does not cover `kill -9`, a crash or a killed session, and nothing else
    removes the copy. The copies must also be treated as CUI by the working-folder rules (marking, audit, backup exclusion
-   or protection); the sweep must log what it removes (ledger/Wazuh).
+   or protection); the sweep must log what it removes (ledger/Wazuh). **Trade-off:** `recover/` is also the editor's crash recovery, so a blanket sweep deletes unsaved CUI edits that "Recover" could restore; the sweep must remove only copies of closed or abandoned sessions (no live ONLYOFFICE process of that user, or a stated age), never a live session's.
 3. **Per-application egress control, not hosts alone:** an nftables/firewalld rule that drops all workstation egress except
    the site server (the CHP workstation role already has the site zone) and blocks DNS to anything but the site resolver
    (UDP/TCP 53 and DoT/DoH ports, IPv4 and IPv6), ideally per-uid or per-cgroup for the editor; keep the `/etc/hosts` block
