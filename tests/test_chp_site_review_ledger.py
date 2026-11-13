@@ -201,3 +201,34 @@ def test_partial_multi_day_sign_names_signed_days(tmp_path):
         sign(tmp_path, days=None, confirm=confirm)
     assert "already signed" in str(ei.value)
     assert {e["date"] for e in rl.read(ledger(tmp_path))} == {"2026-11-07", "2026-11-08"}
+
+
+def _said(tmp_path, data):
+    st.write_day(date(2026, 11, 6), data, "# r\n", "<html></html>", root=tmp_path)
+    said = []
+    rl.sign(site=SITE, approver="Dana ISSO", notes="n", days=None, root=tmp_path, now=1.0, operator="dana",
+            confirm=lambda t: True, say=said.append, rec=lambda *a, **k: None)
+    return "\n".join(said)
+
+
+def test_sign_prompt_strips_control_characters(tmp_path):
+    text = _said(tmp_path, {"day": "2026-11-06", "attention": [
+        {"host": "sr\x1bv1", "item": "i\rt", "state": "ATTENTION", "detail": "\x1b[2Jgone\r\x7f"}]})
+    assert "gone" in text and not any(ord(c) < 32 and c != "\n" or ord(c) == 127 for c in text)
+
+
+@pytest.mark.parametrize("data", [[1, 2], None, {"attention": ["x"]}, {"attention": 5}, {"attention": [None]}])
+def test_sign_prompt_survives_wrong_shaped_data(tmp_path, data):
+    assert "could not be read" in _said(tmp_path, data)
+
+
+def test_rec_failure_still_names_the_ledger_signed_day(tmp_path):
+    built(tmp_path, date(2026, 11, 7), date(2026, 11, 8))
+    calls = []
+
+    def rec(*a, **k):
+        calls.append(1)
+        if len(calls) == 2:
+            raise SiteError("audit down")
+    with pytest.raises(SiteError, match="signed 2026-11-07, 2026-11-08 before stopping: audit down"):
+        sign(tmp_path, days=None, rec=rec)
