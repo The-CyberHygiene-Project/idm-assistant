@@ -1101,6 +1101,79 @@ def test_wazuh_rollback_when_new_rules_cannot_be_removed(tmp_path, monkeypatch):
     assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
 
 
+def _bad_wazuh_check(e):
+    base = Run.__call__
+
+    def bad(self, argv, **kw):
+        if argv[:1] == ["/var/ossec/bin/wazuh-analysisd"]:
+            return R(1, "", "rule error")
+        return base(self, argv, **kw)
+    e.run.__class__ = type("BadRun", (Run,), {"__call__": bad})
+
+
+def test_wazuh_rollback_when_old_rules_cannot_be_put_back(tmp_path, monkeypatch):
+    # _put(rules, old_rules) failing must not skip restoring ossec.conf or clearing the restart mark
+    e = Env(tmp_path)
+    conf = e.root / "var/ossec/etc/ossec.conf"
+    old_conf = conf.read_text()
+    rules = e.root / "var/ossec/etc/rules/chp_nextcloud_rules.xml"
+    rules.parent.mkdir(parents=True, exist_ok=True)
+    rules.write_text("<group name='old'/>\n")
+    _bad_wazuh_check(e)
+    real_put = D._put
+
+    def put(path, text, mode, chown=None):
+        if path == rules and text == "<group name='old'/>\n":
+            raise SiteError(f"could not write {path} (Read-only file system); fix it, then re-run chp-site documents enable")
+        return real_put(path, text, mode, chown)
+    monkeypatch.setattr(D, "_put", put)
+    with pytest.raises(SiteError) as ex:
+        e.enable()
+    msg = str(ex.value)
+    assert conf.read_text() == old_conf                         # ossec.conf is restored anyway
+    assert msg == ("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; "
+                   f"the previous {conf} is back; NOT rolled back: the previous {rules} could not be restored "
+                   f"(could not write {rules} (Read-only file system); fix it, then re-run chp-site documents enable); "
+                   "the manager was not restarted; fix that by hand before restarting Wazuh: rule error")
+    assert not (e.root / D.MARK).exists() or "wazuh-manager" not in (e.root / D.MARK).read_text()
+    assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
+
+
+def test_wazuh_rollback_reports_a_restart_mark_that_cannot_be_cleared(tmp_path, monkeypatch):
+    e = Env(tmp_path)
+    conf = e.root / "var/ossec/etc/ossec.conf"
+    old_conf = conf.read_text()
+    _bad_wazuh_check(e)
+
+    real_unmark = D._unmark
+
+    def unmark(root, units):
+        if units == ["wazuh-manager"]:
+            raise SiteError("could not clear /x/restart-pending (Permission denied)")
+        return real_unmark(root, units)
+    monkeypatch.setattr(D, "_unmark", unmark)
+    with pytest.raises(SiteError) as ex:
+        e.enable()
+    msg = str(ex.value)
+    assert conf.read_text() == old_conf
+    assert "is back" in msg and "NOT rolled back: the wazuh-manager restart mark could not be cleared " \
+           "(could not clear /x/restart-pending (Permission denied))" in msg
+    assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
+
+
+def test_trust_lines_exists_error_is_a_plain_error(tmp_path, monkeypatch):
+    tf = tmp_path / "trust.d" / "nextcloud"
+    real_exists = Path.exists
+
+    def exists(self, *a, **k):
+        if self == tf:
+            raise PermissionError(13, "Permission denied")
+        return real_exists(self, *a, **k)
+    monkeypatch.setattr(Path, "exists", exists)
+    with pytest.raises(SiteError, match=r"could not read .*trust\.d/nextcloud \(Permission denied\)"):
+        D._trust_lines(tf, D.CONFIG_PHP)
+
+
 # ---------- nightly tag check and share-link canary (Plan 2 Task 6) ----------
 import sqlite3
 

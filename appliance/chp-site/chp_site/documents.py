@@ -741,25 +741,34 @@ def _wazuh(root, run, chown):
     if r.returncode != 0:
         why = (r.stderr or r.stdout or "").strip()[:200]
         if changed:
-            unlink_err = None
-            if old_rules is None:
-                try:
-                    rules.unlink()
-                except OSError as e:
-                    unlink_err = e.strerror or str(e)
-            else:
-                _put(rules, old_rules, 0o640, grp)
+            # Roll back each piece on its own: a failure on one never stops the others (ossec.conf is restored and
+            # the restart mark handled even when the rules file cannot be put back).
+            done_, notdone = [], []
+            try:
+                if old_rules is None:
+                    try:
+                        rules.unlink()
+                    except FileNotFoundError:
+                        pass
+                    done_.append(f"the new rules file {rules} is removed")
+                else:
+                    _put(rules, old_rules, 0o640, grp)
+                    done_.append(f"the previous {rules} is back")
+            except OSError as e:
+                notdone.append(f"the new rules file {rules} could not be removed ({e.strerror or e})")
+            except SiteError as e:
+                notdone.append(f"the previous {rules} could not be restored ({e})")
             try:
                 _put(conf, old_conf, 0o640, grp)
-                conf_err = None
+                done_.append(f"the previous {conf} is back")
             except SiteError as e:
-                conf_err = str(e)
+                notdone.append(f"{conf} could not be restored ({e})")
             if not marked_before:                    # keep a mark an earlier failed restart left
-                _unmark(root, ["wazuh-manager"])
-            if unlink_err or conf_err:
-                done_ = [] if conf_err else [f"the previous {conf} is back"]
-                notdone = ([f"the new rules file {rules} could not be removed ({unlink_err})"] if unlink_err else []) \
-                    + ([f"{conf} could not be restored ({conf_err})"] if conf_err else [])
+                try:
+                    _unmark(root, ["wazuh-manager"])
+                except SiteError as e:
+                    notdone.append(f"the wazuh-manager restart mark could not be cleared ({e})")
+            if notdone:
                 raise SiteError("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; "
                                 + "; ".join(done_ + ["NOT rolled back: " + "; ".join(notdone)])
                                 + "; the manager was not restarted; fix that by hand before restarting Wazuh: " + why)
