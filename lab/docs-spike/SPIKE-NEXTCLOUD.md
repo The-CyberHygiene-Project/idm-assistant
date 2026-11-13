@@ -567,7 +567,7 @@ Fix (`chp_ledger` 0.2.0 + `docs_ledger.py`, `logs/67`, `logs/69`):
 - The app no longer reads claims. It records `bearer-claimed` and forwards the raw token in the spool request.
 - The root appender asks **Kanidm's `chp-doc` userinfo** with it (stdlib `urllib`; only `chp-doc` tokens pass there,
   `logs/65`). It checks `preferred_username == the NextCloud uid` and `aud`/`azp == chp-doc`, records only what
-  Kanidm returned (`sub`, `auth_time`, `verified: kanidm userinfo`), and never writes the token anywhere.
+  Kanidm returned (`sub`, `auth_time`, `verified: kanidm userinfo`), and never writes the token anywhere. (That became true only in round 2: until then, quarantine kept the original spool file and its token, `logs/75`.)
 - A Bearer that does not validate makes the whole request refused.
 - **approve and override require a verified Bearer.** An app password or browser session is refused (`logs/72` G).
   Route L2 approvals are refused for the same reason.
@@ -638,16 +638,44 @@ Re-run on two new controlled documents in `Internal/Compliance`, as listed in `l
 - **`logs/62`'s "before"** (two buttons on the login page) rests on the continued part of that log (the `?direct=1`
   page still lists both). The first "before" line probed `/login`, which is a 404 here.
 
-**State left on iso5-docs** (for Plan 2; removal in `README.md`):
+**Review round 2 (`logs/75-77`).**
+- **Quarantine kept the raw Bearer.** `os.replace` moved the original spool file, and `pop()` removed the token only
+  from memory, so the claim "never stores the token" was false. Fixed:
+  - `quarantine()` now writes a record without `bearer_token` (an unparsable file is recorded only as its size and
+    sha256), then always deletes the spool file.
+  - `purge-quarantine` cleaned the one existing file (`71c55686…`, the forged request of `logs/69`).
+  - The forged case was re-run: refused, and no quarantine file holds `bearer_token` or the forged signature
+    (`logs/75`, `logs/76`).
+- **Compliance was decided by a path regex over the user's own view**, so a home folder named `Compliance` would have
+  matched. Fixed in chp_ledger 0.3.1: the app requires a `GroupMountPoint` with team-folder id 1 (CUI) or 5
+  (Internal), and an internal path starting `Compliance/`. The appender re-checks both fields.
+  - 0.3.0 wrongly expected `files/Compliance/`: the team folder's jail reports `Compliance/<name>`, found with a
+    debug reply (`logs/75`).
+  - Shown: home `Compliance/fake-controlled.txt` and `MyStuff/CUI/Compliance/fake2.txt` get 403; the real CUI and
+    Internal Compliance files are accepted (`logs/76`).
+  - The team-folder ids are spike constants; Plan 2 renders them from the site.
+- **The result write could leave the file in the spool:** quarantine now happens first, and the result write is
+  guarded. Shown with `out/` made immutable: the request was quarantined (its fake token not kept), "no result
+  written" was logged, the spool emptied, and the path unit stayed active (`logs/77`).
 
+**State left on iso5-docs** (for Plan 2; removal in `README.md`, as of `logs/77`):
 - Kanidm client `chp-doc`.
 - user_oidc provider `kanidm-cli` and the two `user_oidc` settings.
 - The vhost rewrite (the original is `/root/spike/nextcloud.conf.before-task2`).
-- App `chp_ledger`, `/var/lib/chp-docs` (11 entries; entries 1-4 are `logs/56` leftovers, `logs/57` note), and
-  `chp-docs-ledger.path`.
+- App `chp_ledger` **0.3.1**.
+- `/var/lib/chp-docs`: the ledger holds **25 entries**, verify OK. They include test artefacts:
+  - 1-4 are `logs/56` leftovers (`logs/57` note);
+  - **12-13 are the logs/66 forged-Bearer test on file 119; entry 13 carries the FORGED Kanidm evidence**, made
+    before fix 3;
+  - 22 and 25 are the session checkouts of logs/69 and logs/76;
+  - 23-24 are logs/76's app-password checkouts.
+  - Quarantine holds 5 records, none with a token.
+- Units `chp-docs-ledger.{path,service}` and `chp-docs-ledger-alert.service`.
 - Team folder `Approvals` (id 7).
+- Test documents: file ids 281/282 in `Internal/Compliance`; lab01's home files `notes-fix5.txt`,
+  `Compliance/fake-controlled.txt`, `MyStuff/CUI/Compliance/fake2.txt`.
 - fapolicyd trust file `chp-spike`.
-- The stick stand-in `/root/spike/stick`.
+- The stick stand-in `/root/spike/stick` (its heads show 11 entries).
 
 All route-1 sessions were revoked (`logs/64`, `logs/65`). No new SELinux or fapolicyd denials were recorded during
 Task 2 (`logs/61`). fapolicyd's counter says 1 denial since its start while the audit log holds none: the same
@@ -679,6 +707,19 @@ mismatch as finding 2, not explained.
    - Test a refresh near the limit; read the session expiry from Kanidm (fix 6).
    - The login-page rewrite.
    - `occ upgrade` in `%post` when an app's version changes.
+   - From review round 2 (doc only):
+     - Wire the alert to the **path unit** too (`OnFailure=` on the `.path` / its trigger limit), and test it.
+     - Requesters get a fixed, generic refusal text; the detail is logged, not returned.
+     - Harden the outbound userinfo call: pin the site CA; take the Kanidm host from site config, not a constant;
+       disable redirects so `Authorization` is never re-sent; give it a timeout and rate budget so bad tokens cannot
+       stall the appender.
+     - On a Kanidm outage, retry instead of quarantining.
+     - Repeated checkouts can void pending approvals, and `create` makes the caller an author: a policy decision plus
+       the rate limit.
+     - `preferred_username == uid` depends on user_oidc's uid mapping (`--mapping-uid=preferred_username`,
+       `--unique-uid=0`), which must stay as shipped.
+     - Spool hardening: open with `O_NOFOLLOW`; no check-then-use (TOCTOU) between the read and the move.
+     - Compliance team-folder ids come from the site, not constants.
 9. Egress: BindsTo + pre-check drop-in, a monitor check for the table, and the DNS decision (above).
 10. Copy-out containment (`ContainListener`) and its logging into the audit trail; the owner decides on the
     download/re-upload residual (§Copy out).

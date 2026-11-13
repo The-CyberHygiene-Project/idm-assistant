@@ -1,0 +1,24 @@
+# logs/75 (round 2, 2026-11-13T01:42:39Z): quarantine without tokens; purge of the old quarantine; reinstall chp_ledger 0.3.0 (mount-based Compliance check)
++ quarantine before: files holding a bearer_token field
+count: 0
+Fapolicyd was notified
+active
+chp_ledger already enabled
+Turned off maintenance mode
+Resetting log level
+  - chp_ledger: 0.3.0
++ (root) docs_ledger.py purge-quarantine
+purged the token from 71c55686a581a552d49b02d9ecc97d33.json
+count after: 0
+0
+## the forged-Bearer request again (logs/66 case): refused, and its quarantine record holds no token
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+cookie session only: POST -> 403 {'error': 'not a controlled document (Compliance area only)'}
+cookie session + forged Bearer: POST -> 403 {'error': 'not a controlled document (Compliance area only)'}
++ quarantine files with bearer_token / the forged signature:
+0
++ spool:
+0
++ newest quarantine record (keys):
+71c55686a581a552d49b02d9ecc97d33.json ['action', 'auth', 'fileid', 'id', 'notes', 'path', 'reason', 'received', 'remote', 'sha256', 'user']
+# NOTE: 'count: 0' BEFORE was the unprivileged-glob mistake again (quarantine is 0700 root); the purge did find and clean one file (71c55686…, the logs/69 forged request). The 403s for file 119 are a bug in 0.3.0's check, fixed in logs/76.

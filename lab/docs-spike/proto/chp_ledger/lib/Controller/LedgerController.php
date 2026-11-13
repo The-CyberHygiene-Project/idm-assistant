@@ -48,14 +48,20 @@ class LedgerController extends OCSController {
 		$auth = $this->request->getHeader('Authorization');
 		$kind = stripos($auth, 'bearer ') === 0 ? 'bearer-claimed' : (stripos($auth, 'basic ') === 0 ? 'app-password' : 'session');
 		$token = $kind === 'bearer-claimed' ? trim(substr($auth, 7)) : null;
-		// fix 5: only controlled documents (the Compliance areas) may be named, so nobody grows the ledger with home files
+		// fix 5 + round 2: only controlled documents. Decide by the MOUNT, not the path the user sees: a folder the user
+		// names "Compliance" (or "CUI/Compliance") in their own home must not count. Allowed = the Compliance folder at
+		// the root of the CUI (id 1) or Internal (id 5) team folder (spike ids; Plan 2 renders them from the site). The
+		// internal path is relative to the team folder's jail: "Compliance/<name>" (logs/76; 0.3.0 wrongly expected files/).
 		$path = $nodes[0]->getPath();
-		if (preg_match('#^/[^/]+/files/(CUI/|Internal/)?Compliance/#', $path) !== 1) {
+		$mount = $nodes[0]->getMountPoint();
+		$teamFolder = method_exists($mount, 'getFolderId') ? $mount->getFolderId() : null;
+		$internal = $nodes[0]->getInternalPath();
+		if (!in_array($teamFolder, [1, 5], true) || !str_starts_with($internal, 'Compliance/')) {
 			return new DataResponse(['error' => 'not a controlled document (Compliance area only)'], 403);
 		}
 		$id = bin2hex(random_bytes(16));
 		$req = ['id' => $id, 'action' => $action, 'user' => $uid, 'auth' => $kind, 'bearer_token' => $token,
-			'fileid' => $fileid, 'path' => $path, 'sha256' => $sha256, 'notes' => $notes,
+			'fileid' => $fileid, 'path' => $path, 'team_folder' => $teamFolder, 'internal_path' => $internal, 'sha256' => $sha256, 'notes' => $notes,
 			'reason' => $reason, 'received' => gmdate('Y-m-d\TH:i:s\Z'), 'remote' => $this->request->getRemoteAddress()];
 		$tmp = self::SPOOL . "/$id.tmp";
 		if (file_put_contents($tmp, json_encode($req, JSON_UNESCAPED_SLASHES)) === false || !rename($tmp, self::SPOOL . "/$id.json")) {

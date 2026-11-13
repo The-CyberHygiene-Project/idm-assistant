@@ -1,0 +1,8 @@
+# logs/77 (round 2 item 3, 2026-11-13T01:44:52Z): a failing result write no longer leaves the request in the spool
++ chattr +i out/ (result writes now fail)
+spool dddddddddddddddddddddddddddddddd.json: QUARANTINED (ValueError: not a controlled document (Compliance area only))
+  (no result written for dddddddddddddddddddddddddddddddd.json: [Errno 1] Operation not permitted: '/var/lib/chp-docs/out/dddddddddddddddddddddddddddddddd.tmp')
++ chattr -i out/
+spool: 0
+0
+active

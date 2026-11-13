@@ -1,0 +1,30 @@
+# logs/76 (round 2, 2026-11-13T01:43:57Z): chp_ledger 0.3.1 (the team-folder jail's internal path is 'Compliance/…', logs/75 debug: ['OCA\GroupFolders\Mount\GroupMountPoint', 1, 'Compliance/CUI_spike-ssp_v1.0.docx']); Compliance decided by the mount
+Fapolicyd was notified
+active
+Resetting log level
+  - chp_ledger: 0.3.1
+0
+## lab01 (app password): look-alike folders in the HOME vs the real Compliance areas
+PUT home Compliance/fake-controlled.txt -> 201
+PUT home MyStuff/CUI/Compliance/fake2.txt -> 201
+checkout Compliance/fake-controlled.txt -> 403 {'error': 'not a controlled document (Compliance area only)'}
+checkout MyStuff/CUI/Compliance/fake2.txt -> 403 {'error': 'not a controlled document (Compliance area only)'}
+checkout CUI/Compliance/CUI_spike-ssp_v1.0.docx -> 200 {'id': '513be4c69be574440cefd367ef99b36d'}
+checkout Internal/Compliance/Internal_spike-cycle2_v1.0.docx -> 200 {'id': '37bdcb50b4474f4d031719adf29a87dc'}
+(note: a home folder literally named 'CUI' would collide with the CUI team-folder mount, so the look-alike uses MyStuff/CUI/Compliance; the old regex matched '/lab01/files/Compliance/…' directly)
+L1 checkout by lab01 (app-password) fileid 119: APPENDED seq 23
+L1 checkout by lab01 (app-password) fileid 282: APPENDED seq 24
+## the forged-Bearer case again on file 119: refused; the quarantine record holds no token
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+cookie session only: POST -> 200 {'id': '7a093826816bdf5d7696576cd9241a68'}
+cookie session + forged Bearer: POST -> 200 {'id': '3fa8af1301dbc383e52314a1f5ae720c'}
+L1 checkout by lab01 (app-password) fileid 119: APPENDED seq 23
+L1 checkout by lab01 (app-password) fileid 282: APPENDED seq 24
+L1 checkout by lab01 (session) fileid 119: APPENDED seq 25
+spool 3fa8af1301dbc383e52314a1f5ae720c.json: QUARANTINED (ValueError: the Bearer sent with this request did not validate at Kanidm (HTTP Error 401: Unauthorized))
++ quarantine files holding bearer_token or the forged signature (root shell):
+0
+5
++ spool:
+0
+verify: OK, 25 entries, head 25 f44cd3b796eed84a...

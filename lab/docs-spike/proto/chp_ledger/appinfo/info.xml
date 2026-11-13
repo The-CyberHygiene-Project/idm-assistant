@@ -4,7 +4,7 @@
 	<name>CHP approval ledger (spike)</name>
 	<summary>Ledger route L1: the doc commands' checkout / approve / publish requests, with the signed-in identity.</summary>
 	<description>Task 2 spike (ISO 0.7.0 Plan 1). Takes a request over NextCloud's own HTTPS (OCS), stamps it with the user NextCloud authenticated (never a name from the request), and drops it in /var/lib/chp-docs/spool for the root-owned appender (docs_ledger.py), which owns the hash-chained ledger. The app cannot write the ledger.</description>
-	<version>0.2.0</version>
+	<version>0.3.1</version>
 	<licence>agpl</licence>
 	<author>CyberHygiene Project</author>
 	<namespace>ChpLedger</namespace>

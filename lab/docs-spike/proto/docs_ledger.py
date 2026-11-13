@@ -27,7 +27,7 @@ BASE = Path(os.environ.get("CHP_DOCS_BASE", "/var/lib/chp-docs"))
 LEDGER, HEAD = BASE / "ledger" / "ledger.jsonl", BASE / "ledger" / "ledger.head"
 SPOOL, OUT, QUAR = BASE / "spool", BASE / "out", BASE / "quarantine"
 DOMAIN, CLI_CLIENT = "docs.lab.test", "chp-doc"
-COMPLIANCE = re.compile(r"^/[^/]+/files/(CUI/|Internal/)?Compliance/")
+COMPLIANCE_FOLDERS = {1: "CUI", 5: "Internal"}   # round 2: team-folder ids whose Compliance/ is controlled
 APPROVERS = ["lab03", "lab04"]          # spike stand-ins for the new site keys (Kanidm account names)
 ISSO = "lab04"
 GENESIS = "0" * 64
@@ -206,7 +206,7 @@ def process():
             for k in ("action", "user", "auth", "fileid", "path", "sha256"):
                 if k not in r:
                     raise ValueError(f"missing {k}")
-            if not COMPLIANCE.match(str(r["path"])):
+            if r.get("team_folder") not in COMPLIANCE_FOLDERS or not str(r.get("internal_path", "")).startswith("Compliance/"):
                 raise ValueError("not a controlled document (Compliance area only)")
             r["auth"], r["kanidm"] = verify_bearer(r)
             e, why = append(r, "L1-ocs")
@@ -218,11 +218,45 @@ def process():
             p.unlink()
         except Exception as err:          # noqa: BLE001 - quarantine on anything
             print(f"spool {p.name}: QUARANTINED ({type(err).__name__}: {err})")
+            quarantine(p, r)                  # round 2 (3): move FIRST, so nothing below can leave the file to loop
             if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{32}", str(r.get("id", ""))) and isinstance(r.get("user"), str):
-                r.pop("bearer_token", None)
-                _result(r, None, f"refused: {err}")
-            os.replace(p, QUAR / p.name)
+                try:
+                    _result(r, None, f"refused: {err}")
+                except Exception as err2:     # noqa: BLE001
+                    print(f"  (no result written for {p.name}: {err2})")
 
+
+def quarantine(p, r):
+    """round 2 (1): keep a record WITHOUT the Bearer token (the request file itself still holds it), then remove the
+    spool file whatever happens."""
+    try:
+        if isinstance(r, dict):
+            rec = {k: v for k, v in r.items() if k != "bearer_token"}
+        else:
+            raw = p.read_bytes()
+            rec = {"unparsed": True, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+        fd = os.open(QUAR / p.name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(rec, f)
+    except Exception as err:              # noqa: BLE001
+        print(f"  (quarantine record for {p.name} not written: {err})")
+    finally:
+        p.unlink(missing_ok=True)
+
+
+def purge_quarantine():
+    """round 2 (1): rewrite quarantine files written before the fix, dropping any Bearer token they hold."""
+    for q in sorted(QUAR.glob("*.json")):
+        try:
+            d = json.loads(q.read_text())
+        except ValueError:
+            d = None
+        if isinstance(d, dict) and "bearer_token" in d:
+            d.pop("bearer_token")
+            q.write_text(json.dumps(d)); print(f"purged the token from {q.name}")
+        elif d is None and b"bearer_token" in q.read_bytes():
+            raw = q.read_bytes(); q.write_text(json.dumps({"unparsed": True, "bytes": len(raw),
+                                                           "sha256": hashlib.sha256(raw).hexdigest()})); print(f"replaced {q.name}")
 
 
 def uploader(fileid, name):
@@ -310,6 +344,8 @@ if __name__ == "__main__":
             process()
         elif a[:1] == ["drop"]:
             drop(a[1])
+        elif a[:1] == ["purge-quarantine"]:
+            purge_quarantine()
         elif a[:1] == ["verify"]:
             print(f"verify: OK, {len(read())} entries, head {head()[0]} {head()[1][:16]}...")
         elif a[:1] == ["export"]:
