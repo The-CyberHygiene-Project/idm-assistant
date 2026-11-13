@@ -23,7 +23,8 @@ use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
  * Archive) and whose target is anywhere else (another team folder, a home folder) is aborted before anything is
  * written, unless the (source, target) pair is listed in "contain_allow" (owner decision 3: CUI <-> Archive).
  * WebDAV answers 403. Copies and moves inside the same team folder (renames, subfolder moves) are not affected.
- * A policy that cannot be read refuses every copy or move out of any team folder (fail closed).
+ * A policy that cannot be read refuses every copy or move out of any team folder, and any other error refuses
+ * the operation outright (fail closed: NextCloud's hook layer would otherwise log the error and let it proceed).
  * It does not stop download-then-upload, copy-paste of the content, or a sync client; downloads are audited
  * by admin_audit (owner decision 2).
  *
@@ -40,11 +41,29 @@ class ContainListener implements IEventListener {
 		if (!($event instanceof BeforeNodeCopiedEvent || $event instanceof BeforeNodeRenamedEvent)) {
 			return;
 		}
+		$op = $event instanceof BeforeNodeCopiedEvent ? 'copy' : 'move';
+		// NextCloud's hook layer swallows any exception except AbortedEventException and lets the operation go
+		// on, so every other error here must become a refusal (fail closed), never an escape.
+		try {
+			$this->decide($event, $op);
+		} catch (AbortedEventException $e) {
+			throw $e;
+		} catch (\Throwable $e) {
+			$srcPath = self::pathOr(fn () => $event->getSource()->getPath());
+			$dstPath = self::pathOr(fn () => $event->getTarget()->getPath());
+			$reason = 'internal error: ' . get_class($e);
+			$this->audit->event(Audit::REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $srcPath . ' -> ' . $dstPath,
+				['op' => $op, 'source_folder' => null, 'target_folder' => null, 'source' => $srcPath, 'target' => $dstPath,
+					'reason' => $reason]);
+			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
+		}
+	}
+
+	private function decide(BeforeNodeCopiedEvent|BeforeNodeRenamedEvent $event, string $op): void {
 		$srcPath = $event->getSource()->getPath();
 		$dstPath = $event->getTarget()->getPath();
 		$src = $this->policy->folderOfPath($srcPath);
 		$dst = $this->policy->folderOfPath($dstPath);
-		$op = $event instanceof BeforeNodeCopiedEvent ? 'copy' : 'move';
 		try {
 			$refused = $this->policy->refuses($src, $dst);
 			$reason = 'out of contained team folder';
@@ -60,5 +79,13 @@ class ContainListener implements IEventListener {
 			['op' => $op, 'source_folder' => $src, 'target_folder' => $dst, 'source' => $srcPath, 'target' => $dstPath,
 				'reason' => $reason]);
 		throw new AbortedEventException('chp_foldertag: ' . $op . ' out of a contained team folder is not allowed');
+	}
+
+	private static function pathOr(callable $f): string {
+		try {
+			return (string)$f();
+		} catch (\Throwable $e) {
+			return 'unknown';
+		}
 	}
 }

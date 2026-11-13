@@ -46,7 +46,7 @@
   run2 FAIL trash restore of a CUI folder: its file tagged (HTTP None; tags ['CUI'])
   run2 main cce00c: 3 FAIL
   FINDING A (upstream, FIPS): every MOVE/rename/DELETE of a folder WITH CONTENTS answers 500, in any folder (Operations too):
-    lib/private/Files/Cache/Cache.php:826 moveFromCache sets the children's path_hash = MD5(...) in SQL, and
+    lib/private/Files/Cache/Cache.php:804 moveFromCache sets the children's path_hash = MD5(...) in SQL (run at :826), and
     PostgreSQL in FIPS mode refuses: 'ERROR: could not compute MD5 hash: unsupported'. The files are already moved
     on disk, so cache and disk diverge: CUI/sub-cce00c (fileid 336, tagged) stayed in the cache while the data sat at
     CUI/sub-cce00c-renamed, re-scanned as NEW entries 340/342 with NO tag; CUI -> Archive folder move left Archive/dir-cce00c

@@ -113,7 +113,7 @@ def test_licence_shipped_and_declared():
 
 
 def test_release_style_and_unsigned_build_on_chp_build():
-    assert re.search(r"^Release:\s+1\.chp%\{\?dist\}$", SPEC, re.M)
+    assert re.search(r"^Release:\s+\d+\.chp%\{\?dist\}$", SPEC, re.M)
     b = (PKG / "build-rpm.sh").read_text()
     assert "lab/build-vm/ssh_config" in b and "chp-build" in b and "/data/chp-release/built" in b
     runs = [l for l in b.splitlines() if "rpmbuild" in l and not l.lstrip().startswith("#")]
@@ -182,3 +182,34 @@ def test_trash_and_version_items_cannot_be_copied_into_files():
 def test_tags_are_only_added_never_removed():
     for p in PHP:
         assert "unassignTags" not in p.read_text() and "setObjectIdsForTag" not in p.read_text(), p
+
+
+def _handle(src):
+    return src[src.index("public function handle(Event $event): void {"):]
+
+
+def test_before_listeners_fail_closed_on_any_error():
+    # NextCloud's OC_Hook::emit swallows every exception except AbortedEventException and lets the operation
+    # proceed, so each Before-listener must turn any other error into an AbortedEventException.
+    for f, const in (("Listener/ContainListener.php", "REFUSED"), ("Listener/FolderGuardListener.php", "FOLDEROP_REFUSED")):
+        h = _handle(php(f))
+        i_try = h.index("try {")
+        i_dec = h.index("$this->decide(")
+        i_rethrow = h.index("catch (AbortedEventException $e) {\n\t\t\tthrow $e;")
+        i_any = h.index("catch (\\Throwable $e) {")
+        assert i_try < i_dec < i_rethrow < i_any, f
+        tail = h[i_any:h.index("\n\t}\n")]
+        assert f"Audit::{const}" in tail and "'internal error: ' . get_class($e)" in tail, f
+        assert "throw new AbortedEventException(" in tail, f
+    fg = _handle(php("Listener/FolderGuardListener.php"))
+    assert "$node instanceof Folder || ($node instanceof File && $target !== null && $this->leavesOrUnknown($node, $target))" in fg
+
+
+def test_tag_listener_reports_every_failure():
+    t = php("Listener/TagListener.php")
+    h = _handle(t)
+    rules = h[h.index("$rules = $this->policy->rules();"):]
+    assert rules.index("catch (\\Throwable $e)") < rules.index("return;")   # not only PolicyError
+    assert h.count("catch (\\Throwable $e)") >= 3    # rules, per file, the subtree walk
+    assert h.count("$this->failed(") >= 3
+    assert "Audit::TAG_FAILED" in t[t.index("private function failed("):]

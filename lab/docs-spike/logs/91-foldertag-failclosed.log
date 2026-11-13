@@ -1,0 +1,98 @@
+# 91 chp_foldertag 1.0.0 from nextcloud-chp-35.0.3-2.chp (fail closed on ANY error), iso5-docs, 2026-11-13 (Plan 2 Task 3 review fix)
+# Why: NextCloud 35.0.3 OC_Hook::emit catches Throwable from hook handlers and lets the operation proceed; only
+# AbortedEventException stops it. Release 1 caught only PolicyError, so e.g. AppConfigTypeConflictException let a
+# CUI copy/move out through (review finding; the pre-fix escape was NOT re-run here).
+# Mac: bash lab/docs-spike/foldertag-1.0.sh install-rpm (app files taken from the RPM built on chp-build with rpm2cpio)
+#      python3 -I lab/docs-spike/foldertag_proofs.py ROOT_CA 18443 type-contain|type-allow|type-rules|main
+# each key: occ config:app:delete + config:app:set --type=array, run, then delete + set back as a plain (mixed) value
+
+== install from the RPM payload
+  from nextcloud-chp-35.0.3-2.chp.el9.noarch.rpm 5095c0c3d75baa6c...
+  + SPIKE-ONLY trust: fapolicyd-cli --file add/update /usr/lib/nextcloud/apps/chp_foldertag/ (trust file chp-spike) + --update
+  Fapolicyd was notified
+  + php -l (on the trusted copy: fapolicyd denies php reading untrusted .php in a home folder)
+  No upgrade required.
+  Note: This command triggers the upgrade actions associated with a new version. The new version's updated source files must be deployed in advance.
+  See the upgrade documentation: https://docs.nextcloud.com/server/35/go.php?to=admin-update for more information.
+  chp_foldertag 1.0.0
+  rpm -V lines for chp_foldertag (expected: the spike RPM no longer matches): 5
+  php -l: No syntax errors detected in all 10 PHP files
+
+== first pass (type-contain FAIL is a test artefact: the same-parent rename was refused, nothing created, but
+   NextCloud's DAV setName answers 500 'Failed to rename', not 403; the check now accepts 403 or 500)
+  == type-contain: contain stored with --type=array
+  Config value contain of app chp_foldertag deleted
+  Config value 'contain' for app 'chp_foldertag' is now set to '[1,2,3]', stored as array in fast cache
+    - value: [1,2,3]
+    - type: array
+  PASS MOVE CUI/tc-1a0bc4.txt -> Operations/tc-1a0bc4.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/tc-1a0bc4.txt -> tc-home-1a0bc4.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/tc-1a0bc4.txt -> Archive/tc-1a0bc4.txt refused, nothing created (HTTP 403; target exists False)
+  FAIL MOVE CUI/tc-1a0bc4.txt -> CUI/tc-1a0bc4-renamed.txt refused, nothing created (HTTP 500; target exists False)
+  PASS home rename (no team folder, the config is never read) still works (HTTP 201)
+  type-contain 1a0bc4: 1 FAIL
+  -- restore contain (string):
+  Config value contain of app chp_foldertag deleted
+  Config value 'contain' for app 'chp_foldertag' is now set to '[1,2,3]', stored as mixed in fast cache
+  contain = [1,2,3]
+  == type-allow: contain_allow stored with --type=array
+  Config value contain_allow of app chp_foldertag deleted
+  Config value 'contain_allow' for app 'chp_foldertag' is now set to '[[1,3],[3,1]]', stored as array in fast cache
+    - value: [[1,3],[3,1]]
+    - type: array
+  PASS MOVE CUI/ta-ab27a6.txt -> Archive/ta-ab27a6.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/ta-ab27a6.txt -> Operations/ta-ab27a6.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/ta-ab27a6.txt -> CUI/ta-ab27a6-renamed.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  type-allow ab27a6: ALL PASS
+  -- restore contain_allow (string):
+  Config value contain_allow of app chp_foldertag deleted
+  Config value 'contain_allow' for app 'chp_foldertag' is now set to '[[1,3],[3,1]]', stored as mixed in fast cache
+  contain_allow = [[1,3],[3,1]]
+  == type-rules: rules stored with --type=array
+  Config value rules of app chp_foldertag deleted
+  Config value 'rules' for app 'chp_foldertag' is now set to '{"1":"1","2":"2"}', stored as array in fast cache
+    - value: {"1":"1","2":"2"}
+    - type: array
+  PASS PUT into CUI works but stays untagged (reported as chp.tag.failed) (HTTP 201; tags [])
+    untagged file for the audit check: CUI/tr-ce0b22.txt
+  type-rules ce0b22: ALL PASS
+  -- restore rules (string):
+  Config value rules of app chp_foldertag deleted
+  Config value 'rules' for app 'chp_foldertag' is now set to '{"1":"1","2":"2"}', stored as mixed in fast cache
+  rules = {"1":"1","2":"2"}
+  == audit lines (internal error / tag.failed) from these runs:
+  {"reqId":"avdO2OM8BYVxqwHnk7YMOAAAAMI","level":2,"time":"2026-11-13T17:54:32+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/tc-1a0bc4.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain is stor
+  {"reqId":"avdO2OM8BYVxqwHnk7YMOwAAAMk","level":2,"time":"2026-11-13T17:54:32+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"COPY","url":"/remote.php/dav/files/lab01/CUI/tc-1a0bc4.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused copy (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain is stor
+  {"reqId":"avdO2eM8BYVxqwHnk7YMPQAAAM8","level":2,"time":"2026-11-13T17:54:33+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/tc-1a0bc4.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain is stor
+  {"reqId":"avdO2TF4LtxhHCmeoSX0NwAAAEE","level":2,"time":"2026-11-13T17:54:33+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/tc-1a0bc4.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain is stor
+  {"reqId":"avdO3uM8BYVxqwHnk7YMQQAAAMo","level":2,"time":"2026-11-13T17:54:38+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/ta-ab27a6.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain_allow i
+  {"reqId":"avdO3tCtrFEl9w86yi4cAgAAAIM","level":2,"time":"2026-11-13T17:54:39+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"COPY","url":"/remote.php/dav/files/lab01/CUI/ta-ab27a6.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused copy (internal error: OCP\\Exceptions\\AppConfigTypeConflictException: Config value chp_foldertag/contain_allow i
+  {"reqId":"avdO5OM8BYVxqwHnk7YMRAAAAME","level":2,"time":"2026-11-13T17:54:44+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"PUT","url":"/remote.php/dav/files/lab01/CUI/tr-ce0b22.txt","scriptName":"/remote.php","message":"chp.tag.failed: policy not read (OCP\\Exceptions\\AppConfigTypeConflictException), nothing tagged: Config value chp_foldertag/rules is stored a
+  {"reqId":"avdO5OM8BYVxqwHnk7YMRAAAAME","level":2,"time":"2026-11-13T17:54:44+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"PUT","url":"/remote.php/dav/files/lab01/CUI/tr-ce0b22.txt","scriptName":"/remote.php","message":"chp.tag.failed: policy not read (OCP\\Exceptions\\AppConfigTypeConflictException), nothing tagged: Config value chp_foldertag/rules is stored a
+  -- check:
+  UNTAGGED folder 1 file 556 files/tr-ce0b22.txt
+  FAIL 103 files checked, 1 untagged, 2 rule(s)
+
+== second pass
+  == type-contain re-run (same-parent rename refusal may answer 500, nothing created)
+  Config value contain of app chp_foldertag deleted
+  Config value 'contain' for app 'chp_foldertag' is now set to '[1,2,3]', stored as array in fast cache
+  PASS MOVE CUI/tc-403e13.txt -> Operations/tc-403e13.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/tc-403e13.txt -> tc-home-403e13.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/tc-403e13.txt -> Archive/tc-403e13.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/tc-403e13.txt -> CUI/tc-403e13-renamed.txt refused, nothing created (HTTP 500; target exists False)
+  PASS home rename (no team folder, the config is never read) still works (HTTP 201)
+  type-contain 403e13: ALL PASS
+  Config value contain of app chp_foldertag deleted
+  Config value 'contain' for app 'chp_foldertag' is now set to '[1,2,3]', stored as mixed in fast cache
+  rules = {"1":"1","2":"2"} (  - type: mixed)
+  contain = [1,2,3] (  - type: mixed)
+  contain_allow = [[1,3],[3,1]] (  - type: mixed)
+  == cleanup: rewrite CUI/tr-ce0b22.txt with valid rules (NodeWritten tags it)
+  PUT 204 tags ['CUI']
+  -- main regression run with the Release 2 app:
+  main 9fde33: ALL PASS (4 moves refused by the folder guard: database MD5 unavailable)
+  -- check:
+  OK 121 files checked, 0 untagged, 2 rule(s)
+  -- fapolicyd:
+  Denied accesses: 9

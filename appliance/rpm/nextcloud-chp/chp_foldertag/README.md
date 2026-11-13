@@ -41,6 +41,14 @@ A key that is missing or empty means nothing is configured. A key that holds the
 - with a bad `contain` or `contain_allow`, every copy or move out of any team folder is refused;
 - with bad `rules`, nothing is tagged and each event writes `chp.tag.failed`.
 
+Any other error while deciding fails closed as well. NextCloud's hook layer catches every exception except
+`AbortedEventException`, logs it and lets the operation go on, so the listeners turn errors into refusals:
+- in containment, any error refuses the copy or move (`chp.contain.refused`, reason `internal error: <class>`).
+  Examples: an app config value stored with another type (`--type=array`), a mount lookup failure, a database error;
+- in the folder guard, an error refuses the move or delete of a folder, and the move of a file out of its team
+  folder (`chp.folderop.refused`, same reason);
+- in tagging, any error writes `chp.tag.failed`. Nothing is skipped silently.
+
 `occ chp:foldertag:check` lists files in ruled folders that lack their tag (exit 1 if any). It is a tool for the
 administrator. The nightly check runs outside this app, from chp-site, because the command is gone while the app
 is disabled.

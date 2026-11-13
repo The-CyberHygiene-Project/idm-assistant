@@ -6,6 +6,10 @@ WebDAV endpoints the browser uses, as lab01 (cui-users + chp-users), app passwor
               (403, nothing created) to FCI / Operations / home, into-containment moves, trash restore and version
               restore across folders; every surviving file must carry the CUI tag
   failclosed  run while app config "contain" is invalid JSON: CUI -> Archive refused, rename inside CUI allowed
+  type-contain   run while "contain" is stored with --type=array (getValueString throws a type-conflict error,
+                 not a PolicyError): every copy/move with a team-folder source refused (403), nothing created
+  type-allow     run while "contain_allow" is stored with --type=array: CUI -> Archive refused, rename inside CUI allowed
+  type-rules     run while "rules" is stored with --type=array: a new CUI file is left untagged (chp.tag.failed)
 Lab folder ids: 1 CUI, 2 FCI, 3 Archive, 4 Operations; tag 1 = CUI (rules {"1":"1","2":"2"}; Archive has NO rule, so
 a CUI file in Archive is tagged only because its tag travels with it)."""
 import base64
@@ -112,10 +116,10 @@ def allowed(verb, src, dst, files=("",), guarded=False):
     return dst
 
 
-def refused(verb, src, dst):
+def refused(verb, src, dst, codes=(403,)):
     st = mv(verb, src, dst)
     there = exists(dst)
-    check(f"{verb} {src} -> {dst} refused, nothing created", st == 403 and not there and exists(src),
+    check(f"{verb} {src} -> {dst} refused, nothing created", st in codes and not there and exists(src),
           f"HTTP {st}; target exists {there}")
 
 
@@ -239,5 +243,24 @@ if STAGE == "failclosed":
     put(f"Operations/fc-ops-{n}.txt", b"ops\n")
     st = mv("MOVE", f"Operations/fc-ops-{n}.txt", f"Archive/fc-ops-{n}.txt")
     check("policy unreadable: a move out of Operations (any team folder) refused too", st == 403, f"HTTP {st}")
+if STAGE == "type-contain":
+    put(f"CUI/tc-{n}.txt", b"type conflict\n")
+    refused("MOVE", f"CUI/tc-{n}.txt", f"Operations/tc-{n}.txt")
+    refused("COPY", f"CUI/tc-{n}.txt", f"tc-home-{n}.txt")
+    refused("MOVE", f"CUI/tc-{n}.txt", f"Archive/tc-{n}.txt")
+    # internal error: refused outright; a same-parent rename answers 500 "Failed to rename" (NextCloud's DAV setName)
+    refused("MOVE", f"CUI/tc-{n}.txt", f"CUI/tc-{n}-renamed.txt", codes=GUARD)
+    put(f"tch-{n}.txt", b"home\n")
+    st = mv("MOVE", f"tch-{n}.txt", f"tch-{n}-renamed.txt")
+    check("home rename (no team folder, the config is never read) still works", st == 201, f"HTTP {st}")
+if STAGE == "type-allow":
+    put(f"CUI/ta-{n}.txt", b"type conflict allow\n")
+    refused("MOVE", f"CUI/ta-{n}.txt", f"Archive/ta-{n}.txt")
+    refused("COPY", f"CUI/ta-{n}.txt", f"Operations/ta-{n}.txt")
+    allowed("MOVE", f"CUI/ta-{n}.txt", f"CUI/ta-{n}-renamed.txt")
+if STAGE == "type-rules":
+    st = put(f"CUI/tr-{n}.txt", b"type conflict rules\n")
+    check("PUT into CUI works but stays untagged (reported as chp.tag.failed)", st == 201 and tags(f"CUI/tr-{n}.txt") == [], f"HTTP {st}; tags {tags(f'CUI/tr-{n}.txt')}")
+    print(f"  untagged file for the audit check: CUI/tr-{n}.txt")
 print(f"{STAGE} {n}: {'ALL PASS' if not fails else str(fails) + ' FAIL'}" + (f" ({known} moves refused by the folder guard: database MD5 unavailable)" if known else ""))
 sys.exit(1 if fails else 0)

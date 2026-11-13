@@ -8,14 +8,22 @@
 #             product gets its trust from the signed RPM via the rpm database), php -l every file, then occ upgrade.
 #             Undo: copy /root/spike/chp_foldertag-0.2.0 back is NOT enough (NextCloud refuses a version downgrade);
 #             reinstall the spike RPM instead.
+#   install-rpm  the same, but with the app files taken from the newest RPM built on chp-build (rpm2cpio)
 #   config    contain_allow = [[CUI,Archive],[Archive,CUI]] (owner decision 3); prints rules/contain/contain_allow
 #   audit N   the last N chp_foldertag lines of /var/log/nextcloud/audit.log
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; F="$here/ssh_config"; APP="$here/../../appliance/rpm/nextcloud-chp/chp_foldertag"
 X() { ssh -F "$F" -o BatchMode=yes docs "$@"; }
 case ${1:-} in
-  install)
-    COPYFILE_DISABLE=1 tar --no-xattrs -C "$APP/.." -cf - --exclude .DS_Store chp_foldertag | X 'rm -rf ~/ft && mkdir ~/ft && tar -C ~/ft -xf -'
+  install|install-rpm)
+    if [ "$1" = install-rpm ]; then   # the app files exactly as packaged in the newest RPM built on chp-build
+      ssh -F "$here/../build-vm/ssh_config" -o BatchMode=yes chp-build 'f=$(ls -t ~/nc-chp/RPMS/noarch/nextcloud-chp-*.rpm | head -1)
+          echo "from $(basename $f) $(sha256sum $f | cut -c1-16)..." >&2; d=$(mktemp -d); cd $d
+          rpm2cpio $f | cpio -idm "./usr/lib/nextcloud/apps/chp_foldertag/*" 2>/dev/null
+          tar -C usr/lib/nextcloud/apps -cf - chp_foldertag; rm -rf $d' | X 'rm -rf ~/ft && mkdir ~/ft && tar -C ~/ft -xf -'
+    else
+      COPYFILE_DISABLE=1 tar --no-xattrs -C "$APP/.." -cf - --exclude .DS_Store chp_foldertag | X 'rm -rf ~/ft && mkdir ~/ft && tar -C ~/ft -xf -'
+    fi
     X 'set -e
       A=/usr/lib/nextcloud/apps/chp_foldertag
       [ -d /root/spike/chp_foldertag-0.2.0 ] || sudo cp -a $A /root/spike/chp_foldertag-0.2.0
@@ -36,5 +44,5 @@ case ${1:-} in
     X 'sudo occ config:app:set chp_foldertag contain_allow --value="[[1,3],[3,1]]" >/dev/null
        for k in rules contain contain_allow; do echo "$k = $(sudo occ config:app:get chp_foldertag $k)"; done' ;;
   audit) X "sudo grep '\"app\":\"chp_foldertag\"' /var/log/nextcloud/audit.log | tail -${2:-20}" ;;
-  *) echo "usage: $0 install|config|audit [N]"; exit 2 ;;
+  *) echo "usage: $0 install|install-rpm|config|audit [N]"; exit 2 ;;
 esac

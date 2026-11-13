@@ -53,6 +53,31 @@ class FolderGuardListener implements IEventListener {
 		} else {
 			return;
 		}
+		// NextCloud's hook layer swallows any exception except AbortedEventException and lets the operation go on;
+		// on any other error refuse folders and files leaving their team folder (fail closed), let the rest pass.
+		try {
+			$this->decide($node, $op, $target);
+		} catch (AbortedEventException $e) {
+			throw $e;
+		} catch (\Throwable $e) {
+			if (!($node instanceof Folder || ($node instanceof File && $target !== null && $this->leavesOrUnknown($node, $target)))) {
+				return;
+			}
+			$path = '';
+			try {
+				$path = $node->getPath();
+			} catch (\Throwable $ignored) {
+				$path = 'unknown';
+			}
+			$reason = 'internal error: ' . get_class($e);
+			$this->audit->event(Audit::FOLDEROP_REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $path
+				. ($target !== null ? ' -> ' . $target : ''),
+				['op' => $op, 'source' => $path, 'target' => $target, 'reason' => $reason]);
+			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
+		}
+	}
+
+	private function decide(Node $node, string $op, ?string $target): void {
 		if ($node instanceof Folder && $node->getDirectoryListing() !== []) {
 			$what = 'a non-empty folder';
 		} elseif ($node instanceof File && $target !== null && $this->leavesTeamFolder($node, $target) && $this->hasOldVersions($node)) {
@@ -68,6 +93,14 @@ class FolderGuardListener implements IEventListener {
 			. ($target !== null ? ' -> ' . $target : ''),
 			['op' => $op, 'source' => $node->getPath(), 'target' => $target, 'reason' => $reason]);
 		throw new AbortedEventException('chp_foldertag: ' . $what . ' cannot be moved or deleted on this server yet (database MD5 unavailable)');
+	}
+
+	private function leavesOrUnknown(File $file, string $target): bool {
+		try {
+			return $this->leavesTeamFolder($file, $target);
+		} catch (\Throwable $e) {
+			return true;
+		}
 	}
 
 	private function leavesTeamFolder(Node $node, string $target): bool {

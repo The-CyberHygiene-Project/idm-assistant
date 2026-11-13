@@ -20,7 +20,7 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
 # chp_foldertag: Apache-2.0 (this repository's licence)
@@ -113,6 +113,11 @@ fi
 %dir %attr(0750,apache,apache) %{_localstatedir}/log/nextcloud
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 35.0.3-2.chp
+- chp_foldertag 1.0.0: the Before-listeners fail closed on ANY error (NextCloud's hook layer swallows every
+  exception except AbortedEventException and lets the operation proceed): containment refuses, the folder guard
+  refuses folders and files leaving their team folder, tagging reports chp.tag.failed instead of skipping
+
 * Fri Nov 13 2026 The CyberHygiene Project - 35.0.3-1.chp
 - First product build (ISO 0.7.0 Plan 2 Task 3): NextCloud 35.0.3, groupfolders 23.0.1, files_accesscontrol 6.0.1,
   user_oidc 8.13.0, chp_foldertag 1.0.0 (policy from app config, CUI <-> Archive allowed, audit events, trash and

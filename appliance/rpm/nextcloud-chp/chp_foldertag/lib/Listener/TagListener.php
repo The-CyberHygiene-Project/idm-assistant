@@ -57,26 +57,46 @@ class TagListener implements IEventListener {
 		}
 		try {
 			$rules = $this->policy->rules();
-		} catch (PolicyError $e) {
-			$this->audit->event(Audit::TAG_FAILED, 'policy unreadable, nothing tagged: ' . $e->getMessage() . ': ' . $target->getPath(),
-				['op' => $reason, 'file_id' => null, 'folder' => null, 'tag' => null, 'path' => $target->getPath(),
-					'error' => $e->getMessage()]);
+		} catch (\Throwable $e) {   // PolicyError, or any app config / database error: never skip silently
+			$what = $e instanceof PolicyError ? 'policy unreadable' : 'policy not read (' . get_class($e) . ')';
+			$this->failed($reason, $target, $what . ', nothing tagged', $e);
 			return;
 		}
 		if ($rules === []) {
 			return;
 		}
 		$managed = array_values(array_unique(array_values($rules)));
-		foreach ($this->files($target, '') as [$file, $rel]) {
-			$folder = Policy::folderOfMount($file->getMountPoint());
-			$want = ($folder !== null && isset($rules[$folder])) ? [$rules[$folder]] : [];
-			if ($source !== null) {
-				$want = array_merge($want, $this->managedTagsOf($source, $rel, $managed, $file));
+		try {
+			foreach ($this->files($target, '') as [$file, $rel]) {
+				try {
+					$folder = Policy::folderOfMount($file->getMountPoint());
+					$want = ($folder !== null && isset($rules[$folder])) ? [$rules[$folder]] : [];
+					if ($source !== null) {
+						$want = array_merge($want, $this->managedTagsOf($source, $rel, $managed, $file));
+					}
+				} catch (\Throwable $e) {
+					$this->failed($reason, $file, 'could not work out the tag (' . get_class($e) . ')', $e);
+					continue;
+				}
+				foreach (array_unique($want) as $tag) {
+					$this->tag($file, $folder, $tag, $reason);
+				}
 			}
-			foreach (array_unique($want) as $tag) {
-				$this->tag($file, $folder, $tag, $reason);
-			}
+		} catch (\Throwable $e) {   // walking the subtree failed: the rest of it is untagged, say so
+			$this->failed($reason, $target, 'could not walk the target (' . get_class($e) . '), files below it may be untagged', $e);
 		}
+	}
+
+	private function failed(string $op, Node $node, string $what, \Throwable $e): void {
+		$path = 'unknown';
+		$id = null;
+		try {
+			$path = $node->getPath();
+			$id = (string)$node->getId();
+		} catch (\Throwable $ignored) {
+		}
+		$this->audit->event(Audit::TAG_FAILED, $what . ': ' . $e->getMessage() . ': ' . $path,
+			['op' => $op, 'file_id' => $id, 'folder' => null, 'tag' => null, 'path' => $path, 'error' => $e->getMessage()]);
 	}
 
 	/**
