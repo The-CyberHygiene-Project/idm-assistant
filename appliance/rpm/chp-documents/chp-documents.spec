@@ -35,7 +35,7 @@ Source25:       chp-documents-check.service
 Source26:       chp-documents-check.timer
 Source27:       81-documents-tags.sh
 Requires:       nextcloud-chp, chp-base, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux, chp-site
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.13.0
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -145,7 +145,8 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
   `chp-site documents check` (SQL outside chp_foldertag; app policy, team folders, config.php trust entry, public
   link and internal share canary on a CUI file); monitor check 81 reads its result
   (/var/lib/chp/documents/check.json): alerts once per new failure, again after 24 h, and when the result is missing
-  or older than 26 h; DEGRADED (database MD5) shown, not alerted. Requires chp-site.
+  or older than 26 h; DEGRADED (database MD5) shown, not alerted. ExecStopPost=chp-site documents canary-off
+  (the canary account is never left enabled); no Persistent= catch-up. Requires chp-site >= 0.13.0.
 
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-2.chp
 - Review fixes: check 79 builds the expected table from the shipped files in a throwaway netns every run (no

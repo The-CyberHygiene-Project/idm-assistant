@@ -243,12 +243,27 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>NextCloud: share REFUSED on a no-share team folder (CUI/FCI/Archive): $(message)</description>
     <group>chp_share_refused,</group>
   </rule>
-  <!-- the nightly share canary (chp-site documents check, account chp-canary, disabled between runs) is refused on
-       purpose every night: level 3 here; the check itself alerts (check 81) when the refusal FAILS -->
-  <rule id="100608" level="3">
-    <if_sid>100601</if_sid>
-    <field name="user">^chp-canary$</field>
-    <description>NextCloud: nightly share canary refused as expected: $(message)</description>
+  <!-- the share-canary account (chp-site documents check; local, disabled between runs, no known password). The
+       nightly run enables it by occ (audit user field: two dashes) in its window: level 3. Enabled any other way or at any other
+       time, or its password set/changed by anyone: 12. Its expected nightly share refusal is lowered to 3 by 100608
+       in chp_nextcloud_rules_canary.xml, anchored to the canary FILE id (written by the check). -->
+  <rule id="100609" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^User enabled: "chp-canary"</field>
+    <description>NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: $(message)</description>
+    <group>chp_canary_account,</group>
+  </rule>
+  <rule id="100618" level="3">
+    <if_sid>100609</if_sid>
+    <field name="user">^--$</field>
+    <time>3:05 am - 3:45 am</time>
+    <description>NextCloud: chp-canary enabled by the nightly check (occ, 03:05-03:45): $(message)</description>
+  </rule>
+  <rule id="100619" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">(?i)password\\b[^"]*"chp-canary"</field>
+    <description>NextCloud: the password of the share-canary account chp-canary was set or changed: $(message)</description>
+    <group>chp_canary_account,</group>
   </rule>
   <rule id="100602" level="12">
     <if_sid>100600</if_sid>
@@ -346,6 +361,24 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <regex type="pcre2">(?i)((incorrect|invalid|wrong)\\W+totp|totp\\W+(fail|denied|incorrect|invalid))</regex>
     <description>Kanidm: failed sign-in (authenticator code refused)</description>
     <group>authentication_failed,</group>
+  </rule>
+</group>
+"""
+
+
+CANARY_RULE = "100608"
+
+
+def canary_rules(fileid):
+    """chp_nextcloud_rules_canary.xml (written by chp-site documents check once the canary file exists): the canary's
+    expected refusal on THAT file id is level 3; the same account sharing anything else stays at 100601 (12)."""
+    return f"""<!-- Managed by chp-site documents check (ISO 0.7.0 Plan 2 Task 6): the nightly share canary -->
+<group name="chp,nextcloud,">
+  <rule id="{CANARY_RULE}" level="3">
+    <if_sid>100601</if_sid>
+    <field name="user">^chp-canary$</field>
+    <field name="message" type="pcre2">ShareAction from user chp-canary on {int(fileid)} to \\S+ is restricted</field>
+    <description>NextCloud: nightly share canary refused as expected (canary file {int(fileid)}): $(message)</description>
   </rule>
 </group>
 """

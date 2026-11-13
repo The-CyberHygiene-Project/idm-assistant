@@ -44,6 +44,12 @@ Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron
   disabled between runs, signed in by a per-run app token that is deleted afterwards) refused. A missing result or
   one older than 26 h alerts; DEGRADED (database MD5, design §12) is shown, not alerted. The check reads the database
   with SQL as apache over the socket, so it runs while `chp_foldertag` is off.
+  `ExecStopPost=chp-site documents canary-off` switches the canary account off after any end of the run (failure,
+  timeout, kill). The timer has no `Persistent=`: Wazuh rule 100609 pages (12) when `chp-canary` is enabled other
+  than by occ inside 03:05-03:45 (100618, level 3), and 100619 pages when its password is set or changed. The
+  canary's expected refusal is lowered to level 3 only for the canary file's id (rule 100608 in
+  `/var/ossec/etc/rules/chp_nextcloud_rules_canary.xml`, written by the check). Alert text can carry CUI file names
+  (they stay on the appliance: monitor, Wazuh, daily review). Trash and old versions are not checked for names.
   Check 77 also alerts when the last backup failed. Each alerts once per change and again after 24 h (state in
   `/var/lib/chp/documents/`); while an alert is held back the check prints `OK ... still failing (alerted <time>)`.
 

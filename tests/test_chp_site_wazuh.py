@@ -206,6 +206,20 @@ def _rx(pattern, kind, text):
     return _re.search(p, text) is not None
 
 
+def _in_window(spec, hhmm):
+    """Wazuh's <time>h:mm am - h:mm am</time> (same-day window only, as used here)."""
+    if not hhmm:
+        return False
+    def mins(x):
+        x = x.strip().lower()
+        pm = x.endswith("pm")
+        h, m = x.replace("am", "").replace("pm", "").strip().split(":")
+        return (int(h) % 12 + (12 if pm else 0)) * 60 + int(m)
+    a, b = spec.split(" - ")
+    hh, mm = hhmm.split(":")
+    return mins(a) <= int(hh) * 60 + int(mm) <= mins(b)
+
+
 def _matches(rule, ev, fired):
     for c in rule:
         t = c.tag
@@ -222,6 +236,8 @@ def _matches(rule, ev, fired):
         if t == "regex" and not _rx(c.text, c.get("type"), ev.get("log", "")):
             return False
         if t == "field" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get(c.get("name"), "\0")):
+            return False
+        if t == "time" and not _in_window(c.text, ev.get("hhmm")):
             return False
     return True
 
@@ -336,8 +352,28 @@ def test_nightly_canary_refusal_is_not_a_level_12_page():
     fails); the same refusal for anyone else, and a share MADE by the canary, stay at 12."""
     msg = ("Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canary on 47 to "
            "OCP\\Interaction\\Contacts\\PublicLink is restricted: Node is not shareable.")
-    assert _level(w.NEXTCLOUD_RULES, _nc(msg, user="chp-canary"))[1] == 3
-    assert _level(w.NEXTCLOUD_RULES, _nc(msg.replace("chp-canary", "lab01"), user="lab01"))[1] == 12
-    assert _level(w.NEXTCLOUD_RULES, _nc(msg, user="lab01"))[1] == 12          # the audit's user field decides
+    x = w.NEXTCLOUD_RULES + w.canary_rules(47)
+    assert _level(w.NEXTCLOUD_RULES, _nc(msg, user="chp-canary"))[1] == 12     # no canary rule yet: pages (loud)
+    assert _level(x, _nc(msg, user="chp-canary"))[1] == 3
+    assert _level(x, _nc(msg.replace("chp-canary", "lab01"), user="lab01"))[1] == 12
+    assert _level(x, _nc(msg, user="lab01"))[1] == 12                         # the audit's user field decides
+    # a hijacked canary account sharing REAL CUI (another file id) still pages at 12
+    assert _level(x, _nc(msg.replace(" on 47 ", " on 470 "), user="chp-canary"))[1] == 12
+    assert _level(x, _nc(msg.replace(" on 47 ", " on 4 "), user="chp-canary"))[1] == 12
     made = 'The file "/CUI/CUI_chp-canary.txt" with ID "47" has been shared via link with permissions "1" (Share ID: 3)'
-    assert _level(w.NEXTCLOUD_RULES, _nc(made, user="chp-canary"))[1] == 12
+    assert _level(x, _nc(made, user="chp-canary"))[1] == 12
+    import xml.etree.ElementTree as ET
+    ET.fromstring(w.canary_rules(47))
+    assert w.CANARY_RULE not in _re.findall(r'rule id="(\d+)"', w.NEXTCLOUD_RULES)
+
+
+def test_canary_account_enable_and_password_rules():
+    """Enabled by the nightly run (occ, in its 03:05-03:45 window) = 3; by anyone else or at another time = 12;
+    a password set or changed = always 12."""
+    en = _nc('User enabled: "chp-canary"', user="--")
+    assert _level(w.NEXTCLOUD_RULES, {**en, "hhmm": "03:12"})[1] == 3
+    assert _level(w.NEXTCLOUD_RULES, {**en, "hhmm": "14:00"})[1] == 12
+    assert _level(w.NEXTCLOUD_RULES, {**_nc('User enabled: "chp-canary"', user="ncadmin"), "hhmm": "03:12"})[1] == 12
+    assert (_level(w.NEXTCLOUD_RULES, {**_nc('User enabled: "lab01"', user="--"), "hhmm": "14:00"})[1] or 0) < 7
+    for m in ('Password of user "chp-canary" has been changed', 'Password set for user "chp-canary"'):
+        assert _level(w.NEXTCLOUD_RULES, {**_nc(m, user="--"), "hhmm": "03:12"})[1] == 12, m

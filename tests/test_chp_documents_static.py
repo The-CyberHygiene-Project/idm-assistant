@@ -181,9 +181,13 @@ def test_nightly_check_timer_and_service():
     svc, tim = t("chp-documents-check.service"), t("chp-documents-check.timer")
     assert "ExecStart=/usr/bin/chp-site documents check" in svc and "Type=oneshot" in svc and "UMask=0077" in svc
     assert "ConditionPathExists=/etc/chp/documents.conf" in svc and "postgresql.service" in svc
-    assert "OnCalendar=*-*-* 03:" in tim and "Persistent=true" in tim      # after the 01:40 backup (maintenance mode)
+    assert "OnCalendar=*-*-* 03:10:00" in tim                               # after the 01:40 backup (maintenance mode)
+    # no catch-up run at boot: an out-of-window enable of chp-canary pages at 12 (Wazuh 100609); a missed night is
+    # reported by check 81 as stale instead
+    assert "Persistent=true" not in tim
+    assert "ExecStopPost=/usr/bin/chp-site documents canary-off" in svc     # after a failure, timeout or kill too
     for u in ("chp-documents-check.service", "chp-documents-check.timer"):
         assert "%{_unitdir}/" + u in SPEC
     assert "%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer " \
            "chp-nextcloud-cert-renew.timer chp-documents-check.timer" in SPEC
-    assert re.search(r"^Requires:.*\bchp-site\b", SPEC, re.M)
+    assert re.search(r"^Requires:.*\bchp-site >= 0\.13\.0\b", SPEC, re.M)

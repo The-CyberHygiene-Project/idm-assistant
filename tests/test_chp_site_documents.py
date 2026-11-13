@@ -1124,7 +1124,7 @@ GOOD_APP = {"enabled": "yes", "rules": '{"1":"1","2":"2","3":"1"}', "contain": "
 
 class DB:
     """NextCloud's database as the nightly check sees it (sqlite stands in for PostgreSQL; the check's SQL is portable)."""
-    def __init__(self, app=None):
+    def __init__(self, app=None, canary=True):
         self.c = sqlite3.connect(":memory:")
         self.c.row_factory = sqlite3.Row
         self.c.executescript(SCHEMA)
@@ -1142,6 +1142,7 @@ class DB:
         for k, v in (GOOD_APP if app is None else app).items():
             self.c.execute("INSERT INTO oc_appconfig VALUES ('chp_foldertag', ?, ?)", (k, v))
         self.c.execute("INSERT INTO oc_appconfig VALUES ('core', 'rules', 'x')")
+        self.canary_id = self.file("CUI", "files/" + D.CANARY_NAME, [CUI_TAG]) if canary else None
 
     def file(self, where, path, tags=(), directory=False):
         st = 20 if where == "home" else 10 + IDS[where]
@@ -1260,7 +1261,7 @@ def check_root(tmp_path, enabled="yes", trust=True):
 def do_check(tmp_path, db=None, api=None, occ=None, run=None, **kw):
     r = kw.pop("root", None) or check_root(tmp_path, **kw)
     db, api, occ, run = db or DB(), api or Api(), occ or CanaryOcc(), run or CheckRun()
-    lines = D.check(r, run, sql=db, api=api, occ=occ, now=lambda: 1_800_000_000)
+    lines = D.check(r, run, sql=db, api=api, occ=occ, now=lambda: 1_800_000_000, chown=lambda p: None)
     res = json.loads((r / D.CHECK_RESULT).read_text())
     return lines, res, (r, db, api, occ, run)
 
@@ -1492,8 +1493,10 @@ def test_canary_sets_up_its_account_and_file_without_storing_a_secret(tmp_path):
     occ2 = CanaryOcc()
     occ2.tokens = [{"id": 9, "name": D.CANARY_TOKEN}, {"id": 10, "name": "other"}]
     occ2.enabled = True
-    do_check(tmp_path / "b", occ=occ2)
-    assert occ2.tokens == [{"id": 10, "name": "other"}] and occ2.enabled is False
+    _, res2, _ = do_check(tmp_path / "b", occ=occ2)
+    assert occ2.tokens == [] and occ2.enabled is False                 # every token of the account goes
+    t = next(a["text"] for a in res2["alerts"] if a["key"] == "canary:leftover")
+    assert "ENABLED" in t and "2 app token(s)" in t
 
 
 def test_canary_account_added_back_to_cui_users(tmp_path):
@@ -1552,3 +1555,152 @@ def test_tag_check_never_goes_blind_without_the_directory_mimetype(tmp_path):
     bad = db.file("CUI", "files/x.docx")
     _, res, _ = do_check(tmp_path, db=db)
     assert f"untagged:{bad}" in keys(res)
+
+
+# ---------- Task 6 fix round 1 ----------
+import signal
+
+
+def test_sigterm_mid_canary_still_cleans_up_and_handler_is_restored(tmp_path):
+    before = signal.getsignal(signal.SIGTERM)
+
+    class Term(Api):
+        def __call__(self, method, path, user, token, form=None, body=None):
+            if method == "POST" and form and form.get("shareType") == "3":
+                os.kill(os.getpid(), signal.SIGTERM)          # systemd stop / TimeoutStartSec
+            return super().__call__(method, path, user, token, form, body)
+    occ = CanaryOcc()
+    r = check_root(tmp_path)
+    with pytest.raises(SystemExit):
+        D.check(r, CheckRun(), sql=DB(), api=Term(public=200), occ=occ, now=lambda: 1, chown=lambda p: None)
+    assert occ.enabled is False and occ.tokens == []
+    assert signal.getsignal(signal.SIGTERM) == before
+
+
+def test_canary_off_disables_and_deletes_tokens(tmp_path):
+    r = check_root(tmp_path)
+    occ = CanaryOcc()
+    occ.enabled, occ.tokens = True, [{"id": 3, "name": "x"}]
+    out = D.canary_off(r, occ)
+    assert occ.enabled is False and occ.tokens == [] and out[0].startswith("OK")
+    assert "no canary account" in D.canary_off(r, CanaryOcc(exists=False))[0]
+
+
+def test_cli_canary_off(monkeypatch, capsys):
+    from chp_site import cli
+    monkeypatch.setattr(D, "canary_off", lambda root, occ: ["OK canary-off: done"])
+    assert cli.main(["documents", "canary-off"]) == 0 and "canary-off: done" in capsys.readouterr().out
+
+
+def test_a_running_check_holds_the_lock(tmp_path):
+    import fcntl
+    r = check_root(tmp_path)
+    fd = D._lock(r)
+    try:
+        out = D.check(r, CheckRun(), sql=DB(), api=Api(), occ=CanaryOcc(), now=lambda: 1, chown=lambda p: None)
+        assert "another check is running" in out[0] and not (r / D.CHECK_RESULT).exists()
+        assert "check is running" in D.canary_off(r, CanaryOcc())[0]
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    _, res, _ = do_check(tmp_path, root=r)
+    assert res["alerts"] == []
+
+
+class WRun(CheckRun):
+    def __init__(self, analysisd_rc=0):
+        super().__init__()
+        self.rc = analysisd_rc
+
+    def __call__(self, argv, **kw):
+        if argv[0].endswith("wazuh-analysisd"):
+            self.calls.append(list(argv))
+            return R(self.rc, "", "" if not self.rc else "ERROR: rule 100608 invalid")
+        return super().__call__(argv, **kw)
+
+
+def test_canary_wazuh_rule_anchored_to_the_canary_file_id(tmp_path):
+    db = DB()
+    run = WRun()
+    _, res, (r, *_x) = do_check(tmp_path, db=db, run=run)
+    p = r / D.CANARY_RULES
+    assert res["alerts"] == [] and p.read_text() == D.w.canary_rules(db.canary_id)
+    assert f"on {db.canary_id} to" in p.read_text()
+    assert ["systemctl", "restart", "wazuh-manager"] in run.calls
+    run2 = WRun()
+    do_check(tmp_path, root=r, db=db, run=run2)                    # unchanged: no restart
+    assert ["systemctl", "restart", "wazuh-manager"] not in run2.calls
+
+
+def test_canary_wazuh_rule_rolled_back_when_the_check_fails(tmp_path):
+    run = WRun(analysisd_rc=1)
+    _, res, (r, *_x) = do_check(tmp_path, run=run)
+    assert "check:wazuh" in keys(res) and not (r / D.CANARY_RULES).exists()
+    assert ["systemctl", "restart", "wazuh-manager"] not in run.calls
+
+
+def test_positive_control_must_find_the_tagged_canary_file(tmp_path):
+    _, res, (r, *_x) = do_check(tmp_path, db=DB(canary=False))
+    assert "check:control" in keys(res) and not (r / D.CANARY_RULES).exists()
+    db = DB(canary=False)
+    db.file("CUI", "files/" + D.CANARY_NAME)                       # there, but untagged
+    _, res, _ = do_check(tmp_path / "b", db=db)
+    assert "check:control" in keys(res)
+    db = DB(canary=False)
+    db.file("Operations", "files/" + D.CANARY_NAME, [CUI_TAG])     # tagged, wrong storage
+    _, res, _ = do_check(tmp_path / "c", db=db)
+    assert "check:control" in keys(res)
+
+
+def test_controlled_folder_without_a_storage_id_alerts(tmp_path):
+    db = DB()
+    db.c.execute("UPDATE oc_group_folders SET storage_id = NULL WHERE folder_id = 2")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert "storage:2" in keys(res) and "check:sql" not in keys(res)
+
+
+def test_per_folder_more_keys_and_true_totals(tmp_path):
+    db = DB()
+    for i in range(60):
+        db.file("CUI", f"files/u{i}.docx")
+    for i in range(55):
+        db.file("FCI", f"files/f{i}.md")
+    _, res, _ = do_check(tmp_path, db=db)
+    k = [a["key"] for a in res["alerts"]]
+    assert len(k) == len(set(k))                                    # no duplicate keys
+    assert "untagged:CUI:more" in k and "untagged:FCI:more" in k
+    assert res["counts"]["untagged:CUI"] == 60 and res["counts"]["untagged:FCI"] == 55
+    assert len([x for x in k if x.startswith("untagged:") and x.split(":")[1].isdigit()]) == 100
+    t = next(a["text"] for a in res["alerts"] if a["key"] == "untagged:CUI:more")
+    assert "60 findings" in t
+
+
+def test_trust_check_alerts_when_either_side_is_missing(tmp_path):
+    r = check_root(tmp_path)
+    (r / "etc/nextcloud/config.php").unlink()
+    (r / "etc/fapolicyd/trust.d/nextcloud").write_text("")
+    _, res, _ = do_check(tmp_path, root=r)
+    assert "trust" in keys(res)
+    r2 = check_root(tmp_path / "b")
+    (r2 / "etc/fapolicyd/trust.d/nextcloud").write_text("")
+    _, res, _ = do_check(tmp_path / "b", root=r2)
+    assert "trust" in keys(res)
+
+
+def test_token_output_never_in_an_alert(tmp_path):
+    class Leaky(CanaryOcc):
+        def __call__(self, argv, env=None):
+            if argv[0] == "user:auth-tokens:add":
+                self.calls.append(list(argv))
+                return 1, f"app password:\n{TOKEN}\n", f"error after {TOKEN}"
+            return super().__call__(argv, env)
+    _, res, (r, *_x) = do_check(tmp_path, occ=Leaky())
+    assert "canary:error" in keys(res)
+    assert TOKEN not in (r / D.CHECK_RESULT).read_text()
+
+
+def test_duplicate_tag_names_alert(tmp_path):
+    db = DB()
+    db.c.execute("INSERT INTO oc_systemtag VALUES (9, 'CUI', 1, 0)")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert "tag:CUI:duplicate" in keys(res)

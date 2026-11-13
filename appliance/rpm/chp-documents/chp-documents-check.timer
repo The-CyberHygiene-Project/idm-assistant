@@ -2,6 +2,7 @@
 Description=CHP: nightly NextCloud tag check and share canary (after the 01:40 backup)
 [Timer]
 OnCalendar=*-*-* 03:10:00
-Persistent=true
+# no Persistent=: a catch-up run at boot would enable chp-canary outside the 03:05-03:45 window that Wazuh
+# 100618 expects (a level-12 page); a missed night shows as a stale result in check 81 instead
 [Install]
 WantedBy=timers.target

@@ -6,5 +6,7 @@ After=postgresql.service httpd.service php-fpm.service
 UMask=0077
 Type=oneshot
 ExecStart=/usr/bin/chp-site documents check
+# runs after success, failure, a timeout or a kill: the canary account is never left enabled with a token
+ExecStopPost=/usr/bin/chp-site documents canary-off
 TimeoutStartSec=30min
 Nice=10

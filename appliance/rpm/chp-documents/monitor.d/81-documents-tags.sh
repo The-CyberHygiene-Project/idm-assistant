@@ -42,7 +42,7 @@ case $lines in ''|X) docs_flag noresult "NextCloud check: no result in $R (or un
 while IFS=$'\t' read -r kind a b; do
   case $kind in
     W) when=$a ;;
-    S) docs_flag stale "NextCloud check: last result is $a h old (older than 26 h): is chp-documents-check.timer running?" ;;
+    S) docs_flag stale "NextCloud check: last result is $a h old (older than 26 h): was the server off at 03:10, or is chp-documents-check.timer not running?" ;;
     A) docs_flag "$a" "NextCloud check: $b" ;;
     D) echo "OK NextCloud $a (known, accepted; see the daily review)" ;;
   esac
