@@ -81,7 +81,28 @@ def _valid(b):
         for part, keys in (("cpu", ("avg", "peak")), ("mem", ("avg_pct", "peak_pct"))):
             if part in s and not all(isinstance(s[part].get(x), (int, float)) for x in keys):
                 return False
+        if "documents" in b and not _valid_docs(b["documents"]):
+            return False
         return _num_or_none(b.get("security_since"))
+    except (KeyError, TypeError, AttributeError):
+        return False
+
+
+def _valid_docs(x):
+    try:
+        if not isinstance(x, dict) or not isinstance(x["svc"], dict):
+            return False
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in x["svc"].items()):
+            return False
+        c, bk, ck = x.get("cert"), x.get("bk"), x.get("chk")
+        if c is not None and not (isinstance(c, dict) and _num_or_none(c["nb"]) and _num_or_none(c["na"])):
+            return False
+        if bk is not None and not (isinstance(bk, dict) and isinstance(bk["st"], str) and _num_or_none(bk["at"])):
+            return False
+        if ck is not None and not (isinstance(ck, dict) and _num_or_none(ck["at"]) and isinstance(ck["kinds"], dict)
+                                   and isinstance(ck["can"], list)):
+            return False
+        return _num_or_none(x.get("cr")) and _num_or_none(x.get("sa"))
     except (KeyError, TypeError, AttributeError):
         return False
 
@@ -116,7 +137,9 @@ def _intrusions(alerts, site, ip_host):
         if rid == RECORD_RULE or rid in YARA_OTHER:
             continue
         al = d.get("alert") if isinstance(d.get("alert"), dict) else None
-        if rid in SURICATA_RULES or (al and "suricata" in r.get("groups", [])):
+        if rid.startswith("1006") and "nextcloud" in r.get("groups", []) and lvl >= LEVEL_FLOOR:
+            kind, src, target, sig = "nextcloud", d.get("remoteAddr"), host, r.get("description", "?")
+        elif rid in SURICATA_RULES or (al and "suricata" in r.get("groups", [])):
             kind, src, target, sig = "suricata", d.get("src_ip"), d.get("dest_ip"), (al or {}).get("signature", "?")
         elif rid == YARA_MATCH:
             kind, src, target, sig = "yara", host, host, (d.get("chp_yara") or {}).get("rules", "?")
@@ -199,6 +222,74 @@ def _status(hosts, recs, end, tz=None):
         has_sys = "cpu" in (b.get("sys") or {})                 # final review I6: a dead sysstat is not invisible
         out.append(_item(name, "sysstat", rr.OK if has_sys else rr.STALE,
                          f"{b['sys'].get('samples', '?')} samples" if has_sys else "no sysstat figures in the last record"))
+    out += _documents_items(hosts, recs, end)
+    return out
+
+
+def _span_h(s):
+    return f"{int(max(0, s) // 3600)} h"
+
+
+def _documents_items(hosts, recs, end):
+    """NextCloud rows (ISO 0.7.0 design §6, §12) for each host whose record carries a `documents` block: none otherwise.
+    Owners are the monitor checks that already alert on the same fact (77 services/backup, 81 nightly check)."""
+    out = []
+    for h in hosts:
+        rs = recs.get(_short(h.hostname)) or []
+        withdoc = [b for b in rs if isinstance(b.get("documents"), dict)]
+        if not withdoc:
+            continue
+        name, b = _short(h.hostname), withdoc[-1]
+        dc, at = b["documents"], b.get("time", 0)
+        bad = sorted(u for u, s in dc["svc"].items() if s != "active")
+        out.append(_item(name, "nextcloud services", rr.ATTENTION if bad else rr.OK,
+                         ("not active: " + ", ".join(bad)) if bad else "httpd, php-fpm, postgresql, cron timer active",
+                         "77-nextcloud-services"))
+        c = dc.get("cert")
+        if c:
+            st, imm, det = rr.cert_state(c["nb"], c["na"], at)
+            out.append(_item(name, "nextcloud certificate", st, det, immediate=imm))
+        else:
+            out.append(_item(name, "nextcloud certificate", rr.STALE, "no certificate found"))
+        bk = dc.get("bk")
+        if not bk:
+            out.append(_item(name, "nextcloud backup", rr.STALE, "no backup status", "77-nextcloud-services"))
+        else:
+            age = at - bk["at"]
+            if bk["st"] != "OK":
+                st, det = rr.ATTENTION, f"backup {bk['st']} {_span_h(age)} ago"
+            elif age > 26 * 3600:
+                st, det = rr.ATTENTION, f"last backup {_span_h(age)} ago (older than 26 h)"
+            else:
+                st, det = rr.OK, f"last backup {_span_h(age)} ago"
+            out.append(_item(name, "nextcloud backup", st, det, "77-nextcloud-services"))
+        ck = dc.get("chk")
+        if not ck:
+            out.append(_item(name, "nextcloud nightly check", rr.STALE, "no result yet", "81-documents-tags"))
+        else:
+            age = at - ck["at"]
+            kinds = ", ".join(f"{k} {n}" for k, n in sorted(ck["kinds"].items()))
+            if age > 26 * 3600:
+                st, det = rr.STALE, f"last check {_span_h(age)} ago (older than 26 h)"
+            elif not ck["ok"]:
+                st, det = rr.ATTENTION, f"alerts: {kinds or 'unspecified'}"
+            else:
+                st, det = rr.OK, f"no alerts, {_span_h(age)} ago"
+            out.append(_item(name, "nextcloud nightly check", st, det, "81-documents-tags"))
+            can = ck["can"]
+            ok = len(can) == 2 and all(x == "refused" for x in can)
+            out.append(_item(name, "nextcloud share canary", rr.OK if ok else rr.ATTENTION,
+                             "public link and internal share refused" if ok else
+                             "public " + str(can[0]) + ", internal " + str(can[1] if len(can) > 1 else "?"),
+                             "81-documents-tags"))
+            if ck.get("deg"):
+                out.append(_item(name, "nextcloud database MD5", rr.ATTENTION,
+                                 "DEGRADED: database MD5 unavailable, folder moves/renames/deletes refused; "
+                                 "known limitation, see POA&M"))
+        cr = sum(int(x["documents"].get("cr") or 0) for x in withdoc)
+        sa = sum(int(x["documents"].get("sa") or 0) for x in withdoc)
+        out.append(_item(name, "nextcloud refusals", rr.OK, f"{cr} contain refusals, {sa} share attempts today",
+                         "100601-100611"))
     return out
 
 

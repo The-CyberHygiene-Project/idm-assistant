@@ -1,3 +1,4 @@
+import time
 import json
 import subprocess
 from pathlib import Path
@@ -126,3 +127,66 @@ def test_record_carries_when_the_add_on_was_enabled(tmp_path):
     os.utime(c, (1_799_000_000, 1_799_000_000))
     assert body(rh.host_record(host="h", now=NOW, run=fake_run, root=r))["security_since"] == 1_799_000_000
     assert body(rh.host_record(host="h", now=NOW, run=fake_run, root=tmp_path / "none"))["security_since"] is None
+
+
+# ---- Task 7: NextCloud in the daily review ----
+def docs_root(tmp_path, age_backup=3600, check_age=7200):
+    r = lab_root(tmp_path)
+    (r / "etc/chp").mkdir(parents=True)
+    (r / "etc/chp/documents.conf").write_text("ENABLED=yes\nFQDN=x\n")
+    make_cert(r / "etc/pki/nextcloud/chain.pem", 365)
+    d = r / "var/lib/chp/documents"
+    d.mkdir(parents=True)
+    (d / "backup.status").write_text(f"OK {int(NOW - age_backup)} backup 20261113T010000Z\n")
+    (d / "check.json").write_text(json.dumps({"version": 1, "epoch": int(NOW - check_age), "ok": False, "degraded": True,
+        "alerts": [{"key": "untagged:12", "text": "x"}, {"key": "untagged:13", "text": "y"}, {"key": "share:3", "text": "z"}],
+        "canary": {"public": "refused", "internal": "refused"}}))
+    (r / "var/log/nextcloud").mkdir(parents=True)
+    t = lambda s: time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(NOW - s))
+    (r / "var/log/nextcloud/audit.log").write_text("\n".join(json.dumps(e) for e in [
+        {"time": t(100), "app": "admin_audit", "message": "ShareAction from user bob on 5 to x is restricted"},
+        {"time": t(200), "app": "chp_foldertag", "message": "chp.contain.refused", "event": "chp.contain.refused"},
+        {"time": t(300), "app": "chp_foldertag", "message": "chp.contain.refused", "event": "chp.contain.refused"},
+        {"time": t(5000), "app": "admin_audit", "message": "ShareAction from user bob on 5 to x is restricted"},
+    ]) + "\nnot json\n")
+    return r
+
+
+def docs_run(argv, **kw):
+    if argv[:2] == ["systemctl", "is-active"]:
+        return SimpleNamespace(returncode=0 if argv[2] != "php-fpm" else 3, stdout="active\n" if argv[2] != "php-fpm" else "failed\n", stderr="")
+    return fake_run(argv, **kw)
+
+
+def test_documents_block_when_enabled(tmp_path):
+    b = body(rh.host_record(host="srv1", now=NOW, run=docs_run, root=docs_root(tmp_path)))
+    dc = b["documents"]
+    assert dc["svc"] == {"httpd": "active", "php-fpm": "failed", "postgresql": "active", "nextcloud-cron.timer": "active"}
+    assert dc["cert"]["na"] - dc["cert"]["nb"] > 300 * 86400
+    assert dc["bk"] == {"st": "OK", "at": int(NOW - 3600)}
+    assert dc["chk"]["kinds"] == {"untagged": 2, "share": 1} and dc["chk"]["deg"] is True and dc["chk"]["ok"] is False
+    assert dc["chk"]["can"] == ["refused", "refused"]
+    assert (dc["cr"], dc["sa"]) == (2, 1)                       # default window: the last 10 minutes
+
+
+def test_documents_counts_since_the_last_record(tmp_path):
+    r = docs_root(tmp_path)
+    rh.docs_cursor_save(r, NOW - 6000)
+    assert body(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r))["documents"]["sa"] == 2
+
+
+def test_no_documents_block_when_off(tmp_path):
+    b = body(rh.host_record(host="h", now=NOW, run=fake_run, root=lab_root(tmp_path)))
+    assert "documents" not in b
+    r = docs_root(tmp_path / "x")
+    (r / "etc/chp/documents.conf").write_text("ENABLED=no\n")
+    assert "documents" not in body(rh.host_record(host="h", now=NOW, run=docs_run, root=r))
+
+
+def test_documents_block_size_before_and_after(tmp_path):
+    r = docs_root(tmp_path)
+    after = len(json.dumps(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r)))
+    (r / "etc/chp/documents.conf").write_text("ENABLED=no\n")
+    before = len(json.dumps(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r)))
+    print(f"RECORD SIZE before={before} after={after}")
+    assert after - before < 700 and after < rh.MAX_RECORD // 10

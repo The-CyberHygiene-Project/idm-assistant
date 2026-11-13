@@ -116,6 +116,102 @@ def _rpm(run, name):
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
 
 
+DOCS_CONF = "etc/chp/documents.conf"
+DOCS_UNITS = ("httpd", "php-fpm", "postgresql", "nextcloud-cron.timer")
+DOCS_CURSOR = "var/lib/chp/documents/review.cursor"       # when the last record was appended (counts are "since" it)
+DOCS_TAIL = 2_000_000                                     # the audit log is read from its last 2 MB at most
+SHARE_REFUSED = "is restricted"                           # admin_audit: "ShareAction from user X on N to Y is restricted"
+SHARE_MADE = ("ShareAction", "shared")
+
+
+def _json_file(path):
+    try:
+        v = json.loads(Path(path).read_text())
+        return v if isinstance(v, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _docs_enabled(root):
+    try:
+        return "ENABLED=yes" in _p(root, DOCS_CONF).read_text().splitlines()
+    except OSError:
+        return False
+
+
+def docs_counts(root, since, now):
+    """(contain refusals, share attempts) in NextCloud's audit log between `since` and `now`. Share attempts = shares
+    refused on a controlled folder (rule 100601) or made on one (100602 would be a bug)."""
+    p = _p(root, "var/log/nextcloud/audit.log")
+    try:
+        with open(p, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(0, size - DOCS_TAIL))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return 0, 0
+    cr = sa = 0
+    for ln in lines:
+        try:
+            e = json.loads(ln)
+            t = calendar.timegm(time.strptime(e["time"][:19], "%Y-%m-%dT%H:%M:%S")) if "time" in e else None
+        except (ValueError, KeyError, TypeError):
+            continue
+        if not isinstance(e, dict) or t is None or not (since < t <= now):
+            continue
+        msg = str(e.get("message", ""))
+        if e.get("app") == "chp_foldertag" and str(e.get("event", e.get("message", ""))).startswith("chp.contain.refused"):
+            cr += 1
+        elif e.get("app") == "admin_audit" and msg.startswith("ShareAction from user ") and SHARE_REFUSED in msg:
+            sa += 1
+    return cr, sa
+
+
+def docs_block(root, run, now):
+    """The `documents` block of the server's record (design §6, §12): compact, ~300 bytes. None when documents are off."""
+    if not _docs_enabled(root):
+        return None
+    svc = {}
+    for u in DOCS_UNITS:
+        r = run(["systemctl", "is-active", u], capture_output=True, text=True)
+        svc[u] = (r.stdout or "").strip() or "unknown"
+    cert = None
+    r = run(["openssl", "x509", "-in", str(_p(root, "etc/pki/nextcloud/chain.pem")), "-noout", "-startdate", "-enddate"],
+            capture_output=True, text=True)
+    kv = dict(ln.split("=", 1) for ln in (r.stdout or "").splitlines() if "=" in ln)
+    try:
+        cert = {"nb": _openssl_time(kv["notBefore"]), "na": _openssl_time(kv["notAfter"])}
+    except (KeyError, ValueError):
+        pass
+    bk = None
+    try:
+        f = _p(root, "var/lib/chp/documents/backup.status").read_text().split(None, 2)
+        bk = {"st": f[0], "at": int(f[1])}
+    except (OSError, IndexError, ValueError):
+        pass
+    chk, c = None, _json_file(_p(root, "var/lib/chp/documents/check.json"))
+    if c is not None and isinstance(c.get("epoch"), (int, float)):
+        kinds = {}
+        for a in c.get("alerts") or []:
+            k = str(a.get("key", "?")).split(":", 1)[0][:20]
+            kinds[k] = kinds.get(k, 0) + 1
+        can = c.get("canary") if isinstance(c.get("canary"), dict) else {}
+        chk = {"at": int(c["epoch"]), "ok": bool(c.get("ok")), "kinds": kinds, "deg": bool(c.get("degraded")),
+               "can": [str(can.get("public", "?"))[:24], str(can.get("internal", "?"))[:24]]}
+    cur = _num(_p(root, DOCS_CURSOR))
+    cr, sa = docs_counts(root, cur if cur is not None else now - 600, now)
+    return {"svc": svc, "cert": cert, "bk": bk, "chk": chk, "cr": cr, "sa": sa}
+
+
+def docs_cursor_save(root, now):
+    p = _p(root, DOCS_CURSOR)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"{int(now)}\n")
+    except OSError:
+        pass
+
+
 def host_record(*, host, now, run, root=Path("/"), sys_summary=None):
     aide_check, aide_ok = _aide(root)
     body = {
@@ -130,6 +226,9 @@ def host_record(*, host, now, run, root=Path("/"), sys_summary=None):
         "sys": sys_summary or {},
         "security_since": _mtime(_p(root, "etc/chp/security.conf")),   # when the add-on was enabled (monitor 73's rule)
     }
+    docs = docs_block(root, run, now)
+    if docs is not None:                      # absent (not null) when documents are off: the record is unchanged
+        body["documents"] = docs
     return {"chp_review": {"v": 1, "host": host, "body": json.dumps(body, sort_keys=True, separators=(",", ":"))}}
 
 

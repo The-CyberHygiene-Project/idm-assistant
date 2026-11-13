@@ -402,10 +402,13 @@ def _review(a):
     from . import review_host as rh
     from . import review_sys as rs
     if a.action == "host-record":
-        rec = rh.host_record(host=socket.gethostname(), now=time.time(), run=subprocess.run,
+        now = time.time()
+        rec = rh.host_record(host=socket.gethostname(), now=now, run=subprocess.run,
                              sys_summary=rs.today(subprocess.run))
         if a.append:
             rh.append(rec)
+            if "documents" in json.loads(rec["chp_review"]["body"]):
+                rh.docs_cursor_save(Path("/"), now)
         else:
             print(json.dumps(rec, separators=(",", ":")))
         return 0

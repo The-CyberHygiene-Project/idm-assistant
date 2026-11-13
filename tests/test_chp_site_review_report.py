@@ -250,3 +250,96 @@ def test_report_text_has_no_python_literals():                            # quie
 def test_cell_replaces_c1_controls_and_line_separators(bad):                # final-fix item 8
     out = rr._cell(f"a{bad}b")
     assert out == "a b"
+
+
+# ---- Task 7: NextCloud in the daily review ----
+H = 3600
+
+
+def docs(at, **over):
+    d = {"svc": {"httpd": "active", "php-fpm": "active", "postgresql": "active", "nextcloud-cron.timer": "active"},
+         "cert": {"nb": at - 30 * D, "na": at + 330 * D}, "bk": {"st": "OK", "at": at - 5 * H},
+         "chk": {"at": at - 4 * H, "ok": True, "kinds": {}, "deg": False, "can": ["refused", "refused"]}, "cr": 0, "sa": 0}
+    d.update(over)
+    return d
+
+
+def with_docs(**over):
+    late = END - 600
+    return healthy([record("srv1", late, documents=docs(late, **over))])
+
+
+def nc(d):
+    return {s["item"]: s for s in d["status"] if s["item"].startswith("nextcloud")}
+
+
+def test_documents_status_rows_when_enabled():
+    d = build(with_docs(cr=2, sa=1))
+    rows = nc(d)
+    assert set(rows) == {"nextcloud services", "nextcloud certificate", "nextcloud backup", "nextcloud nightly check",
+                         "nextcloud share canary", "nextcloud refusals"}
+    assert {r["state"] for r in rows.values()} == {"OK"} and rows["nextcloud refusals"]["detail"].startswith("2 contain")
+    assert "nextcloud services" in rr.render_md(d)
+    bad = nc(build(with_docs(svc={"httpd": "active", "php-fpm": "failed", "postgresql": "active",
+                                  "nextcloud-cron.timer": "active"})))
+    assert bad["nextcloud services"]["state"] == "ATTENTION" and "php-fpm" in bad["nextcloud services"]["detail"]
+    deg = nc(build(with_docs(chk={"at": END - 4 * H, "ok": True, "kinds": {}, "deg": True, "can": ["refused", "refused"]})))
+    m = deg["nextcloud database MD5"]
+    assert m["state"] == "ATTENTION" and "known limitation, see POA&M" in m["detail"] and m["owner"] is None
+    old = nc(build(with_docs(chk={"at": END - 40 * H, "ok": True, "kinds": {}, "deg": False, "can": ["refused", "refused"]})))
+    assert old["nextcloud nightly check"]["state"] == "STALE"
+    alerts = nc(build(with_docs(chk={"at": END - H, "ok": False, "kinds": {"untagged": 3}, "deg": False,
+                                     "can": ["CREATED, deleted", "refused"]})))
+    assert "untagged 3" in alerts["nextcloud nightly check"]["detail"] and alerts["nextcloud share canary"]["state"] == "ATTENTION"
+    short = nc(build(healthy([record("srv1", END - 600, documents=docs(END - 600, cert={"nb": END - 3 * D, "na": END + 1 * H}))])))
+    assert short["nextcloud certificate"]["state"] == "ATTENTION"
+
+
+def test_no_documents_rows_when_off():
+    d = build(healthy())
+    assert nc(d) == {} and not [s for s in d["status"] if "nextcloud" in s["item"]]
+    assert "nextcloud" not in rr.render_md(d).lower()
+
+
+def test_backup_older_than_26h_is_attention():
+    late = END - 600
+    st = nc(build(healthy([record("srv1", late, documents=docs(late, bk={"st": "OK", "at": late - 27 * H}))])))["nextcloud backup"]
+    assert st["state"] == "ATTENTION" and "26 h" in st["detail"]
+    st = nc(build(healthy([record("srv1", late, documents=docs(late, bk={"st": "OK", "at": late - 25 * H}))])))["nextcloud backup"]
+    assert st["state"] == "OK"
+    st = nc(build(healthy([record("srv1", late, documents=docs(late, bk={"st": "FAILED", "at": late - H}))])))["nextcloud backup"]
+    assert st["state"] == "ATTENTION" and "FAILED" in st["detail"]
+
+
+def test_nextcloud_level12_in_intrusions():
+    a = [alert("100601", 12, "srv1", START + 3600, {"remoteAddr": "192.0.2.50", "message": "x"},
+               desc="NextCloud: share REFUSED on a no-share team folder (CUI/FCI/Archive): ShareAction", groups=("chp", "nextcloud")),
+         alert("100611", 12, "srv1", START + 3700, {}, desc="NextCloud: copy/move OUT of a controlled team folder refused: `evil`\nx",
+               groups=("chp", "nextcloud"))]
+    d = build(healthy(a))
+    kinds = {i["signature"][:30]: i for i in d["intrusions"] if i["kind"] == "nextcloud"}
+    assert len(kinds) == 2
+    first = [i for i in d["intrusions"] if i["source"] == "192.0.2.50"][0]
+    assert first["inside"] is True and first["target"] == "srv1"
+    md = rr.render_md(d)
+    assert "`" not in md.split("## 1.")[1] and "evil" in md and "192.0.2.50" in md
+    assert nc(d) == {}                                            # no documents rows without a documents block
+
+
+def test_malformed_documents_block_is_skipped_not_fatal():
+    late = END - 600
+    d = build(healthy([record("srv1", late, documents={"svc": "bad"})]))
+    assert d["sources"]["bad_records"].get("srv1") == 1
+
+
+def test_nextcloud_text_goes_through_cell():
+    late = END - 600
+    d = build(healthy([record("srv1", late, documents=docs(late, chk={"at": late - H, "ok": False,
+              "kinds": {"x`\nx": 1}, "deg": False, "can": ["a`\nb", "refused"]}))]))
+    md = rr.render_md(d)
+    assert "`" not in md and "x\nx" not in md
+
+
+def test_old_records_render_exactly_as_before():
+    base = healthy()
+    assert rr.render_md(build(base)) == rr.render_md(build([a for a in base]))
