@@ -380,8 +380,17 @@ def _review(a):
         from zoneinfo import ZoneInfo
         from datetime import datetime
         today = datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
-        alerts = wa.load_alerts("/var/ossec/logs/alerts", now - (st.CATCH_UP + 2) * 86400)
+        zone = ZoneInfo(site.get("TIMEZONE") or "UTC")
+        missing = st.missing_days(today=today)
+        if missing:                                      # only from the earliest missing day, minus a day of margin
+            first = datetime(missing[0].year, missing[0].month, missing[0].day, tzinfo=zone).timestamp()
+            alerts = wa.load_alerts("/var/ossec/logs/alerts", first - 86400)
+        else:
+            alerts = []
         built = st.nightly(today=today, site=site, hosts=hosts, alerts=alerts, now=now)
+        if built is None:
+            print("another review build is running; nothing written by this one")
+            return 0
         print("built " + (", ".join(d.isoformat() for d in built) if built else "nothing (every day is built)"))
         return 0
     if a.action == "sign":
@@ -442,9 +451,17 @@ def _review(a):
         problems = list(chain)
         anchor = None
         if a.stick:
-            with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
-                hp = s / "review" / "heads.txt"
-                heads = hp.read_text() if hp.exists() else ""
+            try:
+                with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
+                    hp = s / "review" / "heads.txt"
+                    heads = hp.read_text() if hp.exists() else ""
+            except SiteError as err:                    # the server chain verdict is still worth having
+                for p in problems:
+                    print(p if a.quiet else f"PROBLEM: {p}")
+                if not problems and not a.quiet:
+                    print("chain OK; kept reports match")
+                print(f"site stick not present ({err}); stick anchor NOT checked")
+                return 2
             anchor = rl.verify_heads(rl._path("/"), heads) if heads else ["the stick has no review/heads.txt yet "
                                                                            "(export once to anchor the ledger)"]
             problems += anchor

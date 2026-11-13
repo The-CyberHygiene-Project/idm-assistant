@@ -1,3 +1,4 @@
+import time
 import json
 
 import pytest
@@ -174,3 +175,13 @@ def test_host_records_never_appear_in_the_summary():
 def test_host_records_never_reach_the_hook_even_at_level_3():               # final review I5 (SECURITY_ALERT_LEVEL=3)
     f = wa.Forwarder(level=3)
     assert f.feed(alert(rid="100520", level=3, host="ws1", desc="CHP review host record: ws1"), now=0) == []
+
+
+def test_load_alerts_dedups_by_wazuh_alert_id(tmp_path):
+    import os
+    a = json.dumps({"id": "1699999999.123", "rule": {"id": "5712", "level": 10}}) + "\n"
+    b = json.dumps({"id": "1699999999.124", "rule": {"id": "5712", "level": 10}}) + "\n"
+    (tmp_path / "ossec-alerts-12.json").write_text(a + b)           # rotated copy
+    (tmp_path / "alerts.json").write_text(a)                         # different inode, same alert
+    got = wa.load_alerts(tmp_path, since_epoch=time.time() - 86400)
+    assert sorted(x["id"] for x in got) == ["1699999999.123", "1699999999.124"]

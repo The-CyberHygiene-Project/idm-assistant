@@ -4,6 +4,7 @@
 """Where the daily reviews live (review spec §4): one folder per day, root-only, FROZEN once written (never rebuilt),
 kept 365 days; catch-up after downtime builds each missing day once. The ledger and the stick-head record are never
 pruned."""
+import fcntl
 import hashlib
 import json
 import os
@@ -118,15 +119,24 @@ def show(*, root=Path("/"), day=None):
 
 
 def nightly(*, root=Path("/"), today, site, hosts, alerts, now):
-    """The timer's job: build every missing day (frozen), then remove reports older than a year."""
+    """The timer's job: build every missing day (frozen), then remove reports older than a year. Only one build runs at
+    a time (flock on .build.lock); a second caller returns None without writing."""
     from . import review_report as rr
 
     def make(day):
         data = rr.build(day, alerts=alerts, hosts=hosts, site=site, now=now, previous=previous(root=root, day=day))
         return data, rr.render_md(data), rr.render_html(data)
 
-    built = build_missing(root=root, today=today, make=make)
-    prune(root=root, today=today)
+    base = _dir(root)
+    base.mkdir(parents=True, exist_ok=True)
+    os.chmod(base, 0o700)
+    with open(base / ".build.lock", "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return None                                     # another build holds the lock: it writes, we do not
+        built = build_missing(root=root, today=today, make=make)
+        prune(root=root, today=today)
     return built
 
 
@@ -176,17 +186,20 @@ def monitor_lines(*, root=Path("/"), today, now, tz, verify_problems, immediate_
     if waiting:
         lines.append(f"ALERT {len(waiting)} daily review(s) have waited more than 2 days for a sign-off "
                      f"({', '.join(waiting[:5])}{' ...' if len(waiting) > 5 else ''}): chp-site review sign")
-    if days:
-        latest = days[-1].isoformat()
-        marker = base / f".alerted-{latest}"
-        if not marker.exists():
-            try:
-                att = json.loads((base / latest / "data.json").read_text()).get("attention", [])
-            except (OSError, ValueError):
-                att = []
-            lines += [f"ALERT review {latest}: {a['host']}: {a['item']}: {a['detail']}" for a in att]
-            fd = os.open(marker, os.O_WRONLY | os.O_CREAT, 0o600)
-            os.close(fd)
+    for day in days:                                     # catch-up: every day without a marker alerts once
+        if (today - day).days > CATCH_UP:
+            continue                                     # older than any catch-up window: never a new day
+        name = day.isoformat()
+        marker = base / f".alerted-{name}"
+        if marker.exists():
+            continue
+        try:
+            att = json.loads((base / name / "data.json").read_text()).get("attention", [])
+        except (OSError, ValueError):
+            att = []
+        lines += [f"ALERT review {name}: {a['host']}: {a['item']}: {a['detail']}" for a in att]
+        fd = os.open(marker, os.O_WRONLY | os.O_CREAT, 0o600)
+        os.close(fd)
     if verify_problems:
         lines.append(f"ALERT the review ledger check failed: {verify_problems[0]}"
                      + (f" (+{len(verify_problems) - 1} more; chp-site review verify)" if len(verify_problems) > 1 else ""))

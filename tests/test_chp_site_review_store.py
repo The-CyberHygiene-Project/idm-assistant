@@ -185,3 +185,65 @@ def test_no_not_built_alert_before_the_first_possible_build(tmp_path):     # fin
     lines = st.monitor_lines(root=tmp_path, today=TODAY, now=at, tz="UTC", verify_problems=[], immediate_items=[],
                              security_since=enabled - 3 * 86400)            # enabled days ago and still nothing: alert
     assert any("not built" in x for x in lines)
+
+
+def test_build_loads_alerts_only_from_the_earliest_missing_day(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from chp_site import cli
+    seen = {}
+    monkeypatch.setattr(st, "missing_days", lambda **kw: [date(2026, 11, 7)])
+    monkeypatch.setattr(st, "nightly", lambda **kw: [date(2026, 11, 7)])
+    monkeypatch.setattr(cli, "_load", lambda site: ({"SUBNET": None, "TIMEZONE": "America/Denver"}, []))
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: seen.update(since=since) or [])
+    assert cli.main(["review", "build"]) == 0
+    start = datetime(2026, 11, 7, tzinfo=ZoneInfo("America/Denver")).timestamp()
+    assert seen["since"] == start - 86400
+
+
+def test_build_loads_nothing_when_every_day_is_built(monkeypatch, capsys):
+    from chp_site import cli
+    called = []
+    monkeypatch.setattr(st, "missing_days", lambda **kw: [])
+    monkeypatch.setattr(st, "nightly", lambda **kw: [])
+    monkeypatch.setattr(cli, "_load", lambda site: ({"SUBNET": None, "TIMEZONE": "UTC"}, []))
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: called.append(1) or [])
+    assert cli.main(["review", "build"]) == 0 and not called
+    assert "nothing" in capsys.readouterr().out
+
+
+def test_concurrent_builds_one_writes(tmp_path):
+    import fcntl
+    import ipaddress
+    from chp_site.hosts import Host
+    site = {"SUBNET": ipaddress.IPv4Network("192.0.2.0/24"), "TIMEZONE": "UTC"}
+    hosts = [Host("aa:01", "srv1", "192.0.2.10", "server", "vda")]
+    base = tmp_path / "var/lib/chp/review"
+    base.mkdir(parents=True)
+    with open(base / ".build.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        assert st.nightly(root=tmp_path, today=TODAY, site=site, hosts=hosts, alerts=[], now=0) is None
+        assert not (base / (TODAY - timedelta(days=1)).isoformat()).exists()
+    # lock released: it builds normally
+    assert len(st.nightly(root=tmp_path, today=TODAY, site=site, hosts=hosts, alerts=[], now=0)) == 1
+
+
+def test_cli_says_when_another_build_holds_the_lock(monkeypatch, capsys):
+    from chp_site import cli
+    monkeypatch.setattr(st, "missing_days", lambda **kw: [date(2026, 11, 7)])
+    monkeypatch.setattr(st, "nightly", lambda **kw: None)
+    monkeypatch.setattr(cli, "_load", lambda site: ({"SUBNET": None, "TIMEZONE": "UTC"}, []))
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: [])
+    assert cli.main(["review", "build"]) == 0
+    assert "another review build is running" in capsys.readouterr().out
+
+
+def test_catch_up_alerts_attention_for_every_new_day(tmp_path):
+    for n, d in enumerate([date(2026, 11, 5), date(2026, 11, 6), date(2026, 11, 7)]):
+        data = {"day": d.isoformat(), "attention": [{"host": "srv1", "item": "cert", "detail": f"d{n}"}] if n != 1 else []}
+        st.write_day(d, data, "# r\n", "<html></html>", root=tmp_path)
+    kw = dict(root=tmp_path, today=TODAY, now=1794000000, tz="UTC", verify_problems=[], immediate_items=[])
+    first = st.monitor_lines(**kw)
+    assert [l for l in first if "review 2026-11-05" in l] and [l for l in first if "review 2026-11-07" in l]
+    assert not [l for l in first if "review 2026-11-06" in l]
+    assert not [l for l in st.monitor_lines(**kw) if l.startswith("ALERT review")]      # once each

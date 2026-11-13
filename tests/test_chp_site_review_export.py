@@ -100,3 +100,21 @@ def test_cli_export_and_verify_use_the_pinned_stick(tmp_path, monkeypatch, capsy
     assert cli.main(["review", "export"]) == 0 and "exported 2 review(s)" in capsys.readouterr().out
     assert cli.main(["review", "verify", "--stick"]) == 0
     assert "stick anchor OK (1 head)" in capsys.readouterr().out
+
+
+def test_verify_stick_without_stick_still_gives_the_chain_verdict(tmp_path, monkeypatch, capsys):
+    from chp_site import cli, usbstick
+    from chp_site.sitefile import SiteError
+    root, stick = setup(tmp_path)
+    monkeypatch.setattr(rl, "_path", lambda r: ledger(root))
+    monkeypatch.setattr(st, "_dir", lambda r: root / "var/lib/chp/review")
+
+    @contextmanager
+    def no_stick(s=None):
+        raise SiteError("no site stick found: plug in the USB stick labelled OEMDRV")
+        yield
+    monkeypatch.setattr(usbstick, "site_stick", no_stick)
+    assert cli.main(["review", "verify", "--stick"]) == 2
+    out = capsys.readouterr().out
+    assert "chain OK" in out and "site stick not present" in out
+    assert out.index("chain OK") < out.index("site stick not present")

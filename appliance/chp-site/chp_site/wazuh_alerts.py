@@ -176,8 +176,9 @@ def summarize(alerts, since_epoch, min_level):
 
 def load_alerts(base, since_epoch):
     """Every alert in base (alerts.json and the dated YYYY/Mon/ossec-alerts-DD.json[.gz] files). Wazuh's alerts.json is
-    a hard link to today's dated file, so each file is read once (by device + inode)."""
-    seen, out = set(), []
+    a hard link to today's dated file, so each file is read once (by device + inode); an alert present in two files
+    (a copy, or a rotation) is returned once, keyed on Wazuh's alert "id" (the whole line when it has none)."""
+    seen, keys, out = set(), set(), []
     for p in sorted(Path(base).rglob("*.json*")):
         st = p.stat()
         if (st.st_dev, st.st_ino) in seen or st.st_mtime < since_epoch - DAY:
@@ -187,9 +188,14 @@ def load_alerts(base, since_epoch):
         with opener(p, "rt", errors="replace") as fh:
             for ln in fh:
                 try:
-                    out.append(json.loads(ln))
+                    a = json.loads(ln)
                 except ValueError:
-                    pass
+                    continue
+                key = a["id"] if isinstance(a, dict) and a.get("id") else ln.strip()
+                if key in keys:
+                    continue
+                keys.add(key)
+                out.append(a)
     return out
 
 
