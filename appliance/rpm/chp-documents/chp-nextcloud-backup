@@ -6,6 +6,9 @@
 #   backup     maintenance mode on -> pg_dump (peer auth) + rsync of the data directory and /etc/nextcloud into
 #              /backup/nextcloud/<UTC stamp>/ -> maintenance off; keeps DOCUMENTS_BACKUP_DAYS days (from
 #              /etc/chp/documents.conf, default 14); MANIFEST with sha256. The copies hold CUI: mode 0700, root only.
+#              Only a directory with a MANIFEST is a copy (MANIFEST is written last, via rename): a directory left
+#              without one by a killed run (SIGKILL skips the cleanup trap) is neither the --link-dest base nor
+#              counted toward MIN_KEEP, and is deleted at the start of the next run.
 #   restore    the reverse onto a reset server (nextcloud-chp installed, database empty or absent); verifies MANIFEST
 #   keep-days  print the retention in force
 set -Eeuo pipefail
@@ -21,16 +24,22 @@ KEEP=$(keep_days)
 occ() { "$OCC" "$@"; }
 log() { logger -t chp-nextcloud-backup -- "$*" 2>/dev/null || :; echo "$*"; }
 status() { install -d -m 0700 "$SD"; printf '%s %s %s\n' "$1" "$(date +%s)" "$2" > "$SD/backup.status"; }
-stamps() { find "$B" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort; }   # UTC stamps sort oldest first
+dirs() { find "$B" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort; }   # UTC stamps sort oldest first
+stamps() { local d; for d in $(dirs); do [ -s "$d/MANIFEST" ] && echo "$d"; done; return 0; }   # complete copies only
+partials() { local d; for d in $(dirs); do [ -s "$d/MANIFEST" ] || echo "$d"; done; return 0; }
 free_kb() { df -Pk "$B" | awk 'NR==2{print $4}'; }
 case ${1:-backup} in
   keep-days) echo "$KEEP" ;;
   backup)
     install -d -m 0700 "$B"
+    install -d -m 0700 "$SD"; exec 9> "$SD/backup.lock"; flock -n 9 || { log "backup not started: another backup is running (it records the status)"; exit 75; }
+    for d in $(partials); do log "deleting the incomplete copy $d (no MANIFEST: an earlier run was killed)"; rm -rf "$d"; done
     prev=$(stamps | tail -1)
     # Space first: a full /backup must not stop backups forever. Each night is an rsync --link-dest incremental plus a
     # new database dump, but we require room for a whole copy of the last one; prune the oldest (keeping at least
-    # MIN_KEEP) until it fits, else fail loudly (status FAILED -> monitor check 77 ALERT).
+    # MIN_KEEP) until it fits, else fail loudly (status FAILED -> monitor check 77 ALERT). du -sk counts the last
+    # copy's hardlinked (unchanged) files in full, so it overestimates what an incremental needs: conservative, it
+    # can only fail loudly too early, never run out of space unannounced.
     if [ -n "$prev" ]; then
       need=$(du -sk "$prev" | cut -f1)
       while [ "$(free_kb)" -lt "$need" ] && [ "$(stamps | wc -l)" -gt "$MIN_KEEP" ]; do
@@ -50,7 +59,7 @@ case ${1:-backup} in
     rsync -aHAX --numeric-ids ${link[@]+"${link[@]}"} "$D/" "$o/data/"
     rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
     occ maintenance:mode --off >/dev/null
-    (cd "$o" && find . -type f ! -name MANIFEST -print0 | sort -z | xargs -0 sha256sum > MANIFEST)
+    (cd "$o" && find . -type f ! -name MANIFEST ! -name MANIFEST.tmp -print0 | sort -z | xargs -0 sha256sum > MANIFEST.tmp && mv MANIFEST.tmp MANIFEST)
     # retention: older than KEEP days go, but never below MIN_KEEP copies
     n=$(stamps | wc -l)
     for d in $(stamps); do

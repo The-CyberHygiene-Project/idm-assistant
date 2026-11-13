@@ -23,7 +23,10 @@ def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0
     (b / "systemctl").write_text("#!/bin/bash\n" + f'case " {active} " in *" $3 "*) exit 0;; esac\nexit 3\n')
     (b / "nft").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{live}EOF\n" if live is not None else "exit 1\n"))
     # the fake unshare stands for "build the expected table from the files in a throwaway netns"
-    (b / "unshare").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{expected}EOF\n" if expected is not None else "exit 1\n"))
+    if expected is not None and expected.startswith("ERR:"):
+        (b / "unshare").write_text("#!/bin/bash\n" + f"echo '{expected[4:]}' >&2; exit 1\n")
+    else:
+        (b / "unshare").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{expected}EOF\n" if expected is not None else "exit 1\n"))
     if cert:
         f = lambda t: time.strftime("%b %e %H:%M:%S %Y GMT", time.gmtime(t))
         (b / "openssl").write_text("#!/bin/bash\n" + f'echo "notBefore={f(cert[0])}"; echo "notAfter={f(cert[1])}"\n')
@@ -131,8 +134,14 @@ def test_79_shipped_file_changed_but_unit_not_reloaded_alerts(tmp_path):
 
 
 def test_79_cannot_build_expected_alerts(tmp_path):
-    assert "ALERT NextCloud egress: cannot build the expected table" in run(tmp_path, "79-nextcloud-egress.sh",
-                                                                           live=EXPECTED % (0, 0), expected=None)
+    out = run(tmp_path, "79-nextcloud-egress.sh", live=EXPECTED % (0, 0), expected=None)
+    assert "ALERT NextCloud egress: the expected table could not be built" in out
+    assert "broken?" not in out and "unshare -n / nft failed: no error output" in out and "not compared" in out
+
+
+def test_79_cannot_build_expected_names_the_error(tmp_path):
+    out = run(tmp_path, "79-nextcloud-egress.sh", live=EXPECTED % (0, 0), expected="ERR:unshare: unshare failed: Operation not permitted")
+    assert "the expected table could not be built" in out and "Operation not permitted" in out
 
 
 def test_79_widened_or_extra_content_in_address_file_alerts(tmp_path):

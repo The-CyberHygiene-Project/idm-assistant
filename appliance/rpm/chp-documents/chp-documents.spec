@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -35,7 +35,7 @@ Source25:       chp-documents-check.service
 Source26:       chp-documents-check.timer
 Source27:       81-documents-tags.sh
 Requires:       nextcloud-chp, chp-base, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.13.0
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -140,6 +140,13 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/documents
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-4.chp
+- chp-nextcloud-backup: only a directory with a MANIFEST (now written last, by rename) is a copy; a killed run's
+  partial directory is neither the --link-dest base nor counted toward the 2 kept copies and is deleted at the
+  start of the next run; one backup at a time (lock); README: du -sk overestimates hardlinked incrementals
+- check 79: when the expected table cannot be built (unshare/nft) the alert says so and names the error
+- Requires chp-site >= 0.14.0 (documents and doc commands)
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-3.chp
 - Nightly tag check and share canary (Plan 2 Task 6): chp-documents-check.timer (03:10, after the backup) runs
   `chp-site documents check` (SQL outside chp_foldertag; app policy, team folders, config.php trust entry, public

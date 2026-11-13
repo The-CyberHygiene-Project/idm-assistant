@@ -111,7 +111,7 @@ def test_no_file_references_the_internet():
 def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        3.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        4.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
@@ -121,12 +121,12 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
     assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
     assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
-    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        3.chp" in SPEC
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        4.chp" in SPEC
     assert "UMask=0077" in t("chp-nextcloud-backup.service")
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
 
-def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0):
+def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0, partial=(), flock_rc=0):
     """Run chp-nextcloud-backup with fake occ/runuser/rsync/df/logger; returns (rc, out, calls)."""
     b = tmp / "bin"; b.mkdir(exist_ok=True)
     calls = tmp / "calls"
@@ -135,12 +135,15 @@ def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0):
     (b / "rsync").write_text("#!/bin/bash\necho rsync \"$@\" >> " + str(calls) + "\nfor a; do last=$a; done; mkdir -p \"$last\"; echo f > \"$last/f\"\nexit " + str(rsync_rc) + "\n")
     (b / "df").write_text(f"#!/bin/bash\necho Filesystem; echo x 1 1 {free_kb} 1% /backup\n")
     (b / "logger").write_text("#!/bin/bash\nexit 0\n")
+    (b / "flock").write_text(f"#!/bin/bash\nexit {flock_rc}\n")
     for x in b.iterdir():
         x.chmod(0o755)
     B = tmp / "backup"; B.mkdir(exist_ok=True)
     for st in stamps:
         (B / st / "data").mkdir(parents=True); (B / st / "data/f").write_text("x" * 4096)
         (B / st / "MANIFEST").write_text("m")
+    for st in partial:   # a run killed before MANIFEST (SIGKILL skips the trap)
+        (B / st / "data").mkdir(parents=True); (B / st / "data/f").write_text("x" * 4096)
     data = tmp / "data"; data.mkdir(exist_ok=True)
     conf = tmp / "c"; conf.write_text("DOCUMENTS_BACKUP_DAYS=14\n")
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_NC_BACKUP=str(B), CHP_NC_DATA=str(data), CHP_OCC=str(b / "occ"),
@@ -177,6 +180,39 @@ def test_backup_failure_midway_records_failed_and_leaves_no_partial_copy(tmp_pat
     assert [p.name for p in (tmp_path / "backup").iterdir()] == ["20260101T000000Z"]
 
 
+def test_backup_ignores_and_deletes_a_killed_runs_partial_copy(tmp_path):
+    # the newest dir has no MANIFEST: it is not the --link-dest base and is deleted at the start
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z", "20260102T000000Z"], partial=["20260103T000000Z"])
+    assert rc == 0, out
+    assert f"--link-dest={tmp_path}/backup/20260102T000000Z/data" in calls and "20260103T000000Z" not in calls
+    assert "deleting the incomplete copy" in out
+    left = sorted(p.name for p in (tmp_path / "backup").iterdir() if p.is_dir())
+    assert left[:2] == ["20260101T000000Z", "20260102T000000Z"] and "20260103T000000Z" not in left and len(left) == 3
+    assert all((tmp_path / "backup" / d / "MANIFEST").exists() for d in left)
+
+
+def test_backup_partials_do_not_count_toward_min_keep(tmp_path):
+    # two complete copies + two partials, no space: partials go first and the two complete copies are kept
+    rc, out, _ = _backup(tmp_path, 1, ["20260101T000000Z", "20260102T000000Z"], partial=["20260103T000000Z", "20260104T000000Z"])
+    assert rc == 75 and re.search(r"only +2 copies kept", out)
+    left = sorted(p.name for p in (tmp_path / "backup").iterdir() if p.is_dir())
+    assert left == ["20260101T000000Z", "20260102T000000Z"]
+
+
+def test_backup_manifest_written_last_by_rename_and_single_run_lock(tmp_path):
+    b = t("chp-nextcloud-backup")
+    assert "> MANIFEST.tmp && mv MANIFEST.tmp MANIFEST" in b
+    assert b.index('flock -n 9') < b.index('for d in $(partials)')
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"], partial=["20260102T000000Z"], flock_rc=1)
+    assert rc == 75 and "another backup is running" in out and calls == ""
+    assert (tmp_path / "backup/20260102T000000Z").is_dir()   # a running backup's dir is never deleted
+
+
+def test_readme_says_du_overestimates_hardlinked_incrementals():
+    r = re.sub(r"\s+", " ", t("README.md"))
+    assert "du -sk" in r and "overestimates" in r and "hardlink" in r
+
+
 def test_nightly_check_timer_and_service():
     svc, tim = t("chp-documents-check.service"), t("chp-documents-check.timer")
     assert "ExecStart=/usr/bin/chp-site documents check" in svc and "Type=oneshot" in svc and "UMask=0077" in svc
@@ -190,4 +226,4 @@ def test_nightly_check_timer_and_service():
         assert "%{_unitdir}/" + u in SPEC
     assert "%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer " \
            "chp-nextcloud-cert-renew.timer chp-documents-check.timer" in SPEC
-    assert re.search(r"^Requires:.*\bchp-site >= 0\.13\.0\b", SPEC, re.M)
+    assert re.search(r"^Requires:.*\bchp-site >= 0\.14\.0\b", SPEC, re.M)

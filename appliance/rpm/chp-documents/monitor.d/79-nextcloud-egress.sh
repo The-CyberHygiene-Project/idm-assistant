@@ -18,8 +18,11 @@ docs_begin 79-egress
 if ! why=$("$V" 2>&1); then
   docs_flag addr "NextCloud egress address file invalid: $why"
 fi
-if ! exp=$(unshare -n sh -c "nft -f '$F' >/dev/null && nft list table inet chp_nextcloud_egress" 2>/dev/null); then
-  docs_flag noexpected "NextCloud egress: cannot build the expected table from $F (file or address file broken?)"
+errf=$(mktemp) || errf=/dev/null
+trap '[ "$errf" = /dev/null ] || rm -f "$errf"' EXIT
+if ! exp=$(unshare -n sh -c "nft -f '$F' >/dev/null && nft list table inet chp_nextcloud_egress" 2>"$errf"); then
+  err=$(tr '\n' ' ' < "$errf" 2>/dev/null | cut -c1-200); err=${err% }
+  docs_flag noexpected "NextCloud egress: the expected table could not be built from $F (unshare -n / nft failed: ${err:-no error output}), so the live table was not compared"
 elif ! live=$(nft list table inet chp_nextcloud_egress 2>/dev/null); then
   docs_flag missing "NextCloud egress table chp_nextcloud_egress is missing (NextCloud is not contained; restart chp-nextcloud-egress.service)"
 elif [ "$(printf '%s\n' "$live" | norm)" != "$(printf '%s\n' "$exp" | norm)" ]; then

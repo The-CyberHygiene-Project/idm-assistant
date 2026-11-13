@@ -67,7 +67,13 @@ the `nextcloud` database, `rsync` of `/data/nextcloud/data` and `/etc/nextcloud`
 dump. Copies older than `DOCUMENTS_BACKUP_DAYS` (default 14) days are removed, never going below 2 copies. Before
 copying, if `/backup` has less free space than the last copy, the oldest copies are pruned (down to 2); if it still
 does not fit, the backup fails with a log line and exit 75, `/var/lib/chp/documents/backup.status` says FAILED, and check 77
-alerts.
+alerts. The size of the last copy comes from `du -sk`, which counts the files it shares with older copies through
+hardlinks in full, so it overestimates what an incremental needs: conservative, the backup can only fail loudly too
+early, never fill `/backup` unannounced.
+
+Only a directory with a `MANIFEST` counts as a copy (the `MANIFEST` is written last, by rename). A directory a killed
+run left without one (SIGKILL skips the cleanup) is never the `--link-dest` base, does not count toward the 2 kept
+copies, and is deleted at the start of the next run. One backup runs at a time (a lock on `/var/lib/chp/documents/backup.lock`).
 
 Restore, on a server with `nextcloud-chp` and `chp-documents` installed and rendered:
 
