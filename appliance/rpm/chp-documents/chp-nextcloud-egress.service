@@ -8,9 +8,9 @@ Before=php-fpm.service httpd.service nextcloud-cron.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# the address file must be exactly one valid line equal to SERVER_IP (it is an nft include and could hold anything)
+ExecStartPre=/usr/libexec/chp/nextcloud-egress-validate
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-nextcloud-egress.nft
-# the snapshot check 79 compares the live table with
-ExecStartPost=/usr/libexec/chp/nextcloud-egress-snapshot
 ExecStop=/usr/sbin/nft delete table inet chp_nextcloud_egress
 [Install]
 WantedBy=multi-user.target

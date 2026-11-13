@@ -22,11 +22,20 @@ def test_egress_table_is_apache_only_loopback_and_server():
     assert "@SERVER_IP@" not in n and not re.search(r"\b\d+\.\d+\.\d+\.\d+\b", re.sub(r"#.*", "", n).replace("127.0.0.0", ""))
 
 
-def test_egress_unit_refuses_without_rendered_address_and_snapshots():
+def test_egress_unit_refuses_without_valid_rendered_address():
     u = t("chp-nextcloud-egress.service")
     assert "AssertPathExists=/etc/chp/nextcloud-egress-addr.nft" in u
     assert "Before=php-fpm.service httpd.service nextcloud-cron.service" in u
-    assert "ExecStartPost=/usr/libexec/chp/nextcloud-egress-snapshot" in u
+    assert "ExecStartPre=/usr/libexec/chp/nextcloud-egress-validate" in u and "Snapshot" not in u
+
+
+def test_httpd_lan_include_is_a_location_and_no_cgi_bin(tmp_path):
+    c = t("nextcloud-httpd.conf")
+    assert re.search(r'<Location "/">\s*Include /etc/httpd/conf.d/chp-nextcloud-lan.inc\s*</Location>', c)
+    (tmp_path / "conf").mkdir()
+    (tmp_path / "conf/httpd.conf").write_text('ScriptAlias /cgi-bin/ "/var/www/cgi-bin/"\n')
+    subprocess.run(["bash", str(D / "nextcloud-httpd-stock-off.sh")], env=dict(os.environ, CHP_HTTPD_ROOT=str(tmp_path)), check=True)
+    assert not re.search(r"^\s*ScriptAlias", (tmp_path / "conf/httpd.conf").read_text(), re.M)
 
 
 def test_bindsto_dropins_for_phpfpm_and_httpd():
@@ -76,6 +85,9 @@ def test_backup_keeps_configured_days_and_includes_db_and_data(tmp_path):
 
 def test_cert_renew_opens_port_80_only_during_issue():
     s = t("cert-renew-nextcloud.sh")
+    assert "/run/chp-acme.lock" in s and s.index("flock") < s.index("--add-service=http")
+    assert "/run/chp-acme.lock" in (D.parent / "chp-identity-server/cert-renew-kanidm.sh").read_text()
+    assert "refusing" in s and "$S/fqdn" in s
     assert s.index("--add-service=http") < s.index("ca certificate") < s.index("--remove-service=http")
     assert "/etc/pki/nextcloud" in s and "FQDN" in s
     assert "ConditionPathExists=/etc/chp/documents.conf" in t("chp-nextcloud-cert-renew.service")
@@ -83,13 +95,9 @@ def test_cert_renew_opens_port_80_only_during_issue():
 
 def test_fapolicyd_rule_shipped():
     r = t("65-chp-nextcloud.rules")
+    assert "ftype=" not in re.sub(r"#.*", "", r)
     assert "exe=/usr/sbin/php-fpm" in r and "dir=/data/nextcloud/data/" in r
     assert "/etc/fapolicyd/rules.d/65-chp-nextcloud.rules" in SPEC
-
-
-def test_snapshot_and_check_79_normalise_identically():
-    pat = "s/counter packets [0-9]+ bytes [0-9]+/counter/"
-    assert pat in t("nextcloud-egress-snapshot.sh") and pat in (D / "monitor.d/79-nextcloud-egress.sh").read_text()
 
 
 def test_no_file_references_the_internet():
@@ -103,7 +111,67 @@ def test_no_file_references_the_internet():
 def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        1.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        2.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
+
+
+def test_spec_scriptlets_state_dir_and_backup_umask():
+    assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
+    assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
+    assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        2.chp" in SPEC
+    assert "UMask=0077" in t("chp-nextcloud-backup.service")
+    assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
+
+
+def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0):
+    """Run chp-nextcloud-backup with fake occ/runuser/rsync/df/logger; returns (rc, out, calls)."""
+    b = tmp / "bin"; b.mkdir(exist_ok=True)
+    calls = tmp / "calls"
+    (b / "occ").write_text("#!/bin/bash\necho occ \"$@\" >> " + str(calls) + "\n")
+    (b / "runuser").write_text("#!/bin/bash\necho DUMP\n")
+    (b / "rsync").write_text("#!/bin/bash\necho rsync \"$@\" >> " + str(calls) + "\nfor a; do last=$a; done; mkdir -p \"$last\"; echo f > \"$last/f\"\nexit " + str(rsync_rc) + "\n")
+    (b / "df").write_text(f"#!/bin/bash\necho Filesystem; echo x 1 1 {free_kb} 1% /backup\n")
+    (b / "logger").write_text("#!/bin/bash\nexit 0\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    B = tmp / "backup"; B.mkdir(exist_ok=True)
+    for st in stamps:
+        (B / st / "data").mkdir(parents=True); (B / st / "data/f").write_text("x" * 4096)
+        (B / st / "MANIFEST").write_text("m")
+    data = tmp / "data"; data.mkdir(exist_ok=True)
+    conf = tmp / "c"; conf.write_text("DOCUMENTS_BACKUP_DAYS=14\n")
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_NC_BACKUP=str(B), CHP_NC_DATA=str(data), CHP_OCC=str(b / "occ"),
+               CHP_DOCS_STATE=str(tmp / "st"), CHP_DOCUMENTS_CONF=str(conf))
+    r = subprocess.run(["bash", str(D / "chp-nextcloud-backup"), name], env=env, capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr, calls.read_text() if calls.exists() else ""
+
+
+def test_backup_is_a_link_dest_incremental_of_the_previous_copy(tmp_path):
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z", "20260102T000000Z"])
+    assert rc == 0, out
+    assert f"--link-dest={tmp_path}/backup/20260102T000000Z/data" in calls
+    assert (tmp_path / "st/backup.status").read_text().startswith("OK ")
+    assert "occ maintenance:mode --off" in calls
+
+
+def test_backup_prunes_oldest_when_space_is_short_but_keeps_two(tmp_path):
+    rc, out, _ = _backup(tmp_path, 1, ["20260101T000000Z", "20260102T000000Z", "20260103T000000Z", "20260104T000000Z"])
+    assert rc == 75 and "not enough space" in out
+    left = sorted(p.name for p in (tmp_path / "backup").iterdir())
+    assert left == ["20260103T000000Z", "20260104T000000Z"]                  # oldest pruned, never below 2
+    assert (tmp_path / "st/backup.status").read_text().startswith("FAILED ")
+
+
+def test_backup_with_enough_space_prunes_nothing(tmp_path):
+    rc, out, _ = _backup(tmp_path, 10**9, ["20260101T000000Z", "20260102T000000Z", "20260103T000000Z"])
+    assert rc == 0 and len(list((tmp_path / "backup").iterdir())) == 4
+
+
+def test_backup_failure_midway_records_failed_and_leaves_no_partial_copy(tmp_path):
+    rc, out, _ = _backup(tmp_path, 10**9, ["20260101T000000Z"], rsync_rc=23)
+    assert rc != 0
+    assert (tmp_path / "st/backup.status").read_text().startswith("FAILED ")
+    assert [p.name for p in (tmp_path / "backup").iterdir()] == ["20260101T000000Z"]

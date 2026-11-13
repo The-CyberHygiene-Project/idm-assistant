@@ -3,5 +3,6 @@ Description=CHP: nightly NextCloud backup into /backup
 ConditionPathExists=/etc/chp/documents.conf
 After=postgresql.service
 [Service]
+UMask=0077
 Type=oneshot
 ExecStart=/usr/sbin/chp-nextcloud-backup backup

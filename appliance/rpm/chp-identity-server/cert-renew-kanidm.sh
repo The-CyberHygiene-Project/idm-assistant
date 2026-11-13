@@ -14,6 +14,7 @@ if [ -f /var/lib/chp/kanidm-domain ] && [ "$(cat /var/lib/chp/kanidm-domain)" !=
   logger -t cert-renew-kanidm "refusing: Kanidm serves $(cat /var/lib/chp/kanidm-domain), site.conf now says $IDM"; exit 1
 fi
 issue() {
+  exec 9>/run/chp-acme.lock; flock -w 300 9   # one ACME renewer at a time may hold :80 open (shared with cert-renew-nextcloud)
   firewall-cmd -q --add-service=http
   if step-cli ca certificate "$IDM" "$C" "$K" --provisioner acme --kty EC --crv P-384 --force >/dev/null; then rc=0; else rc=$?; fi
   firewall-cmd -q --remove-service=http || true

@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, checks 77-79
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -12,7 +12,7 @@ Source2:        nextcloud-fpm.conf
 Source3:        nextcloud-egress.nft
 Source4:        nextcloud-egress-addr.nft.example
 Source5:        chp-nextcloud-egress.service
-Source6:        nextcloud-egress-snapshot.sh
+Source6:        nextcloud-egress-validate.sh
 Source7:        nextcloud-bindsto.conf
 Source8:        nextcloud-bindsto-httpd.conf
 Source9:        nextcloud-httpd-stock-off.sh
@@ -32,7 +32,7 @@ Source22:       79-nextcloud-egress.sh
 Source23:       README.md
 Source24:       LICENSE
 Requires:       nextcloud-chp, chp-base, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils
+Requires:       python3, firewalld, policycoreutils, util-linux
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -43,9 +43,10 @@ and starts the units. Until then everything FAILS CLOSED: httpd denies all, the 
 
 Files that `chp-site documents enable` must render (see /usr/share/doc/chp-documents/README.md):
   /etc/httpd/conf.d/chp-nextcloud-lan.inc    "Require ip <SUBNET_CIDR>" (shipped: "Require all denied")
-  /etc/chp/nextcloud-egress-addr.nft         "define CHP_NC_SERVER_IP = <SERVER_IP>" (absent: egress unit won't start)
+  /etc/chp/nextcloud-egress-addr.nft         "define CHP_NC_SERVER_IP = <SERVER_IP>", exactly one line (absent or invalid: egress unit won't start)
   /etc/hosts                                 NextCloud's own names (apache has no DNS)
-  /etc/chp/documents.conf                    ENABLED=yes, FQDN=..., DOCUMENTS_BACKUP_DAYS=... (absent: checks silent OK)
+  /etc/chp/documents.conf                    ENABLED=yes, FQDN=..., SERVER_IP=... (must equal the address file), optional
+                                             DOCUMENTS_BACKUP_DAYS=... (absent: checks silent OK)
   /etc/pki/nextcloud/{chain,key}.pem         the certificate: cert-renew-nextcloud --issue
 The NextCloud audit file and the Wazuh index are CUI-boundary records: see the README (retention, no forwarding off
 the appliance).
@@ -57,7 +58,7 @@ install -Dm0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/php-fpm.d/nextcloud.conf
 install -Dm0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/nftables/chp-nextcloud-egress.nft
 install -Dm0644 %{SOURCE4} %{buildroot}%{_docdir}/%{name}/nextcloud-egress-addr.nft.example
 install -Dm0644 %{SOURCE5} %{buildroot}%{_unitdir}/chp-nextcloud-egress.service
-install -Dm0755 %{SOURCE6} %{buildroot}%{_libexecdir}/chp/nextcloud-egress-snapshot
+install -Dm0755 %{SOURCE6} %{buildroot}%{_libexecdir}/chp/nextcloud-egress-validate
 install -Dm0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/systemd/system/php-fpm.service.d/chp-egress.conf
 install -Dm0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/systemd/system/httpd.service.d/chp-egress.conf
 install -Dm0755 %{SOURCE9} %{buildroot}%{_libexecdir}/chp/nextcloud-httpd-stock-off
@@ -77,15 +78,26 @@ install -Dm0755 %{SOURCE22} %{buildroot}%{_prefix}/lib/chp/monitor.d/79-nextclou
 install -Dm0644 %{SOURCE23} %{buildroot}%{_docdir}/%{name}/README.md
 install -Dm0644 %{SOURCE24} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -dm0700 %{buildroot}%{_sysconfdir}/pki/nextcloud
+install -dm0700 %{buildroot}%{_sharedstatedir}/chp/documents
 
 %post
+%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
 systemctl daemon-reload >/dev/null 2>&1 || :
 # the fapolicyd rule takes effect at the next rules load / fapolicyd restart (chp-site documents enable restarts it
 # and reads fapolicyd-cli --check-status)
 if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1 || :; fi
 
+%preun
+%systemd_preun chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
+
 %postun
-systemctl daemon-reload >/dev/null 2>&1 || :
+%systemd_postun nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
+# on upgrade the egress table is reloaded from the (possibly new) shipped file
+%systemd_postun_with_restart chp-nextcloud-egress.service
+
+# a httpd or mod_ssl update can bring back the stock listeners: switch them off again at once
+%triggerin -- httpd, mod_ssl
+%{_libexecdir}/chp/nextcloud-httpd-stock-off >/dev/null 2>&1 || :
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -97,7 +109,7 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_sysconfdir}/nftables/chp-nextcloud-egress.nft
 %ghost %attr(0644,root,root) %{_sysconfdir}/chp/nextcloud-egress-addr.nft
 %{_unitdir}/chp-nextcloud-egress.service
-%{_libexecdir}/chp/nextcloud-egress-snapshot
+%{_libexecdir}/chp/nextcloud-egress-validate
 %{_sysconfdir}/systemd/system/php-fpm.service.d/chp-egress.conf
 %{_sysconfdir}/systemd/system/httpd.service.d/chp-egress.conf
 %{_libexecdir}/chp/nextcloud-httpd-stock-off
@@ -115,8 +127,17 @@ systemctl daemon-reload >/dev/null 2>&1 || :
 %{_prefix}/lib/chp/monitor.d/78-nextcloud-cert.sh
 %{_prefix}/lib/chp/monitor.d/79-nextcloud-egress.sh
 %dir %attr(0700,root,root) %{_sysconfdir}/pki/nextcloud
+%dir %attr(0700,root,root) %{_sharedstatedir}/chp/documents
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-2.chp
+- Review fixes: check 79 builds the expected table from the shipped files in a throwaway netns every run (no
+  snapshot to bless) and validates the rendered address file (one line, IPv4, = SERVER_IP), which the egress unit also
+  refuses to load otherwise; backup is a --link-dest incremental, prunes (min 2 copies) or fails loudly (check 77) on a
+  full /backup; suppressed alerts print "still failing"; rule 65 without ftype=; scriptlets; stock listeners/cgi-bin
+  off on httpd/mod_ssl update; LAN Require in <Location>; state under /var/lib/chp/documents; UMask on backup;
+  shared ACME lock and FQDN one-way door.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-1.chp
 - First release (ISO 0.7.0 Plan 2 Task 4): NextCloud httpd (8443, LAN include fails closed) and php-fpm pool, no-DNS egress
   table with BindsTo + pre-check drop-ins and a load-time snapshot, cron and backup timers, ACME certificate renewal,

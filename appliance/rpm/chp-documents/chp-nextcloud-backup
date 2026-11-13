@@ -10,28 +10,55 @@
 #   keep-days  print the retention in force
 set -Eeuo pipefail
 CONF=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
-B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=/data/nextcloud/data
+B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=${CHP_NC_DATA:-/data/nextcloud/data}; OCC=${CHP_OCC:-/usr/bin/occ}
+SD=${CHP_DOCS_STATE:-/var/lib/chp/documents}; MIN_KEEP=2
 keep_days() {
   local v; v=$(sed -n 's/^DOCUMENTS_BACKUP_DAYS=//p' "$CONF" 2>/dev/null | head -1)
   case $v in ''|*[!0-9]*|0) v=14 ;; esac
   echo "$v"
 }
 KEEP=$(keep_days)
-occ() { /usr/bin/occ "$@"; }
-log() { logger -t chp-nextcloud-backup -- "$*"; echo "$*"; }
+occ() { "$OCC" "$@"; }
+log() { logger -t chp-nextcloud-backup -- "$*" 2>/dev/null || :; echo "$*"; }
+status() { install -d -m 0700 "$SD"; printf '%s %s %s\n' "$1" "$(date +%s)" "$2" > "$SD/backup.status"; }
+stamps() { find "$B" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort; }   # UTC stamps sort oldest first
+free_kb() { df -Pk "$B" | awk 'NR==2{print $4}'; }
 case ${1:-backup} in
   keep-days) echo "$KEEP" ;;
   backup)
-    t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t; install -d -m 0700 "$B" "$o"
-    trap 'occ maintenance:mode --off >/dev/null 2>&1 || true' EXIT
+    install -d -m 0700 "$B"
+    prev=$(stamps | tail -1)
+    # Space first: a full /backup must not stop backups forever. Each night is an rsync --link-dest incremental plus a
+    # new database dump, but we require room for a whole copy of the last one; prune the oldest (keeping at least
+    # MIN_KEEP) until it fits, else fail loudly (status FAILED -> monitor check 77 ALERT).
+    if [ -n "$prev" ]; then
+      need=$(du -sk "$prev" | cut -f1)
+      while [ "$(free_kb)" -lt "$need" ] && [ "$(stamps | wc -l)" -gt "$MIN_KEEP" ]; do
+        old=$(stamps | head -1); log "low space on /backup: pruning the oldest copy $old"; rm -rf "$old"
+      done
+      if [ "$(free_kb)" -lt "$need" ]; then
+        log "backup FAILED: not enough space in $B ($(free_kb) kB free, last copy $need kB, only $(stamps | wc -l) copies kept)"
+        status FAILED "not enough space in $B ($(free_kb) kB free, last copy $need kB)"; exit 75
+      fi
+    fi
+    t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t
+    trap 'rc=$?; occ maintenance:mode --off >/dev/null 2>&1 || true; if [ $rc -ne 0 ]; then rm -rf "$o"; status FAILED "backup $t exited $rc"; fi' EXIT
+    install -d -m 0700 "$o"
     occ maintenance:mode --on >/dev/null
     runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
-    rsync -aHAX --numeric-ids "$D/" "$o/data/"
+    link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
+    rsync -aHAX --numeric-ids ${link[@]+"${link[@]}"} "$D/" "$o/data/"
     rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
-    occ maintenance:mode --off >/dev/null; trap - EXIT
+    occ maintenance:mode --off >/dev/null
     (cd "$o" && find . -type f ! -name MANIFEST -print0 | sort -z | xargs -0 sha256sum > MANIFEST)
-    find "$B" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP" -exec rm -rf {} +
-    log "backup $t: $(du -sh "$o" | cut -f1), $(wc -l < "$o/MANIFEST") files, keeping $KEEP days" ;;
+    # retention: older than KEEP days go, but never below MIN_KEEP copies
+    n=$(stamps | wc -l)
+    for d in $(stamps); do
+      [ "$n" -gt "$MIN_KEEP" ] || break
+      if [ -n "$(find "$d" -maxdepth 0 -mtime +"$KEEP")" ]; then rm -rf "$d"; n=$((n - 1)); fi
+    done
+    trap - EXIT; status OK "backup $t"
+    log "backup $t: $(du -sh "$o" | cut -f1), $(wc -l < "$o/MANIFEST") files, keeping $KEEP days (at least $MIN_KEEP copies)" ;;
   restore)
     o=${2:?restore DIR}; [ -s "$o/MANIFEST" ] || { echo "no MANIFEST in $o"; exit 1; }
     (cd "$o" && sha256sum --quiet -c MANIFEST) || { echo "MANIFEST check FAILED: not restoring"; exit 1; }

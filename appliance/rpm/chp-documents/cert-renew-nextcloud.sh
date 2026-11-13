@@ -12,13 +12,20 @@ C0=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
 FQDN=$(sed -n 's/^FQDN=//p' "$C0" | head -1)
 [ -n "$FQDN" ] || { logger -t cert-renew-nextcloud "no FQDN in $C0"; exit 1; }
 D=/etc/pki/nextcloud; C=$D/chain.pem; K=$D/key.pem
-install -d -m 0700 "$D"
+S=${CHP_DOCS_STATE:-/var/lib/chp/documents}
+install -d -m 0700 "$D" "$S"
+# One-way door (as cert-renew-kanidm): never request a certificate for a name NextCloud was not set up for.
+if [ -f "$S/fqdn" ] && [ "$(cat "$S/fqdn")" != "$FQDN" ]; then
+  logger -t cert-renew-nextcloud "refusing: NextCloud serves $(cat "$S/fqdn"), documents.conf now says $FQDN"; exit 1
+fi
 issue() {
+  # one ACME renewer at a time may hold :80 open (shared with cert-renew-kanidm)
+  exec 9>/run/chp-acme.lock; flock -w 300 9
   firewall-cmd -q --add-service=http
   if step-cli ca certificate "$FQDN" "$C" "$K" --provisioner acme --kty EC --crv P-384 --force >/dev/null; then rc=0; else rc=$?; fi
   firewall-cmd -q --remove-service=http || true
   [ "$rc" -eq 0 ] || return "$rc"
-  chmod 0600 "$C" "$K"; systemctl try-reload-or-restart httpd
+  printf "%s\n" "$FQDN" > "$S/fqdn"; chmod 0600 "$C" "$K"; systemctl try-reload-or-restart httpd
   logger -t cert-renew-nextcloud "issued a new certificate for $FQDN over ACME"
 }
 if [ "${1:-}" = --issue ] || [ ! -s "$C" ] || ! openssl x509 -in "$C" -noout -checkend 0 >/dev/null 2>&1; then

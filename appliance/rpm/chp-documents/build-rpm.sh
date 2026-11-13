@@ -8,7 +8,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../../.." && pwd)"
 ssh aero 'rm -rf /tmp/chpdoc && mkdir -p /tmp/chpdoc/SOURCES /tmp/chpdoc/SPECS /data/chp-release/built'
 scp -q "$here"/nextcloud-httpd.conf "$here"/nextcloud-lan.inc "$here"/nextcloud-fpm.conf "$here"/nextcloud-egress.nft \
-  "$here"/nextcloud-egress-addr.nft.example "$here"/chp-nextcloud-egress.service "$here"/nextcloud-egress-snapshot.sh \
+  "$here"/nextcloud-egress-addr.nft.example "$here"/chp-nextcloud-egress.service "$here"/nextcloud-egress-validate.sh \
   "$here"/nextcloud-bindsto.conf "$here"/nextcloud-bindsto-httpd.conf "$here"/nextcloud-httpd-stock-off.sh \
   "$here"/nextcloud-cron.service "$here"/nextcloud-cron.timer "$here"/chp-nextcloud-backup \
   "$here"/chp-nextcloud-backup.service "$here"/chp-nextcloud-backup.timer "$here"/cert-renew-nextcloud.sh \
