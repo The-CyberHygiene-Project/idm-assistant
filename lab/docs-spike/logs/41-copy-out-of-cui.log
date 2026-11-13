@@ -1,0 +1,65 @@
+  COPY CUI/CUI_copyout-240848.txt -> Operations/copied-240848.txt: HTTP 201; target exists True; tags on the target []
+    share to lab02: OCS 200 (OK); public link: OCS 200 (OK)
+    lab02 reads it: GET 200
+PASS COPY out of CUI to Operations possible (the bypass)
+  MOVE CUI/CUI_moveout-240848.txt -> Operations/moved-240848.txt: HTTP 201; target exists True; tags on the target ['CUI']
+    share to lab02: OCS 200 (OK); public link: OCS 200 (OK)
+    lab02 reads it: GET 200
+PASS MOVE out of CUI to Operations possible (the bypass)
+  COPY CUI/CUI_copyout-240848.txt -> copied-home-240848.txt: HTTP 201; target exists True; tags on the target []
+    share to lab02: OCS 200 (OK); public link: OCS 200 (OK)
+    lab02 reads it: GET 200
+PASS COPY out of CUI to home possible (the bypass)
+  MOVE CUI/CUI_moveout-240848.txt -> FCI/moved-fci-240848.txt: HTTP 404; target exists False; tags on the target None
+copyout: ALL PASS
+
+== control prototype: chp_foldertag 0.2.0 ContainListener (BeforeNodeCopied/Renamed -> AbortedEventException), contain = CUI, FCI, Archive
+b79b9330efa6d9653b8c31c731dc482da85973bc1fcde3b8ac0431b967abd873  /root/spike/setup.sh
+nextcloud-chp-35.0.3-0.spike5.el9.noarch
+Nextcloud or one of the apps require upgrade - only a limited number of commands are available
+You may use your browser or the occ upgrade command to do the upgrade
+  - chp_foldertag: 0.1.0
+Nextcloud or one of the apps require upgrade - only a limited number of commands are available
+You may use your browser or the occ upgrade command to do the upgrade
+Config value 'contain' for app 'chp_foldertag' is now set to '[1,2,3]', stored as mixed in fast cache
+denials before: 1
+  COPY CUI/CUI_copyout-a3e6df.txt -> Operations/copied-a3e6df.txt: HTTP 503; target exists False; tags on the target None
+PASS COPY out of CUI to Operations blocked
+  MOVE CUI/CUI_moveout-a3e6df.txt -> Operations/moved-a3e6df.txt: HTTP 503; target exists False; tags on the target None
+PASS MOVE out of CUI to Operations blocked
+  COPY CUI/CUI_copyout-a3e6df.txt -> copied-home-a3e6df.txt: HTTP 503; target exists False; tags on the target None
+PASS COPY out of CUI to home blocked
+  MOVE CUI/CUI_moveout-a3e6df.txt -> FCI/moved-fci-a3e6df.txt: HTTP 503; target exists False; tags on the target None
+copyout-blocked: ALL PASS
+-- inside the same folder still works:
+COPY CUI -> CUI/sub copy: 503 tags []
+MOVE Operations -> CUI (into containment) : 503
+Denied accesses: 1
+AVCs: 0
+
+== VOID: the run above hit 503 because the app version bump (0.1.0 -> 0.2.0) needs 'occ upgrade' first; NextCloud refused everything. Re-run after the upgrade:
+Turned off maintenance mode
+Resetting log level
+  - chp_foldertag: 0.2.0
+[1,2,3]
+  COPY CUI/CUI_copyout-60d16f.txt -> Operations/copied-60d16f.txt: HTTP 403; target exists False; tags on the target None
+PASS COPY out of CUI to Operations blocked
+  MOVE CUI/CUI_moveout-60d16f.txt -> Operations/moved-60d16f.txt: HTTP 403; target exists False; tags on the target None
+PASS MOVE out of CUI to Operations blocked
+  COPY CUI/CUI_copyout-60d16f.txt -> copied-home-60d16f.txt: HTTP 403; target exists False; tags on the target None
+PASS COPY out of CUI to home blocked
+  MOVE CUI/CUI_moveout-60d16f.txt -> FCI/moved-fci-60d16f.txt: HTTP 403; target exists False; tags on the target None
+copyout-blocked: ALL PASS
+-- inside the same folder, and into CUI:
+PUT CUI/in: 201
+COPY CUI -> CUI: 201 tags ['CUI']
+MOVE Operations -> CUI: 201 tags ['CUI']
+residual: lab01 downloads the CUI file: 200
+residual: and uploads the same bytes to Operations: 201 -> share: 200
+nextcloud.log: 2 chp_foldertag: REFUSED move out of contained team folder 1: /lab01/files/CUI/CUI_moveout-60d16f.txt -> /lab01/files/FCI/moved-fci-60d16f.txt
+nextcloud.log: 2 rename process aborted
+Denied accesses: 1
+cleanup: DELETE Operations/copied-240848.txt 204
+cleanup: DELETE Operations/moved-240848.txt 204
+cleanup: DELETE Operations/reuploaded-71e3c9.txt 204
+cleanup: DELETE copied-home-240848.txt 204

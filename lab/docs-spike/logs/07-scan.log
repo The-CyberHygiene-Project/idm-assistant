@@ -1,0 +1,5 @@
+PASS iso5-docs: oscap evaluated (oscap-rc=2)
+iso5-docs: 2 failing, 108 passing
+PASS iso5-dcli: oscap evaluated (oscap-rc=2)
+iso5-dcli: 2 failing, 108 passing
+PASS scan results hold no secrets

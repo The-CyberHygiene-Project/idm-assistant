@@ -1,0 +1,7 @@
+PASS iso5-dcli: installed from the ISO
+PASS iso5-dcli: first boot unlocked
+PASS iso5-dcli: client first boot finished
+PASS iso5-dcli: AIDE baseline built at first boot
+PASS iso5-dcli: aide-pin
+PASS iso5-dcli: stick detached
+PASS iso5-dcli: kanidm-unixd online

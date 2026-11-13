@@ -1,0 +1,13 @@
+T0=11/12/2026 16:34:44
++ occ security:certificates:import /etc/pki/ca-trust/source/anchors/chp-root.crt
++ occ config:system:set allow_local_remote_servers --type=boolean --value=true
+System config value allow_local_remote_servers set to boolean true
++ occ config:app:set --value=0 user_oidc allow_multiple_user_backends
+Config value 'allow_multiple_user_backends' for app 'user_oidc' is now set to '0', stored as mixed in fast cache
++ occ user_oidc:provider
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| ID | Identifier | Discovery endpoint                                                                 | End session endpoint | Client ID |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| 1  | kanidm     | https://idm.docs.lab.test/oauth2/openid/nextcloud/.well-known/openid-configuration |                      | nextcloud |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+Denied accesses: 8

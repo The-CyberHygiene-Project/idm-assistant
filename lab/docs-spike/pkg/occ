@@ -1,0 +1,3 @@
+#!/bin/bash
+# occ (SPIKE): NextCloud's command line as the web server user.
+exec runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ "$@"

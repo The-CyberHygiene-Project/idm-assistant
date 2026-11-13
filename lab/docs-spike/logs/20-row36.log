@@ -1,0 +1,49 @@
+success
+ga-enrol rc=0
+400 root unconfined_u:object_r:var_auth_t:s0
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib64/python3.9/base64.py", line 205, in b32decode
+    raise binascii.Error('Incorrect padding')
+binascii.Error: Incorrect padding
+row 36 run 1: gdm-password lab01 (POSIX password + GA code) rc=1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib64/python3.9/base64.py", line 205, in b32decode
+    raise binascii.Error('Incorrect padding')
+binascii.Error: Incorrect padding
+row 36 run 2: gdm-password lab01 (POSIX password + GA code) rc=1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib64/python3.9/base64.py", line 205, in b32decode
+    raise binascii.Error('Incorrect padding')
+binascii.Error: Incorrect padding
+row 36 run 3: gdm-password lab01 (POSIX password + GA code) rc=1
+label unconfined_u:object_r:var_auth_t:s0
+(re-run: the first attempt's inline TOTP helper lacked base32 padding, so no code was sent; host unchanged)
+row 36 run 1: gdm-password lab01 (POSIX password + GA code) rc=1
+row 36 run 2: gdm-password lab01 (POSIX password + GA code) rc=1
+row 36 run 3: gdm-password lab01 (POSIX password + GA code) rc=1
+label unconfined_u:object_r:var_auth_t:s0
+(re-run 2: the prompts are 'Verification code:' then 'Password:'; the code goes first)
+row 36 run 1: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+row 36 run 2: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+row 36 run 3: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+label unconfined_u:object_r:var_auth_t:s0
+(re-run 3: three prompts: 'Verification code:', 'Password:' (pam_unix), 'Password:' (pam_kanidm); answers: code, password, password)
+row 36 run 1: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+row 36 run 2: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+row 36 run 3: PAM_FAIL Authentication failure prompts=Verification code:|Password:|Password:
+rc=1
+label unconfined_u:object_r:var_auth_t:s0
+== my first three runs sent no code (helper bug) and pam_faillock locked lab01 (deny=3, unlock_time=0: correct CUI behaviour); every later run failed on the lock even when GA and Kanidm accepted. Admin reset, then the real row 36:
+faillock reset for lab01
+row 36 run 1: PAM_OK prompts=Verification code:|Password:
+row 36 run 2: PAM_OK prompts=Verification code:|Password:
+row 36 run 3: PAM_OK prompts=Verification code:|Password:
+GA token label unconfined_u:object_r:var_auth_t:s0

@@ -1,0 +1,25 @@
+== iso5-docs, allow_filesystem_mark=1. Counters: FANOTIFY = audit records (ausearch -m FANOTIFY), DENIED = fapolicyd-cli --check-status
+before: FANOTIFY=9 DENIED=0
+-- A. daemon denial: rule 65 removed for the test, php-fpm (auid unset) opens an untrusted .php
+after rule removal: FANOTIFY=9 DENIED=0
+php-fpm download of Operations/form.php: 200
+after php-fpm denial: FANOTIFY=9 DENIED=0
+rule 65 restored: FANOTIFY=9 DENIED=0
+php-fpm download of Operations/form.php: 200
+-- B. admin-session denial: chpadmin (auid 1000) -> sudo -> runuser -u apache head of the same file
+head rc=1
+after admin-session denial: FANOTIFY=10 DENIED=1
+-a always,exit -F arch=b32 -S openat,open_by_handle_at -F a2&0x40 -F exit=-EACCES -F auid>=1000 -F auid!=-1 -F key=unsuccessful-create
+-a always,exit -F arch=b64 -S openat,open_by_handle_at -F a2&0x40 -F exit=-EACCES -F auid>=1000 -F auid!=-1 -F key=unsuccessful-create
+-a always,exit -F arch=b32 -S open -F a1&0x40 -F exit=-EACCES -F auid>=1000 -F auid!=-1 -F key=unsuccessful-create
+-a always,exit -F arch=b64 -S open -F a1&0x40 -F exit=-EACCES -F auid>=1000 -F auid!=-1 -F key=unsuccessful-create
+
+== A again: the first try returned 200 because 'fagenrules --load' does not drop fapolicyd's decision cache; now rule 65 removed AND fapolicyd restarted
+allow_filesystem_mark = 1
+after restart: FANOTIFY=10 DENIED=0
+php-fpm download of Operations/form.php: 503
+after php-fpm denial: FANOTIFY=12 DENIED=2
+rule 65 restored + restart: FANOTIFY=12 DENIED=0
+php-fpm download of Operations/form.php: 200
+B again: admin-session head rc=1
+after admin-session denial: FANOTIFY=13 DENIED=1

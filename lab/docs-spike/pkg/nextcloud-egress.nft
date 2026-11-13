@@ -1,0 +1,20 @@
+# nextcloud-egress.nft (SPIKE): NextCloud runs as the web server user (apache: php-fpm workers, cron, occ).
+# That user may open connections ONLY to this server itself; anything else is logged and refused.
+# @SERVER_IP@ is filled in by spike.sh. A separate table: firewalld's own table is left alone.
+# Positive match on the socket owner: packets with no socket (the kernel's own IGMP/MLD/ND) never match
+# (a first version used "meta skuid != apache accept", which does not match socket-less packets and refused them).
+table inet chp_nextcloud_egress
+delete table inet chp_nextcloud_egress
+table inet chp_nextcloud_egress {
+    chain output {
+        type filter hook output priority filter; policy accept;
+        meta skuid "apache" jump apache_out
+    }
+    chain apache_out {
+        oifname "lo" accept
+        ip daddr { 127.0.0.0/8, @SERVER_IP@ } accept
+        ip6 daddr ::1 accept
+        ct state established,related accept
+        log prefix "CHP-NC-EGRESS " level warn flags skuid counter reject
+    }
+}

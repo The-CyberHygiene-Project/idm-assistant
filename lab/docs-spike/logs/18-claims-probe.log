@@ -1,0 +1,17 @@
++ kanidm system oauth2 create claimprobe Claims probe (spike) https://files.docs.lab.test:8443 -D idm_admin
+Success
++ kanidm system oauth2 add-redirect-url claimprobe https://files.docs.lab.test:8443/claimprobe -D idm_admin
+Success
++ kanidm system oauth2 update-scope-map claimprobe chp_users openid profile email groups -D idm_admin
+Success
++ kanidm system oauth2 prefer-short-username claimprobe -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map claimprobe chp_groups cui-users cui-users -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map claimprobe chp_groups doc-reviewers doc-reviewers -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map-join claimprobe chp_groups array -D idm_admin
+Success
+ID TOKEN header: {"alg": "ES256"}
+ID TOKEN claims: {"aud": "claimprobe", "auth_time": 1794526770, "azp": "claimprobe", "chp_groups": ["cui-users", "doc-reviewers"], "exp": 1794527670, "groups": ["00000000-0000-0000-0000-000000000035", "idm_all_persons@idm.docs.lab.test", "00000000-0000-0000-0000-000000000036", "idm_all_accounts@idm.docs.lab.test", "00000000-0000-0000-0000-000000000048", "idm_people_self_name_write@idm.docs.lab.test", "cf7b2371-3c3b-4ab5-b50f-32c38195b952", "chp_users@idm.docs.lab.test", "f415b908-afa5-42ba-9032-78991fe8656d", "cui-users@idm.docs.lab.test", "cb87689c-202e-4405-b05f-44b3c98d6de2", "doc-reviewers@idm.docs.lab.test"], "iat": 1794526770, "iss": "https://idm.docs.lab.test/oauth2/openid/claimprobe", "jti": "de2fcd14-056d-437a-85fe-5d96db8029d3", "name": "Docs Lab 04", "nbf": 1794526770, "preferred_username": "lab04", "scopes": ["email", "groups", "openid", "profile"], "sub": "d46fdb47-2277-447f-aec1-a6edea8a1421", "updated_at": 1794526770}
++ kanidm system oauth2 delete claimprobe: Success

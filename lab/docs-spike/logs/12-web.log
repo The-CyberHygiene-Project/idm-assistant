@@ -1,0 +1,27 @@
+192.168.100.53  files.docs.lab.test
+[32m[32m✔[0m [1mProvisioner[0m[1m:[0m acme (ACME)
+Using Standalone Mode HTTP challenge to validate files.docs.lab.test . done!
+Waiting for Order to be 'ready' for finalization .. done!
+Finalizing Order .. done!
+[32m[32m✔[0m [1mCertificate[0m[1m:[0m /etc/pki/nextcloud/chain.pem
+[32m[32m✔[0m [1mPrivate Key[0m[1m:[0m /etc/pki/nextcloud/key.pem
+subject=CN=files.docs.lab.test
+issuer=O=docs.lab.test CA, CN=docs.lab.test CA Intermediate CA
+notAfter=Nov 13 23:23:00 2026 GMT
+Denied accesses: 8
+== fix: httpd listened on 80 and 443 (mod_ssl ssl.conf) -> only 8443
+subject=CN=files.docs.lab.test
+issuer=O=docs.lab.test CA, CN=docs.lab.test CA Intermediate CA
+notAfter=Nov 13 23:23:00 2026 GMT
+rule family="ipv4" source address="192.168.100.54/32" port port="1514" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.0" port port="8443" protocol="tcp" accept
+status.php over TLS: 200
+192.168.100.53:443 users:(("kanidmd",pid=1730,fd=19))
+*:8443 users:(("httpd",pid=10636,fd=5),("httpd",pid=10635,fd=5),("httpd",pid=10634,fd=5),("httpd",pid=10631,fd=5))
+Denied accesses: 8
+0
+rule family="ipv4" source address="192.168.100.0/24" port port="8443" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.54/32" port port="1514" protocol="tcp" accept
+status.php over TLS: 200
+(fix: chp-site get SUBNET returns the network without /24; rule re-made from site.conf)
+from aero (LAN 192.168.100.1): 200

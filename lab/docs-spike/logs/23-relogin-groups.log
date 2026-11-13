@@ -1,0 +1,12 @@
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+SIGNED IN: id=lab02 display='Docs Lab 02' groups=['chp-users'] backend=user_oidc
+SIGNED IN: id=lab03 display='Docs Lab 03' groups=['chp-users', 'doc-reviewers'] backend=user_oidc
+SIGNED IN: id=lab04 display='Docs Lab 04' groups=['chp-users', 'cui-users', 'doc-reviewers'] backend=user_oidc
+Enter the account password: app password for lab01 stored (0600, not printed)
+Enter the account password: app password for lab02 stored (0600, not printed)
+Enter the account password: app password for lab03 stored (0600, not printed)
+Enter the account password: app password for lab04 stored (0600, not printed)
+app password for lab01 stored (0600, not printed)
+app password for lab02 stored (0600, not printed)
+app password for lab03 stored (0600, not printed)
+app password for lab04 stored (0600, not printed)

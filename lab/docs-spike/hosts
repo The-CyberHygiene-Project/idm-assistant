@@ -1,0 +1,3 @@
+# docs spike lab site (ISO 0.7.0 Plan 1 Task 1): its own site, because a site has exactly one server (hosts.py).
+52:54:00:c4:05:53  iso5-docs  192.168.100.53  server
+52:54:00:c4:05:54  iso5-dcli  192.168.100.54  client

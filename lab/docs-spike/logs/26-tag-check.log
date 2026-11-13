@@ -1,0 +1,34 @@
+c2ff2c9a8319acd2aa24d0d099091955842c918dc11d83c6e3b3bf554a7b6986  /root/spike/setup.sh
+nextcloud-chp-35.0.3-0.spike4.el9.noarch
+No syntax errors detected in /usr/lib/nextcloud/apps/chp_foldertag/lib/Command/Check.php
+== nightly check, all tagged:
+OK 4 files checked, 0 untagged, 2 rule(s)
+rc=0
+== negative 1: a file put straight into the CUI storage on disk + files:scan (no upload event)
+UNTAGGED folder 1 file 80 files/CUI_dropped-on-disk.txt
+FAIL 5 files checked, 1 untagged, 2 rule(s)
+rc=1
+== negative 2: the tagging app switched off, then an upload
+chp_foldertag 0.1.0 disabled
+upload with the app off: PUT 201
+
+                                                                   
+  There are no commands defined in the "chp:foldertag" namespace.  
+                                                                   
+
+rc=1
+chp_foldertag 0.1.0 enabled
+== after re-enabling:
+UNTAGGED folder 1 file 80 files/CUI_dropped-on-disk.txt
+UNTAGGED folder 1 file 81 files/CUI_uploaded-while-off.txt
+FAIL 6 files checked, 2 untagged, 2 rule(s)
+rc=1
+total 76
+drwxr-x---.  2 apache apache    44 Nov 12 16:58 .
+drwxr-xr-x. 21 root   root    4096 Nov 12 16:18 ..
+-rw-r--r--.  1 apache apache     0 Nov 12 16:21 audit.log
+-rw-r-----.  1 apache apache 72899 Nov 12 16:50 nextcloud.log
+0
+== finding: audit.log was EMPTY: admin_audit writes at level 1 and loglevel=2 dropped it; fix: log.condition apps=[admin_audit]. App disable/enable now audited:
+2026-11-13T00:00:41+00:00 App "chp_foldertag" disabled
+2026-11-13T00:00:42+00:00 App "chp_foldertag" enabled

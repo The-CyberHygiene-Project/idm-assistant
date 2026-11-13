@@ -1,0 +1,6 @@
+54df6f8902f3d68dfa79e9b910c663ab7e95a23f93fdf2213ee44f89d35d7059  /root/spike/nextcloud-chp-35.0.3-0.spike3.el9.noarch.rpm
+eb447959b7f811dda5e34e6b9b1162543a951f81d21ca1abeb3c118f56d6a0f1  /root/spike/setup.sh
+nextcloud-chp-35.0.3-0.spike3.el9.noarch
+rpm files: 33880  in trust db: 25079
+system_u:object_r:httpd_sys_content_t:s0 /usr/lib/nextcloud
+#!/us occ readable

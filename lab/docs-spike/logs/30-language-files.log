@@ -1,0 +1,10 @@
+Operations/tool.py: upload 201, download 200, bytes ok True
+Operations/page.js: upload 201, download 200, bytes ok True
+Operations/form.php: upload 201, download 200, bytes ok True
+Operations/script.sh: upload 201, download 200, bytes ok True
+Denied accesses: 8
+text/x-script.python text/plain text/x-php text/x-shellscript == after a fapolicyd restart (empty caches):
+Operations/tool.py: download 200 (42 bytes)
+Operations/form.php: download 200 (16 bytes)
+Operations/page.js: download 200 (65 bytes)
+Denied accesses: 0

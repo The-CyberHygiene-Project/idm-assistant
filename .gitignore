@@ -16,3 +16,4 @@ appliance/chp-site/dist/
 lab/iso5/scan-results/*.xml
 lab/aide/.t0
 lab/iso5/.quiet-t0
+lab/docs-spike/scan-results/**/*.xml

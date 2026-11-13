@@ -1,0 +1,6 @@
+PASS server first boot finished
+PASS server AIDE baseline built at first boot
+PASS fapolicyd no denials
+PASS SELinux no AVC since boot
+  chp <1.82t 342.98g
+PASS iso5-docs: stick detached

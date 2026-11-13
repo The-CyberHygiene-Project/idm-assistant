@@ -1,0 +1,6 @@
+[Unit]
+Description=CHP: nightly NextCloud backup into /backup (SPIKE)
+After=postgresql.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/chp-nextcloud-backup backup

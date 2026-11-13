@@ -1,0 +1,8 @@
+nextcloud-chp-35.0.3-0.spike5.el9.noarch.rpm 250603808 bytes, 33896 files, os=linux noarch zstd
+894520f501dedb3119f138d5409a780e91fca8010ed9ed51bb4cd6ae7df55586  nextcloud-chp-35.0.3-0.spike5.el9.noarch.rpm
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+

@@ -1,0 +1,4 @@
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+Denied accesses: 8
+0

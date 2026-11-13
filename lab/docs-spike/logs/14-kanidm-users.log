@@ -1,0 +1,37 @@
++ kanidm group create cui-users -D idm_admin
+Successfully created group 'cui-users'
++ kanidm group create doc-reviewers -D idm_admin
+Successfully created group 'doc-reviewers'
++ kanidm person create lab01 Docs Lab 01 -D idm_admin
+Successfully created display_name="Docs Lab 01" username=lab01
++ kanidm group add-members chp_users lab01 -D idm_admin
+Successfully added ["lab01"] to group "chp_users"
++ kanidm group add-members cui-users lab01 -D idm_admin
+Successfully added ["lab01"] to group "cui-users"
++ kanidm person posix set lab01 -D idm_admin
++ kanidm person credential create-reset-token lab01 -D idm_admin
+PASS lab01: Kanidm person, password + TOTP + POSIX; groups: chp_users cui-users
++ kanidm person create lab02 Docs Lab 02 -D idm_admin
+Successfully created display_name="Docs Lab 02" username=lab02
++ kanidm group add-members chp_users lab02 -D idm_admin
+Successfully added ["lab02"] to group "chp_users"
++ kanidm person credential create-reset-token lab02 -D idm_admin
+PASS lab02: Kanidm person, password + TOTP; groups: chp_users 
++ kanidm person create lab03 Docs Lab 03 -D idm_admin
+Successfully created display_name="Docs Lab 03" username=lab03
++ kanidm group add-members chp_users lab03 -D idm_admin
+Successfully added ["lab03"] to group "chp_users"
++ kanidm group add-members doc-reviewers lab03 -D idm_admin
+Successfully added ["lab03"] to group "doc-reviewers"
++ kanidm person credential create-reset-token lab03 -D idm_admin
+PASS lab03: Kanidm person, password + TOTP; groups: chp_users doc-reviewers
++ kanidm person create lab04 Docs Lab 04 -D idm_admin
+Successfully created display_name="Docs Lab 04" username=lab04
++ kanidm group add-members chp_users lab04 -D idm_admin
+Successfully added ["lab04"] to group "chp_users"
++ kanidm group add-members doc-reviewers lab04 -D idm_admin
+Successfully added ["lab04"] to group "doc-reviewers"
++ kanidm group add-members cui-users lab04 -D idm_admin
+Successfully added ["lab04"] to group "cui-users"
++ kanidm person credential create-reset-token lab04 -D idm_admin
+PASS lab04: Kanidm person, password + TOTP; groups: chp_users doc-reviewers cui-users

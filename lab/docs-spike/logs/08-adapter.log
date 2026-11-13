@@ -1,0 +1,5 @@
+PASS iso5-docs: lab adapter sudo rule
+PASS iso5-dcli: lab adapter sudo rule
+PASS idm_admin secret file (0600)
+PASS docs: sudo works
+PASS dcli: sudo works

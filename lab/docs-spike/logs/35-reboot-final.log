@@ -1,0 +1,31 @@
+== reboot
+Domain 'iso5-docs' is being rebooted
+
+2026-11-12 17:09:53
+active active active active active active active active active 
+table inet firewalld table inet chp_nextcloud_egress 
+failed units: 0
+Denied accesses: 0
+AVCs since boot: 0
+== full proof run after the reboot (fapolicyd counter starts at 0 at boot)
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab02 display='Docs Lab 02' groups=['chp-users'] backend=user_oidc
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab03 display='Docs Lab 03' groups=['chp-users', 'doc-reviewers'] backend=user_oidc
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab04 display='Docs Lab 04' groups=['chp-users', 'cui-users', 'doc-reviewers'] backend=user_oidc
+after reboot: browser-style chunked upload of 7 MB into CUI: MKCOL 201, MOVE 201; tags ['CUI']
+after reboot: WebDAV PUT into FCI: 201; tags ['FCI']
+share: ALL PASS
+see: ALL PASS
+tags: ALL PASS
+curl: (7) Failed to connect to 1.1.1.1 port 443: Connection refused
+egress refusals logged since boot: 16
+backup 20261113T001238Z: 9.3M, 48 files
+OK 8 files checked, 0 untagged, 2 rule(s)
+== totals since boot
+Allowed accesses: 63621
+Denied accesses: 0
+AVC records since boot: 0

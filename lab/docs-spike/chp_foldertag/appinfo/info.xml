@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>chp_foldertag</id>
+	<name>CHP folder tags</name>
+	<summary>Tag every file that arrives in a configured team folder (CUI, FCI) with that folder's system tag.</summary>
+	<description>Spike (ISO 0.7.0 Plan 1): rules = app config chp_foldertag/rules, JSON {"team folder id": system tag id}. occ chp:foldertag:check lists untagged files.</description>
+	<version>0.2.0</version>
+	<licence>agpl</licence>
+	<author>CyberHygiene Project</author>
+	<namespace>ChpFolderTag</namespace>
+	<category>files</category>
+	<dependencies>
+		<nextcloud min-version="35" max-version="35"/>
+	</dependencies>
+	<commands>
+		<command>OCA\ChpFolderTag\Command\Check</command>
+	</commands>
+</info>

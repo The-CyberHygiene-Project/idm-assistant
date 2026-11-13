@@ -1,0 +1,15 @@
+  GET files.docs.lab.test:8443/index.php/apps/user_oidc/login/1 -> 303
+  GET idm.docs.lab.test/ui/oauth2 -> 200
+  form /ui/login/begin fields=['password', 'totp', 'username']
+  POST idm.docs.lab.test/ui/login/begin -> 200
+  form /ui/login/totp fields=['password', 'totp']
+  POST idm.docs.lab.test/ui/login/totp -> 200
+  form /ui/login/pw fields=['password']
+  POST idm.docs.lab.test/ui/login/pw -> 303
+  GET idm.docs.lab.test/ui/oauth2/resume -> 200
+  form /ui/oauth2/consent fields=['consent_token']
+  POST idm.docs.lab.test/ui/oauth2/consent -> 303
+  GET files.docs.lab.test:8443/index.php/apps/user_oidc/code -> 303
+  GET files.docs.lab.test:8443/index.php/apps/files/ -> 200
+  GET files.docs.lab.test:8443/ocs/v2.php/cloud/user -> 200
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['cui-users'] backend=user_oidc

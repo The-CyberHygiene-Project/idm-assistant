@@ -1,0 +1,34 @@
+== docs: processes NOT in init's mount namespace (lsns -t mnt), with their systemd unit
+      1 chronyd.service
+      2 dbus-broker.service
+      6 httpd.service
+      1 irqbalance.service
+      1 kanidmd.service
+      1 kanidm-unixd.service
+      1 kanidm-unixd-tasks.service
+      1 ModemManager.service
+      1 named.service
+      1 NetworkManager.service
+      4 php-fpm.service
+      1 rsyslog.service
+      1 step-ca.service
+      1 suricata.service
+      1 systemd-logind.service
+      1 systemd-udevd.service
+      1 usbguard.service
+== dcli: processes NOT in init's mount namespace (lsns -t mnt), with their systemd unit
+      1 chronyd.service
+      2 dbus-broker.service
+      1 irqbalance.service
+      1 kanidm-unixd.service
+      1 kanidm-unixd-tasks.service
+      1 ModemManager.service
+      1 NetworkManager.service
+      1 rsyslog.service
+      1 suricata.service
+      1 systemd-logind.service
+      1 systemd-udevd.service
+      1 usbguard.service
+docs fapolicyd: allow_filesystem_mark = 1 (docs: changed to 1 by the spike; dcli: as installed)
+dcli fapolicyd: allow_filesystem_mark = 0 (docs: changed to 1 by the spike; dcli: as installed)
+(note: wazuh-manager/wazuh-agent are NOT in a private namespace on either host)

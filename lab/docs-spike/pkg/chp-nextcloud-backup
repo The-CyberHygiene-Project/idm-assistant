@@ -1,0 +1,35 @@
+#!/bin/bash
+# chp-nextcloud-backup [backup|restore DIR] (SPIKE; root; chp-nextcloud-backup.timer nightly):
+#   backup   maintenance mode on -> pg_dump (peer auth, no password) + rsync of the data dir and /etc/nextcloud into
+#            /backup/nextcloud/<UTC stamp>/ -> maintenance off; keeps KEEP_DAYS (default 14) copies; MANIFEST with sha256
+#   restore  the reverse onto a reset server (NextCloud package installed, database empty or absent)
+set -Eeuo pipefail
+B=/backup/nextcloud; D=/data/nextcloud/data; KEEP=${KEEP_DAYS:-14}
+occ() { /usr/bin/occ "$@"; }
+log() { logger -t chp-nextcloud-backup -- "$*"; echo "$*"; }
+case ${1:-backup} in
+  backup)
+    t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t; install -d -m 0700 "$o"
+    trap 'occ maintenance:mode --off >/dev/null 2>&1 || true' EXIT
+    occ maintenance:mode --on >/dev/null
+    runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
+    rsync -aHAX --numeric-ids "$D/" "$o/data/"
+    rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
+    occ maintenance:mode --off >/dev/null; trap - EXIT
+    (cd "$o" && find . -type f ! -name MANIFEST -print0 | sort -z | xargs -0 sha256sum > MANIFEST)
+    find "$B" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP" -exec rm -rf {} +
+    log "backup $t: $(du -sh "$o" | cut -f1), $(wc -l < "$o/MANIFEST") files" ;;
+  restore)
+    o=${2:?restore DIR}; [ -s "$o/MANIFEST" ] || { echo "no MANIFEST in $o"; exit 1; }
+    (cd "$o" && sha256sum --quiet -c MANIFEST) || { echo "MANIFEST check FAILED: not restoring"; exit 1; }
+    systemctl stop httpd php-fpm nextcloud-cron.timer
+    runuser -u postgres -- psql -qc "DROP DATABASE IF EXISTS nextcloud" -c "CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING 'UTF8'"
+    runuser -u postgres -- pg_restore -d nextcloud --no-owner --role=apache < "$o/nextcloud.pgdump"   # stdin: the dir is root-only
+    install -d -m 0750 -o apache -g apache /data/nextcloud "$D"
+    rsync -aHAX --numeric-ids --delete "$o/data/" "$D/"
+    rsync -aHAX --numeric-ids "$o/etc-nextcloud/" /etc/nextcloud/
+    restorecon -R /data/nextcloud /etc/nextcloud
+    systemctl start php-fpm httpd nextcloud-cron.timer
+    occ maintenance:mode --off >/dev/null; occ maintenance:data-fingerprint >/dev/null
+    log "restored from $o" ;;
+esac

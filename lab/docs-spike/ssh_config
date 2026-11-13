@@ -1,0 +1,19 @@
+# docs spike site (lab/docs-spike): admin = chpadmin + the lab adapter sudo rule (after the CUI scan).
+Host aero
+    HostName 192.168.100.1
+    User itadmin
+    IdentityFile ~/.ssh/aero_ecdsa
+    LogLevel ERROR
+    IdentitiesOnly yes
+Host docs dcli
+    ProxyJump aero
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+    User chpadmin
+    IdentityFile ~/idm-lab-secrets/iso2_chpadmin
+Host docs
+    HostName 192.168.100.53
+Host dcli
+    HostName 192.168.100.54

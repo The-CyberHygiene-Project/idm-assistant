@@ -1,0 +1,195 @@
++ kanidm system oauth2 update-claim-map nextcloud chp_groups chp_users chp-users -D idm_admin
+Success
++ occ user_oidc:provider kanidm --group-whitelist-regex=^(cui-users|doc-reviewers|chp-users)$
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "<string>", line 1, in <listcomp>
+KeyError: 'settings'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create CUI
++ occ groupfolders:group 1 cui-users read write create delete
+Unable to parse permissions input: read write create delete
++ occ groupfolders:permissions 1 --enable
++ occ groupfolders:permissions 1 --group doc-reviewers -- / +read -write -create -delete -share
+folder CUI = id 1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create FCI
++ occ groupfolders:group 2 cui-users read write create delete
+Unable to parse permissions input: read write create delete
++ occ groupfolders:permissions 2 --enable
++ occ groupfolders:permissions 2 --group doc-reviewers -- / +read -write -create -delete -share
+folder FCI = id 2
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create Archive
++ occ groupfolders:group 3 cui-users read write create delete
+Unable to parse permissions input: read write create delete
++ occ groupfolders:permissions 3 --enable
++ occ groupfolders:permissions 3 --group doc-reviewers -- / +read -write -create -delete -share
+folder Archive = id 3
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create Operations
++ occ groupfolders:group 4 chp-users read write create delete share
+group/team not found: chp-users
++ occ groupfolders:permissions 4 --enable
++ occ groupfolders:permissions 4 --group doc-reviewers -- / +read -write -create -delete -share
+folder Operations = id 4
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create Internal
++ occ groupfolders:group 5 chp-users read write create delete share
+group/team not found: chp-users
++ occ groupfolders:permissions 5 --enable
++ occ groupfolders:permissions 5 --group doc-reviewers -- / +read -write -create -delete -share
+folder Internal = id 5
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ groupfolders:create Public
++ occ groupfolders:group 6 chp-users read write create delete share
+group/team not found: chp-users
++ occ groupfolders:permissions 6 --enable
++ occ groupfolders:permissions 6 --group doc-reviewers -- / +read -write -create -delete -share
+folder Public = id 6
++ occ tag:add CUI restricted
+  - id: 1
+  - name: CUI
+  - access: restricted
++ occ tag:add FCI restricted
+  - id: 2
+  - name: FCI
+  - access: restricted
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; n=sys.argv[1]; print(next((str(f["id"]) for f in json.load(sys.stdin).values() if f["mount_point"]==n), ""))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'
++ occ config:app:set chp_foldertag rules --value={"":"1","":"2"}
+Config value 'rules' for app 'chp_foldertag' is now set to '{"":"1","":"2"}', stored as mixed in fast cache
+tag ids: CUI=1 FCI=2; rules={"":"1","":"2"}
++-----------+------------+--------+-----------+------+----------------------+-----------------------------+
+| Folder Id | Name       | Groups | Quota     | Size | Advanced Permissions | Manage advanced permissions |
++-----------+------------+--------+-----------+------+----------------------+-----------------------------+
+| 1         | CUI        |        | Unlimited | 0    | Enabled              |                             |
+| 2         | FCI        |        | Unlimited | 0    | Enabled              |                             |
+| 3         | Archive    |        | Unlimited | 0    | Enabled              |                             |
+| 4         | Operations |        | Unlimited | 0    | Enabled              |                             |
+| 5         | Internal   |        | Unlimited | 0    | Enabled              |                             |
+| 6         | Public     |        | Unlimited | 0    | Enabled              |                             |
++-----------+------------+--------+-----------+------+----------------------+-----------------------------+
+  - 1:
+    - name: CUI
+    - access: restricted
+  - 2:
+    - name: FCI
+    - access: restricted
+== re-run after fixes (permission names: read write share delete; json key mountPoint; chp-users group made first)
++ kanidm system oauth2 update-claim-map nextcloud chp_groups chp_users chp-users -D idm_admin
+Success
++ occ user_oidc:provider kanidm --group-whitelist-regex=^(cui-users|doc-reviewers|chp-users)$
++ occ group:add chp-users
+Created group "chp-users"
++ occ groupfolders:group 1 cui-users read write delete
++ occ groupfolders:permissions 1 --enable
++ occ groupfolders:permissions 1 --group doc-reviewers -- / +read -write -create -delete -share
+folder CUI = id 1
++ occ groupfolders:group 2 cui-users read write delete
++ occ groupfolders:permissions 2 --enable
++ occ groupfolders:permissions 2 --group doc-reviewers -- / +read -write -create -delete -share
+folder FCI = id 2
++ occ groupfolders:group 3 cui-users read write delete
++ occ groupfolders:permissions 3 --enable
++ occ groupfolders:permissions 3 --group doc-reviewers -- / +read -write -create -delete -share
+folder Archive = id 3
++ occ groupfolders:group 4 chp-users read write delete share
++ occ groupfolders:permissions 4 --enable
++ occ groupfolders:permissions 4 --group doc-reviewers -- / +read -write -create -delete -share
+folder Operations = id 4
++ occ groupfolders:group 5 chp-users read write delete share
++ occ groupfolders:permissions 5 --enable
++ occ groupfolders:permissions 5 --group doc-reviewers -- / +read -write -create -delete -share
+folder Internal = id 5
++ occ groupfolders:group 6 chp-users read write delete share
++ occ groupfolders:permissions 6 --enable
++ occ groupfolders:permissions 6 --group doc-reviewers -- / +read -write -create -delete -share
+folder Public = id 6
++ occ config:app:set chp_foldertag rules --value={"1":"1","2":"2"}
+Config value 'rules' for app 'chp_foldertag' is now set to '{"1":"1","2":"2"}', stored as mixed in fast cache
+tag ids: CUI=1 FCI=2; rules={"1":"1","2":"2"}
++-----------+------------+-------------+-----------+------+----------------------+-----------------------------+
+| Folder Id | Name       | Groups      | Quota     | Size | Advanced Permissions | Manage advanced permissions |
++-----------+------------+-------------+-----------+------+----------------------+-----------------------------+
+| 1         | CUI        | cui-users:  | Unlimited | 0    | Enabled              |                             |
+| 2         | FCI        | cui-users:  | Unlimited | 0    | Enabled              |                             |
+| 3         | Archive    | cui-users:  | Unlimited | 0    | Enabled              |                             |
+| 4         | Operations | chp-users:  | Unlimited | 0    | Enabled              |                             |
+| 5         | Internal   | chp-users:  | Unlimited | 0    | Enabled              |                             |
+| 6         | Public     | chp-users:  | Unlimited | 0    | Enabled              |                             |
++-----------+------------+-------------+-----------+------+----------------------+-----------------------------+
+  - 1:
+    - name: CUI
+    - access: restricted
+  - 2:
+    - name: FCI
+    - access: restricted
+folder 1 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+
+folder 2 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+
+folder 3 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+
+folder 4 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+
+folder 5 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+
+folder 6 ACL:
++------+--------------------------------------+-----------------------------------------+
+| Path | User/Group                           | Permissions                             |
++------+--------------------------------------+-----------------------------------------+
+| /    | group: doc-reviewers (doc-reviewers) | +read, -write, -create, -delete, -share |
++------+--------------------------------------+-----------------------------------------+

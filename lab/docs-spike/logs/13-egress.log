@@ -1,0 +1,20 @@
+table inet chp_nextcloud_egress {
+	chain output {
+		type filter hook output priority filter; policy accept;
+		meta skuid != 48 accept
+		oifname "lo" accept
+		ip daddr { 127.0.0.0/8, 192.168.100.53 } accept
+		ip6 daddr ::1 accept
+		ct state established,related accept
+		log prefix "CHP-NC-EGRESS " flags skuid counter packets 0 bytes 0 reject
+	}
+}
+httpd_can_network_connect --> off
+httpd_can_network_relay --> off
+httpd_can_network_connect_db --> off
+httpd_can_sendmail --> off
+httpd_can_connect_ldap --> off
+httpd_can_connect_ftp --> off
+httpd_execmem --> off
+httpd_unified --> off
+httpd_use_nfs --> off

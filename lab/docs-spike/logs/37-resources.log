@@ -1,0 +1,18 @@
+RSS MB by service:
+  httpd 60
+  php-fpm 123
+  postgresql 39
+  kanidmd 76
+  wazuh-manager 1281
+  suricata 539
+               total        used        free      shared  buff/cache   available
+Mem:            7869        1748        4833          75        1653        6121
+874M	/usr/lib/nextcloud
+74M	/var/lib/pgsql
+7.4M	/data/nextcloud
+15M	/backup/nextcloud
+OK 8 files checked, 0 untagged, 2 rule(s)
+14	/data/libvirt/images/iso5-docs-1.qcow2
+8	/data/libvirt/images/iso5-dcli-1.qcow2
+active
+0

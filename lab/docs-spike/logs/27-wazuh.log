@@ -1,0 +1,13 @@
+== wazuh-logtest on a sample share-refusal line
+PASS internal share of a CUI file to lab02 (not cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_spike-webdav_v1.0.txt".)
+PASS internal share of a CUI file even to lab04 (cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_spike-webdav_v1.0.txt".)
+bad app password -> 401
+== alerts at the manager (alerts.json), rules 1006xx since the restart:
+2026-11-12T17:02:29.550-0700 100601 level 12 | NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): Interaction OCP\Interaction\Actions\ShareAction from user lab01 on 70 to lab02 is re | src 192.168.100.1
+2026-11-12T17:02:29.550-0700 100601 level 12 | NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): Interaction OCP\Interaction\Actions\ShareAction from user lab01 on 70 to lab04 is re | src 192.168.100.1
+2026-11-12T17:02:29.550-0700 100601 level 12 | NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): Interaction OCP\Interaction\Actions\ShareAction from user lab01 on 70 to OCP\Interac | src 192.168.100.1
+2026-11-12T17:02:29.550-0700 100601 level 12 | NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): Interaction OCP\Interaction\Actions\ShareAction from user lab01 on 75 to OCP\Interac | src 192.168.100.1
+2026-11-12T17:02:29.550-0700 100601 level 12 | NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): Interaction OCP\Interaction\Actions\ShareAction from user lab01 on 47 to lab02 is re | src 192.168.100.1
+2026-11-12T17:02:31.549-0700 100603 level 12 | NextCloud: a CUI control app was switched OFF: App "chp_foldertag" disabled | src None
+bad app password -> 401
+2026-11-12T17:03:27.574-0700 100605 level 7 | NextCloud: failed sign-in: Login failed: "lab02" from 192.168.100.1

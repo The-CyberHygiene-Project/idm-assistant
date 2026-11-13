@@ -1,0 +1,11 @@
+PASS Operations/sample.docx: upload 201, download by lab02 200, same bytes
+PASS Operations/sample.xlsx: upload 201, download by lab02 200, same bytes
+PASS Operations/sample.md: upload 201, download by lab02 200, same bytes
+PASS Operations/sample.pdf: upload 201, download by lab02 200, same bytes
+PASS CUI/CUI_sample_v1.0.docx: upload 201, download by lab04 200, same bytes
+PASS CUI/CUI_sample_v1.0.pdf: upload 201, download by lab04 200, same bytes
+  capabilities: richdocuments False | text editor (files.directEditing / text): False
+PASS no editor capability advertised (text, richdocuments, onlyoffice)
+editors: ALL PASS
+disabled editors: ['text', 'office'] | not installed: ['richdocuments', 'onlyoffice'] | viewers on: ['viewer', 'files_pdfviewer']
+Denied accesses: 8

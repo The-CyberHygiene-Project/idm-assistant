@@ -1,0 +1,26 @@
+Denied accesses: 1
+ASSETS: files page 200; 57 scripts/styles referenced; status counts {200: 57}
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+Denied accesses: 1
+tags: ALL PASS
+see: ALL PASS
+Operations/sample.docx: download 200
+Operations/sample.pdf: download 200
+Operations/tool.py: download 503
+Operations/form.php: download 503
+Operations/page.js: download 200
+Operations/script.sh: download 200
+Denied accesses: 5
+Nov 12 17:05:45 iso5-docs.docs.lab.test fapolicyd[26732]: Loaded trust info from all backends (without duplicates): 64438
+Nov 12 17:05:45 iso5-docs.docs.lab.test fapolicyd[26732]: Trust database checks OK
+Nov 12 17:05:46 iso5-docs.docs.lab.test fapolicyd[26732]: Starting to listen for events
+== fix: rules.d/65-chp-nextcloud.rules (php-fpm and php may open script-type user files under /data/nextcloud/data/)
+11:10. allow perm=open exe=/usr/sbin/php-fpm : dir=/data/nextcloud/data/ ftype=%languages
+12:11. allow perm=open exe=/usr/bin/php : dir=/data/nextcloud/data/ ftype=%languages
+Denied accesses: 5
+Operations/tool.py: download 200
+Operations/form.php: download 200
+Operations/page.js: download 200
+Denied accesses: 5
+other programs (head as apache): still denied
+Denied accesses: 6

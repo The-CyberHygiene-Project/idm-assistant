@@ -1,0 +1,61 @@
+2026-11-12T23:14:38Z
+name=Rocky Linux 9.8
+mediaid=None
+62a8841e00ed7db3c620678a08e5bcda1bc6fdd5bfacae1670544f393a865084  /root/spike/nextcloud-chp-35.0.3-0.spike1.el9.noarch.rpm
+bdcebfb61e92c4882e6260ff1ea855746d0303a725c5ac19aec5baa38f9d01f2  /root/spike/nextcloud-chp-35.0.3-0.spike2.el9.noarch.rpm
+87dce6178716d7414c57681464324a674217749ee2846a62a271bdc239631c8d  /root/spike/setup.sh
+
+Installed:
+  apr-1.7.0-12.el9_3.x86_64                                                     
+  apr-util-1.6.1-23.el9.x86_64                                                  
+  apr-util-bdb-1.6.1-23.el9.x86_64                                              
+  apr-util-openssl-1.6.1-23.el9.x86_64                                          
+  capstone-4.0.2-12.el9_8.x86_64                                                
+  httpd-2.4.62-13.el9.x86_64                                                    
+  httpd-core-2.4.62-13.el9.x86_64                                               
+  httpd-filesystem-2.4.62-13.el9.noarch                                         
+  httpd-tools-2.4.62-13.el9.x86_64                                              
+  libpq-13.23-1.el9_7.x86_64                                                    
+  libzip-1.7.3-8.el9.x86_64                                                     
+  mod_http2-2.0.26-5.el9.x86_64                                                 
+  mod_lua-2.4.62-13.el9.x86_64                                                  
+  mod_ssl-1:2.4.62-13.el9.x86_64                                                
+  nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch                             
+  php-bcmath-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                      
+  php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-common-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                      
+  php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-gd-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                          
+  php-gmp-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-intl-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                        
+  php-mbstring-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                    
+  php-opcache-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                     
+  php-pdo-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-pecl-apcu-5.1.23-1.module+el9.7.0+40005+715283ec.x86_64                   
+  php-pecl-zip-1.22.3-1.module+el9.7.0+40005+715283ec.x86_64                    
+  php-pgsql-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                       
+  php-process-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                     
+  php-xml-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  postgresql-16.13-1.module+el9.8.0+40159+adcaa225.x86_64                       
+  postgresql-private-libs-16.13-1.module+el9.8.0+40159+adcaa225.x86_64          
+  postgresql-server-16.13-1.module+el9.8.0+40159+adcaa225.x86_64                
+  rocky-logos-httpd-90.17-1.el9.noarch                                          
+
+
+Installed:
+  nextcloud-chp-35.0.3-0.spike2.el9.noarch                                      
+
+httpd-2.4.62-13.el9 (none)
+mod_ssl-2.4.62-13.el9 (none)
+php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd (none)
+php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd (none)
+postgresql-server-16.13-1.module+el9.8.0+40159+adcaa225 (none)
+nextcloud-chp-35.0.3-0.spike2.el9 (none)
+ Target   Source
+--------------------------------------------------
+ vda      /data/libvirt/images/iso5-docs-1.qcow2
+
+PHP 8.3.29 (cli) (built: Dec 16 2025 14:32:42) (NTS gcc x86_64)
+[PHP Modules] apcu bcmath bz2 calendar Core ctype curl date dom exif fileinfo filter ftp gd gettext gmp hash iconv intl json libxml mbstring openssl pcntl pcre PDO pdo_pgsql pdo_sqlite pgsql Phar posix random readline Reflection session shmop SimpleXML sockets SPL sqlite3 standard sysvmsg sysvsem sysvshm tokenizer xml xmlreader xmlwriter xsl Zend OPcache zip zlib  [Zend Modules] Zend OPcache  
+active
+denials:

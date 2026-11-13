@@ -1,0 +1,38 @@
+Client secret loaded from environment variable "NOPE"
+| 2  | outside-probe | https://93.184.215.14/.well-known/openid-configuration                             |                      | x         |
+probe provider id=2
+== 1. web server (php-fpm, httpd_t) -> 93.184.215.14:443 (an internet address) through NextCloud's own HTTP client
+HTTP 404
+nextcloud.log: user_oidc Could not reach the provider at URL https://93.184.215.14/.well-known/openid-configuration
+  exception: cURL error 7: Failed to connect to 93.184.215.14 port 443: Connection refused (see https://curl.se/libcurl/c/libcurl-errors.html) for https://93.184.215.14/.well-known/openid-configuration
+Nov 12 16:50:32 iso5-docs.docs.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.53 DST=93.184.215.14 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=4436 DF PROTO=TCP SPT=34396 DPT=443 WINDOW=64240 RES=0x00 SYN URGP=0 UID=48 GID=48 
+		log prefix "CHP-NC-EGRESS " flags skuid counter packets 2 bytes 116 reject
+== 2. the apache user outside the web server (cron/occ context): curl to 1.1.1.1:443 and 8.8.8.8:53
+curl: (7) Failed to connect to 1.1.1.1 port 443: Connection refused
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/8.8.8.8/53: Connection refused
+Nov 12 16:50:35 iso5-docs.docs.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.53 DST=8.8.8.8 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=44230 DF PROTO=TCP SPT=54044 DPT=53 WINDOW=64240 RES=0x00 SYN URGP=0 UID=48 GID=48 
+Nov 12 16:50:36 iso5-docs.docs.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.53 DST=8.8.8.8 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=44231 DF PROTO=TCP SPT=54044 DPT=53 WINDOW=64240 RES=0x00 SYN URGP=0 UID=48 GID=48 
+		log prefix "CHP-NC-EGRESS " flags skuid counter packets 5 bytes 296 reject
+== 3. name resolution: the server resolves no internet names (no DNS forwarders)
+apps.nextcloud.com: no answer
+== 4. the server itself has no route out: aero ip_forward
+net.ipv4.ip_forward = 0
+== 5. NextCloud settings
+has_internet_connection=false
+appstoreenabled=false
+updatechecker=false
+allow_local_remote_servers=true
+httpd_can_network_connect --> off
+httpd_can_network_relay --> on
+"outside-probe" has been deleted.
+0
+active
+table inet firewalld
+table inet chp_nextcloud_egress
+egress table still present after firewall-cmd --reload: 1
+
+== fix after the reboot: socket-less kernel packets (IGMP 224.0.0.22, MLD ff02::16) were refused by 'skuid != apache accept'; now a positive match jumps to apache_out
+curl: (7) Failed to connect to 93.184.215.14 port 443: Connection refused
+DST=93.184.215.14 DPT=443 UID=48 
+apache -> Kanidm on this server: 200

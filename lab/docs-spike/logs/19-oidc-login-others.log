@@ -1,0 +1,3 @@
+SIGNED IN: id=lab02 display='Docs Lab 02' groups=[] backend=user_oidc
+SIGNED IN: id=lab03 display='Docs Lab 03' groups=['doc-reviewers'] backend=user_oidc
+SIGNED IN: id=lab04 display='Docs Lab 04' groups=['cui-users', 'doc-reviewers'] backend=user_oidc

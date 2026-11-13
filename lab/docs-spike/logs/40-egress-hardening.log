@@ -1,0 +1,18 @@
+== 1. php-fpm and httpd bound to the egress unit (drop-in pkg/nextcloud-bindsto.conf)
+active active active 
+-- the table file missing -> egress unit fails:
+Job for chp-nextcloud-egress.service failed because the control process exited with error code.
+egress=failed php-fpm=inactive httpd=inactive
+A dependency job for php-fpm.service failed. See 'journalctl -xe' for details.
+start php-fpm by hand: inactive
+-- the table deleted at run time (unit still active), then php-fpm restarted:
+Job for php-fpm.service failed because the control process exited with error code.
+php-fpm=failed (ExecStartPre found no table)
+restored: egress=active php-fpm=active httpd=active
+
+== 2. DNS prototype: apache gets no DNS (port 53 refused, logged); NextCloud's names from /etc/hosts
+192.168.100.53  idm.docs.lab.test files.docs.lab.test
+;; connection timed out; no servers could be reached
+DPT=53 DST=192.168.100.53 UID=48 
+SIGNED IN: id=lab01 display='Docs Lab 01' groups=['chp-users', 'cui-users'] backend=user_oidc
+5

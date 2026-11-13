@@ -1,0 +1,3 @@
+PASS chp-site validate (docs site)
+PASS iso5 helpers present on aero
+PASS docs stick made

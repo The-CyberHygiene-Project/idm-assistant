@@ -1,0 +1,6 @@
+wrote /run/chp-stick-ttgwfdl6/client.conf
+Compare both with the server console before installing clients.
+Wazuh agent keys moved to the stick: iso5-dcli
+AIDE baseline pinned: aide/iso5-docs.txt
+PASS export-client moved the client token
+PASS nothing pending on the server

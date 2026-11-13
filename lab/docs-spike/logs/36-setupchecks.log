@@ -1,0 +1,12 @@
+		ℹ .well-known URLs: `check_for_working_wellknown_setup` is set to false in your configuration, so this check was skipped.
+		⚠ Errors in the log: 9 errors in the logs since November 6, 2026, 12:13:23 AM
+		ℹ Brute-force Throttle: Your remote address could not be determined.
+		ℹ Transactional File Locking: The database is used for transactional file locking. To enhance performance, please configure memcache, if available.
+		⚠ Mimetype migrations available: One or more mimetype migrations are available. Occasionally new mimetypes are added to better handle certain file types. Migrating the mimetypes take a long time on larger instances so this is no
+		⚠ App directories owner: Some app directories are owned by a different user than the web server one. This may be the case if apps have been installed manually. Check the permissions of the following app directories:
+		ℹ Forwarded for headers: Your remote address could not be determined.
+		⚠ PHP version: You are currently running PHP 8.3.29. PHP 8.3 is deprecated since Nextcloud 35. Nextcloud 37 may require at least PHP 8.4. Please upgrade to one of the officially supported PHP versions provided by the PHP Group a
+		ℹ Second factor configuration: Second factor providers are available but two-factor authentication is not enforced.
+		ℹ Configuration server ID: Server identifier isn’t configured. It is recommended if your Nextcloud instance is running on several PHP servers. Add a server ID in your configuration.
+		ℹ PHP modules: This instance is missing some recommended PHP modules. For improved performance and better compatibility it is highly recommended to install them:
+		ℹ PHP Imagick module: The PHP module "imagick" is not enabled although the theming app is. For favicon generation to work correctly, you need to install and enable this module.

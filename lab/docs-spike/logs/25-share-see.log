@@ -1,0 +1,22 @@
+PASS internal share of a CUI file to lab02 (not cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_spike-webdav_v1.0.txt".)
+PASS internal share of a CUI file even to lab04 (cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_spike-webdav_v1.0.txt".)
+PASS public link on a CUI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_spike-webdav_v1.0.txt".)
+PASS public link on an FCI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "fci-note.md".)
+PASS internal share of the CUI folder itself REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI".)
+PASS control: internal share of an Operations file to lab02 ALLOWED (HTTP 200, OCS 200: OK)
+share: ALL PASS
+  lab03 (doc-reviewers, NOT cui-users) sees: ['Internal', 'Operations', 'Public']
+PASS lab03 sees no CUI/FCI/Archive
+PASS lab03 cannot read the CUI file by path
+PASS lab03 reads Operations (read-only layer)
+PASS lab03 cannot write in Operations
+  lab02 (plain user) sees: ['Internal', 'Operations', 'Public', 'ops-plan.txt']
+PASS lab02 sees no CUI/FCI/Archive
+  lab04 (doc-reviewers + cui-users) sees: ['Archive', 'CUI', 'FCI', 'Internal', 'Operations', 'Public']
+PASS lab04 sees CUI
+PASS lab04 reads the CUI file (GET 200)
+PASS lab04 cannot change the CUI file (PUT)
+PASS lab04 cannot add a file to CUI (PUT new)
+PASS lab04 cannot delete the CUI file (DELETE)
+PASS CUI file unchanged afterwards
+see: ALL PASS

@@ -1,0 +1,91 @@
+== reset: services stopped, database dropped, /data/nextcloud and /etc/nextcloud/config.php + oidc-secret deleted
+{"installed":false,"maintenance":false,"needsDbUpgrade":false,"version":"35.0.3.2","versionstring":"35.0.3","edition":""
+== restore
+NOTICE:  database "nextcloud" does not exist, skipping
+pg_restore: error: could not open input file "/backup/nextcloud/20261113T000745Z/nextcloud.pgdump": Permission denied
+fapolicyd denials during the restore: 0
+Nextcloud is not installed - only a limited number of commands are available
+  - installed: false
+  - maintenance: false
+Nextcloud is not installed - only a limited number of commands are available
+
+                                                                   
+  There are no commands defined in the "chp:foldertag" namespace.  
+                                                                   
+
+Traceback (most recent call last):
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 114, in <module>
+    fid = fileid("lab01", p); st, t = tags_of("lab01", fid)
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 62, in fileid
+    st, data = req(u, "PROPFIND", dav(u, p), body, {"Depth": "0", "Content-Type": "application/xml"})
+               ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 27, in req
+    c.sock = CTX.wrap_socket(socket.create_connection(("127.0.0.1", PORT), 60), server_hostname=FILES)
+             ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sock=sock,
+        ^^^^^^^^^^
+    ...<5 lines>...
+        session=session
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 1076, in _create
+    self.do_handshake()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 1372, in do_handshake
+    self._sslobj.do_handshake()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+ConnectionResetError: [Errno 54] Connection reset by peer
+Traceback (most recent call last):
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 134, in <module>
+    st, l3 = listing("lab03"); print(f"  lab03 (doc-reviewers, NOT cui-users) sees: {l3}")
+             ~~~~~~~^^^^^^^^^
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 70, in listing
+    st, data = req(u, "PROPFIND", dav(u, p), None, {"Depth": "1"})
+               ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/dshannon/idm-assistant/lab/docs-spike/proofs.py", line 27, in req
+    c.sock = CTX.wrap_socket(socket.create_connection(("127.0.0.1", PORT), 60), server_hostname=FILES)
+             ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sock=sock,
+        ^^^^^^^^^^
+    ...<5 lines>...
+        session=session
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 1076, in _create
+    self.do_handshake()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/ssl.py", line 1372, in do_handshake
+    self._sslobj.do_handshake()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+ConnectionResetError: [Errno 54] Connection reset by peer
+AVCs: 0
+
+== restore, second try (fix: pg_restore reads the dump on stdin; the backup dir is root-only 0700)
+restored from /backup/nextcloud/20261113T000745Z
+fapolicyd denials during the restore: 0
+  - installed: true
+  - maintenance: false
+UNTAGGED folder 1 file 81 files/CUI_uploaded-while-off.txt
+UNTAGGED folder 1 file 80 files/CUI_dropped-on-disk.txt
+FAIL 8 files checked, 2 untagged, 2 rule(s)
+6
+tags: ALL PASS
+see: ALL PASS
+SIGNED IN: id=lab04 display='Docs Lab 04' groups=['chp-users', 'cui-users', 'doc-reviewers'] backend=user_oidc
+AVCs: 0
+cleanup of the deliberate untagged negatives: DELETE CUI/CUI_uploaded-while-off.txt -> 204
+cleanup of the deliberate untagged negatives: DELETE CUI/CUI_dropped-on-disk.txt -> 204
+active
+Nov 12 17:09:29 iso5-docs.docs.lab.test systemd[1]: chp-nextcloud-backup.service: Consumed 1.003s CPU time.
+20261113T000745Z
+20261113T000927Z
+OK 6 files checked, 0 untagged, 2 rule(s)
+Fri 2026-11-13 01:40:00 MST 8h left -    -      chp-nextcloud-backup.timer chp-nextcloud-backup.service

@@ -1,0 +1,38 @@
+<!-- SPIKE (ISO 0.7.0 Plan 1): NextCloud admin_audit JSON (/var/log/nextcloud/audit.log), decoded by Wazuh's json decoder -->
+<group name="chp,nextcloud,">
+  <rule id="100600" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="app">^admin_audit$</field>
+    <description>NextCloud audit: $(message)</description>
+  </rule>
+  <rule id="100601" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">ShareAction from user \S+ on \d+ to \S+ is restricted</field>
+    <description>NextCloud: share REFUSED (no-share team folder: CUI/FCI/Archive): $(message)</description>
+    <group>chp_share_refused,</group>
+  </rule>
+  <rule id="100602" level="7">
+    <if_sid>100600</if_sid>
+    <field name="message">^Login failed: </field>
+    <description>NextCloud: failed sign-in: $(message) from $(remoteAddr)</description>
+    <group>authentication_failed,</group>
+  </rule>
+  <rule id="100603" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^App .(chp_foldertag|admin_audit|groupfolders|files_accesscontrol). disabled</field>
+    <description>NextCloud: a CUI control app was switched OFF: $(message)</description>
+  </rule>
+  <!-- a "Login failed" line is taken first by Wazuh's generic rule 2501 ("authentication failure"), so hang ours there too -->
+  <rule id="100605" level="7">
+    <if_sid>2501</if_sid>
+    <field name="app">^admin_audit$</field>
+    <field name="message">^Login failed: </field>
+    <description>NextCloud: failed sign-in: $(message) from $(remoteAddr)</description>
+    <group>authentication_failed,</group>
+  </rule>
+  <rule id="100604" level="7">
+    <if_sid>100600</if_sid>
+    <field name="message">has been deleted</field>
+    <description>NextCloud: deletion: $(message)</description>
+  </rule>
+</group>

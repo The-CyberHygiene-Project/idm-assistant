@@ -1,0 +1,21 @@
+php-fpm mnt ns: mnt:[4026532523]  init: mnt:[4026531841]  httpd: mnt:[4026532522]
+PrivateTmp=yes
+ProtectHome=no
+ProtectSystem=no
+<?php <- systemd-run PrivateTmp=yes rc=0
+/bin/head: cannot open '/data/nextcloud/data/__groupfolders/4/files/form.php' for reading: Operation not permitted
+ <- systemd-run (host namespace) rc=1
+Denied accesses: 1
+allow_filesystem_mark = 0
+active
+allow_filesystem_mark = 1
+/bin/head: cannot open '/data/nextcloud/data/__groupfolders/4/files/form.php' for reading: Operation not permitted
+ <- systemd-run PrivateTmp=yes rc=1
+Denied accesses: 1
+
+== iso5-dcli (client, fapolicyd as installed: allow_filesystem_mark = 0): same test, an untrusted .php under /home
+allow_filesystem_mark = 0
+text/x-php
+host namespace: rc=1
+PrivateTmp=yes: rc=0
+denials counted: 1

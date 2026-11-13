@@ -1,0 +1,14 @@
+PASS lab01 WebDAV PUT CUI/CUI_spike-webdav_v1.0.txt
+PASS lab01 browser-style chunked upload CUI/browser-upload.docx (MKCOL 201, MOVE 201)
+PASS lab01 WebDAV PUT FCI/fci-note.md
+PASS lab01 browser-style chunked upload FCI/browser-fci.xlsx (MKCOL 201, MOVE 201)
+PASS lab01 WebDAV PUT Operations/ops-plan.txt
+upload: ALL PASS
+PASS tag on CUI/CUI_spike-webdav_v1.0.txt (file 70) (tags ['CUI'])
+PASS tag on CUI/browser-upload.docx (file 74) (tags ['CUI'])
+PASS tag on FCI/fci-note.md (file 75) (tags ['FCI'])
+PASS tag on FCI/browser-fci.xlsx (file 78) (tags ['FCI'])
+PASS tag on Operations/ops-plan.txt (file 79) (tags [])
+PASS lab01 cannot remove the CUI tag (restricted tag) (DELETE -> 403)
+PASS CUI tag still on the file afterwards (tags ['CUI'])
+tags: ALL PASS

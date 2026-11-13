@@ -1,0 +1,10 @@
+== backup run
+backup 20261113T000745Z: 2.7M, 46 files
+fapolicyd denials during the backup: 0
+AVCs: 0
+data
+etc-nextcloud
+MANIFEST
+nextcloud.pgdump
+-rw-r--r--. 1 apache apache  16 Nov 12 17:04 form.php
+-rw-r--r--. 1 apache apache  42 Nov 12 17:04 tool.py

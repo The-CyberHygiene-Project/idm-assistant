@@ -1,0 +1,35 @@
++ kanidm system oauth2 create nextcloud NextCloud https://files.docs.lab.test:8443 -D idm_admin
+Success
++ kanidm system oauth2 add-redirect-url nextcloud https://files.docs.lab.test:8443/index.php/apps/user_oidc/code -D idm_admin
+Success
++ kanidm system oauth2 update-scope-map nextcloud chp_users openid profile email groups -D idm_admin
+Success
++ kanidm system oauth2 prefer-short-username nextcloud -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map nextcloud chp_groups cui-users cui-users -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map nextcloud chp_groups doc-reviewers doc-reviewers -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map-join nextcloud chp_groups array -D idm_admin
+Success
++ kanidm system oauth2 show-basic-secret nextcloud -D idm_admin > /root/spike/oidc-secret (0600, never printed)
+49
++ kanidm system oauth2 get nextcloud -D idm_admin
+---
+class: account
+class: memberof
+class: oauth2_resource_server
+class: oauth2_resource_server_basic
+class: object
+displayname: NextCloud
+name: nextcloud
+oauth2_prefer_short_username: true
+oauth2_rs_claim_map: chp_groups:doc-reviewers@idm.docs.lab.test:;:"doc-reviewers"
+oauth2_rs_claim_map: chp_groups:cui-users@idm.docs.lab.test:;:"cui-users"
+oauth2_rs_origin: https://files.docs.lab.test:8443/index.php/apps/user_oidc/code
+oauth2_rs_origin_landing: https://files.docs.lab.test:8443/
+oauth2_rs_scope_map: chp_users@idm.docs.lab.test: {"email", "groups", "openid", "profile"}
+oauth2_strict_redirect_uri: true
+spn: nextcloud@idm.docs.lab.test
+uuid: 2baf3f8a-167f-4487-804d-1207c575cd5f
+

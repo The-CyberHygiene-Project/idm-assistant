@@ -1,0 +1,108 @@
+scram-sha-256
+
+PostgreSQL 16.13 on x86_64-redhat-linux-gnu, compiled by gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14), 64-bit
+File context for /data/nextcloud(/.*)? already defined, modifying instead
+{"reqId":"TJ9Lq952bGMbdGIrc9zo","level":2,"time":"2026-11-12T23:19:11+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/lib/nextcloud/config/config.php): Failed to open stream: Operation not permitted at /usr/lib/nextcloud/lib/private/Config.php#296","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","maintenance:install"],"data":{"app":"PHP"}}
+
+In Config.php line 304:
+                                      
+  Can't write into config directory!  
+                                      
+
+maintenance:install [--database DATABASE] [--database-name DATABASE-NAME] [--database-host DATABASE-HOST] [--database-port DATABASE-PORT] [--database-user DATABASE-USER] [--database-pass [DATABASE-PASS]] [--database-table-space [DATABASE-TABLE-SPACE]] [--database-ssl-mode DATABASE-SSL-MODE] [--database-ssl-ca DATABASE-SSL-CA] [--database-ssl-cert DATABASE-SSL-CERT] [--database-ssl-key DATABASE-SSL-KEY] [--database-ssl-crl DATABASE-SSL-CRL] [--database-ssl-no-verify] [--disable-admin-user] [--admin-user ADMIN-USER] [--admin-pass ADMIN-PASS] [--admin-email [ADMIN-EMAIL]] [--data-dir DATA-DIR] [--password-salt [PASSWORD-SALT]] [--server-secret [SERVER-SECRET]]
+
+{"reqId":"TJ9Lq952bGMbdGIrc9zo","level":3,"time":"2026-11-12T23:19:11+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/lib/nextcloud/data/nextcloud.log): Failed to open stream: No such file or directory at /usr/lib/nextcloud/lib/private/Log/File.php#52","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","maintenance:install"],"data":{"app":"PHP"}}
+Nextcloud is not installed - only a limited number of commands are available
+
+                                                                   
+  There are no commands defined in the "config:system" namespace.  
+                                                                   
+
+{"reqId":"wvKHpK44xCfFg5nIhMtB","level":3,"time":"2026-11-12T23:19:12+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/lib/nextcloud/config/config.php): Failed to open stream: Operation not permitted at /usr/lib/nextcloud/lib/private/Config.php#222","userAgent":"--","version":"","occ_command":["/usr/lib/nextcloud/occ","config:system:set"],"data":{"app":"PHP"}}
+denials since 11/12/2026 16:19:07:
+== after fix 1 (trust entry /etc/nextcloud/config.php)
+Denied accesses: 8
+File context for /data/nextcloud(/.*)? already defined, modifying instead
+Nextcloud was successfully installed
+The current PHP memory limit is below the recommended value of 512MB.
+An unhandled exception has been thrown:
+Error: Password hashing failed for unknown reason in /usr/lib/nextcloud/lib/private/Security/Hasher.php:78
+Stack trace:
+#0 /usr/lib/nextcloud/lib/private/Security/Hasher.php(78): password_hash()
+#1 /usr/lib/nextcloud/lib/private/User/Database.php(100): OC\Security\Hasher->hash()
+#2 /usr/lib/nextcloud/lib/public/AppFramework/Db/TTransactional.php(46): OC\User\Database->OC\User\{closure}()
+#3 /usr/lib/nextcloud/lib/private/User/Database.php(95): OC\User\Database->atomic()
+#4 /usr/lib/nextcloud/lib/private/User/Manager.php(470): OC\User\Database->createUser()
+#5 /usr/lib/nextcloud/lib/private/User/Manager.php(439): OC\User\Manager->createUserFromBackend()
+#6 /usr/lib/nextcloud/core/Command/User/Add.php(129): OC\User\Manager->createUser()
+#7 /usr/lib/nextcloud/3rdparty/symfony/console/Command/Command.php(341): OC\Core\Command\User\Add->execute()
+#8 /usr/lib/nextcloud/3rdparty/symfony/console/Application.php(1102): Symfony\Component\Console\Command\Command->run()
+#9 /usr/lib/nextcloud/3rdparty/symfony/console/Application.php(357): Symfony\Component\Console\Application->doRunCommand()
+#10 /usr/lib/nextcloud/3rdparty/symfony/console/Application.php(196): Symfony\Component\Console\Application->doRun()
+#11 /usr/lib/nextcloud/lib/private/Console/Application.php(210): Symfony\Component\Console\Application->run()
+#12 /usr/lib/nextcloud/console.php(92): OC\Console\Application->run()
+#13 /usr/lib/nextcloud/occ(15): require_once('...')
+#14 {main}enabled: activity admin_audit appstore bruteforcesettings chp_foldertag cloud_federation_api comments dav federatedfilesharing files files_accesscontrol files_downloadlimit files_lock files_pdfviewer files_sharing files_trashbin files_versions groupfolders logreader lookup_server_connector notifications oauth2 password_policy profile provisioning_api serverinfo settings sharing systemtags theming twofactor_backupcodes twofactor_totp user_oidc viewer workflowengine
+Denied accesses: 8
+-rw-r-----. 1 apache apache 2167 Nov 12 16:21 /etc/nextcloud/config.php
+0
+== fix 2 (FIPS: Argon2id fails -> hashing_default_password=true, bcrypt)
+System config value hashing_default_password set to boolean true
+File context for /data/nextcloud(/.*)? already defined, modifying instead
+The current PHP memory limit is below the recommended value of 512MB.
+The account "ncadmin" was created successfully
+Display name set to "Break-glass admin"
+Account "ncadmin" added to group "admin"
+  - installed: true
+  - version: 35.0.3.2
+  - versionstring: 35.0.3
+  - edition: 
+  - maintenance: false
+  - needsDbUpgrade: false
+  - productname: Nextcloud
+  - extendedSupport: false
+  - user_id: ncadmin
+  - display_name: Break-glass admin
+  - email: 
+  - cloud_id: ncadmin@files.docs.lab.test:8443
+	dav:
+	network:
+		ℹ WebDAV endpoint: Could not check that your web server is properly set up to allow file synchronization over WebDAV. Please check manually.
+To allow this check to run you have to make sure that your Web server can connect to itself. Therefore it must be able to resolve and connect to at least one of its `trusted_domains` or the `overwrite.cli.url`. This failure may be the result of a server-side DNS mismatch or outbound firewall rule.
+		⚠ Data directory protected: Could not check that the data directory is protected. Please check manually that your server does not allow access to the data directory.
+To allow this check to run you have to make sure that your Web server can connect to itself. Therefore it must be able to resolve and connect to at least one of its `trusted_domains` or the `overwrite.cli.url`. This failure may be the result of a server-side DNS mismatch or outbound firewall rule.
+		⚠ JavaScript source map support: Your webserver is not set up to serve `.js.map` files. Without these files, JavaScript Source Maps won't function properly, making it more challenging to troubleshoot and debug any issues that may arise.
+		⚠ JavaScript modules support: Unable to run check for JavaScript support. Please remedy or confirm manually if your webserver serves `.mjs` files using the JavaScript MIME type.
+To allow this check to run you have to make sure that your Web server can connect to itself. Therefore it must be able to resolve and connect to at least one of its `trusted_domains` or the `overwrite.cli.url`. This failure may be the result of a server-side DNS mismatch or outbound firewall rule.
+		⚠ OCS provider resolving: Could not check if your web server properly resolves the OCM and OCS provider URLs.
+To allow this check to run you have to make sure that your Web server can connect to itself. Therefore it must be able to resolve and connect to at least one of its `trusted_domains` or the `overwrite.cli.url`. This failure may be the result of a server-side DNS mismatch or outbound firewall rule.
+		ℹ .well-known URLs: `check_for_working_wellknown_setup` is set to false in your configuration, so this check was skipped.
+		ℹ Font file loading: Could not check for otf loading support. Please check manually if your webserver serves `.otf` files.
+To allow this check to run you have to make sure that your Web server can connect to itself. Therefore it must be able to resolve and connect to at least one of its `trusted_domains` or the `overwrite.cli.url`. This failure may be the result of a server-side DNS mismatch or outbound firewall rule.
+	system:
+		ℹ Brute-force Throttle: Your remote address could not be determined.
+		✗ Cron last run: Last background job execution ran 56 years ago. Something seems wrong. Check the background job settings.
+		ℹ Transactional File Locking: The database is used for transactional file locking. To enhance performance, please configure memcache, if available.
+		⚠ Mimetype migrations available: One or more mimetype migrations are available. Occasionally new mimetypes are added to better handle certain file types. Migrating the mimetypes take a long time on larger instances so this is not done automatically during upgrades. Use the command `occ maintenance:repair --include-expensive` to perform the migrations.
+- 14.8 GiB available in /tmp (PHP temporary directory)
+	notifications:
+	database:
+	security:
+		⚠ App directories owner: Some app directories are owned by a different user than the web server one. This may be the case if apps have been installed manually. Check the permissions of the following app directories:
+/usr/lib/nextcloud/apps/activity
+/usr/lib/nextcloud/apps/admin_audit
+/usr/lib/nextcloud/apps/app_api
+/usr/lib/nextcloud/apps/appstore
+/usr/lib/nextcloud/apps/bruteforcesettings
+/usr/lib/nextcloud/apps/chp_foldertag
+/usr/lib/nextcloud/apps/circles
+/usr/lib/nextcloud/apps/cloud_federation_api
+/usr/lib/nextcloud/apps/comments
+/usr/lib/nextcloud/apps/contactsinteraction
+/usr/lib/nextcloud/apps/dashboard
+/usr/lib/nextcloud/apps/dav
+/usr/lib/nextcloud/apps/encryption
+/usr/lib/nextcloud/apps/federatedfilesharing
+/usr/lib/nextcloud/apps/federation
+/usr/lib/nextcloud/apps/files
+Denied accesses: 8
