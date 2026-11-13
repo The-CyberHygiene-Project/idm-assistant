@@ -222,7 +222,8 @@ def test_before_listener_refusal_survives_a_failing_audit_write():
         tail = h[h.index("catch (\\Throwable $e) {"):h.index("\n\t}\n")]
         i_try = tail.index("try {   // the refusal below must happen even when the audit write fails")
         i_audit = tail.index("$this->audit->event(")
-        i_ign = tail.index("} catch (\\Throwable $ignored) {\n\t\t\t}")
+        i_ign = tail.index("} catch (\\Throwable $auditError) {")
+        assert "error_log('chp_foldertag: could not audit a refused '" in tail, f
         i_throw = tail.index("throw new AbortedEventException(")
         assert i_try < i_audit < i_ign < i_throw, f
 
@@ -239,10 +240,33 @@ def test_children_come_from_the_filecache_not_the_acting_users_listing():
     assert "return true;   // cannot tell: treat as non-empty (fail closed)" in hc
     assert "return true;   // not in the filecache yet" in hc
     t = php("Listener/TagListener.php")
-    walk = t[t.index("private function files(Node $node)"):t.index("private function sourceId(")]
+    walk = t[t.index("private function files(Node $node, string $op)"):t.index("private function storageOf(")]
     assert "->from('filecache')" in walk and "$q->expr()->eq('parent'," in walk
     assert "$this->mimeTypeLoader->getId('httpd/unix-directory')" in walk and "$queue[] =" in walk
     assert "throw new \\RuntimeException('folder has no id yet')" in walk   # becomes chp.tag.failed, never silent
-    src = t[t.index("private function sourceId("):t.index("private function managedTagsOf(")]
-    assert "eq('path_hash', $q->createNamedParameter(md5($path)))" in src and "eq('storage'," in src
     assert "->get($rel)" not in t
+
+
+def test_copy_source_found_by_parent_and_name_never_silently():
+    # jail-independent: from the source's own id down the $rel segments; never a path_hash of a jail-relative path
+    t = php("Listener/TagListener.php")
+    src = t[t.index("private function sourceId("):t.index("private function managedTagsOf(")]
+    assert "path_hash" not in src and "getInternalPath" not in src
+    assert "(int)$source->getId()" in src and "explode('/', $rel)" in src
+    assert "eq('parent', $q->createNamedParameter($id, IQueryBuilder::PARAM_INT))" in src and "eq('name'," in src
+    assert "throw new \\RuntimeException('source file ' . $rel . ' not found in the filecache')" in src
+    m = t[t.index("private function managedTagsOf("):t.index("private function tag(")]
+    assert m.index("$this->sourceId(") < m.index("catch (\\Throwable $e)") < m.index("Audit::TAG_FAILED")
+
+
+def test_subtree_walk_is_bounded_and_reports_what_it_skips():
+    t = php("Listener/TagListener.php")
+    walk = t[t.index("private function files(Node $node, string $op)"):t.index("private function children(")]
+    assert "$seen = [$root => true];" in walk and "throw new \\RuntimeException('filecache cycle at file id '" in walk
+    assert "++$n > self::MAX_WALK" in walk and "private const MAX_WALK = 200000;" in t
+    assert "(int)$row['storage'] !== $storage" in walk and "entry of another storage below the target, not walked" in walk
+    assert "$this->mounts->findIn($base)" in walk and "mounts below the target are not walked" in walk
+    i = walk.index("(int)$row['storage'] !== $storage")
+    assert "$this->failedAt(" in walk[i:i + 300]
+    h = _handle(t)
+    assert "foreach ($this->files($target, $reason) as" in h   # a throw lands in the walk's catch -> chp.tag.failed

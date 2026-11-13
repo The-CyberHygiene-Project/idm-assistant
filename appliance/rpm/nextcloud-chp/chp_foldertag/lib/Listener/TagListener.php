@@ -22,6 +22,7 @@ use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IMimeTypeLoader;
+use OCP\Files\Mount\IMountManager;
 use OCP\Files\Node;
 use OCP\IDBConnection;
 use OCP\SystemTag\ISystemTagObjectMapper;
@@ -34,9 +35,11 @@ use OCP\SystemTag\ISystemTagObjectMapper;
  *     without a rule of its own, e.g. Archive, keeps its CUI tag; a move keeps the file id and so its tags).
  * Tags are only ever added, never removed. Each new assignment writes chp.tag.applied; each failure, including
  * an unreadable policy, writes chp.tag.failed. A folder's subtree (and, on a copy, the matching source file) is
- * read from the filecache, not through the acting user's view: groupfolders ACLs hide children from that view,
- * and a hidden child must still be tagged. The walk stays in the target's storage (a team folder holds no other
- * mounts: sharing is off on the contained folders).
+ * read from the filecache by parent (and, for the source, by parent + name), not through the acting user's view:
+ * groupfolders ACLs hide children from that view, and a hidden child must still be tagged. Ids only, never paths,
+ * so the groupfolders storage jail does not matter. The walk stays in the target's storage; a mount below the target
+ * (not expected: sharing is off on the contained folders), a cycle, a row from another storage, an oversized subtree
+ * or a copy's source file that cannot be found each write chp.tag.failed (never skipped silently).
  *
  * @template-implements IEventListener<Event>
  */
@@ -47,6 +50,7 @@ class TagListener implements IEventListener {
 		private Audit $audit,
 		private IDBConnection $db,
 		private IMimeTypeLoader $mimeTypeLoader,
+		private IMountManager $mounts,
 	) {
 	}
 
@@ -76,7 +80,7 @@ class TagListener implements IEventListener {
 		$managed = array_values(array_unique(array_values($rules)));
 		try {
 			$folder = Policy::folderOfMount($target->getMountPoint());   // the whole subtree is in the target's mount
-			foreach ($this->files($target) as [$id, $path, $rel]) {
+			foreach ($this->files($target, $reason) as [$id, $path, $rel]) {
 				try {
 					$want = ($folder !== null && isset($rules[$folder])) ? [$rules[$folder]] : [];
 					if ($source !== null) {
@@ -111,13 +115,17 @@ class TagListener implements IEventListener {
 			['op' => $op, 'file_id' => $id, 'folder' => null, 'tag' => null, 'path' => $path, 'error' => $e->getMessage()]);
 	}
 
+	/** Upper bound on the entries one walk visits (a sane cap; beyond it the rest is reported, not walked). */
+	private const MAX_WALK = 200000;
+
 	/**
 	 * Every file at or below $node as [file id, path, path relative to $node]. A folder is walked in the filecache
-	 * by parent (breadth first), so children the acting user's ACLs hide are included.
+	 * by parent (breadth first), so children the acting user's ACLs hide are included. Throws (-> chp.tag.failed
+	 * for the target) on a cycle or an oversized subtree; a row of another storage is reported and not followed.
 	 *
 	 * @return \Generator<array{0:string,1:string,2:string}>
 	 */
-	private function files(Node $node): \Generator {
+	private function files(Node $node, string $op): \Generator {
 		if ($node instanceof File) {
 			yield [(string)$node->getId(), $node->getPath(), ''];
 			return;
@@ -129,17 +137,41 @@ class TagListener implements IEventListener {
 		if ($root <= 0) {
 			throw new \RuntimeException('folder has no id yet');
 		}
-		$dir = $this->mimeTypeLoader->getId('httpd/unix-directory');
 		$base = $node->getPath();
+		$nested = [];
+		foreach ($this->mounts->findIn($base) as $mp) {
+			$nested[] = $mp->getMountPoint();
+		}
+		if ($nested !== []) {
+			$this->failedAt($op, (string)$root, $base, 'mounts below the target are not walked (' . implode(', ', $nested)
+				. '), files in them may be untagged', new \RuntimeException('nested mount'));
+		}
+		$storage = $this->storageOf($root);
+		$dir = $this->mimeTypeLoader->getId('httpd/unix-directory');
+		$seen = [$root => true];
 		$queue = [[$root, '']];
+		$n = 0;
 		while ($queue !== []) {
 			[$parent, $rel] = array_shift($queue);
 			foreach ($this->children($parent) as $row) {
+				$id = (int)$row['fileid'];
 				$childRel = $rel === '' ? (string)$row['name'] : $rel . '/' . $row['name'];
+				if (isset($seen[$id])) {
+					throw new \RuntimeException('filecache cycle at file id ' . $id);
+				}
+				if (++$n > self::MAX_WALK) {
+					throw new \RuntimeException('more than ' . self::MAX_WALK . ' entries below the target');
+				}
+				$seen[$id] = true;
+				if ((int)$row['storage'] !== $storage) {
+					$this->failedAt($op, (string)$id, $base . '/' . $childRel, 'entry of another storage below the target, not walked',
+						new \RuntimeException('storage ' . $row['storage'] . ' is not ' . $storage));
+					continue;
+				}
 				if ((int)$row['mimetype'] === $dir) {
-					$queue[] = [(int)$row['fileid'], $childRel];
+					$queue[] = [$id, $childRel];
 				} else {
-					yield [(string)$row['fileid'], $base . '/' . $childRel, $childRel];
+					yield [(string)$id, $base . '/' . $childRel, $childRel];
 				}
 			}
 		}
@@ -148,7 +180,7 @@ class TagListener implements IEventListener {
 	/** @return list<array<string,mixed>> the filecache rows whose parent is $parent */
 	private function children(int $parent): array {
 		$q = $this->db->getQueryBuilder();
-		$q->select('fileid', 'name', 'mimetype')->from('filecache')
+		$q->select('fileid', 'name', 'mimetype', 'storage')->from('filecache')
 			->where($q->expr()->eq('parent', $q->createNamedParameter($parent, IQueryBuilder::PARAM_INT)))
 			->orderBy('fileid');
 		$r = $q->executeQuery();
@@ -157,24 +189,52 @@ class TagListener implements IEventListener {
 		return $rows;
 	}
 
-	/** The filecache id of the file at $rel below $source (same storage), or null. */
+	private function storageOf(int $fileId): int {
+		$q = $this->db->getQueryBuilder();
+		$q->select('storage')->from('filecache')
+			->where($q->expr()->eq('fileid', $q->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+		$r = $q->executeQuery();
+		$st = $r->fetchOne();
+		$r->closeCursor();
+		if ($st === false || $st === null) {
+			throw new \RuntimeException('file id ' . $fileId . ' is not in the filecache');
+		}
+		return (int)$st;
+	}
+
+	/**
+	 * The filecache id of the source file that corresponds to the copy at $rel, found jail-independently: from the
+	 * source's own id down the $rel segments by parent + name. Null only when no source FILE is expected (the source
+	 * is neither a file nor a folder); an expected one that is not found throws (-> chp.tag.failed).
+	 */
 	private function sourceId(Node $source, string $rel): ?string {
 		if ($rel === '') {
-			return $source instanceof File ? (string)$source->getId() : null;
+			if ($source instanceof File) {
+				return (string)$source->getId();
+			}
+			return null;
 		}
 		if (!$source instanceof Folder) {
 			return null;
 		}
-		$storage = $source->getStorage()->getCache()->getNumericStorageId();
-		$path = ltrim($source->getInternalPath() . '/' . $rel, '/');
-		$q = $this->db->getQueryBuilder();
-		$q->select('fileid')->from('filecache')
-			->where($q->expr()->eq('storage', $q->createNamedParameter($storage, IQueryBuilder::PARAM_INT)))
-			->andWhere($q->expr()->eq('path_hash', $q->createNamedParameter(md5($path))));
-		$r = $q->executeQuery();
-		$id = $r->fetchOne();
-		$r->closeCursor();
-		return $id === false || $id === null ? null : (string)$id;
+		$id = (int)$source->getId();
+		if ($id <= 0) {
+			throw new \RuntimeException('source folder has no id');
+		}
+		foreach (explode('/', $rel) as $name) {
+			$q = $this->db->getQueryBuilder();
+			$q->select('fileid')->from('filecache')
+				->where($q->expr()->eq('parent', $q->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+				->andWhere($q->expr()->eq('name', $q->createNamedParameter($name)));
+			$r = $q->executeQuery();
+			$next = $r->fetchOne();
+			$r->closeCursor();
+			if ($next === false || $next === null) {
+				throw new \RuntimeException('source file ' . $rel . ' not found in the filecache');
+			}
+			$id = (int)$next;
+		}
+		return (string)$id;
 	}
 
 	/**

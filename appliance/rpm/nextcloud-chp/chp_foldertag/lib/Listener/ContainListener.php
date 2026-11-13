@@ -56,7 +56,8 @@ class ContainListener implements IEventListener {
 				$this->audit->event(Audit::REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $srcPath . ' -> ' . $dstPath,
 					['op' => $op, 'source_folder' => null, 'target_folder' => null, 'source' => $srcPath, 'target' => $dstPath,
 						'reason' => $reason]);
-			} catch (\Throwable $ignored) {
+			} catch (\Throwable $auditError) {   // make the audit gap visible in the PHP error log
+				error_log('chp_foldertag: could not audit a refused ' . $op . ': ' . get_class($auditError) . ': ' . $auditError->getMessage());
 			}
 			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
 		}

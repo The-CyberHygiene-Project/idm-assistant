@@ -20,7 +20,7 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
 # chp_foldertag: Apache-2.0 (this repository's licence)
@@ -113,6 +113,13 @@ fi
 %dir %attr(0750,apache,apache) %{_localstatedir}/log/nextcloud
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 35.0.3-4.chp
+- chp_foldertag 1.0.0: a copy's source file is found jail-independently (from the source id down the path by
+  parent + name); a source file that cannot be found writes chp.tag.failed instead of silently dropping its tags
+- the subtree walk refuses a filecache cycle and caps its size (chp.tag.failed), and reports a row of another
+  storage or a mount below the target instead of skipping it silently
+- a failed audit write in a Before-listener's catch-all goes to the PHP error log
+
 * Fri Nov 13 2026 The CyberHygiene Project - 35.0.3-3.chp
 - chp_foldertag 1.0.0: the folder guard counts a folder's children, and tagging walks a subtree, in the filecache
   by parent instead of the acting user's listing (groupfolders ACLs hide children from it), so ACL-hidden

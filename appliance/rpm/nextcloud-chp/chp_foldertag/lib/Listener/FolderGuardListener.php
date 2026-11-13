@@ -75,7 +75,8 @@ class FolderGuardListener implements IEventListener {
 				$this->audit->event(Audit::FOLDEROP_REFUSED, 'refused ' . $op . ' (' . $reason . ': ' . $e->getMessage() . '): ' . $path
 					. ($target !== null ? ' -> ' . $target : ''),
 					['op' => $op, 'source' => $path, 'target' => $target, 'reason' => $reason]);
-			} catch (\Throwable $ignored) {
+			} catch (\Throwable $auditError) {   // make the audit gap visible in the PHP error log
+				error_log('chp_foldertag: could not audit a refused ' . $op . ': ' . get_class($auditError) . ': ' . $auditError->getMessage());
 			}
 			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
 		}
