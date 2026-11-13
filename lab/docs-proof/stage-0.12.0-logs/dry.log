@@ -1,0 +1,189 @@
+
+-rw-r--r--. 1 root root   380928 2026-11-13 06:46:44.131917513 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r--. 1 root root 73846784 2026-11-11 11:10:30.004135615 -0700 /var/lib/rpm/rpmdb.sqlite
+== whoami inside: 0 ; host module state before:
+== 1. module list (repo s012 only)
+Added s012 repo from file:///var/tmp/s012/repo
+s012                                            335 MB/s | 390 kB     00:00    
+s012
+Name       Stream Profiles                   Summary                            
+php        8.3    common [d], devel, minimal PHP scripting language             
+postgresql 16     client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. module enable php:8.3 postgresql:16 --assumeno
+Added s012 repo from file:///var/tmp/s012/repo
+Dependencies resolved.
+================================================================================
+ Package           Architecture     Version             Repository         Size
+================================================================================
+Enabling module streams:
+ php                                8.3                                        
+ postgresql                         16                                         
+
+Transaction Summary
+================================================================================
+
+Operation aborted.
+rc=1
+== 3. module enable -y (namespace-private /etc/dnf/modules.d only)
+Added s012 repo from file:///var/tmp/s012/repo
+Last metadata expiration check: 0:00:01 ago on Fri 13 Nov 2026 04:34:24 PM MST.
+Dependencies resolved.
+================================================================================
+ Package           Architecture     Version             Repository         Size
+================================================================================
+Enabling module streams:
+ php                                8.3                                        
+ postgresql                         16                                         
+
+Transaction Summary
+================================================================================
+
+Complete!
+rc=0
+php.module
+postgresql.module
+[php]
+name=php
+stream=8.3
+profiles=
+state=enabled
+[postgresql]
+name=postgresql
+stream=16
+profiles=
+state=enabled
+== 4. install --assumeno nextcloud-chp chp-documents (streams enabled)
+Added s012 repo from file:///var/tmp/s012/repo
+Last metadata expiration check: 0:00:01 ago on Fri 13 Nov 2026 04:34:24 PM MST.
+Dependencies resolved.
+================================================================================
+ Package               Arch   Version                                Repo  Size
+================================================================================
+Installing:
+ chp-documents         noarch 0.1.0-5.chp.el9                        s012  34 k
+ nextcloud-chp         noarch 35.0.3-4.chp.el9                       s012 212 M
+Upgrading:
+ chp-site              noarch 0.14.0-1.chp.el9                       s012 111 k
+Installing dependencies:
+ apr                   x86_64 1.7.0-12.el9_3                         s012 122 k
+ apr-util              x86_64 1.6.1-23.el9                           s012  94 k
+ apr-util-bdb          x86_64 1.6.1-23.el9                           s012  12 k
+ capstone              x86_64 4.0.2-12.el9_8                         s012 755 k
+ httpd                 x86_64 2.4.62-13.el9                          s012  45 k
+ httpd-core            x86_64 2.4.62-13.el9                          s012 1.4 M
+ httpd-filesystem      noarch 2.4.62-13.el9                          s012  12 k
+ httpd-tools           x86_64 2.4.62-13.el9                          s012  79 k
+ libpq                 x86_64 13.23-1.el9_7                          s012 208 k
+ libzip                x86_64 1.7.3-8.el9                            s012  61 k
+ mod_ssl               x86_64 1:2.4.62-13.el9                        s012 110 k
+ nginx-filesystem      noarch 2:1.20.1-28.el9.rocky.0.1              s012 9.9 k
+ php-bcmath            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  33 k
+ php-cli               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 3.7 M
+ php-common            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 714 k
+ php-fpm               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 1.9 M
+ php-gd                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  40 k
+ php-gmp               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  30 k
+ php-intl              x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 169 k
+ php-mbstring          x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 524 k
+ php-opcache           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 353 k
+ php-pdo               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  86 k
+ php-pecl-apcu         x86_64 5.1.23-1.module+el9.7.0+40005+715283ec s012  60 k
+ php-pecl-zip          x86_64 1.22.3-1.module+el9.7.0+40005+715283ec s012  63 k
+ php-pgsql             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  75 k
+ php-process           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  42 k
+ php-xml               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 150 k
+ postgresql            x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 1.9 M
+ postgresql-private-libs
+                       x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 143 k
+ postgresql-server     x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 6.9 M
+ rocky-logos-httpd     noarch 90.17-1.el9                            s012  24 k
+
+Transaction Summary
+================================================================================
+Install  33 Packages
+Upgrade   1 Package
+
+Total size: 232 M
+Operation aborted.
+rc=1
+== 5. upgrade --assumeno
+Added s012 repo from file:///var/tmp/s012/repo
+Last metadata expiration check: 0:00:02 ago on Fri 13 Nov 2026 04:34:24 PM MST.
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                Repository  Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-10.chp.el9       s012        24 k
+ chp-identity-server       noarch       0.1.2-3.chp.el9        s012        21 k
+ chp-site                  noarch       0.14.0-1.chp.el9       s012       111 k
+
+Transaction Summary
+================================================================================
+Upgrade  3 Packages
+
+Total size: 156 k
+Operation aborted.
+rc=1
+== 6. upgrade + install together --assumeno (what a 0.6.0 server does: apply repo, then documents enable)
+Dependencies resolved.
+================================================================================
+ Package               Arch   Version                                Repo  Size
+================================================================================
+Installing:
+ chp-documents         noarch 0.1.0-5.chp.el9                        s012  34 k
+ nextcloud-chp         noarch 35.0.3-4.chp.el9                       s012 212 M
+Upgrading:
+ chp-base              noarch 0.1.0-10.chp.el9                       s012  24 k
+ chp-identity-server   noarch 0.1.2-3.chp.el9                        s012  21 k
+ chp-site              noarch 0.14.0-1.chp.el9                       s012 111 k
+Installing dependencies:
+ apr                   x86_64 1.7.0-12.el9_3                         s012 122 k
+ apr-util              x86_64 1.6.1-23.el9                           s012  94 k
+ apr-util-bdb          x86_64 1.6.1-23.el9                           s012  12 k
+ capstone              x86_64 4.0.2-12.el9_8                         s012 755 k
+ httpd                 x86_64 2.4.62-13.el9                          s012  45 k
+ httpd-core            x86_64 2.4.62-13.el9                          s012 1.4 M
+ httpd-filesystem      noarch 2.4.62-13.el9                          s012  12 k
+ httpd-tools           x86_64 2.4.62-13.el9                          s012  79 k
+ libpq                 x86_64 13.23-1.el9_7                          s012 208 k
+ libzip                x86_64 1.7.3-8.el9                            s012  61 k
+ mod_ssl               x86_64 1:2.4.62-13.el9                        s012 110 k
+ nginx-filesystem      noarch 2:1.20.1-28.el9.rocky.0.1              s012 9.9 k
+ php-bcmath            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  33 k
+ php-cli               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 3.7 M
+ php-common            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 714 k
+ php-fpm               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 1.9 M
+ php-gd                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  40 k
+ php-gmp               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  30 k
+ php-intl              x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 169 k
+ php-mbstring          x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 524 k
+ php-opcache           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 353 k
+ php-pdo               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  86 k
+ php-pecl-apcu         x86_64 5.1.23-1.module+el9.7.0+40005+715283ec s012  60 k
+ php-pecl-zip          x86_64 1.22.3-1.module+el9.7.0+40005+715283ec s012  63 k
+ php-pgsql             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  75 k
+ php-process           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012  42 k
+ php-xml               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd s012 150 k
+ postgresql            x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 1.9 M
+ postgresql-private-libs
+                       x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 143 k
+ postgresql-server     x86_64 16.13-1.module+el9.8.0+40159+adcaa225  s012 6.9 M
+ rocky-logos-httpd     noarch 90.17-1.el9                            s012  24 k
+
+Transaction Summary
+================================================================================
+Install  33 Packages
+Upgrade   3 Packages
+
+Total size: 232 M
+Operation aborted.
+rc=0
+== 7. control: streams NOT enabled -> php hidden (modular filtering)
+Added s012 repo from file:///var/tmp/s012/repo
+Last metadata expiration check: 0:00:03 ago on Fri 13 Nov 2026 04:34:24 PM MST.
+All matches were filtered out by modular filtering for argument: php-fpm
+Error: Unable to find a match: php-fpm
+rc=0

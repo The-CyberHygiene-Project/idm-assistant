@@ -1,0 +1,7 @@
+# <module> <stream>: the module streams the repo carries (their RPMs are in PACKAGES.txt, label rocky).
+# assemble-repo.sh cuts these streams (and their vendor defaults) out of Rocky's AppStream modules.yaml, which sits in
+# the third-party dir as appstream-modules.yaml.gz, copied unchanged from the Rocky 9.8 DVD (sha256 1fc6cf45a603…b101,
+# = the checksum in the DVD's AppStream repomd.xml). The document server (chp-documents) runs
+# `dnf module enable php:8.3 postgresql:16` from this repo.
+php 8.3
+postgresql 16

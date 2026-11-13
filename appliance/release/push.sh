@@ -3,5 +3,5 @@
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 shopt -s nullglob
-scp -q "$here"/*.sh "$here"/RPM-GPG-KEY-* "$here"/trusted-keys.txt "$here"/PACKAGES*.txt aero:/data/chp-release/tools/
+scp -q "$here"/*.sh "$here"/RPM-GPG-KEY-* "$here"/trusted-keys.txt "$here"/PACKAGES*.txt "$here"/MODULES*.txt aero:/data/chp-release/tools/
 echo "pushed to aero:/data/chp-release/tools/"

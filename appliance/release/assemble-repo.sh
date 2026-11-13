@@ -3,9 +3,10 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # assemble-repo.sh <stage-dir> <built-dir> <third-party-dir>: copy the newest RPM of each PACKAGES.txt entry into
-# stage-dir. PACKAGES.txt lines are "<name> ours" (taken ONLY from built-dir, our own builds) or "<name> <label>"
-# (third-party, taken ONLY from third-party-dir, keeping its vendor signature). A package of ours is never picked up
-# from the third-party dir, whatever its version. Fails if an entry has no RPM, or if stage-dir already exists.
+# stage-dir, then stage-dir/modules.yaml for the MODULES.txt streams (stage-modules.sh). PACKAGES.txt lines are "<name>
+# ours" (taken ONLY from built-dir, our own builds) or "<name> <label>" (third-party, taken ONLY from third-party-dir,
+# keeping its vendor signature). A package of ours is never picked up from the third-party dir, whatever its version.
+# Fails if an entry has no RPM, or if stage-dir already exists.
 set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; S=$1; BUILT=$2; THIRD=$3
 [[ -e $S ]] && { echo "refusing: $S exists"; exit 1; }
@@ -19,4 +20,7 @@ while read -r name src; do
   [[ -n $best ]] || { echo "MISSING package: $name"; exit 1; }
   cp -a "$best" "$S/"; echo "  $name ← $(basename "$best")"
 done < "$here/PACKAGES.txt"
+# module metadata for the modular RPMs (MODULES.txt streams), cut from the vendor's AppStream modules.yaml that sits
+# in the third-party dir as appstream-modules.yaml.gz (copied unchanged from the Rocky DVD; see MODULES.txt)
+bash "$here/stage-modules.sh" "$THIRD/appstream-modules.yaml.gz" "$here/MODULES.txt" "$S"
 

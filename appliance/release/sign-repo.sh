@@ -2,10 +2,11 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-# sign-repo.sh <stage-dir> <out-dir> <signer-fpr> <keys-dir>: sign every UNSIGNED RPM of stage-dir with signer-fpr,
-# keep signatures by pinned third-party keys (e.g. EPEL) as they are, REFUSE anything signed by an unpinned key,
-# build repodata, sign repomd.xml, verify. Works in a temp copy next to out-dir; out-dir appears only when all of it
-# passed (all-or-nothing: an unplugged YubiKey or a missed touch leaves nothing half-signed). stage-dir is unchanged.
+# sign-repo.sh <stage-dir> <out-dir> <signer-fpr> <keys-dir>: sign every UNSIGNED RPM of stage-dir with signer-fpr, keep
+# signatures by pinned third-party keys (e.g. EPEL) as they are, REFUSE anything signed by an unpinned key, build
+# repodata (make-repodata.sh: with the stage's modules.yaml, if any), sign repomd.xml, verify. Works in a temp copy next
+# to out-dir; out-dir appears only when all of it passed (all-or-nothing: an unplugged YubiKey or a missed touch leaves
+# nothing half-signed). stage-dir is unchanged.
 set -Eeuo pipefail
 S=$1; O=$2; FPR=$3; K=$4
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -24,6 +25,7 @@ done < "$K/trusted-keys.txt"
 shopt -s nullglob
 rpms=("$S"/*.rpm); (( ${#rpms[@]} )) || { echo "no RPMs in $S"; exit 1; }
 cp -a "${rpms[@]}" "$work/"
+[[ -f $S/modules.yaml ]] && cp -a "$S/modules.yaml" "$work/"   # module metadata (stage-modules.sh), if any
 to_sign=()
 for f in "$work"/*.rpm; do
   out=$(rpm --dbpath "$db" -Kv "$f" 2>&1 || true)
@@ -40,7 +42,7 @@ done
 if (( ${#to_sign[@]} )); then
   rpmsign --addsign --define "_gpg_name $FPR" --define "_gpg_digest_algo sha256" "${to_sign[@]}"
 fi
-createrepo_c --quiet "$work"
+bash "$here/make-repodata.sh" "$work"           # createrepo_c (+ modifyrepo_c for modules.yaml)
 gpg --batch --yes --local-user "$FPR" --armor --detach-sign -o "$work/repodata/repomd.xml.asc" "$work/repodata/repomd.xml"
 bash "$here/verify-repo.sh" "$work" "$K"
 chmod 0755 "$work"

@@ -1,0 +1,10 @@
+
+0
+-rw-r--r--. 1 root root   380928 2026-11-13 06:46:44.131917513 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r--. 1 root root 73846784 2026-11-11 11:10:30.004135615 -0700 /var/lib/rpm/rpmdb.sqlite
+chp-site-0.13.0-2.chp.el9.noarch
+chp-base-0.1.0-4.chp.el9.noarch
+chp-identity-server-0.1.2-2.chp.el9.noarch
+package httpd is not installed
+package php-common is not installed
+ls: cannot access '/var/tmp/s012': No such file or directory

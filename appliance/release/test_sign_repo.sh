@@ -52,7 +52,7 @@ t "…and creates no out-dir"                         "[[ ! -e $T/out5 ]]"
 mkdir -p "$T/a/built" "$T/a/third"; cp "$OURS"/idm-collect-*.rpm "$T/a/built/"
 cp "$FIX"/kanidm-server-1.11.2-1.lab.el9.x86_64.rpm "$FIX"/google-authenticator-*.rpm "$T/a/third/"
 printf '%s\n' "idm-collect ours" "kanidm-server ours" "google-authenticator epel" > "$T/a/PACKAGES.txt"
-cp "$here/assemble-repo.sh" "$T/a/"
+cp "$here/assemble-repo.sh" "$here/stage-modules.sh" "$T/a/"; : > "$T/a/MODULES.txt"   # no streams
 t "assemble: our package missing from built/ is MISSING, not taken from third-party" "out bash '$T/a/assemble-repo.sh' '$T/a/stage' '$T/a/built' '$T/a/third' | grep -q 'MISSING package: kanidm-server'"
 printf '%s\n' "idm-collect ours" "google-authenticator epel" > "$T/a/PACKAGES.txt"
 t "assemble: ours from built/, EPEL from third-party" "bash '$T/a/assemble-repo.sh' '$T/a/stage2' '$T/a/built' '$T/a/third' >/dev/null && ls '$T/a/stage2' | grep -q idm-collect && ls '$T/a/stage2' | grep -q google-authenticator"
@@ -71,4 +71,20 @@ rpmsign --addsign --define "_gpg_name $B" --define "_gpg_digest_algo sha256" "$T
 t "fixture: v8's RPM really is signed by the second key" "rpm -qp --qf '%{RSAHEADER:pgpsig}' '$T'/v8/*.rpm 2>/dev/null | grep -qi '${B: -16}'"
 createrepo_c --quiet "$T/v8"; gpg --batch --yes -u "$A" --armor --detach-sign -o "$T/v8/repodata/repomd.xml.asc" "$T/v8/repodata/repomd.xml"
 t "verify: a key file carrying a second key is rejected" "out bash '$here/verify-repo.sh' '$T/v8' '$T/k8' | grep -q 'KEY FILE HOLDS 2 KEYS'"
+# 9 module metadata (ISO 0.7.0): Rocky's modular php RPM + the DVD's AppStream modules.yaml (third-party dir)
+VM=$FIX/appstream-modules.yaml.gz; PHP=$(ls "$FIX"/php-common-8.3.*.module+*.rpm | head -1)
+mkdir "$T/m1"; cp "$PHP" "$T/m1/"; echo "php 8.3" > "$T/m1.txt"
+t "modules: keeps only the listed stream"            "bash '$here/stage-modules.sh' '$VM' '$T/m1.txt' '$T/m1' >/dev/null && grep -q 'stream: \"8.3\"' '$T/m1/modules.yaml' && ! grep -qE 'stream: \"8.[12]\"|name: postgresql' '$T/m1/modules.yaml'"
+mkdir "$T/m2"; cp "$PHP" "$T/m2/"; echo "postgresql 16" > "$T/m2.txt"
+t "modules: refuses a modular RPM outside the listed streams" "out bash '$here/stage-modules.sh' '$VM' '$T/m2.txt' '$T/m2' | grep -q 'not in any listed stream' && [[ ! -e $T/m2/modules.yaml ]]"
+mkdir "$T/m3"; cp "$PHP" "$T/m3/"; : > "$T/m3.txt"
+t "modules: refuses modular RPMs when no stream is listed" "out bash '$here/stage-modules.sh' '$VM' '$T/m3.txt' '$T/m3' | grep -q 'no streams'"
+t "repodata: refuses modular RPMs without modules.yaml"  "out bash '$here/make-repodata.sh' '$T/m3' | grep -q 'no modules.yaml'"
+t "repodata: adds the modules metadata, no loose copy"   "bash '$here/make-repodata.sh' '$T/m1' && grep -q '<data type=\"modules\">' '$T/m1/repodata/repomd.xml' && [[ ! -e $T/m1/modules.yaml ]]"
+createrepo_c --quiet "$T/m3"
+t "verify: modular RPMs without modules metadata fail"  "out bash '$here/verify-repo.sh' '$T/m3' '$T/keys' | grep -q 'MISSING modules metadata'"
+mkdir "$T/m4"; cp "$PHP" "$T/m4/"; bash "$here/stage-modules.sh" "$VM" "$T/m1.txt" "$T/m4" >/dev/null
+cp -a "$T/keys" "$T/k9"; cp /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 "$T/k9/"   # aero is Rocky 9: the vendor key file
+echo "21CB256AE16FC54C6E652949702D426D350D275D rocky9 RPM-GPG-KEY-Rocky-9" >> "$T/k9/trusted-keys.txt"
+t "sign-repo: signed repo carries the modules metadata" "bash '$here/sign-repo.sh' '$T/m4' '$T/m4out' '$A' '$T/k9' >/dev/null 2>&1; [[ -f $T/m4out/repodata/repomd.xml ]] && grep -q '<data type=\"modules\">' '$T/m4out/repodata/repomd.xml'"
 exit $fails

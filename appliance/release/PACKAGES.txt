@@ -28,3 +28,39 @@ sysstat rocky
 pcp-libs rocky
 pcp-conf rocky
 lm_sensors-libs rocky
+# ISO 0.7.0: the document server (NextCloud). Ours, then the Rocky 9.8 DVD packages that are not on a 0.6.0 server:
+# the dependency closure of nextcloud-chp + chp-documents against iso5-srv's rpm database, without weak deps
+# (lab/docs-proof/stage-0.12.0.md). The php and postgresql RPMs are modular: MODULES.txt.
+nextcloud-chp ours
+chp-documents ours
+apr rocky
+apr-util rocky
+apr-util-bdb rocky
+capstone rocky
+httpd rocky
+httpd-core rocky
+httpd-filesystem rocky
+httpd-tools rocky
+libpq rocky
+libzip rocky
+mod_ssl rocky
+nginx-filesystem rocky
+php-bcmath rocky
+php-cli rocky
+php-common rocky
+php-fpm rocky
+php-gd rocky
+php-gmp rocky
+php-intl rocky
+php-mbstring rocky
+php-opcache rocky
+php-pdo rocky
+php-pecl-apcu rocky
+php-pecl-zip rocky
+php-pgsql rocky
+php-process rocky
+php-xml rocky
+postgresql rocky
+postgresql-private-libs rocky
+postgresql-server rocky
+rocky-logos-httpd rocky

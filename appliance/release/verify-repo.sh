@@ -4,7 +4,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # verify-repo.sh <repo-dir> <keys-dir>: every RPM carries a V4 RSA/SHA256 header signature by a PINNED key
 # (<keys-dir>/trusted-keys.txt: "<fpr> <label> <file>"), and repodata/repomd.xml.asc is valid and made by the
-# 'cyberhygiene' key. Prints one line per problem; exit 1 on any.
+# 'cyberhygiene' key; a repo with modular RPMs carries modules metadata. Prints one line per problem; exit 1 on any.
 set -Eeuo pipefail
 R=$1; K=$2
 tmp=$(mktemp -d); db=$(mktemp -d); trap 'rm -rf "$tmp" "$db"' EXIT
@@ -39,6 +39,10 @@ for f in "$R"/*.rpm; do
   fi
 done
 (( n > 0 )) || say "no RPMs in $R"
+mod=("$R"/*.module+*.rpm)   # modular RPMs: dnf can enable their streams only from the repo's modules metadata
+if (( ${#mod[@]} )) && ! grep -q '<data type="modules">' "$R/repodata/repomd.xml" 2>/dev/null; then
+  say "MISSING modules metadata (${#mod[@]} modular RPMs)"
+fi
 if [[ ! -f $R/repodata/repomd.xml.asc ]]; then say "MISSING repomd.xml.asc"
 elif ! gpg --batch --status-fd 1 --verify "$R/repodata/repomd.xml.asc" "$R/repodata/repomd.xml" 2>/dev/null \
        | grep -qE "^\[GNUPG:\] VALIDSIG .* $chp\$"; then

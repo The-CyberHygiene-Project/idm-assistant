@@ -1,0 +1,61 @@
+
+== removed vs 0.11.0 stage
+chp-base-0.1.0-4.chp.el9.noarch.rpm
+chp-identity-server-0.1.2-2.chp.el9.noarch.rpm
+chp-site-0.13.0-2.chp.el9.noarch.rpm
+== added
+apr-1.7.0-12.el9_3.x86_64.rpm
+apr-util-1.6.1-23.el9.x86_64.rpm
+apr-util-bdb-1.6.1-23.el9.x86_64.rpm
+capstone-4.0.2-12.el9_8.x86_64.rpm
+chp-base-0.1.0-10.chp.el9.noarch.rpm
+chp-documents-0.1.0-5.chp.el9.noarch.rpm
+chp-identity-server-0.1.2-3.chp.el9.noarch.rpm
+chp-site-0.14.0-1.chp.el9.noarch.rpm
+httpd-2.4.62-13.el9.x86_64.rpm
+httpd-core-2.4.62-13.el9.x86_64.rpm
+httpd-filesystem-2.4.62-13.el9.noarch.rpm
+httpd-tools-2.4.62-13.el9.x86_64.rpm
+libpq-13.23-1.el9_7.x86_64.rpm
+libzip-1.7.3-8.el9.x86_64.rpm
+mod_ssl-2.4.62-13.el9.x86_64.rpm
+modules.yaml
+nextcloud-chp-35.0.3-4.chp.el9.noarch.rpm
+nginx-filesystem-1.20.1-28.el9.rocky.0.1.noarch.rpm
+php-bcmath-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-common-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-gd-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-gmp-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-intl-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-mbstring-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-opcache-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-pdo-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-pecl-apcu-5.1.23-1.module+el9.7.0+40005+715283ec.x86_64.rpm
+php-pecl-zip-1.22.3-1.module+el9.7.0+40005+715283ec.x86_64.rpm
+php-pgsql-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-process-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+php-xml-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64.rpm
+postgresql-16.13-1.module+el9.8.0+40159+adcaa225.x86_64.rpm
+postgresql-private-libs-16.13-1.module+el9.8.0+40159+adcaa225.x86_64.rpm
+postgresql-server-16.13-1.module+el9.8.0+40159+adcaa225.x86_64.rpm
+rocky-logos-httpd-90.17-1.el9.noarch.rpm
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  stage/modules.yaml
+318 stage/modules.yaml
+  module: php
+  name: php
+  stream: "8.3"
+  module: postgresql
+  name: postgresql
+  stream: "16"
+    8.3: [common]
+    16: [server]
+<data type="primary">
+<data type="filelists">
+<data type="other">
+<data type="primary_db">
+<data type="filelists_db">
+<data type="other_db">
+<data type="modules">
+repodata
