@@ -1,0 +1,27 @@
+# logs/53 (Task 2, 2026-11-13T01:03:41Z): checkout/publish freshness on the workstation (lab01, route 1 Bearer over WebDAV)
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## 1. checkout, edit, publish --dry-run: fresh
+CHECKOUT CUI/Compliance/CUI_spike-ssp_v1.0.docx as lab01: fileid 119 etag "053844eef6cc23e04550b8a16819d8a5" sha256 0097387783347b0f... (GET's own ETag header "053844eef6cc23e04550b8a16819d8a5")
+edited /home/chpadmin/chp-docs-work/CUI_spike-ssp_v1.0.docx
+  canonical now: etag "053844eef6cc23e04550b8a16819d8a5" sha256 0097387783347b0f...; matches checkout: {'fileid': True, 'etag': True, 'sha256': True}
+PUBLISH WOULD PROCEED (full): the copy looks fresh
+## 2. a colleague's update that keeps the ETag (same size, X-OC-Mtime): ETag-only misses it, the hash does not
+COLLEAGUE (same-etag) PUT -> 204: content changed (2550 -> 2550 bytes); etag "053844eef6cc23e04550b8a16819d8a5" -> "053844eef6cc23e04550b8a16819d8a5" (SAME)
+  canonical now: etag "053844eef6cc23e04550b8a16819d8a5" sha256 dc8203cc3a4b3806...; matches checkout: {'fileid': True, 'etag': True, 'sha256': False}
+PUBLISH WOULD PROCEED (etag-only): the copy looks fresh
+  canonical now: etag "053844eef6cc23e04550b8a16819d8a5" sha256 dc8203cc3a4b3806...; matches checkout: {'fileid': True, 'etag': True, 'sha256': False}
+PUBLISH REFUSED (full): the canonical copy changed since checkout
+## 3. checkout again; an ordinary update by someone else: refused
+CHECKOUT CUI/Compliance/CUI_spike-ssp_v1.0.docx as lab01: fileid 119 etag "053844eef6cc23e04550b8a16819d8a5" sha256 dc8203cc3a4b3806... (GET's own ETag header "053844eef6cc23e04550b8a16819d8a5")
+edited /home/chpadmin/chp-docs-work/CUI_spike-ssp_v1.0.docx
+COLLEAGUE (plain) PUT -> 204: content changed (2550 -> 2569 bytes); etag "053844eef6cc23e04550b8a16819d8a5" -> "bc21947bc87e1fdd352c42eda9560506" (changed)
+  canonical now: etag "bc21947bc87e1fdd352c42eda9560506" sha256 92d8fa5c2eb3dc9f...; matches checkout: {'fileid': True, 'etag': False, 'sha256': False}
+PUBLISH REFUSED (full): the canonical copy changed since checkout
+## 4. checkout again, edit, publish for real (PUT with If-Match)
+CHECKOUT CUI/Compliance/CUI_spike-ssp_v1.0.docx as lab01: fileid 119 etag "bc21947bc87e1fdd352c42eda9560506" sha256 92d8fa5c2eb3dc9f... (GET's own ETag header "bc21947bc87e1fdd352c42eda9560506")
+edited /home/chpadmin/chp-docs-work/CUI_spike-ssp_v1.0.docx
+  canonical now: etag "bc21947bc87e1fdd352c42eda9560506" sha256 92d8fa5c2eb3dc9f...; matches checkout: {'fileid': True, 'etag': True, 'sha256': True}
+PUBLISH PUT with If-Match "bc21947bc87e1fdd352c42eda9560506": HTTP 204; new etag "a6391f547e6bdb9f9c0e91aff04da6f8"
+## 5. the old checkout record is now stale (the publish itself moved the canonical copy): publish again is refused
+  canonical now: etag "a6391f547e6bdb9f9c0e91aff04da6f8" sha256 a92642ca64668488...; matches checkout: {'fileid': True, 'etag': False, 'sha256': False}
+PUBLISH REFUSED (full): the canonical copy changed since checkout

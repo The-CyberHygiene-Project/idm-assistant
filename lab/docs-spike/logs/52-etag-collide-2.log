@@ -1,0 +1,57 @@
+# logs/52 (Task 2, 2026-11-13T01:00:00Z): ETag collisions, rerun with case E (no ssh stat between the two PUTs)
+  A same size, back to back try 0: etag changed; inode/mtime 805496834 1794531592 -> 805496834 1794531593
+  A same size, back to back try 1: etag changed; inode/mtime 805496834 1794531594 -> 805496834 1794531595
+  A same size, back to back try 2: etag changed; inode/mtime 805496834 1794531596 -> 805496834 1794531597
+  A same size, back to back try 3: etag changed; inode/mtime 805496834 1794531598 -> 805496834 1794531599
+  A same size, back to back try 4: etag SAME (collision); inode/mtime 805496834 1794531600 -> 805496834 1794531600
+  A same size, back to back try 5: etag changed; inode/mtime 805496834 1794531601 -> 805496834 1794531602
+  A same size, back to back try 6: etag changed; inode/mtime 805496834 1794531603 -> 805496834 1794531604
+  A same size, back to back try 7: etag changed; inode/mtime 805496834 1794531605 -> 805496834 1794531606
+  A same size, back to back try 8: etag changed; inode/mtime 805496834 1794531607 -> 805496834 1794531608
+  A same size, back to back try 9: etag changed; inode/mtime 805496834 1794531609 -> 805496834 1794531610
+A same size, back to back: 1/10 tries kept the ETag across a content change
+  B same size, 1.2 s apart try 0: etag changed; inode/mtime 805496834 1794531611 -> 805496834 1794531613
+  B same size, 1.2 s apart try 1: etag changed; inode/mtime 805496834 1794531614 -> 805496834 1794531616
+  B same size, 1.2 s apart try 2: etag changed; inode/mtime 805496834 1794531617 -> 805496834 1794531619
+  B same size, 1.2 s apart try 3: etag changed; inode/mtime 805496834 1794531620 -> 805496834 1794531623
+  B same size, 1.2 s apart try 4: etag changed; inode/mtime 805496834 1794531623 -> 805496834 1794531626
+  B same size, 1.2 s apart try 5: etag changed; inode/mtime 805496834 1794531627 -> 805496834 1794531629
+  B same size, 1.2 s apart try 6: etag changed; inode/mtime 805496834 1794531630 -> 805496834 1794531632
+  B same size, 1.2 s apart try 7: etag changed; inode/mtime 805496834 1794531633 -> 805496834 1794531635
+  B same size, 1.2 s apart try 8: etag changed; inode/mtime 805496834 1794531636 -> 805496834 1794531638
+  B same size, 1.2 s apart try 9: etag changed; inode/mtime 805496834 1794531639 -> 805496834 1794531642
+B same size, 1.2 s apart: 0/10 tries kept the ETag across a content change
+  C different size, back to back try 0: etag changed; inode/mtime 805496834 1794531643 -> 805496834 1794531644
+  C different size, back to back try 1: etag changed; inode/mtime 805496834 1794531644 -> 805496834 1794531645
+  C different size, back to back try 2: etag changed; inode/mtime 805496834 1794531646 -> 805496834 1794531648
+  C different size, back to back try 3: etag changed; inode/mtime 805496834 1794531648 -> 805496834 1794531650
+  C different size, back to back try 4: etag changed; inode/mtime 805496834 1794531650 -> 805496834 1794531651
+  C different size, back to back try 5: etag changed; inode/mtime 805496834 1794531652 -> 805496834 1794531653
+  C different size, back to back try 6: etag changed; inode/mtime 805496834 1794531654 -> 805496834 1794531655
+  C different size, back to back try 7: etag changed; inode/mtime 805496834 1794531656 -> 805496834 1794531657
+  C different size, back to back try 8: etag changed; inode/mtime 805496834 1794531658 -> 805496834 1794531659
+  C different size, back to back try 9: etag changed; inode/mtime 805496834 1794531660 -> 805496834 1794531661
+C different size, back to back: 0/10 tries kept the ETag across a content change
+  E same size, back to back, no server stat in between (truly the same second) try 0: etag changed; inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 1: etag changed; inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 2: etag SAME (collision); inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 3: etag SAME (collision); inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 4: etag SAME (collision); inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 5: etag SAME (collision); inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 6: etag changed; inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 7: etag changed; inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 8: etag changed; inode/mtime - - -> - -
+  E same size, back to back, no server stat in between (truly the same second) try 9: etag changed; inode/mtime - - -> - -
+E same size, back to back, no server stat in between (truly the same second): 4/10 tries kept the ETag across a content change
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 0: etag SAME (collision); inode/mtime 805496834 1794531671 -> 805496834 1794531671
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 1: etag SAME (collision); inode/mtime 805496834 1794531676 -> 805496834 1794531676
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 2: etag SAME (collision); inode/mtime 805496834 1794531680 -> 805496834 1794531680
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 3: etag SAME (collision); inode/mtime 805496834 1794531684 -> 805496834 1794531684
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 4: etag SAME (collision); inode/mtime 805496834 1794531688 -> 805496834 1794531688
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 5: etag SAME (collision); inode/mtime 805496834 1794531693 -> 805496834 1794531693
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 6: etag SAME (collision); inode/mtime 805496834 1794531697 -> 805496834 1794531697
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 7: etag SAME (collision); inode/mtime 805496834 1794531701 -> 805496834 1794531701
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 8: etag SAME (collision); inode/mtime 805496834 1794531706 -> 805496834 1794531706
+  D same size, 2.2 s apart, X-OC-Mtime = first mtime try 9: etag SAME (collision); inode/mtime 805496834 1794531710 -> 805496834 1794531710
+D same size, 2.2 s apart, X-OC-Mtime = first mtime: 10/10 tries kept the ETag across a content change
+summary: {'A': 1, 'B': 0, 'C': 0, 'E': 4, 'D': 10}

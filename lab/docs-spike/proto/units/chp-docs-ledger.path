@@ -1,0 +1,12 @@
+# SPIKE (Task 2, ledger route L1): run the root-owned appender whenever the chp_ledger app drops a request.
+# logs/56: without the two limits below, six requests in ten seconds tripped systemd's start limit and stopped the
+# appender for good (path unit "unit-start-limit-hit"): any user could switch approvals off for the whole site.
+[Unit]
+Description=CHP docs approval ledger: a request is waiting (spike)
+
+[Path]
+PathExistsGlob=/var/lib/chp-docs/spool/*.json
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=paths.target

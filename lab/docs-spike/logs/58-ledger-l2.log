@@ -1,0 +1,44 @@
+# logs/58 (Task 2, 2026-11-13T01:15:14Z): ledger route L2 (drop folder Approvals; identity from NextCloud's admin_audit log; root job)
+## 1. lab04 drops an approval request (as the approver)
+L2 approve as lab04 (file says user='lab04'): PUT Approvals/ead8e742ca3a421981e485ca72c49a7b.json -> 201
+## 2. lab01 drops a request for its own document claiming user lab04
+L2 approve as lab01 (file says user='lab04'): PUT Approvals/e6a113f9cd1f4e8da383f0a0c882561b.json -> 201
+## 3. lab01 tries to change or delete lab04's waiting request
+l2-try-overwrite as lab01: PUT Approvals/ead8e742ca3a421981e485ca72c49a7b.json -> 403
+l2-try-delete as lab01: DELETE Approvals/ead8e742ca3a421981e485ca72c49a7b.json -> 403
+## 4. what a user sees in the drop folder
+l2-list as lab01: HTTP 207; 2 request file(s) visible
+## 5. a request written straight onto the server's disk (no NextCloud upload, so no audit record)
+placed 0000disk0000.json + rescan
+## 6. the root job reads the drop folder
++ (root) docs_ledger.py drop 7
+Traceback (most recent call last):
+  File "/usr/local/libexec/chp-spike/docs_ledger.py", line 256, in <module>
+    drop(a[1])
+  File "/usr/local/libexec/chp-spike/docs_ledger.py", line 206, in drop
+    r = {"id": hashlib.md5(name.encode()).hexdigest(),
+ValueError: [digital envelope routines] unsupported
++ (root) docs_ledger.py show
+  1 2026-11-13T01:11:42Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  2 2026-11-13T01:14:29Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 119 a92642ca6466 
+  3 2026-11-13T01:14:29Z L1-ocs   publish  lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  4 2026-11-13T01:14:29Z L1-ocs   checkout lab04  auth=app-password   kanidm_sub=None file 119 000000000000 
+  5 2026-11-13T01:14:31Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  6 2026-11-13T01:14:40Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 119 a92642ca6466 
+  7 2026-11-13T01:14:44Z L1-ocs   publish  lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  8 2026-11-13T01:14:46Z L1-ocs   checkout lab04  auth=app-password   kanidm_sub=None file 119 000000000000 
+  9 2026-11-13T01:15:07Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+# logs/58 continued (2026-11-13T01:15:30Z): FIPS refuses md5 (above); the request id is now sha256(name)[:32]; reinstall the appender, run step 6 again on the same three waiting requests
++ reinstalled
+L2 0000disk0000.json: REFUSED: no audit record names its uploader (file id 275)
+L2 e6a113f9cd1f4e8da383f0a0c882561b.json: REFUSED: no audit record names its uploader (file id 274)
+L2 ead8e742ca3a421981e485ca72c49a7b.json: REFUSED: no audit record names its uploader (file id 273)
+  7 2026-11-13T01:14:44Z L1-ocs   publish  lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  8 2026-11-13T01:14:46Z L1-ocs   checkout lab04  auth=app-password   kanidm_sub=None file 119 000000000000 
+  9 2026-11-13T01:15:07Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+0
+# NOTE (after the run): all three REFUSED because of a prototype bug, not a NextCloud gap: admin_audit DID record
+#   'File with id "273" created: "/lab04/files/Approvals/ead8e742….json"' (user lab04) and the same for 274 (lab01);
+#   docs_ledger.py pre-filtered lines on '"273"' but the raw JSON line escapes those quotes (\"273\"). The job had
+#   already deleted the three requests, so logs/59 repeats the whole route after the fix. (A refused request is lost
+#   with no word to its sender: one more cost of this route.)

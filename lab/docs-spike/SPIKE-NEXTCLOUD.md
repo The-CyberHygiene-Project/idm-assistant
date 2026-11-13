@@ -1,5 +1,10 @@
 # Spike: NextCloud on a hardened CHP server (ISO 0.7.0 Plan 1, Task 1)
 
+**Task 2 (doc commands, 2026-11-13, §Transport and §Ledger):** sign in with a Kanidm public client and send the
+token as a Bearer (nothing long-lived on the workstation; a Kanidm lock takes effect on the next request); the
+freshness marker is the content hash, because **NextCloud's ETag can stay the same across a content change**;
+the approval ledger is appended by a root job, fed by a small NextCloud app over NextCloud's own HTTPS (no new port).
+
 **Result: NextCloud 35.0.3 runs on a FIPS, SELinux-enforcing, fapolicyd, CUI-profile CHP server installed from ISO
 0.6.0, signs in through Kanidm (password + TOTP), never reaches the internet, refuses every share of CUI/FCI, tags by
 folder, audits to Wazuh, and restores from `/backup`. No product blocker.** Every step below was run on the lab
@@ -351,6 +356,197 @@ kanidmd 76, httpd 60, postgresql 39. Disk: code 874 MB (`/usr/lib/nextcloud`), d
 for three copies. **4 GiB (the install default) is too small for the server with SECURITY_ADDONS and NextCloud; Plan 2
 should say 8 GiB.**
 
+## Transport (Task 2): how `chp-site doc` signs in and finds a stale copy
+
+Task 2 of Plan 1, run on 2026-11-13 (UTC) on the same two VMs; raw output in `logs/43-65`, prototypes in `proto/`
+(stdlib-only Python 3.9 on the workstation, like chp-site). The workstation scripts travel to iso5-dcli as a `-c`
+argument (`proto/on-dcli.sh`) because fapolicyd there refuses `python3` opening an untrusted `.py` in a home
+directory. The product ships chp-site as a trusted RPM file, so this only affects the spike. The browser step is
+scripted (`--scripted-browser`, the same forms as `oidc_login.py`). **A real Firefox click-through on the
+workstation was not done.**
+
+### Sign-in: three routes
+
+| Route | What the workstation keeps | How long it is valid | After a Kanidm lock | Logs |
+|---|---|---|---|---|
+| **1. Kanidm public client `chp-doc`**: authorization code + PKCE S256, redirect to a one-shot listener on `127.0.0.1`; the access token is sent to NextCloud as `Authorization: Bearer` | access token (JWT `at+jwt`, ES256, 722 chars) + refresh token in `$XDG_RUNTIME_DIR/chp-doc/session.json` (tmpfs, 0600). Nothing in the home (a grep of `/home` found none) | access token 900 s; refresh token at most 8 h (`set-refresh-token-expiry chp-doc 28800`; it is replaced on every refresh). The file goes when the user's last session ends: logind removed `/run/user/1000` and the token with it | **next call 401; refresh `invalid_grant`** | 44, 45, 47, 48 |
+| **2. NextCloud Login Flow v2** (`POST /index.php/login/v2`, browser signs in through Kanidm and grants, CLI polls) | a 72-char **app password**: 0600 file in `~/.config/chp-doc/` (on the LUKS home) or tmpfs | **no expiry at the server** (`user:auth-tokens:list`: type 1 = permanent, `expires: None`; nothing in config expires it) until it is revoked | **still 200**: NextCloud checks an app password itself and never asks Kanidm | 46, 47, 48 |
+| 3. OIDC device flow (RFC 8628) | – | **not offered by Kanidm 1.11.2**: no `device_authorization_endpoint` in discovery, `POST /oauth2/device` 404 | – | 43 |
+
+Both working routes sign out cleanly. Route 1 revokes at Kanidm (`/oauth2/token/revoke`, 200), route 2 calls
+`DELETE /ocs/v2.php/core/apppassword` (200), and the old credential then gets 401 (`logs/48`, `logs/64`). An app
+password that is never signed out stays valid. A first Flow v2 run left one behind (id 30), and only an admin
+`occ user:auth-tokens:delete` removed it (`logs/48`).
+
+**Recommendation: route 1 (Kanidm public client + Bearer).** Nothing long-lived sits on the workstation: 15 min and
+at most 8 h, in RAM, and gone at logout. A lock or removal in Kanidm takes effect on the next request, because
+NextCloud asks Kanidm about the token on every call. The identity is the same Kanidm person NextCloud already uses,
+and the ledger can record that person's Kanidm `sub`, `session_id` and `auth_time` (§Ledger). Route 2 is rejected:
+its app password is a permanent bearer secret, and it keeps working for a person locked out in Kanidm (`logs/47`).
+That is an offboarding gap. Keeping the app password in tmpfs and adding an expiry job would narrow the gap but not
+close it.
+
+**What route 1 costs (all shown):**
+
+- **Kanidm:** one public client `chp-doc` (`create-public`, `enable-localhost-redirects`, the same scope map and
+  `chp_groups` claim maps as `nextcloud`, refresh expiry), rendered by chp-site on the server (`proto/auth-setup.sh
+  kanidm`, `logs/44`).
+- **NextCloud:** a second user_oidc provider `kanidm-cli` (`--check-bearer=1 --bearer-provisioning=0`) and
+  `user_oidc.userinfo_bearer_validation = true`, `selfencoded_bearer_validation = false`. Why: Kanidm's access token
+  carries `sub` (a UUID) but **no `preferred_username`**, so NextCloud's self-encoded check found no user ("Could
+  not find unique token validation", `logs/45`). With the userinfo check, every API call costs a call to Kanidm:
+  **PROPFIND median 191 ms with the Bearer vs 92 ms with an app password** (`logs/63`). A doc command makes a handful
+  of calls, so the cost is small. Kanidm ties userinfo to the client that issued the token: a `chp-doc` token is
+  refused at the `nextcloud` client's userinfo (400 `invalid_request`, `logs/65`), so one client's token cannot be
+  used as the other's. WebDAV accepts the Bearer too (`logs/53`).
+- **The second provider breaks the straight-to-Kanidm login page.** user_oidc redirects `/index.php/login` only
+  when exactly one provider exists (`Application.php` `registerRedirect`). With two, the page shows two buttons
+  (`logs/62`). Fix, prototyped: five `RewriteRule` lines in the NextCloud vhost (`proto/nextcloud-login-rewrite.conf`)
+  send `/index.php/login` to provider 1 and keep `redirect_url` (Login Flow v2's grant page needs it) and
+  `?direct=1` (break-glass). Shown working for the plain page, for `redirect_url`, and for the whole Flow v2 hop chain
+  up to Kanidm (`logs/62`). The `?direct=1` page still lists the useless "kanidm-cli" button (cosmetic).
+- **A loopback listener during sign-in.** This is not a network port: it binds `127.0.0.1` only, answers one
+  request and closes (`ss` shows nothing afterwards). The workstation listens only on 22 and 631 (`logs/45`,
+  `logs/61`). Kanidm accepts **any** loopback port for this client even with strict redirects on (`logs/49`), so
+  Plan 2 can bind port 0. A local process that took the port first would get only a code it cannot redeem without
+  the PKCE verifier.
+- **A browser on the workstation** (Firefox 140 is installed) and a Kanidm password + TOTP sign-in at most once
+  per 8 h, or once per GNOME login. **Untested:** whether an existing Kanidm browser session skips the prompts (the
+  scripted browser starts with no cookies; consent was remembered on the second sign-in, `logs/45`). Also untested:
+  `chp-site doc` run from a session with no runtime dir (cron, `su`).
+- Notes for Plan 2, not tested here. user_oidc's Bearer path sets `last-password-confirm` 4 years ahead, so
+  password re-confirmation never applies. With the default `auto_provision`, a Bearer for a Kanidm person who never
+  used the web UI creates their NextCloud account; they would have no groups, so no CUI access.
+
+### Freshness marker: the ETag alone is not enough
+
+`proto/freshness.py` (`logs/50`) recorded the WebDAV marker (`getetag`, `oc:fileid`, size, versions) of one
+controlled file in `CUI/Compliance/` after each event:
+
+| ETag unchanged (correct) | ETag changed |
+|---|---|
+| GET by the author or a reviewer; PROPFIND; a refused reviewer PUT (403); favourite; comment; rename away and back; admin `groupfolders:scan`; background jobs; a share (Operations file) | every author PUT, **even of the same bytes**; PUT with the current `If-Match`; a version restore; mtime changed on the disk + rescan. **Also, wrongly: WebDAV LOCK and UNLOCK** (files_lock app), with the content unchanged |
+
+`fileid` never changed (rename, restore and overwrite all kept it). **Three defects make the ETag unsafe as the
+proof:**
+
+1. **Different content, same ETag.** NextCloud's local-storage ETag is `md5(mtime_seconds . inode . dev . size)`
+   (`lib/private/Files/Storage/Local.php` `calculateEtag`, quoted in `logs/51`), and the inode stays the same from
+   one write to the next (`logs/51`). Two writes in the same second kept the ETag **4 times in 10** with the same
+   size (`logs/52`, case E). Once in `logs/50` a new-content PUT left it unchanged. In `logs/51` case C it stayed
+   the same **twice with a different size**. That is observed and **not explained**, since size is part of the hash.
+   **10 in 10** when the second PUT sent `X-OC-Mtime` equal to the first one's mtime, even 2 s later (`logs/51`,
+   `logs/52` case D). Any NextCloud client may send that header.
+2. **An old ETag comes back.** Restoring a version brought back an ETag the file had had before (`6af6604cc5ba8`,
+   `logs/50`). A checkout made at that ETag would look fresh again after intermediate publications.
+3. **A change on the disk behind NextCloud** that keeps size and mtime is invisible even after a rescan
+   (`logs/50`). That is expected, and only a content hash catches it.
+
+`If-Match` works: a stale value gets **412** and the current one 204 (`logs/50`).
+
+**Prototype (`proto/doc_fresh.py`, `logs/53`, on iso5-dcli over route 1):** `checkout` writes the working copy to
+`~/chp-docs-work/` and records `{fileid, etag, sha256, user, time}` beside it. `publish` downloads the canonical
+copy and refuses unless fileid, ETag **and** sha256 all still match, then PUTs with `If-Match: <checkout etag>`.
+Shown: a fresh copy publishes. A colleague's same-size update with `X-OC-Mtime` kept the ETag; an ETag-only check
+**would have published over it**, and the hash check refused. An ordinary update by someone else is refused. The
+real publish moved the ETag, so the old checkout record is then refused too.
+
+**Recommendation: the freshness marker is the sha256 of the canonical bytes (with the fileid), recorded at checkout
+and compared at publish.** The ETag is used only as the `If-Match` on the final write, to close the gap between the
+check and the write, and as a cheap first look. With the central ledger (§Ledger), Plan 2 should also refuse when
+the ledger holds a publication of that fileid after the checkout entry. Ledger sequence numbers only grow, so this
+closes defect 2 without trusting NextCloud. **Cost:** one extra GET of the canonical copy at publish (controlled
+documents are small), a checkout record beside the working copy, and a hash. A LOCK by anyone makes the copy look
+stale (a false refusal, the safe direction): `doc check` should say so plainly.
+
+## Ledger (Task 2): where the approval ledger lives
+
+Two places were prototyped. Both use the same root-owned appender `proto/docs_ledger.py`: stdlib Python 3.9 on the
+server, modelled on `chp_site/review_ledger.py`. It writes one JSON line per entry, each with the SHA-256 of the
+previous line, under `flock`, with a `ledger.head` witness, `export` of the ledger + `heads.txt` to the stick, and
+`verify-heads` against the stick. It applies design §4's rules: the approver is a listed approver and never the
+author (the user of the latest checkout); the ISSO override needs a reason and a one-person site; publish needs an
+approval of that exact sha256 since the checkout, by someone else. The ledger is
+`/var/lib/chp-docs/ledger/ledger.jsonl` (root, 0600, directory 0700). Install: `proto/ledger-setup.sh` (`logs/54`).
+
+- **L1, through NextCloud's own HTTPS:** a small NextCloud app `chp_ledger` (`proto/chp_ledger/`, one OCS
+  controller). `POST /ocs/v2.php/apps/chp_ledger/api/v1/request` stamps the request with the user NextCloud
+  authenticated (`IUserSession`, never a name in the request), the kind of authentication (bearer / app password /
+  session) and, for a Bearer, the token's Kanidm `sub`, `session_id`, `auth_time`. It checks that this user can see
+  the file id, then drops the request in `/var/lib/chp-docs/spool` (`root:apache 1730`, `httpd_sys_rw_content_t`).
+  `chp-docs-ledger.path` starts the root appender, which writes a result to `out/` (`httpd_sys_content_t`, read-only
+  to the web server), and the CLI polls `GET …/result/<id>`.
+- **L2, a restricted NextCloud folder:** a team folder `Approvals` (read + create; no write, delete or share,
+  through an ACL, because team folders have no "create" permission, `logs/54`). The CLI uploads a request file there.
+  A root job takes the uploader from NextCloud's `admin_audit` log (`File with id "N" created:
+  "/<user>/files/Approvals/<name>"`), never from the file, appends, and deletes the request.
+
+| Proof | L1 (OCS app) | L2 (drop folder) |
+|---|---|---|
+| author approves own document | refused: "is the author" (`logs/57` 2) | refused (`logs/59` 6) |
+| author claims to be the approver (`user=lab04` in the request / in the file) | ignored; recorded and refused as lab01 (`logs/57` 3) | ignored; refused as lab01 (`logs/59` 2, 6) |
+| a different signed-in approver | appended, with Kanidm sub (`logs/57` 7) | appended; identity from the audit log, no Kanidm session (`logs/59` 6) |
+| ISSO override with other approvers present; non-ISSO override | both refused (`logs/57` 8, 4) | (same rules) |
+| publish without approval / of a different hash / of the approved hash | refused / refused / appended (`logs/57` 5, 9, 10) | (same rules) |
+| people outside `cui-users` (lab02, reviewer lab03) | 404: they cannot reference the CUI file (`logs/57` 6) | not shown |
+| no credentials | 401 (`logs/57` 11) | (no upload without sign-in) |
+| a request written on the server's disk, not uploaded | (cannot reach the spool: apache-only) | refused: no audit record (`logs/59` 5-6) |
+| another user changes or deletes a waiting request | spool not listable by apache, not reachable by users | 403 / 403 (`logs/59` 3) |
+| users see others' waiting requests | no | **yes** (2 visible, `logs/59` 4) |
+| answer to the user | synchronous, 0.1-0.3 s (`logs/57`) | **none**: a refused request vanishes unseen (`logs/58` note) |
+| app password instead of Bearer | accepted, and the entry records `auth=app-password` (`logs/57` 12): policy can demand Bearer for approve | can't tell (the audit line doesn't say) |
+| new network port | none (8443, `logs/61`) | none |
+
+**Common to both:**
+
+- The web server's user cannot read or append to the ledger, list the spool or write a result (`logs/60`).
+- A cut-off entry is caught by the head witness. A cut plus a rewritten witness (root on the server) is caught only
+  by the heads on the stick. An approver's name changed in place breaks the chain. All of this was shown on a copy;
+  the real ledger still verifies, and so do its heads on the stick (`logs/60`).
+- **Residual risk (both routes):** whoever controls the NextCloud PHP process can submit requests as anyone,
+  because NextCloud is the authenticator in both. The ledger detects later tampering. It cannot prevent forged
+  entries from a NextCloud that is already compromised.
+
+**Recommendation: L1.** It records the identity NextCloud authenticated for that very request, and with route 1
+that is a live Kanidm session (sub, session id, auth time). It answers at once, needs no new port, and its spool and
+ledger are out of every user's reach. The same app is where Plan 2 can move `publish` itself: a server-side
+compare-and-write of the Compliance area that a modified client cannot skip. L2 works, but each defect it showed
+counts against it: identity rests on matching log lines (fragile: the prototype's first match missed escaped quotes,
+`logs/58`) and on `admin_audit` staying on; requests are visible to every user; there is no answer channel; and it
+cannot see the Kanidm session.
+
+**What L1 costs:**
+
+- A second custom NextCloud app (about 100 lines of PHP, kept current with NextCloud like `chp_foldertag`). It goes
+  in the RPM, because fapolicyd needs it trusted (the spike used `fapolicyd-cli --file add … --trust-file
+  chp-spike`, `logs/54`).
+- `/var/lib/chp-docs` with two SELinux file contexts, a `.path` + `.service` pair, and `docs_ledger.py` in chp-site.
+- The stick export joins the existing export.
+- Two defects to carry into Plan 2:
+  - **Six requests in ten seconds tripped systemd's start limit** and stopped the appender for good
+    (`unit-start-limit-hit`, `logs/56`): any user could have switched approvals off for the site. Fixed with
+    `StartLimitIntervalSec=0` and `TriggerLimitIntervalSec=0` (`logs/57`). Plan 2 should add a per-user rate limit in
+    the app and a monitor check that the path unit is active.
+  - **FIPS refuses `hashlib.md5`** (`logs/58`): use SHA-256 for every id.
+- One rule to settle: "author = the user of the latest checkout" let a reviewer's own checkout (lab04, `logs/57`
+  entry 8) make them the author. Plan 2 must define the author per change cycle (for example the publisher and the
+  checkout user of that cycle).
+
+**State left on iso5-docs** (for Plan 2; removal in `README.md`):
+
+- Kanidm client `chp-doc`.
+- user_oidc provider `kanidm-cli` and the two `user_oidc` settings.
+- The vhost rewrite (the original is `/root/spike/nextcloud.conf.before-task2`).
+- App `chp_ledger`, `/var/lib/chp-docs` (11 entries; entries 1-4 are `logs/56` leftovers, `logs/57` note), and
+  `chp-docs-ledger.path`.
+- Team folder `Approvals` (id 7).
+- fapolicyd trust file `chp-spike`.
+- The stick stand-in `/root/spike/stick`.
+
+All route-1 sessions were revoked (`logs/64`, `logs/65`). No new SELinux or fapolicyd denials were recorded during
+Task 2 (`logs/61`). fapolicyd's counter says 1 denial since its start while the audit log holds none: the same
+mismatch as finding 2, not explained.
+
 ## For Plan 2 (decisions and work the spike surfaced)
 
 1. fapolicyd: the namespace gap (finding 1) and the gates and collector that count FANOTIFY (finding 2): changes to
@@ -363,7 +559,9 @@ should say 8 GiB.**
    stock listeners, the boolean, the cert renewal timer, the backup timer, the Wazuh rules.
 6. Use `chp-site get SUBNET_CIDR` for the firewall rule; the site zone needs `files`.
 7. The nightly tag check outside the app; the canary (public link on a CUI test file expects 403) fits the same timer.
-8. Approval ledger / doc-command transport: not part of this task (Task 2).
+8. Doc commands (Task 2, §Transport, §Ledger): sign in by the Kanidm public client + Bearer (route 1); freshness =
+   sha256 + fileid at checkout, ETag only as If-Match; ledger L1 (chp_ledger OCS app -> spool -> root appender),
+   with the start-limit fix, a per-user rate limit, the login-page rewrite and a per-cycle author rule.
 9. Egress: BindsTo + pre-check drop-in, a monitor check for the table, and the DNS decision (above).
 10. Copy-out containment (`ContainListener`) and its logging into the audit trail; the owner decides on the
     download/re-upload residual (§Copy out).

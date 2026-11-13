@@ -1,0 +1,41 @@
+# logs/47 (Task 2, 2026-11-13T00:52:23Z): offboarding - what each route does when the person is locked in Kanidm
+## before: both work
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+WHOAMI (app-password): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}
++ kanidm person validity expire-at lab01 now -D idm_admin
+Success
++ kanidm person validity expire-at lab02 now -D idm_admin
+Success
++ kanidm person validity show lab01 -D idm_admin
+user: lab01
+valid after: any time
+expire: 2026-11-12T17:52:17.021348132-07:00
++ kanidm person validity show lab02 -D idm_admin
+user: lab02
+valid after: any time
+expire: 2026-11-12T17:52:17.541283828-07:00
+## after the Kanidm lock (no NextCloud action)
+# route 1 (Bearer, checked at Kanidm's userinfo on every call):
+WHOAMI (oidc): HTTP 401 None
+# route 1 refresh:
+  refresh refused: 400 b'{"error":"invalid_grant"}'
+WHOAMI (oidc): HTTP 401 None
+# route 2 (app password, checked by NextCloud alone):
+WHOAMI (app-password): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}
+## a new browser sign-in for lab02 (the Kanidm lock itself works):
+  POST idm.docs.lab.test/ui/login/begin -> 200
+FAIL: no form at /ui/login/begin (title 'Login'): Login Kanidm idm.docs.lab.test Login Failed Reason: account expired Operation ID: 5a4f10cb-0d33-4f38-a5ef-e0250c326b8f Return to Login Powered by Kanidm
++ kanidm person validity expire-at lab01 never -D idm_admin
+Success
++ kanidm person validity expire-at lab02 never -D idm_admin
+Success
++ kanidm person validity show lab01 -D idm_admin
+user: lab01
+valid after: any time
+expire: never
++ kanidm person validity show lab02 -D idm_admin
+user: lab02
+valid after: any time
+expire: never
+## restored
+WHOAMI (app-password): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}

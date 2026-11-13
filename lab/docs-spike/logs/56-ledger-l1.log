@@ -1,0 +1,39 @@
+# logs/56 (Task 2, 2026-11-13T01:11:48Z): ledger route L1 (OCS app over NextCloud's HTTPS -> spool -> root appender) - the rules and forgery attempts
+## 1. lab01 checks the document out (records lab01 as its author)
+L1 checkout as lab01: POST -> 200 {'id': '9e3ac4b5f4e58f951f4582d565af1532'}
+  result after 0.2s: ok=True seq=1 reason=None
+## 2. lab01 approves their own document: refused
+L1 approve as lab01: POST -> 200 {'id': '10f322caf20d585a4749821a54b36b44'}
+  result after 0.2s: ok=False seq=None reason='lab01 is not an approver'
+## 3. lab01 approves again, claiming to be lab04 (user=lab04 in the request): the app ignores the claim
+L1 approve as lab01 claiming lab04: POST -> 200 {'id': 'a79dacb86ca90be82c412447d813a150'}
+  result after 0.2s: ok=False seq=None reason='lab01 is not an approver'
+## 4. lab01 tries the ISSO override: refused (not the ISSO)
+L1 override as lab01: POST -> 200 {'id': 'c292f437cf604a40493687777aa9c9b6'}
+  result after 0.3s: ok=False seq=None reason='only the ISSO may override'
+## 5. lab01 publishes before any approval: refused
+L1 publish as lab01: POST -> 200 {'id': '602a7c6752401d182896ba849862e350'}
+  result after 0.2s: ok=False seq=None reason='no approval of this exact file (sha256) since the checkout, by someone other than the publisher'
+## 6. lab02 (not cui-users) and lab03 (doc-reviewers, not cui-users) cannot see the CUI document: refused
+  (this user cannot see CUI/Compliance/CUI_spike-ssp_v1.0.docx: HTTP 404; sending the known file id 119 anyway)
+L1 approve as lab02: POST -> 404 {'error': 'no such document for this user'}
+  (this user cannot see CUI/Compliance/CUI_spike-ssp_v1.0.docx: HTTP 404; sending the known file id 119 anyway)
+L1 approve as lab03: POST -> 404 {'error': 'no such document for this user'}
+## 7. lab04 (approver, cui-users) approves: appended, with the Kanidm session behind the Bearer
+L1 approve as lab04: POST -> 200 {'id': '0fae0bf63d074cca379e40f334a331ed'}
+  no result in 30 s
+## 8. lab04 (the ISSO here) override: refused, other approvers exist
+L1 override as lab04: POST -> 200 {'id': '7bfdda76ddaa51e144a2824f6eebf6fa'}
+  no result in 30 s
+## 9. lab01 publishes a DIFFERENT file than the approved one: refused
+L1 publish as lab01: POST -> 200 {'id': '2738c99a548f0eb7dd530904516d17a4'}
+  no result in 30 s
+## 10. lab01 publishes the approved file: appended
+L1 publish as lab01: POST -> 200 {'id': 'bcb70bfe92fec0aa5d46c5c36cfd25cf'}
+  no result in 30 s
+## 11. no credentials at all
+unauthenticated POST -> 401
+## 12. lab04 by app password instead of Bearer (the entry records which; policy could demand Bearer)
+lab04 app-password checkout POST -> 200 {'id': '154866f43ee2bbd7b1d07d0155c52781'}
++ (root) docs_ledger.py show
+  1 2026-11-13T01:11:42Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 

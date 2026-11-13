@@ -1,0 +1,24 @@
+# logs/54 (Task 2, 2026-11-13T01:06:26Z): install ledger route L1 (chp_ledger app + root appender), L2 (Approvals drop folder), the stick stand-in
++ semanage fcontext: spool = httpd_sys_rw_content_t, out = httpd_sys_content_t
++ fapolicyd-cli --file add (trust file chp-spike) + --update
+Fapolicyd was notified
+Created symlink /etc/systemd/system/paths.target.wants/chp-docs-ledger.path → /etc/systemd/system/chp-docs-ledger.path.
+total 4
+drwxr-xr-x.  5 root root   system_u:object_r:var_lib_t:s0                44 Nov 12 18:06 .
+drwxr-xr-x. 64 root root   system_u:object_r:var_lib_t:s0              4096 Nov 12 18:06 ..
+drwx------.  2 root root   system_u:object_r:var_lib_t:s0                 6 Nov 12 18:06 ledger
+drwxr-xr-x.  2 root root   system_u:object_r:httpd_sys_content_t:s0       6 Nov 12 18:06 out
+drwx-wx--T.  2 root apache system_u:object_r:httpd_sys_rw_content_t:s0    6 Nov 12 18:06 spool
+active
++ occ app:enable chp_ledger
+chp_ledger 0.1.0 enabled
++ occ groupfolders:create Approvals
++ occ groupfolders:group 7 chp-users read create
+Unable to parse permissions input: read create
+Approvals = team folder 7 (chp-users: read + create; no write, delete or share)
+stick stand-in: /root/spike/stick
+# logs/54 continued (2026-11-13T01:06:49Z): 'create' is not a team-folder permission; read+write plus an ACL instead
++ occ groupfolders:group 7 chp-users read write
++ occ groupfolders:permissions 7 --enable
++ occ groupfolders:permissions 7 --group chp-users -- / +read +create -write -delete -share
+Approvals = team folder 7 (chp-users: read + create; no write, delete or share)

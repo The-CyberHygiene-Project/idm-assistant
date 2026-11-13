@@ -1,0 +1,34 @@
+# logs/60 (Task 2, 2026-11-13T01:16:19Z): the ledger's head anchored on the stick stand-in; tampering caught (on a COPY); what apache can do
++ (root) docs_ledger.py verify
+verify: OK, 11 entries, head 11 e71d5e23ca260575...
++ (root) docs_ledger.py export /root/spike/stick
+exported to /root/spike/stick/docs-ledger: head 11 e71d5e23ca260575...; OK: chain and head match
+11 e71d5e23ca2605758c38ff739b41dc1a389f33915ef1f159f413dbd81a7bccb7 2026-11-13T01:16:12Z
+## tamper with a COPY of the ledger (CHP_DOCS_BASE=/root/spike/tamper), never the real one
+## a. the last entry cut off (head witness still says N)
+LEDGER PROBLEM: the ledger is shorter than its recorded head (11 entries)
+## b. ... and the head witness rewritten to match (someone with root on the server): only the stick notices
+bash: line 1: cd: /root/spike/tamper/ledger: Permission denied
+LEDGER PROBLEM: the ledger is shorter than its recorded head (11 entries)
+verify-heads: PROBLEMS: head at 2026-11-13T01:16:12Z: the stick saw 11 entries; the server has 10 (entries removed)
+## c. an entry's approver changed in place (lab04 -> lab03): the chain breaks
+LEDGER PROBLEM: entry 3 does not follow entry 2 (the chain is broken there)
+## the real ledger is untouched
++ (root) docs_ledger.py verify
+verify: OK, 11 entries, head 11 e71d5e23ca260575...
++ (root) docs_ledger.py verify-heads /root/spike/stick
+verify-heads: OK
+## apache (the web server's user, i.e. a compromised NextCloud)
+cat: /var/lib/chp-docs/ledger/ledger.jsonl: Permission denied
+sh: line 1: /var/lib/chp-docs/ledger/ledger.jsonl: Permission denied
+ls: cannot open directory '/var/lib/chp-docs/spool': Permission denied
+sh: line 1: /var/lib/chp-docs/out/forged.json: Permission denied
+ls: cannot open directory '/var/lib/chp-docs/ledger': Permission denied
+-rw-------. 1 root root unconfined_u:object_r:var_lib_t:s0   68 Nov 12 18:16 ledger.head
+-rw-------. 1 root root system_u:object_r:var_lib_t:s0     5822 Nov 12 18:16 ledger.jsonl
+# logs/60 continued (2026-11-13T01:16:34Z): step b again (the cd ran unprivileged above); the copy still lacks its last entry
+copy made, last entry cut
+witness rewritten: 10 entries
+verify: OK, 10 entries, head 10 17771593a187653c...
+verify-heads: PROBLEMS: head at 2026-11-13T01:16:12Z: the stick saw 11 entries; the server has 10 (entries removed)
+copy removed

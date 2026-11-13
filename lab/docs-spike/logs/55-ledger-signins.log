@@ -1,0 +1,13 @@
+# logs/55 (Task 2, 2026-11-13T01:07:38Z): route 1 sign-in of the four lab people on iso5-dcli (one runtime session each)
+## lab01
+  id token: preferred_username=lab01 chp_groups=['chp-users', 'cui-users'] aud=chp-doc auth_time=1794532110 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## lab02
+  id token: preferred_username=lab02 chp_groups=['chp-users'] aud=chp-doc auth_time=1794532170 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}
+## lab03
+  id token: preferred_username=lab03 chp_groups=['chp-users', 'doc-reviewers'] aud=chp-doc auth_time=1794532230 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab03', 'groups': ['chp-users', 'doc-reviewers'], 'backend': 'user_oidc'}
+## lab04
+  id token: preferred_username=lab04 chp_groups=['chp-users', 'cui-users', 'doc-reviewers'] aud=chp-doc auth_time=1794532291 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab04', 'groups': ['chp-users', 'cui-users', 'doc-reviewers'], 'backend': 'user_oidc'}

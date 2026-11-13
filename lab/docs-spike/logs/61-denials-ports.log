@@ -1,0 +1,17 @@
+# logs/61 (Task 2, 2026-11-13T01:16:48Z): SELinux / fapolicyd denials on iso5-docs during Task 2 (since 17:40 server time), egress table intact
++ ausearch AVC/USER_AVC/FANOTIFY since 17:40
+(end of denial list)
+Allowed accesses: 603372
+Denied accesses: 1
+2
++ outbound-blocked counters:
+		meta l4proto { tcp, udp } th dport 53 log prefix "CHP-NC-EGRESS-DNS " flags skuid counter packets 5 bytes 360 reject
+		log prefix "CHP-NC-EGRESS " flags skuid counter packets 0 bytes 0 reject
++ listening TCP ports:
+0.0.0.0:1514 0.0.0.0:22 127.0.0.1:53 127.0.0.1:55000 127.0.0.1:631 127.0.0.1:953 [::1]:631 192.168.100.53:443 192.168.100.53:53 192.168.100.53:9000 [::1]:953 [::]:22 *:8443 
++ workstation listening TCP ports:
+0.0.0.0:22 127.0.0.1:631 [::1]:631 [::]:22 
++ cross-check: the same search from boot (FANOTIFY/AVC records since this boot, any time)
+       0
+2026-11-12 17:09:53
+ActiveEnterTimestamp=Thu 2026-11-12 17:24:01 MST

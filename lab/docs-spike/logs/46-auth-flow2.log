@@ -1,0 +1,59 @@
+# logs/46 (Task 2, 2026-11-13T00:51:36Z): route 2 = NextCloud Login Flow v2 -> app password (stored in the home, 0600, on LUKS)
+# (a first run at 00:51Z -10 min, identical, made the first lab02 token below)
+## flow2-login lab02 --store home (scripted browser = Firefox: Log in -> Kanidm -> Grant access)
+  login/v2 -> 200: a login URL + a poll token (poll endpoint /index.php/login/v2/poll)
+  picker page: state 'auth', client 'CHP doc commands (spike)'
+  browser GET https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1 -> 303
+  browser GET https://idm.docs.lab.test/ui/oauth2 -> 200
+  browser form /ui/login/begin fields=['password', 'totp', 'username']
+  browser POST https://idm.docs.lab.test/ui/login/begin -> 200
+  browser form /ui/login/totp fields=['password', 'totp']
+  browser POST https://idm.docs.lab.test/ui/login/totp -> 200
+  browser form /ui/login/pw fields=['password']
+  browser POST https://idm.docs.lab.test/ui/login/pw -> 303
+  browser GET https://idm.docs.lab.test/ui/oauth2/resume -> 303
+  browser GET https://files.docs.lab.test:8443/index.php/apps/user_oidc/code -> 303
+  grant page: HTTP 200, state 'grant'
+  POST /login/v2/grant (the Grant access button) -> 200
+  poll -> 200: loginName=lab02, appPassword=<72 chars, not shown>
+WHOAMI (app password): HTTP 200 {'id': 'lab02', 'groups': ['chp-users'], 'backend': 'user_oidc'}
+## stored
+{
+ "path": "/run/user/1000/chp-doc/session.json",
+ "mode": "0o600",
+ "owner_uid": 1000,
+ "filesystem": "/run/user/1000 tmpfs (tmpfs)",
+ "kind": "oidc",
+ "user": "lab01",
+ "stored_at": "2026-11-13T00:48:30Z",
+ "access_token_expires": "2026-11-13T01:03:32Z",
+ "access_token_shape": "3 dot-separated parts, 722 chars",
+ "refresh_token": "present",
+ "refresh_expires_by": "2026-11-13T08:48:30Z (Kanidm client setting)"
+}
+{
+ "path": "/home/chpadmin/.config/chp-doc/app-password",
+ "mode": "0o600",
+ "owner_uid": 1000,
+ "filesystem": "/home xfs (/dev/mapper/chp-home)",
+ "kind": "app-password",
+ "user": "lab02",
+ "stored_at": "2026-11-13T00:52:01Z",
+ "app_password": "72 chars; no expiry at the server (valid until revoked)"
+}
+## the server's view: lab02's app passwords (occ user:auth-tokens:list; no secrets)
+{'id': 2, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0, 'lastActivity': 1794526801, 'expires': None, 'remember': None}
+{'id': 6, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0, 'lastActivity': 1794527701, 'expires': None, 'remember': None}
+{'id': 22, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0, 'lastActivity': 1794528691, 'expires': None, 'remember': None}
+{'id': 15, 'name': 'spike', 'type': 1, 'lastActivity': 1794529673, 'expires': None, 'remember': None}
+{'id': 29, 'name': 'CHP doc commands (spike)', 'type': 0, 'lastActivity': 1794531061, 'expires': None, 'remember': None}
+{'id': 30, 'name': 'CHP doc commands (spike)', 'type': 1, 'lastActivity': 1794531062, 'expires': None, 'remember': None}
+{'id': 31, 'name': 'CHP doc commands (spike)', 'type': 0, 'lastActivity': 1794531121, 'expires': None, 'remember': None}
+{'id': 32, 'name': 'CHP doc commands (spike)', 'type': 1, 'lastActivity': 1794531121, 'expires': None, 'remember': None}
+## NextCloud config: does anything expire app passwords? (token_auth_* / remember_login_cookie_lifetime)
+token_auth_enforced = (unset)
+token_auth_activity_update = (unset)
+remember_login_cookie_lifetime = 0
+session_lifetime = 900
+session_keepalive = false
+auth.authtoken.v1.disabled = (unset)

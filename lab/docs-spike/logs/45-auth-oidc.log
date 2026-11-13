@@ -1,0 +1,45 @@
+# logs/45 (Task 2, 2026-11-13T00:47:47Z): route 1 = Kanidm public client chp-doc, code + PKCE, loopback redirect; Bearer to NextCloud
+# first attempt (before the userinfo setting): Bearer -> 401; NextCloud debug log: 'Could not find unique token validation'.
+# cause: Kanidm's access token (header {alg: ES256, typ: at+jwt}) has claims aud, auth_time, client_id, exp, iat, iss, jti,
+#   nbf, nonce, parent_session_id, scope, session_id, sub - no preferred_username, so the self-encoded check maps no user.
+# fix: occ config:system:set user_oidc userinfo_bearer_validation true; selfencoded_bearer_validation false (auth-setup.sh).
+# also seen: $XDG_RUNTIME_DIR (/run/user/1000) was REMOVED by logind when the user's last session ended (the token went
+#   with it: 'not signed in'). For a desktop user that is the whole GNOME login; the spike holds an ssh session open.
+## oidc-login lab01 (scripted browser = the user's Firefox)
+  listener: 127.0.0.1:8400 (loopback only, one request, then closed)
+  browser GET https://idm.docs.lab.test/ui/oauth2 -> 200
+  browser form /ui/login/begin fields=['password', 'totp', 'username']
+  browser POST https://idm.docs.lab.test/ui/login/begin -> 200
+  browser form /ui/login/totp fields=['password', 'totp']
+  browser POST https://idm.docs.lab.test/ui/login/totp -> 200
+  browser form /ui/login/pw fields=['password']
+  browser POST https://idm.docs.lab.test/ui/login/pw -> 303
+  browser GET https://idm.docs.lab.test/ui/oauth2/resume -> 303
+  listener closed; callback had: ['code', 'state']
+  token response keys: ['access_token', 'expires_in', 'id_token', 'issued_token_type', 'refresh_token', 'scope', 'token_type']; expires_in=900; token_type=Bearer
+  id token: preferred_username=lab01 chp_groups=['chp-users', 'cui-users'] aud=chp-doc auth_time=1794530910 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## stored (what is on the workstation, never the secret)
+{
+ "path": "/run/user/1000/chp-doc/session.json",
+ "mode": "0o600",
+ "owner_uid": 1000,
+ "filesystem": "/run/user/1000 tmpfs (tmpfs)",
+ "kind": "oidc",
+ "user": "lab01",
+ "stored_at": "2026-11-13T00:48:30Z",
+ "access_token_expires": "2026-11-13T01:03:30Z",
+ "access_token_shape": "3 dot-separated parts, 722 chars",
+ "refresh_token": "present",
+ "refresh_expires_by": "2026-11-13T08:48:30Z (Kanidm client setting)"
+}
+## whoami again (no browser)
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## whoami --force-refresh (refresh token -> new access token)
+  refreshed: new access token, expires_in=900; refresh token rotated: True
+WHOAMI (oidc): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+## the home directory holds nothing
+ls: cannot access '/home/chpadmin/.config/chp-doc': No such file or directory
+(grep of /home for refresh_token: done)
+## the listener is gone after sign-in
+0

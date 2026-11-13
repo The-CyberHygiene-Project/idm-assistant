@@ -1,0 +1,29 @@
+# logs/59 (Task 2, 2026-11-13T01:16:03Z): ledger route L2 again after the logs/58 fixes (FIPS md5, audit-line match)
+## 1. lab04 drops an approval request (as the approver)
+L2 approve as lab04 (file says user='lab04'): PUT Approvals/6ce246ab8e0942c6b1a12e3a6a1fb434.json -> 201
+## 2. lab01 drops a request for its own document claiming user lab04
+L2 approve as lab01 (file says user='lab04'): PUT Approvals/43ac87b2b3b0484783ac5950099e42f5.json -> 201
+## 3. lab01 tries to change or delete lab04's waiting request
+l2-try-overwrite as lab01: PUT Approvals/6ce246ab8e0942c6b1a12e3a6a1fb434.json -> 403
+l2-try-delete as lab01: DELETE Approvals/6ce246ab8e0942c6b1a12e3a6a1fb434.json -> 403
+## 4. what a user sees in the drop folder
+l2-list as lab01: HTTP 207; 2 request file(s) visible
+## 5. a request written straight onto the server's disk (no NextCloud upload, so no audit record)
+placed 0000disk0000.json + rescan
+## 6. the root job reads the drop folder
++ (root) docs_ledger.py drop 7
+L2 0000disk0000.json: REFUSED: no audit record names its uploader (file id 278)
+L2 approve by lab01 (claimed in the file: 'lab04') fileid 119: REFUSED: lab01 is the author (the user who checked it out); an approver must be someone else
+L2 approve by lab04 (claimed in the file: 'lab04') fileid 119: APPENDED seq 11
++ (root) docs_ledger.py show
+  1 2026-11-13T01:11:42Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  2 2026-11-13T01:14:29Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 119 a92642ca6466 
+  3 2026-11-13T01:14:29Z L1-ocs   publish  lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  4 2026-11-13T01:14:29Z L1-ocs   checkout lab04  auth=app-password   kanidm_sub=None file 119 000000000000 
+  5 2026-11-13T01:14:31Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  6 2026-11-13T01:14:40Z L1-ocs   approve  lab04  auth=bearer         kanidm_sub=d46fdb47 file 119 a92642ca6466 
+  7 2026-11-13T01:14:44Z L1-ocs   publish  lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+  8 2026-11-13T01:14:46Z L1-ocs   checkout lab04  auth=app-password   kanidm_sub=None file 119 000000000000 
+  9 2026-11-13T01:15:07Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+ 10 2026-11-13T01:15:56Z L1-ocs   checkout lab01  auth=bearer         kanidm_sub=a92aff85 file 119 a92642ca6466 
+ 11 2026-11-13T01:16:03Z L2-drop  approve  lab04  auth=nextcloud audit log kanidm_sub=None file 119 a92642ca6466 

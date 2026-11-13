@@ -1,0 +1,7 @@
+# logs/65 (Task 2, 2026-11-13T01:20:16Z): Kanidm binds userinfo to the client that issued the token (no token confusion)
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+userinfo of client chp-doc with a chp-doc token: HTTP 200; preferred_username=lab01 error=None
+userinfo of client nextcloud with a chp-doc token: HTTP 400; preferred_username=None error=invalid_request
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None

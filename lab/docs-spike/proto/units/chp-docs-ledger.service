@@ -1,0 +1,8 @@
+# SPIKE (Task 2, ledger route L1): append waiting requests to /var/lib/chp-docs/ledger/ledger.jsonl (root, 0600).
+[Unit]
+Description=CHP docs approval ledger appender (spike)
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/chp-spike/docs_ledger.py process

@@ -1,0 +1,29 @@
+# logs/64 (Task 2, 2026-11-13T01:19:25Z): end of the Task 2 runs: sign the four route-1 sessions out (revoke at Kanidm), drop the held ssh session
+## lab01
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## lab02
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## lab03
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## lab04
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+## the default-profile session from logs/45-49
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+/run/user/1000/chp-doc
+/run/user/1000/chp-doc-lab01
+/run/user/1000/chp-doc-lab02
+/run/user/1000/chp-doc-lab03
+/run/user/1000/chp-doc-lab04
+CUI_spike-ssp_v1.0.docx
+held ssh session closed
+## left on iso5-docs for Plan 2 (see README 'Task 2 additions'): Kanidm client chp-doc, user_oidc provider kanidm-cli + userinfo_bearer_validation, chp_ledger app, /var/lib/chp-docs (ledger 11 entries), chp-docs-ledger.path, Approvals team folder 7, the /index.php/login rewrite

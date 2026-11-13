@@ -27,3 +27,27 @@ guard) and `iso5-dcli` (client, 192.168.100.54, 120 GiB, for row 36). It reuses 
 
 Remove: `ssh aero 'sudo virsh destroy iso5-docs; sudo virsh undefine iso5-docs --nvram --snapshots-metadata;
 sudo systemctl stop size-guard-iso5-docs'` (same for `iso5-dcli`), then delete `aero:/data/libvirt/images/iso5-d*`.
+
+## Task 2 additions (doc commands: sign-in, freshness, ledger; findings in SPIKE-NEXTCLOUD.md §Transport, §Ledger)
+
+Prototypes in `proto/` (throwaway). Workstation scripts run with `bash proto/on-dcli.sh SCRIPT [ARGS]` (a `lib.py+main.py`
+pair is joined; `ENVS="CHP_DOC_AS=labNN"` picks a per-person session). Keep one ssh session to iso5-dcli open while
+working (`ssh -F ssh_config dcli sleep 3600 &`): the tokens live in `/run/user/1000`, which logind removes when the last
+session ends. The tunnel from step 5 is needed for the Mac-side scripts.
+
+1. Sign-in: `bash proto/auth-setup.sh discovery|kanidm|nextcloud` (logs/43-44); then
+   `bash proto/on-dcli.sh doc_auth.py oidc-login --scripted-browser < ~/idm-lab-secrets/docs-lab01.json`, `whoami`,
+   `stored`, `logout`; Login Flow v2: `flow2-login --scripted-browser --store home` (logs/45-49, 55, 63-65).
+2. Login page: insert `proto/nextcloud-login-rewrite.conf` after `RewriteEngine On` in the NextCloud vhost (logs/62).
+3. Freshness: `python3 -I proto/freshness.py ROOT_CA`, `proto/etag_collide.py ROOT_CA` (Mac); on the workstation
+   `doc_auth.py+doc_fresh.py checkout|edit|publish`, with `proto/colleague.py` as the other writer (logs/50-53).
+4. Ledger: `bash proto/ledger-setup.sh l1`, `l2`, `stick` (logs/54); proofs `bash proto/ledger-run.sh l1|l2|anchor|apache`
+   (logs/56-60; needs four route-1 sessions, logs/55).
+
+Remove Task 2's state (iso5-docs): `occ app:disable chp_ledger` and `rm -rf /usr/lib/nextcloud/apps/chp_ledger`;
+`systemctl disable --now chp-docs-ledger.path`, remove the two units and `/usr/local/libexec/chp-spike`;
+`rm -rf /var/lib/chp-docs /root/spike/stick`; `semanage fcontext -d` the two `/var/lib/chp-docs` entries; `fapolicyd-cli
+--file delete` the trust file `chp-spike` entries + `--update`; `occ groupfolders:delete 7` (Approvals);
+`occ user_oidc:provider:delete kanidm-cli`, `occ config:system:delete user_oidc`; restore
+`/root/spike/nextcloud.conf.before-task2` to `/etc/httpd/conf.d/nextcloud.conf`; `kanidm system oauth2 delete chp-doc`.
+On iso5-dcli: `rm -rf ~/chp-docs-work ~/.config/chp-doc`.

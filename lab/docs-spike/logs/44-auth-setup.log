@@ -1,0 +1,57 @@
+# logs/44 (Task 2, 2026-11-13T00:44:28Z): public Kanidm client chp-doc + bearer-only user_oidc provider
++ kanidm system oauth2 create-public chp-doc CHP doc commands https://files.docs.lab.test:8443 -D idm_admin
+Success
++ kanidm system oauth2 enable-localhost-redirects chp-doc -D idm_admin
+Success
++ kanidm system oauth2 add-redirect-url chp-doc http://localhost:8400/callback -D idm_admin
+Success
++ kanidm system oauth2 update-scope-map chp-doc chp_users openid profile groups -D idm_admin
+Success
++ kanidm system oauth2 prefer-short-username chp-doc -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map chp-doc chp_groups cui-users cui-users -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map chp-doc chp_groups doc-reviewers doc-reviewers -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map chp-doc chp_groups chp_users chp-users -D idm_admin
+Success
++ kanidm system oauth2 update-claim-map-join chp-doc chp_groups array -D idm_admin
+Success
++ kanidm system oauth2 set-refresh-token-expiry chp-doc 28800 -D idm_admin
+Success
++ kanidm system oauth2 get chp-doc -D idm_admin
+---
+class: account
+class: key_object
+class: key_object_internal
+class: key_object_jwe_a128gcm
+class: key_object_jwt_es256
+class: memberof
+class: oauth2_resource_server
+class: oauth2_resource_server_public
+class: object
+displayname: CHP doc commands
+key_internal_data: 316119eb1bb0: valid jws_es256 0
+key_internal_data: 923be39b29a2: valid jwe_a128gcm 0
+name: chp-doc
+oauth2_allow_localhost_redirect: true
+oauth2_prefer_short_username: true
+oauth2_refresh_token_expiry: 28800
+oauth2_rs_claim_map: chp_groups:doc-reviewers@idm.docs.lab.test:;:"doc-reviewers"
+oauth2_rs_claim_map: chp_groups:chp_users@idm.docs.lab.test:;:"chp-users"
+oauth2_rs_claim_map: chp_groups:cui-users@idm.docs.lab.test:;:"cui-users"
+oauth2_rs_origin: http://localhost:8400/callback
+oauth2_rs_origin_landing: https://files.docs.lab.test:8443/
+oauth2_rs_scope_map: chp_users@idm.docs.lab.test: {"groups", "openid", "profile"}
+oauth2_strict_redirect_uri: true
+spn: chp-doc@idm.docs.lab.test
+uuid: e46c085a-dbff-4805-93b8-7bdaf29855a9
+
++ occ user_oidc:provider kanidm-cli --clientid=chp-doc --clientsecret=unused-public-client --discoveryuri=https://idm.docs.lab.test/oauth2/openid/chp-doc/.well-known/openid-configuration --mapping-uid=preferred_username --unique-uid=0 --check-bearer=1 --bearer-provisioning=0 --mapping-groups=chp_groups --scope=openid profile groups
++ occ user_oidc:provider
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| ID | Identifier | Discovery endpoint                                                                 | End session endpoint | Client ID |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| 1  | kanidm     | https://idm.docs.lab.test/oauth2/openid/nextcloud/.well-known/openid-configuration |                      | nextcloud |
+| 3  | kanidm-cli | https://idm.docs.lab.test/oauth2/openid/chp-doc/.well-known/openid-configuration   |                      | chp-doc   |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+

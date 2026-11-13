@@ -1,0 +1,15 @@
+# logs/49 (Task 2, 2026-11-13T00:53:59Z): the loopback redirect port: Kanidm strict redirect vs RFC 8252 any-port
+## strict (as created): port 8401, not registered
+  token response keys: ['access_token', 'expires_in', 'id_token', 'issued_token_type', 'refresh_token', 'scope', 'token_type']; expires_in=900; token_type=Bearer
+  id token: preferred_username=lab01 chp_groups=['chp-users', 'cui-users'] aud=chp-doc auth_time=1794531271 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
++ kanidm system oauth2 disable-strict-redirect-url chp-doc
+Success
+## not strict: port 8401
+  listener closed; callback had: ['code', 'state']
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
++ kanidm system oauth2 enable-strict-redirect-url chp-doc (back to strict)
+Success
+# NOTE (after the run): the FIRST attempt already succeeded on port 8401 with strict redirects ON: with
+#   enable-localhost-redirects, Kanidm accepts any loopback port for a public client (RFC 8252 7.3). Turning strict
+#   off changed nothing; it was turned back on. Only http://localhost:8400/callback is registered.

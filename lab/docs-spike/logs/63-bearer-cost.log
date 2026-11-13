@@ -1,0 +1,4 @@
+# logs/63 (Task 2, 2026-11-13T01:18:53Z): route 1's cost per request (proto/bench.py, on iso5-dcli)
+DiscoveryService.php ID4MeService.php JweService.php JwkService.php LdapService.php LocalIdService.php OIDCService.php ProviderService.php ProvisioningService.php RequestClassificationService.php SettingsService.php TokenService.php 
+Bearer (userinfo check): 30 x PROPFIND 207; median 191 ms, p90 243 ms
+app password: 30 x PROPFIND 207; median 92 ms, p90 114 ms

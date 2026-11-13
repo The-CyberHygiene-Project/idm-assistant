@@ -1,0 +1,33 @@
+# logs/62 (Task 2, 2026-11-13T01:17:38Z): the login page with two user_oidc providers, and the httpd rewrite that restores the direct redirect
+## before: /login shows a chooser (user_oidc redirects only when there is exactly one provider)
+GET /login -> 404 
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/lib64/python3.9/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "/usr/lib64/python3.9/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/usr/lib64/python3.9/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "/usr/lib64/python3.9/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
++ insert proto/nextcloud-login-rewrite.conf after RewriteEngine On in /etc/httpd/conf.d/nextcloud.conf; apachectl configtest; reload
+Syntax OK
+reloaded
+## after
+GET /login -> 302 https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1
+GET /login?redirect_url=/index.php/apps/files/ -> 302 https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1?redirectUrl=/index.php/apps/files/
+GET /index.php/login?direct=1 -> 200 
+## Login Flow v2 unauthenticated: picker -> grant page -> /login?redirect_url=... -> (rewrite) -> provider 1 with the grant page as redirectUrl
+grant page -> ?redirect_url=<grant page>
+## a browser sign-in through the rewritten /login (oidc_login.py goes to provider 1 directly) still works:
+SIGNED IN: id=lab03 display='Docs Lab 03' groups=['chp-users', 'doc-reviewers'] backend=user_oidc
+# logs/62 continued (2026-11-13T01:18:33Z): the 'before' check used /login, which is a 404 here (no pretty URLs); the login page is /index.php/login.
+## /index.php/login now (rewrite in place) and the chooser it replaced:
+GET /index.php/login -> 302 https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1
+buttons on the (direct=1) login page: ['Login with kanidm', 'Login with kanidm-cli']
+## Login Flow v2 as a browser navigation (Accept: text/html; without it the grant page answers 401 to a script):
+hop 1: GET https://files.docs.lab.test:8443/index.php/login/v2/grant?… -> 303 https://files.docs.lab.test:8443/index.php/login?redirect_url=/index.php/login/v2/grant?user%3D%26direct%3D0%26stateToken%3D<x>
+hop 2: GET https://files.docs.lab.test:8443/index.php/login?… -> 302 https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1?redirectUrl=/index.php/login/v2/grant?user%3D%26direct%3D0%26stateToken%3D<x>
+hop 3: GET https://files.docs.lab.test:8443/index.php/apps/user_oidc/login/1?… -> 303 https://idm.docs.lab.test/ui/oauth2?client_id=<x>&response_type=code&scope=openid+profile+email+groups&redirect_uri=https%3A%2F%2Ffiles.docs.lab.test%3A8443%2Findex.php%2Fapps%2Fuser_oidc%2Fcode&claims=%7B%22id_token

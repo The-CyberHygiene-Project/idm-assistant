@@ -1,0 +1,14 @@
+# logs/43 (Task 2, 2026-11-13T00:44:26Z): what Kanidm 1.11.2 offers a CLI sign-in
++ GET https://idm.docs.lab.test/oauth2/openid/nextcloud/.well-known/openid-configuration (keys of interest)
+  grant_types_supported: ['authorization_code', 'urn:ietf:params:oauth:grant-type:token-exchange']
+  token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post']
+  code_challenge_methods_supported: ['S256']
+  revocation_endpoint: https://idm.docs.lab.test/oauth2/token/revoke
+  introspection_endpoint: https://idm.docs.lab.test/oauth2/token/introspect
+  device_authorization_endpoint: ABSENT (no RFC 8628 device flow)
++ curl -s -o /dev/null -w %{http_code} -X POST https://idm.docs.lab.test/oauth2/device (guess at a device endpoint)
+  -> 404
+  create-public                         Create a new OAuth2 public client that requires PKCE. You should prefer using confidential client types if possible over public ones
+  set-refresh-token-expiry              Set the refresh token expiry in seconds. An empty value will reset the value to default
+  enable-localhost-redirects            Allow public clients to redirect to localhost
+  disable-localhost-redirects           Disable public clients redirecting to localhost

@@ -1,0 +1,31 @@
+# logs/48 (Task 2, 2026-11-13T00:52:41Z): sign-out of each route; the token after revocation
+## route 1: lab01 signs in again (the lock ended its Kanidm session), then logout
+  listener closed; callback had: ['code', 'state']
+  id token: preferred_username=lab01 chp_groups=['chp-users', 'cui-users'] aud=chp-doc auth_time=1794531210 exp-iat=900s
+WHOAMI (Bearer): HTTP 200 {'id': 'lab01', 'groups': ['chp-users', 'cui-users'], 'backend': 'user_oidc'}
+  revoke refresh_token: HTTP 200
+  revoke access_token: HTTP 200
+  the old credential afterwards: HTTP 401 None
+{
+ "path": "/home/chpadmin/.config/chp-doc/app-password",
+ "mode": "0o600",
+ "owner_uid": 1000,
+ "filesystem": "/home xfs (/dev/mapper/chp-home)",
+ "kind": "app-password",
+ "user": "lab02",
+ "stored_at": "2026-11-13T00:52:01Z",
+ "app_password": "72 chars; no expiry at the server (valid until revoked)"
+}
+## route 2: lab02 logout (DELETE /ocs/v2.php/core/apppassword), then the server's token list
+  DELETE core/apppassword: HTTP 200
+  the old credential afterwards: HTTP 401 None
+{'id': 2, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0}
+{'id': 6, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0}
+{'id': 22, 'name': 'Mozilla/5.0 (CHP spike scripted browser)', 'type': 0}
+{'id': 15, 'name': 'spike', 'type': 1}
+{'id': 29, 'name': 'CHP doc commands (spike)', 'type': 0}
+{'id': 30, 'name': 'CHP doc commands (spike)', 'type': 1}
+{'id': 31, 'name': 'CHP doc commands (spike)', 'type': 0}
+# id 30 (the first identical flow2 run, never logged out) is still valid at the server: an orphan, until an admin deletes it
+deleted orphan id 30
+deleted its session token id 29
