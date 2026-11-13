@@ -59,3 +59,11 @@ copying a new version, run `occ upgrade` (logs/67).
 ## Task 3 additions (ONLYOFFICE Desktop on iso5-dcli; findings in SPIKE-NEXTCLOUD.md §Editor, logs/78-86)
 
 `editor/make_docs.py OUTDIR` makes the test docx/xlsx; the GUI ran under Xvfb :77 on the workstation, driven with `editor/xin.sh` (XTest keys/clicks) and read with `editor/shot.sh`. Vendor RPM and key: `~/idm-lab-inputs/onlyoffice/` (use the yum-repo copy: the "latest" link is unsigned).
+
+## Plan 2 Task 3 additions (product chp_foldertag 1.0 on iso5-docs; logs/90)
+
+`bash foldertag-1.0.sh install` copies `appliance/rpm/nextcloud-chp/chp_foldertag` over the spike app (0.2.0 kept in
+`/root/spike/chp_foldertag-0.2.0`; spike-only fapolicyd trust file `chp-spike`; `occ upgrade`), `config` sets
+`contain_allow = [[1,3],[3,1]]` (CUI <-> Archive, owner decision 3). Proofs (tunnel from step 5):
+`python3 -I foldertag_proofs.py ROOT_CA 18443 main`, and `failclosed` while `contain` holds invalid JSON
+(`occ config:app:set chp_foldertag contain --value=not-json`, then back to `[1,2,3]`).

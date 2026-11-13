@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!--
+  SPDX-FileCopyrightText: 2026 The CyberHygiene Project
+  SPDX-License-Identifier: Apache-2.0
+-->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>chp_foldertag</id>
+	<name>CHP folder tags</name>
+	<summary>Tag files by team folder (CUI, FCI) and refuse copies and moves out of contained team folders.</summary>
+	<description>CyberHygiene appliance control app. Policy in app config (set by chp-site): rules = {"team folder id": "system tag id"}, contain = [team folder ids], contain_allow = [[from id, to id]]. Audit events chp.contain.refused, chp.tag.applied, chp.tag.failed and chp.app.disabled go to the admin_audit log file. occ chp:foldertag:check lists untagged files.</description>
+	<version>1.0.0</version>
+	<licence>Apache-2.0</licence>
+	<author>The CyberHygiene Project</author>
+	<namespace>ChpFolderTag</namespace>
+	<category>files</category>
+	<category>security</category>
+	<bugs>https://github.com/The-CyberHygiene-Project/idm-assistant/issues</bugs>
+	<dependencies>
+		<nextcloud min-version="35" max-version="35"/>
+	</dependencies>
+	<commands>
+		<command>OCA\ChpFolderTag\Command\Check</command>
+	</commands>
+</info>

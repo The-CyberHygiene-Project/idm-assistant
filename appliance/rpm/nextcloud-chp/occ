@@ -1,0 +1,4 @@
+#!/bin/bash
+# occ: NextCloud's command line, run as the web server user (the code tree is read-only root:root;
+# config, data and logs belong to apache).
+exec runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ "$@"

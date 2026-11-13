@@ -1,0 +1,200 @@
+# 90 chp_foldertag 1.0 (product app, appliance/rpm/nextcloud-chp/chp_foldertag) on iso5-docs, 2026-11-13 (ISO 0.7.0 Plan 2 Task 3)
+# Mac: bash lab/docs-spike/foldertag-1.0.sh install|config ; python3 -I lab/docs-spike/foldertag_proofs.py ROOT_CA 18443 main|failclosed
+# lab folder ids: 1 CUI, 2 FCI, 3 Archive, 4 Operations; tag 1 = CUI, 2 = FCI; rules {"1":"1","2":"2"} (Archive has NO rule)
+
+== install (spike-only trust step: fapolicyd trust file chp-spike; the product is trusted through the signed RPM)
+  -- first attempt: php -l ran on the copy in ~/ft, which fapolicyd (correctly) denies to php:
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Listener/AppDisableListener.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Listener/ContainListener.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Listener/TagListener.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Command/Check.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Service/Policy.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Service/Audit.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/Service/PolicyError.php
+  Could not open input file: /home/chpadmin/ft/chp_foldertag/lib/AppInfo/Application.php
+  + SPIKE-ONLY trust: fapolicyd-cli --file add/update /usr/lib/nextcloud/apps/chp_foldertag/ (trust file chp-spike) + --update
+  Fapolicyd was notified
+  Finished code integrity check
+  Update successful
+  Turned off maintenance mode
+  Resetting log level
+  chp_foldertag 1.0.0
+  rpm -V lines for chp_foldertag (expected: the spike RPM no longer matches): 5
+  -- re-installed after each code change below; final install: php -l on the trusted copy, 'No syntax errors detected' in all 10 PHP files
+
+== config (owner decision 3)
+  rules = {"1":"1","2":"2"}
+  contain = [1,2,3]
+  contain_allow = [[1,3],[3,1]]
+
+== run 1 (cc1738) and run 2 (cce00c): VOID as a pass/fail record, KEPT as findings (first app version, no folder/DAV guard)
+  run1 run cc1738: lab01; contain [1,2,3], contain_allow [[1,3],[3,1]], rules CUI->tag CUI, FCI->tag FCI
+  run1 FAIL MOVE CUI/sub-cc1738 -> CUI/sub-cc1738-renamed allowed and tagged (HTTP 500; tags {'in-sub.txt': [], 'deep/mv.txt': []})
+  run1 FAIL MOVE CUI/sub-cc1738-copy -> Archive/dir-cc1738 allowed and tagged (HTTP 500; tags {'in-sub.txt': [], 'deep/mv.txt': []})
+  run1 FAIL trash restore of a CUI file: back in CUI and tagged (HTTP 412; tags None)
+  run1 FAIL trash restore of a CUI file deleted in Archive: back in Archive and still tagged (HTTP 412; tags None)
+  run1 FAIL trash item MOVEd straight to Operations (restore elsewhere): not created (HTTP 201)
+  run1 FAIL trash restore of a CUI folder: its file tagged (HTTP None; tags ['CUI'])
+  run1 FAIL version restore after CUI -> Archive: old content back and tagged (1 version(s); HTTP 412; content b'version TWO\n'; tags ['CUI'])
+  run1 FAIL version restore inside CUI: tagged (1 version(s); HTTP 412; tags ['CUI'])
+  run1 main cc1738: 8 FAIL
+  run2 run cce00c: lab01; contain [1,2,3], contain_allow [[1,3],[3,1]], rules CUI->tag CUI, FCI->tag FCI
+  run2 FAIL MOVE CUI/sub-cce00c -> CUI/sub-cce00c-renamed allowed and tagged (HTTP 500; tags {'in-sub.txt': [], 'deep/mv.txt': []})
+  run2 CONTROL folder rename in Operations (no rule, not contained): HTTP 500
+  run2 FAIL MOVE CUI/sub-cce00c-copy -> Archive/dir-cce00c allowed and tagged (HTTP 500; tags {'in-sub.txt': [], 'deep/mv.txt': []})
+  run2 DELETE a CUI folder with a file: HTTP 500
+  run2 FAIL trash restore of a CUI folder: its file tagged (HTTP None; tags ['CUI'])
+  run2 main cce00c: 3 FAIL
+  FINDING A (upstream, FIPS): every MOVE/rename/DELETE of a folder WITH CONTENTS answers 500, in any folder (Operations too):
+    lib/private/Files/Cache/Cache.php:826 moveFromCache sets the children's path_hash = MD5(...) in SQL, and
+    PostgreSQL in FIPS mode refuses: 'ERROR: could not compute MD5 hash: unsupported'. The files are already moved
+    on disk, so cache and disk diverge: CUI/sub-cce00c (fileid 336, tagged) stayed in the cache while the data sat at
+    CUI/sub-cce00c-renamed, re-scanned as NEW entries 340/342 with NO tag; CUI -> Archive folder move left Archive/dir-cce00c
+    untagged (Archive has no rule, so chp:foldertag:check did not even see it); a CUI folder DELETE moved the data to
+    __groupfolders/1/trash on disk while the folder still listed in CUI.
+    Same failure for a single FILE with old versions moved to another team folder: groupfolders
+    VersionsBackend::moveVersionsBetweenFolders moves versions/<fileid> (a folder) -> MD5 -> 500.
+  FINDING B (bypass): a WebDAV MOVE of a trash item straight to files/lab01/Operations/... answered 201 and created an
+    UNTAGGED copy of the deleted CUI file in Operations (Sabre falls back to copy+delete, a create the ContainListener
+    never sees). Same for an old version.
+  FIX in 1.0 (final): DavGuardListener (SabrePluginAddEvent: beforeMove/beforeCopy from trashbin/ or versions/ to files/ -> 403)
+    and FolderGuardListener (while SELECT MD5() fails: refuse move/delete of a non-empty folder and the cross-folder move
+    of a file with old versions, before anything moves). The real fix (MD5 in the database) is open, see the Task 3 report.
+  HTTP 412 in run 1: test artefact (the script sent 'Overwrite: F' to the restore endpoints; removed).
+  version restore failures in runs 1-2: test artefact (two PUTs in the same second = one version); the script now waits 1.5 s.
+
+== resync and cleanup of runs 1-2 (occ groupfolders:scan 1 3 4, then delete the diverged test folders file by file)
+  --- before resync:
+  UNTAGGED folder 1 file 295 files/sub-cc1738-renamed/in-sub.txt
+  UNTAGGED folder 1 file 297 files/sub-cc1738-renamed/deep/mv.txt
+  UNTAGGED folder 1 file 342 files/sub-cce00c-renamed/in-sub.txt
+  UNTAGGED folder 1 file 343 files/sub-cce00c-renamed/deep/mv.txt
+  FAIL 103 files checked, 4 untagged, 2 rule(s)
+  --- after resync (cache matches disk again):
+  UNTAGGED folder 1 file 295 files/sub-cc1738-renamed/in-sub.txt
+  UNTAGGED folder 1 file 297 files/sub-cc1738-renamed/deep/mv.txt
+  UNTAGGED folder 1 file 342 files/sub-cce00c-renamed/in-sub.txt
+  UNTAGGED folder 1 file 343 files/sub-cce00c-renamed/deep/mv.txt
+  FAIL 93 files checked, 4 untagged, 2 rule(s)
+  DELETEs: 34
+  untagged (from runs 1-2): DELETE CUI/sub-cce00c-renamed/deep/mv.txt tags [] 204
+  untagged (from runs 1-2): DELETE CUI/sub-cce00c-renamed/in-sub.txt tags [] 204
+  untagged (from runs 1-2): DELETE CUI/sub-cc1738-renamed/deep/mv.txt tags [] 204
+  untagged (from runs 1-2): DELETE CUI/sub-cc1738-renamed/in-sub.txt tags [] 204
+  untagged (from runs 1-2): DELETE Archive/dir-cce00c/deep/mv.txt tags [] 204
+  untagged (from runs 1-2): DELETE Archive/dir-cce00c/in-sub.txt tags [] 204
+  untagged (from runs 1-2): DELETE Archive/dir-cc1738/deep/mv.txt tags [] 204
+  untagged (from runs 1-2): DELETE Archive/dir-cc1738/in-sub.txt tags [] 204
+  untagged (from runs 1-2): DELETE Operations/ctl-cce00c-renamed/f.txt tags [] 204
+  untagged (from runs 1-2): DELETE Operations/ctl-4dba73/f.txt tags [] 204
+  after: OK 82 files checked, 0 untagged, 2 rule(s)
+
+== FINAL run: main (all checks)
+  run 045006: lab01; contain [1,2,3], contain_allow [[1,3],[3,1]], rules CUI->tag CUI, FCI->tag FCI
+  PASS MOVE CUI/ren-045006.txt -> CUI/ren-045006-renamed.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS MOVE CUI/mv-045006.txt -> CUI/sub-045006/deep/mv.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS MOVE CUI/sub-045006 -> CUI/sub-045006-renamed refused by the folder guard (database MD5 unavailable), source whole and tagged (HTTP 500; target exists False; source tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS MOVE CUI/sub-045006 -> CUI/sub2-045006/moved-sub refused by the folder guard (database MD5 unavailable), source whole and tagged (HTTP 403; target exists False; source tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS COPY CUI/sub-045006 -> CUI/sub-045006-copy allowed and tagged (HTTP 201; tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS CONTROL folder rename in Operations (no rule, not contained): refused by the folder guard too (HTTP 500)
+  PASS MOVE CUI/arc-045006.txt -> Archive/arc-045006.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS MOVE Archive/arc-045006.txt -> CUI/arc-045006-back.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS COPY CUI/cpy-045006.txt -> Archive/cpy-045006.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS COPY Archive/cpy-045006.txt -> CUI/cpy-045006-from-archive.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS MOVE CUI/sub-045006-copy -> Archive/dir-045006 refused by the folder guard (database MD5 unavailable), source whole and tagged (HTTP 403; target exists False; source tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS COPY CUI/sub-045006 -> Archive/dir-045006-copy allowed and tagged (HTTP 201; tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS COPY Archive/dir-045006-copy -> CUI/dir-045006-back allowed and tagged (HTTP 201; tags {'in-sub.txt': ['CUI'], 'deep/mv.txt': ['CUI']})
+  PASS MOVE CUI/ren-045006-renamed.txt -> FCI/x-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/ren-045006-renamed.txt -> FCI/x-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/ren-045006-renamed.txt -> Operations/x-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/ren-045006-renamed.txt -> Operations/x-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/ren-045006-renamed.txt -> x-home-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/ren-045006-renamed.txt -> x-home-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/sub-045006 -> Operations/dir-045006 refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/sub-045006 -> dir-home-045006 refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE Archive/cpy-045006.txt -> FCI/y-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY Archive/cpy-045006.txt -> Operations/y-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE Archive/cpy-045006.txt -> y-home-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE FCI/fci-045006.txt -> CUI/z-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY FCI/fci-045006.txt -> Archive/z-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE FCI/fci-045006.txt -> Operations/z-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY FCI/fci-045006.txt -> z-home-045006.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE Operations/in-045006.txt -> CUI/in-ops-045006.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS COPY home-in-045006.txt -> CUI/in-home-045006.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS DELETE a CUI file (to the team folder trash) works (HTTP 204)
+  PASS trash restore of a CUI file: back in CUI and tagged (HTTP 201; tags ['CUI'])
+  PASS trash restore of a CUI file deleted in Archive: back in Archive and still tagged (HTTP 201; tags ['CUI'])
+  PASS trash item MOVEd straight to Operations (restore elsewhere): refused, not created (HTTP 403)
+  PASS trash item COPYed straight to home: refused, not created (HTTP 403)
+  PASS and the normal restore still works, tagged (HTTP 201)
+  PASS DELETE a CUI folder with contents: refused by the folder guard, folder and file intact and tagged (HTTP 403)
+  PASS ... after its file is deleted, the empty folder deletes (HTTP 204)
+  PASS restore the empty folder, then its file: back in CUI and tagged (HTTP 201, 201; tags ['CUI'])
+    CUI/ver-045006.txt has 2 version entries (oldest first)
+  PASS MOVE CUI/ver-045006.txt -> Archive/ver-045006.txt refused by the folder guard (database MD5 unavailable), source whole and tagged (HTTP 403; target exists False; source tags {'': ['CUI']})
+  PASS old version of CUI/ver-045006.txt MOVEd straight to Operations: refused, not created (HTTP 403)
+  PASS version restore of CUI/ver-045006.txt: old content back and tagged (2 version(s); HTTP 201; content b'version ONE\n'; tags ['CUI'])
+  PASS old version of Archive/verA-045006.txt MOVEd straight to Operations: refused, not created (HTTP 403)
+  PASS version restore of Archive/verA-045006.txt: old content back and tagged (2 version(s); HTTP 201; content b'A one\n'; tags ['CUI'])
+  main 045006: ALL PASS (4 moves refused by the folder guard: database MD5 unavailable)
+
+== FINAL run: failclosed (app config contain = not-json, then back to [1,2,3])
+  (an earlier attempt 0315ea is VOID: the config set did not run in that compound command; contain was still [1,2,3])
+  PASS MOVE CUI/fc-caa27a.txt -> Archive/fc-caa27a.txt refused, nothing created (HTTP 403; target exists False)
+  PASS COPY CUI/fc-caa27a.txt -> Operations/fc-caa27a.txt refused, nothing created (HTTP 403; target exists False)
+  PASS MOVE CUI/fc-caa27a.txt -> CUI/fc-caa27a-renamed.txt allowed and tagged (HTTP 201; tags {'': ['CUI']})
+  PASS policy unreadable: a move out of Operations (any team folder) refused too (HTTP 403)
+  failclosed caa27a: ALL PASS
+
+== unreadable rules (rules = [1]): PUT CUI/badrules.txt -> 201, tags [] and chp.tag.failed; rules restored;
+   occ chp:foldertag:check then listed 'UNTAGGED folder 1 file 499 files/badrules.txt'; a rewrite (NodeWritten) tagged it: tags ['CUI']
+
+== app disable (occ app:disable chp_foldertag, then enable; files_pdfviewer as a non-control app)
+  chp_foldertag 1.0.0 disabled
+  --- audit lines for the disable:
+  {"reqId":"WRfKz4s7UOWkeJD7RE9K","level":1,"time":"2026-11-13T17:30:05+00:00","remoteAddr":"","user":"--","app":"admin_audit","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"App \"chp_foldertag\" disabled","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","app:disable"],"data":{"app":"admin_audit"}}
+  {"reqId":"WRfKz4s7UOWkeJD7RE9K","level":2,"time":"2026-11-13T17:30:05+00:00","remoteAddr":"","user":"--","app":"chp_foldertag","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"chp.app.disabled: app chp_foldertag disabled by occ (a CUI control app)","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","app:disable"],"data":{"app":"chp_foldertag","event":"chp.app.disabled","app_id":"chp_foldertag","control":"true","actor":"occ"}}
+  chp_foldertag 1.0.0 enabled
+  chp_foldertag 1.0.0
+  --- disable another (non-control) app, files_pdfviewer, and re-enable:
+  {"reqId":"WRfKz4s7UOWkeJD7RE9K","level":2,"time":"2026-11-13T17:30:05+00:00","remoteAddr":"","user":"--","app":"chp_foldertag","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"chp.app.disabled: app chp_foldertag disabled by occ (a CUI control app)","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","app:disable"],"data":{"app":"chp_foldertag","event":"chp.app.disabled","app_id":"chp_foldertag","control":"true","actor":"occ"}}
+  {"reqId":"yHCiV7VM2cPa1AdsiSPj","level":2,"time":"2026-11-13T17:30:07+00:00","remoteAddr":"","user":"--","app":"chp_foldertag","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"chp.app.disabled: app files_pdfviewer disabled by occ","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","app:disable"],"data":{"app":"chp_foldertag","event":"chp.app.disabled","app_id":"files_pdfviewer","control":"false","actor":"occ"}}
+
+== audit line samples (/var/log/nextcloud/audit.log, admin_audit file and format)
+  == chp.contain.refused: 90 lines; one sample:
+  {"reqId":"avdI-CqsKBYnxHct4SAPIwAAABI","level":2,"time":"2026-11-13T17:29:28+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/Operations/fc-ops-d34b9e.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move policy unreadable (app config chp_foldertag/contain is not a JSON list) 4 to 3: /lab01/files/Operations/fc-ops-d34b9e.txt -> /lab01/files/Archive/fc-ops-d34b9e.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"move","source_folder":"4","target_folder":"3","source":"/lab01/files/Operations/fc-ops-d34b9e.txt","target":"/lab01/files/Archive/fc-ops-d34b9e.txt","reason":"policy unreadable (app config chp_foldertag/contain is not a JSON list)"}}
+  == chp.tag.applied: 104 lines; one sample:
+  {"reqId":"avdJE-M8BYVxqwHnk7YMBgAAAMI","level":2,"time":"2026-11-13T17:29:55+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"PUT","url":"/remote.php/dav/files/lab01/CUI/badrules.txt","scriptName":"/remote.php","message":"chp.tag.applied: tag 1 on file 499 (team folder 1, write): /lab01/files/CUI/badrules.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.tag.applied","op":"write","file_id":"499","folder":"1","tag":"1","path":"/lab01/files/CUI/badrules.txt"}}
+  == chp.tag.failed: 3 lines; one sample:
+  {"reqId":"avdJCOM8BYVxqwHnk7YMBAAAANg","level":2,"time":"2026-11-13T17:29:44+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"PUT","url":"/remote.php/dav/files/lab01/CUI/badrules.txt","scriptName":"/remote.php","message":"chp.tag.failed: policy unreadable, nothing tagged: app config chp_foldertag/rules is not a JSON object: /lab01/files/CUI/badrules.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.tag.failed","op":"write","file_id":"[unknown(NULL)]","folder":"[unknown(NULL)]","tag":"[unknown(NULL)]","path":"/lab01/files/CUI/badrules.txt","error":"app config chp_foldertag/rules is not a JSON object"}}
+  == chp.folderop.refused: 15 lines; one sample:
+  {"reqId":"avdI5tCtrFEl9w86yi4bpAAAAJA","level":2,"time":"2026-11-13T17:29:10+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/ver-168f01.txt","scriptName":"/remote.php","message":"chp.folderop.refused: refused move of a file with old versions to another folder: the database refuses MD5 (FIPS), so NextCloud cannot move a file with old versions to another folder: /lab01/files/CUI/ver-168f01.txt -> /lab01/files/Archive/ver-168f01.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.folderop.refused","op":"move","source":"/lab01/files/CUI/ver-168f01.txt","target":"/lab01/files/Archive/ver-168f01.txt","reason":"the database refuses MD5 (FIPS), so NextCloud cannot move a file with old versions to another folder"}}
+  == chp.app.disabled: 2 lines; one sample:
+  {"reqId":"yHCiV7VM2cPa1AdsiSPj","level":2,"time":"2026-11-13T17:30:07+00:00","remoteAddr":"","user":"--","app":"chp_foldertag","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"chp.app.disabled: app files_pdfviewer disabled by occ","userAgent":"--","version":"35.0.3.2","occ_command":["/usr/lib/nextcloud/occ","app:disable"],"data":{"app":"chp_foldertag","event":"chp.app.disabled","app_id":"files_pdfviewer","control":"false","actor":"occ"}}
+  == trash/version refusal sample:
+  {"reqId":"avdHpeM8BYVxqwHnk7YLXwAAANI","level":2,"time":"2026-11-13T17:23:49+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/trashbin/lab01/trash/trd-cce00c.txt.d1794590629","scriptName":"/remote.php","message":"chp.contain.refused: refused move of a trash item to a files path (only restore is allowed): trashbin/lab01/trash/trd-cce00c.txt.d1794590629 -> files/lab01/Operations/trd-cce00c.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"move","source_folder":"[unknown(NULL)]","target_folder":"[unknown(NULL)]","source":"trashbin/lab01/trash/trd-cce00c.txt.d1794590629","target":"files/lab01/Operations/trd-cce00c.txt","reason":"trash item to a files path (only restore is allowed)"}}
+  {"reqId":"avdHqdCtrFEl9w86yi4ahwAAAJU","level":2,"time":"2026-11-13T17:23:53+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/versions/lab01/versions/372/1794590631","scriptName":"/remote.php","message":"chp.contain.refused: refused move of a old version to a files path (only restore is allowed): versions/lab01/versions/372/1794590631 -> files/lab01/Operations/ver-cce00c-old.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"move","source_folder":"[unknown(NULL)]","target_folder":"[unknown(NULL)]","source":"versions/lab01/versions/372/1794590631","target":"files/lab01/Operations/ver-cce00c-old.txt","reason":"old version to a files path (only restore is allowed)"}}
+  == policy-unreadable refusal sample:
+  {"reqId":"avdI9-M8BYVxqwHnk7YL_gAAAMw","level":2,"time":"2026-11-13T17:29:27+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/fc-d34b9e.txt","scriptName":"/remote.php","message":"chp.contain.refused: refused move policy unreadable (app config chp_foldertag/contain is not a JSON list) 1 to 3: /lab01/files/CUI/fc-d34b9e.txt -> /lab01/files/Archive/fc-d34b9e.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"move","source_folder":"1","target_folder":"3","source":"/lab01/files/CUI/fc-d34b9e.txt","target":"/lab01/files/Archive/fc-d34b9e.txt","reason":"policy unreadable (app config chp_foldertag/contain is not a JSON list)"}}
+  == chp.contain.refused in the last 3 min: 24 lines; one sample:
+  {"reqId":"avdJlSqsKBYnxHct4SAPdAAAAAI","level":2,"time":"2026-11-13T17:32:05+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/versions/lab01/versions/544/1794591121","scriptName":"/remote.php","message":"chp.contain.refused: refused move of an old version to a files path (only restore is allowed): versions/lab01/versions/544/1794591121 -> files/lab01/Operations/ver-045006-old.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"move","source_folder":"none","target_folder":"none","source":"versions/lab01/versions/544/1794591121","target":"files/lab01/Operations/ver-045006-old.txt","reason":"an old version to a files path (only restore is allowed)"}}
+  == chp.tag.applied in the last 3 min: 26 lines; one sample:
+  {"reqId":"avdJl-M8BYVxqwHnk7YMLQAAAMU","level":2,"time":"2026-11-13T17:32:07+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"PUT","url":"/remote.php/dav/files/lab01/CUI/fc-0315ea.txt","scriptName":"/remote.php","message":"chp.tag.applied: tag 1 on file 549 (team folder 1, create): /lab01/files/CUI/fc-0315ea.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.tag.applied","op":"create","file_id":"549","folder":"1","tag":"1","path":"/lab01/files/CUI/fc-0315ea.txt"}}
+  == chp.folderop.refused in the last 3 min: 6 lines; one sample:
+  {"reqId":"avdJkOM8BYVxqwHnk7YMJgAAANE","level":2,"time":"2026-11-13T17:32:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"MOVE","url":"/remote.php/dav/files/lab01/CUI/ver-045006.txt","scriptName":"/remote.php","message":"chp.folderop.refused: refused move of a file with old versions to another folder: the database refuses MD5 (FIPS), so NextCloud cannot move a file with old versions to another folder: /lab01/files/CUI/ver-045006.txt -> /lab01/files/Archive/ver-045006.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.folderop.refused","op":"move","source":"/lab01/files/CUI/ver-045006.txt","target":"/lab01/files/Archive/ver-045006.txt","reason":"the database refuses MD5 (FIPS), so NextCloud cannot move a file with old versions to another folder"}}
+  == DavGuard sample (last 3 min):
+  {"reqId":"avdJi9CtrFEl9w86yi4b5AAAAJM","level":2,"time":"2026-11-13T17:31:55+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"chp_foldertag","method":"COPY","url":"/remote.php/dav/trashbin/lab01/trash/trd-045006.txt.d1794591114","scriptName":"/remote.php","message":"chp.contain.refused: refused copy of a trash item to a files path (only restore is allowed): trashbin/lab01/trash/trd-045006.txt.d1794591114 -> files/lab01/trd-home-045006.txt","userAgent":"CHP foldertag 1.0 lab test","version":"35.0.3.2","data":{"app":"chp_foldertag","event":"chp.contain.refused","op":"copy","source_folder":"none","target_folder":"none","source":"trashbin/lab01/trash/trd-045006.txt.d1794591114","target":"files/lab01/trd-home-045006.txt","reason":"a trash item to a files path (only restore is allowed)"}}
+  
+  == fapolicyd (fapolicyd-cli --check-status, denied counter):
+  Allowed accesses: 2585608
+  Denied accesses: 9
+  == AVCs today:
+  0
+  == the database refuses MD5 (FIPS):
+  ERROR:  could not compute MD5 hash: unsupported
+  fips_enabled=1
+  denied 9: the counter was not read before this task (it counts since fapolicyd's last start); 8 are expected from the
+  first install attempt, php -l on the 8 PHP files then in ~/ft (untrusted, a home folder: 'Could not open input file');
+  the script now lints the trusted copy. Not an app denial: every request in the runs above was answered.
+
+== tag check after all runs: OK 99 files checked, 0 untagged, 2 rule(s)
