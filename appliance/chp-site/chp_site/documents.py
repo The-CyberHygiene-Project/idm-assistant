@@ -1,7 +1,7 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-"""chp-site documents enable|status (ISO 0.7.0 design §2, §3, §6, §12; Plan 2 Task 5): NextCloud as the site's local,
+"""chp-site documents enable|status|check (ISO 0.7.0 design §2, §3, §5, §6, §12; Plan 2 Tasks 5-6): NextCloud as the site's local,
 offline, Kanidm-signed-in CUI store on the CHP server. The product port of lab/docs-spike setup.sh, folders.sh and
 kanidm.sh. Every command goes through an injected runner (`run` for the host, `occ` for NextCloud, a `Kanidm` for the
 identity server), so the whole sequence is testable. Idempotent: a second run creates nothing (no folder, tag, group,
@@ -795,3 +795,485 @@ def md5_state(run):
     if r.returncode == 0 and (r.stdout or "").strip() == MD5_CHP:
         return "database MD5: available (folder moves, renames and deletes allowed)"
     return "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)"
+
+
+# ---------- the nightly tag check and share-link canary (design §5, §6, §12; Plan 2 Task 6) ----------
+# Runs from chp-site (chp-documents-check.timer), never from chp_foldertag: with the app off its own command is gone
+# (spike §Tag by folder). It reads NextCloud's database with SQL (as apache over the socket, peer authentication) and
+# trusts nothing the app or enable configured: folders, groups, tags, the app's policy and every file are read back.
+
+CHECK_RESULT = "var/lib/chp/documents/check.json"     # chp-documents' state dir (0700); read by check 81 and Task 7
+CANARY_USER = "chp-canary"                            # local NextCloud account, cui-users, DISABLED between runs
+CANARY_TOKEN = "chp-canary"                           # name of the per-run app token (deleted at the end of each run)
+CANARY_FILE = "CUI/CUI_chp-canary.txt"
+CANARY_BODY = b"CHP share canary (no CUI content). The nightly check tries to share this file and expects a refusal.\n"
+OCS_SHARES = "/ocs/v2.php/apps/files_sharing/api/v1/shares"
+LIST_MAX = 50                                         # per kind of finding; the rest is one "more" alert
+SHARE_BIT = 16
+
+_DIR = "(SELECT id FROM oc_mimetypes WHERE mimetype = 'httpd/unix-directory')"
+_LIVE = "substr(f.path, 1, 6) = 'files/'"             # live files only (not trash/, versions/, uploads/, appdata)
+
+
+def _has_tag(tag):
+    return ("EXISTS (SELECT 1 FROM oc_systemtag_object_mapping o WHERE o.objecttype = 'files' AND o.systemtagid = "
+            f"{int(tag)} AND o.objectid = CAST(f.fileid AS VARCHAR(64)))")
+
+
+Q_FOLDERS = "SELECT folder_id, mount_point, storage_id FROM oc_group_folders ORDER BY folder_id"
+Q_GROUPS = "SELECT folder_id, group_id, permissions FROM oc_group_folders_groups ORDER BY folder_id, group_id"
+Q_TAGS = "SELECT id, name, visibility, editable FROM oc_systemtag WHERE name IN ('CUI', 'FCI') ORDER BY id"
+Q_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_foldertag'"
+
+
+def q_untagged(storage, tag, limit=LIST_MAX + 1):
+    """Every live file (not a folder) in one team folder's storage without the folder's tag."""
+    return (f"SELECT f.fileid, f.storage, f.path FROM oc_filecache f WHERE f.storage = {int(storage)} AND {_LIVE} "
+            f"AND f.mimetype NOT IN {_DIR} AND NOT {_has_tag(tag)} ORDER BY f.fileid LIMIT {int(limit)}")
+
+
+def q_named(cui, fci, limit=LIST_MAX + 1):
+    """Every live CUI_/FCI_ file anywhere (any case) without the CUI/FCI tag its name asks for."""
+    pre = "upper(substr(f.name, 1, 4))"
+    return (f"SELECT f.fileid, f.storage, f.path, s.id AS storage_name FROM oc_filecache f "
+            f"JOIN oc_storages s ON s.numeric_id = f.storage WHERE {_LIVE} AND f.mimetype NOT IN {_DIR} "
+            f"AND (({pre} = 'CUI_' AND NOT {_has_tag(cui)}) OR ({pre} = 'FCI_' AND NOT {_has_tag(fci)})) "
+            f"ORDER BY f.fileid LIMIT {int(limit)}")
+
+
+def q_outside(storages, cui, fci, limit=LIST_MAX + 1):
+    """Every live file tagged CUI or FCI that is not in a controlled team folder (copied/moved out, or tagged by hand)."""
+    st = ", ".join(str(int(s)) for s in storages) or "-1"
+    return (f"SELECT f.fileid, f.storage, f.path, s.id AS storage_name FROM oc_filecache f "
+            f"JOIN oc_storages s ON s.numeric_id = f.storage WHERE {_LIVE} AND f.storage NOT IN ({st}) "
+            f"AND ({_has_tag(cui)} OR {_has_tag(fci)}) ORDER BY f.fileid LIMIT {int(limit)}")
+
+
+def q_shares(storages, limit=LIST_MAX + 1):
+    """Every share (any type) on anything in a controlled team folder: there must be none."""
+    st = ", ".join(str(int(s)) for s in storages) or "-1"
+    return (f"SELECT sh.id, sh.share_type, f.fileid, f.storage, f.path FROM oc_share sh "
+            f"JOIN oc_filecache f ON f.fileid = sh.file_source WHERE f.storage IN ({st}) ORDER BY sh.id LIMIT {int(limit)}")
+
+
+def sql_runner(run):
+    """The real database: one query as the apache user over the socket (peer authentication, no password), the rows
+    returned as JSON by PostgreSQL itself (json_agg), so names with any character in them arrive intact."""
+    def q(query):
+        wrapped = f"SELECT coalesce(json_agg(t), '[]'::json) FROM ({query}) t"
+        r = run(["runuser", "-u", "apache", "--", "psql", "-d", "nextcloud", "-qtAX", "-v", "ON_ERROR_STOP=1", "-c",
+                 wrapped], capture_output=True, text=True)
+        if r.returncode != 0:
+            why = (r.stderr or r.stdout or f"exit {r.returncode}").strip().splitlines()
+            raise SiteError(f"psql failed: {(why[-1] if why else '')[:200]}")
+        try:
+            rows = json.loads((r.stdout or "").strip() or "[]")
+        except ValueError:
+            raise SiteError("psql did not return JSON") from None
+        if not isinstance(rows, list):
+            raise SiteError("psql did not return a list of rows")
+        return rows
+    return q
+
+
+def https_api(conf):
+    """NextCloud's own HTTPS front door as a user sees it (the canary must cross the same checks a browser does):
+    https://<FQDN>:8443 (FQDN -> SERVER_IP via /etc/hosts), verified against the site root CA. The app token is only
+    ever in memory and in the Authorization header."""
+    import base64
+    import http.client
+    import ssl
+    import urllib.parse
+    fqdn = conf.get("FQDN", "")
+
+    def call(method, path, user, token, form=None, body=None):
+        ctx = ssl.create_default_context(cafile=SITE_ROOT_CA)
+        conn = http.client.HTTPSConnection(fqdn, PORT, context=ctx, timeout=60)
+        h = {"Authorization": "Basic " + base64.b64encode(f"{user}:{token}".encode()).decode(),
+             "OCS-APIRequest": "true", "Accept": "application/json", "User-Agent": "CHP nightly share canary"}
+        if form is not None:
+            body = urllib.parse.urlencode(form).encode()
+            h["Content-Type"] = "application/x-www-form-urlencoded"
+        if method == "PROPFIND":
+            h["Depth"] = "0"
+        try:
+            conn.request(method, path, body=body, headers=h)
+            r = conn.getresponse()
+            return r.status, r.read(1 << 20)
+        finally:
+            conn.close()
+    return call
+
+
+def _clean(x, n=300):
+    """Text from NextCloud (file, folder, user names) and errors: no control characters (review_report._cell), cut."""
+    from .review_report import _cell
+    s = _cell(x).strip()
+    return s if len(s) <= n else s[:n - 3] + "..."
+
+
+class _CanaryError(Exception):
+    pass
+
+
+def _o(occ, *argv, env=None):
+    rc, out, err = occ(list(argv), env=env) if env else occ(list(argv))
+    if rc != 0:
+        why = (err or out or f"exit {rc}").strip().splitlines()
+        raise _CanaryError(f"occ {argv[0]} failed: {(why[-1] if why else '')[:160]}")
+    return out or ""
+
+
+def _jl(text):
+    try:
+        return json.loads(text)
+    except ValueError:
+        raise _CanaryError(f"occ did not return JSON: {text.strip()[:80]!r}") from None
+
+
+def _canary_account(occ):
+    """The canary account: local, in cui-users, a random password nobody keeps (sign-in only by a per-run token)."""
+    import secrets as _s
+    rc, out, _ = occ(["user:info", CANARY_USER, "--output=json"])
+    if rc != 0:
+        _o(occ, "user:add", "--password-from-env", "--display-name", "CHP share canary (nightly check)", "--group",
+           "cui-users", CANARY_USER, env={"OC_PASS": _s.token_urlsafe(32)})
+        _o(occ, "user:disable", CANARY_USER)
+        out = _o(occ, "user:info", CANARY_USER, "--output=json")
+    info = _jl(out)
+    if "cui-users" not in (info.get("groups") or [] if isinstance(info, dict) else []):
+        _o(occ, "group:adduser", "cui-users", CANARY_USER)
+
+
+def _drop_tokens(occ):
+    toks = _jl(_o(occ, "user:auth-tokens:list", CANARY_USER, "--output=json"))
+    items = toks if isinstance(toks, list) else list(toks.values()) if isinstance(toks, dict) else []
+    for t in items:
+        if isinstance(t, dict) and t.get("name") == CANARY_TOKEN:
+            _o(occ, "user:auth-tokens:delete", CANARY_USER, str(t.get("id")))
+
+
+def _ocs(body):
+    try:
+        o = json.loads(body or b"{}").get("ocs", {})
+        return o.get("meta", {}) or {}, o.get("data")
+    except (ValueError, AttributeError):
+        return {}, None
+
+
+def _canary(occ, api, alert):
+    """Try a public link and an internal share (to the break-glass admin, not in cui-users) on the CUI canary file,
+    as a cui-users member, through the OCS API. 403 = refused (OK). Anything created is ALERTED and deleted at once;
+    whatever happens, every share on the canary file is swept and the token and account are switched off again."""
+    import secrets as _s
+    import urllib.parse
+    res = {"public": "not run", "internal": "not run"}
+    made, gone, token = [], set(), None
+    dav = f"/remote.php/dav/files/{CANARY_USER}/" + urllib.parse.quote(CANARY_FILE)
+
+    def call(method, path, form=None, body=None):
+        return api(method, path, CANARY_USER, token, form, body) if body is not None else \
+            api(method, path, CANARY_USER, token, form)
+
+    def delete(sid):
+        try:
+            st, _ = call("DELETE", f"{OCS_SHARES}/{sid}?format=json")
+        except Exception:                                     # noqa: BLE001 - reported by the caller
+            return False
+        if st == 200:
+            gone.add(sid)
+        return st == 200
+
+    def attempt(which, label, form):
+        st, body = call("POST", f"{OCS_SHARES}?format=json", form)
+        meta, data = _ocs(body)
+        code = meta.get("statuscode")
+        if st == 200 and code in (100, 200):
+            sid = str(data.get("id", "")) if isinstance(data, dict) else ""
+            ok = bool(re.fullmatch(r"\d+", sid)) and (made.append(sid) or delete(sid))
+            alert(f"canary:{which}", f"share canary: a {label} on the CUI canary file was CREATED (share refusal is NOT "
+                  "working on CUI); " + ("it was deleted at once" if ok else
+                                         f"it could NOT be deleted (share id {sid or '?'}): delete it now"))
+            return "CREATED, deleted" if ok else "CREATED, NOT deleted"
+        if st == 403:
+            return "refused"
+        alert("canary:error", f"share canary ({label}) inconclusive: HTTP {st}, OCS {code}: "
+                              f"{_clean(meta.get('message', ''), 120)} (the refusal was not proved)")
+        return f"inconclusive (HTTP {st})"
+
+    try:
+        _canary_account(occ)
+        _drop_tokens(occ)                                     # leftovers of a run that was killed
+        _o(occ, "user:enable", CANARY_USER)
+        lines = [x.strip() for x in _o(occ, "user:auth-tokens:add", "-n", "--name", CANARY_TOKEN,
+                                       CANARY_USER).splitlines() if x.strip()]
+        token = lines[-1] if lines and re.fullmatch(r"[A-Za-z0-9_-]{16,}", lines[-1]) else None
+        if token is None:
+            raise _CanaryError("occ user:auth-tokens:add printed no token")
+        st, _ = call("PROPFIND", dav)
+        if st == 404:
+            st, _ = call("PUT", dav, body=CANARY_BODY)
+            if st not in (201, 204):
+                raise _CanaryError(f"could not create the canary file {CANARY_FILE} (HTTP {st})")
+        elif st != 207:
+            raise _CanaryError(f"could not read the canary file {CANARY_FILE} (HTTP {st})")
+        res["public"] = attempt("public", "public link", {"path": "/" + CANARY_FILE, "shareType": "3",
+                                                          "permissions": "1", "password": "Canary-" + _s.token_urlsafe(18)})
+        res["internal"] = attempt("internal", f"internal share to {ADMIN} (not in cui-users)",
+                                  {"path": "/" + CANARY_FILE, "shareType": "0", "permissions": "1", "shareWith": ADMIN})
+    except Exception as e:                                    # noqa: BLE001 - a nightly check reports, never crashes
+        alert("canary:error", f"share canary could not run to the end: {_clean(e, 200)}")
+    finally:
+        if token is not None:                                  # sweep: any share on the canary file, however made
+            try:
+                st, body = call("GET", f"{OCS_SHARES}?format=json&path=" + urllib.parse.quote("/" + CANARY_FILE))
+                _, data = _ocs(body)
+                for s in (data if st == 200 and isinstance(data, list) else []):
+                    sid = str(s.get("id", "")) if isinstance(s, dict) else ""
+                    if re.fullmatch(r"\d+", sid) and sid not in made:
+                        made.append(sid)
+            except Exception as e:                            # noqa: BLE001
+                alert("canary:cleanup", f"share canary: could not list shares on the canary file: {_clean(e, 160)}")
+            for sid in made:
+                if sid not in gone and not delete(sid):
+                    alert("canary:cleanup", f"share canary: share {sid} on the CUI canary file could NOT be deleted: "
+                                            "delete it now")
+        for what, fn in (("token", lambda: _drop_tokens(occ)), ("account", lambda: _o(occ, "user:disable", CANARY_USER))):
+            try:
+                fn()
+            except Exception as e:                            # noqa: BLE001
+                alert("canary:cleanup", f"share canary: could not switch off the canary {what}: {_clean(e, 160)}")
+    return res
+
+
+def _json_or(v):
+    try:
+        return json.loads(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return ValueError
+
+
+def _scalar(x):
+    return str(x) if isinstance(x, (int, str)) and not isinstance(x, bool) else None
+
+
+def _app_policy(app, ids, tagid, alert):
+    """chp_foldertag's policy must be PRESENT and equal to what the site requires (a missing contain silently turns
+    containment off; a missing rule leaves a folder untagged)."""
+    if app.get("enabled") != "yes":
+        alert("app:enabled", "chp_foldertag is not enabled (tagging and containment are OFF): "
+                             "occ app:enable chp_foldertag, then find out who switched it off")
+    have_ids = all(ids.get(n) for n in CONTROLLED)
+    want_rules = {ids[n]: tagid[t] for n, t in FOLDER_TAG.items()} if have_ids and all(
+        tagid.get(t) for t in FOLDER_TAG.values()) else None
+    want_contain = sorted(ids[n] for n in CONTROLLED) if have_ids else None
+    want_allow = sorted([(ids["CUI"], ids["Archive"]), (ids["Archive"], ids["CUI"])]) if have_ids else None
+    fix = "; re-run chp-site documents enable"
+
+    r = _json_or(app.get("rules"))
+    if not r:
+        alert("app:rules", "chp_foldertag rules are missing or empty (nothing is tagged)" + fix)
+    else:
+        got = {_scalar(k): _scalar(v) for k, v in r.items()} if isinstance(r, dict) else None
+        if want_rules is not None and got != want_rules:
+            alert("app:rules", f"chp_foldertag rules do not match the site policy (CUI and Archive -> CUI tag, FCI -> FCI "
+                               f"tag): want {json.dumps(want_rules, sort_keys=True)}, have {_clean(app.get('rules'), 160)}"
+                  + fix)
+    c = _json_or(app.get("contain"))
+    if not c:
+        alert("app:contain", "chp_foldertag contain is missing or empty (copy/move OUT of CUI, FCI and Archive is NOT "
+                             "refused)" + fix)
+    else:
+        got = sorted(map(str, (_scalar(x) for x in c))) if isinstance(c, list) else None
+        if want_contain is not None and got != want_contain:
+            alert("app:contain", f"chp_foldertag contain does not match the site policy (CUI, FCI, Archive): want "
+                                 f"{want_contain}, have {_clean(app.get('contain'), 160)}" + fix)
+    a = _json_or(app.get("contain_allow"))
+    if not a:
+        alert("app:contain_allow", "chp_foldertag contain_allow is missing or empty (CUI <-> Archive moves are refused)"
+              + fix)
+    else:
+        ok = isinstance(a, list) and all(isinstance(p, list) and len(p) == 2 for p in a)
+        got = sorted((_scalar(p[0]), _scalar(p[1])) for p in a) if ok else None
+        if want_allow is not None and got != want_allow:
+            alert("app:contain_allow", f"chp_foldertag contain_allow does not match the site policy (only CUI <-> "
+                                       f"Archive): have {_clean(app.get('contain_allow'), 160)}" + fix)
+
+
+def _policy(db, ids, alert):
+    folders = {str(f.get("folder_id")): f for f in db["folders"]}
+    groups = {}
+    for g in db["groups"]:
+        groups.setdefault(str(g.get("folder_id")), []).append(g)
+    for n in CONTROLLED + OPEN:
+        i = ids.get(n)
+        if not i:
+            alert(f"conf:{n}", f"/etc/chp/documents.conf has no valid {n} folder id; re-run chp-site documents enable")
+            continue
+        f = folders.get(i)
+        if f is None:
+            alert(f"folder:{i}", f"team folder {n} (id {i}) is missing from NextCloud; re-run chp-site documents enable")
+        elif f.get("mount_point") != n:
+            alert(f"folder:{i}", f"team folder id {i} must be named {n} but is named \"{_clean(f.get('mount_point'), 80)}\" "
+                                 "(renamed in the web UI?): rename it back")
+    known = {v for v in ids.values() if v}
+    for i, f in folders.items():
+        if i in known:
+            continue
+        names = sorted(str(g.get("group_id")) for g in groups.get(i, []))
+        cui = "cui-users" in names
+        alert(f"folder:{i}", f"team folder \"{_clean(f.get('mount_point'), 80)}\" (id {i}) is not one of the site's "
+                             "folders" + ("; it gives cui-users access but is NOT tagged or contained (a renamed CUI, FCI "
+                                          "or Archive folder?): move its files into the right folder, then delete it"
+                                          if cui else f"; groups: {_clean(', '.join(names) or 'none', 80)}"))
+    for n in CONTROLLED:
+        i = ids.get(n)
+        if not i or i not in folders:
+            continue
+        gs = groups.get(i, [])
+        other = sorted(_clean(g.get("group_id") or "a circle", 40) for g in gs if g.get("group_id") != "cui-users")
+        cu = [g for g in gs if g.get("group_id") == "cui-users"]
+        bad = []
+        if other:
+            bad.append(f"also mapped to {', '.join(other)}")
+        if not cu:
+            bad.append("not mapped to cui-users")
+        elif any(int(g.get("permissions") or 0) & SHARE_BIT for g in cu):
+            bad.append("cui-users has the share permission")
+        if bad:
+            alert(f"groups:{i}", f"team folder {n} (id {i}): {'; '.join(bad)} (must be cui-users only, share off); "
+                                 "re-run chp-site documents enable")
+    tagid = {}
+    for t in ("CUI", "FCI"):
+        row = next((x for x in db["tags"] if x.get("name") == t), None)
+        if row is None:
+            alert(f"tag:{t}", f"the system tag {t} is missing; re-run chp-site documents enable")
+            continue
+        tagid[t] = str(row.get("id"))
+        if not (int(row.get("visibility") or 0) == 1 and int(row.get("editable") or 0) == 0):
+            alert(f"tag:{t}", f"the system tag {t} is not restricted (users could add or remove it): "
+                              f"occ tag:edit {tagid[t]} --access restricted")
+    _app_policy({str(r.get("configkey")): r.get("configvalue") for r in db["app"]}, ids, tagid, alert)
+    return folders, tagid
+
+
+def _where(row, folders_by_storage):
+    path = str(row.get("path") or "")
+    rel = path[6:] if path.startswith("files/") else path
+    st = row.get("storage")
+    if st in folders_by_storage:
+        return f"{folders_by_storage[st]}/{rel}"
+    name = str(row.get("storage_name") or f"storage {st}")
+    if name.startswith("home::"):
+        return f"home of {name[6:]}: {rel}"
+    return f"{name}: {rel}"
+
+
+def _files(sql, folders, ids, tagid, alert):
+    by_storage = {f.get("storage_id"): str(f.get("mount_point")) for f in folders.values()}
+    storages = {n: folders[ids[n]].get("storage_id") for n in CONTROLLED if ids.get(n) in folders}
+    counts = {}
+
+    def report(kind, rows, text):
+        for r in rows[:LIST_MAX]:
+            alert(f"{kind}:{r.get('fileid', r.get('id'))}", text(r))
+        if len(rows) > LIST_MAX:
+            alert(f"{kind}:more", f"more than {LIST_MAX} findings of this kind ({kind}); only the first {LIST_MAX} are "
+                                  "listed: run chp-site documents check after fixing them")
+        counts[kind] = len(rows)
+
+    untagged_ids = set()
+    for n in CONTROLLED:
+        st, t = storages.get(n), tagid.get(FOLDER_TAG[n])
+        if st is None or t is None:
+            continue
+        rows = sql(q_untagged(st, t))
+        untagged_ids.update(r.get("fileid") for r in rows)
+        report("untagged", rows, lambda r, n=n: f"file {_clean(_where(r, by_storage), 200)} (id {r.get('fileid')}) in "
+                                                f"team folder {n} has no {FOLDER_TAG[n]} tag")
+    if tagid.get("CUI") and tagid.get("FCI"):
+        rows = [r for r in sql(q_named(tagid["CUI"], tagid["FCI"])) if r.get("fileid") not in untagged_ids]
+        report("name", rows, lambda r: f"file {_clean(_where(r, by_storage), 200)} (id {r.get('fileid')}) is named "
+                                       "CUI_/FCI_ but has no matching tag")
+        rows = sql(q_outside(storages.values(), tagid["CUI"], tagid["FCI"]))
+        report("outside", rows, lambda r: f"file {_clean(_where(r, by_storage), 200)} (id {r.get('fileid')}) is tagged "
+                                          "CUI/FCI but is outside CUI, FCI and Archive")
+    rows = sql(q_shares(storages.values()))
+    report("share", [dict(r, fileid=r.get("id")) for r in rows],
+           lambda r: f"share {r.get('id')} (type {r.get('share_type')}) exists on "
+                     f"{_clean(_where(r, by_storage), 200)} in a controlled team folder: delete it now")
+    return counts
+
+
+def _write_result(root, data):
+    p = _p(root, CHECK_RESULT)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(p.parent, 0o700)
+        tmp = p.with_name(p.name + ".chp-tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=1, sort_keys=True)
+            f.write("\n")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, p)
+    except OSError as e:
+        raise SiteError(f"could not write {p} ({e.strerror or e}); check 81 will report the result as missing/stale") \
+            from None
+
+
+def check(root, run, sql=None, api=None, occ=None, now=None):
+    """`chp-site documents check` (chp-documents-check.timer, nightly): every check below, then one result file
+    (CHECK_RESULT, 0600) that monitor check 81 and the daily review read. Returns the lines to print; any line that
+    starts with ALERT means a failure (the command then exits 1)."""
+    root = Path(root)
+    c = _kv(_p(root, CONF))
+    if not c:
+        return ["OK documents: not enabled on this host (nothing to check)"]
+    if c.get("ENABLED") != "yes":
+        return ["OK documents: enable has not finished on this host (ENABLED is not yes); nightly check not run"]
+    sql = sql or sql_runner(run)
+    occ = occ or occ_run
+    api = api or https_api(c)
+    t = int(now() if now else time.time())
+    alerts = []
+
+    def alert(key, text):
+        alerts.append({"key": _clean(key, 80), "text": _clean(text, 400)})
+
+    ids = {}
+    for n in CONTROLLED + OPEN:
+        v = c.get(f"{n.upper()}_FOLDER_ID", "")
+        ids[n] = v if re.fullmatch(r"[1-9][0-9]*", v) else None
+    db = folders = tagid = None
+    counts = {}
+    try:
+        db = {"folders": sql(Q_FOLDERS), "groups": sql(Q_GROUPS), "tags": sql(Q_TAGS), "app": sql(Q_APP)}
+        folders, tagid = _policy(db, ids, alert)
+    except (SiteError, ValueError, TypeError, AttributeError) as e:
+        alert("check:sql", f"the tag check could not read NextCloud's database: {_clean(e, 200)}")
+        db = None
+    try:                                              # runtime drift: NextCloud rewrote config.php after enable
+        tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
+        if _trust_entry(tf, CONFIG_PHP) != _size_sha(_p(root, CONFIG_PHP)):
+            alert("trust", f"{CONFIG_PHP} does not match its fapolicyd trust entry (size/sha256): NextCloud changed it "
+                           "since the last enable; check the change, then re-run chp-site documents enable")
+    except SiteError as e:
+        alert("trust", str(e))
+    canary = _canary(occ, api, alert)                 # before the share check, which also proves the canary cleaned up
+    if db is not None:
+        try:
+            counts = _files(sql, folders, ids, tagid, alert)
+        except (SiteError, ValueError, TypeError, AttributeError) as e:
+            alert("check:sql", f"the tag check could not read NextCloud's files: {_clean(e, 200)}")
+    md5 = md5_state(run)
+    degraded = md5.startswith("DEGRADED")
+    _write_result(root, {"version": 1, "epoch": t, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)),
+                         "ok": not alerts, "alerts": alerts, "degraded": degraded, "md5": md5, "canary": canary,
+                         "counts": counts})
+    lines = [f"ALERT NextCloud check: {a['text']}" for a in alerts]
+    if not alerts:
+        lines.append("OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy "
+                     "as required; share canary refused (public link, internal share)")
+    lines.append(md5)
+    return lines

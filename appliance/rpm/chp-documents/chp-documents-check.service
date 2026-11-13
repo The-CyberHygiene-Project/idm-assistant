@@ -1,0 +1,10 @@
+[Unit]
+Description=CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81)
+ConditionPathExists=/etc/chp/documents.conf
+After=postgresql.service httpd.service php-fpm.service
+[Service]
+UMask=0077
+Type=oneshot
+ExecStart=/usr/bin/chp-site documents check
+TimeoutStartSec=30min
+Nice=10

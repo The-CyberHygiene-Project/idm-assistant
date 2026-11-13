@@ -243,6 +243,13 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>NextCloud: share REFUSED on a no-share team folder (CUI/FCI/Archive): $(message)</description>
     <group>chp_share_refused,</group>
   </rule>
+  <!-- the nightly share canary (chp-site documents check, account chp-canary, disabled between runs) is refused on
+       purpose every night: level 3 here; the check itself alerts (check 81) when the refusal FAILS -->
+  <rule id="100608" level="3">
+    <if_sid>100601</if_sid>
+    <field name="user">^chp-canary$</field>
+    <description>NextCloud: nightly share canary refused as expected: $(message)</description>
+  </rule>
   <rule id="100602" level="12">
     <if_sid>100600</if_sid>
     <field name="message" type="pcre2">^The (file|folder) "/{_CTRL}(/[^"]*)?" with ID "\\d+" has been shared</field>

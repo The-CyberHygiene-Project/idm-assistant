@@ -1,4 +1,5 @@
 """Monitor checks 77-79 of the chp-documents package (fake systemctl / nft / unshare / openssl on PATH)."""
+import json
 import os
 import subprocess
 import time
@@ -16,7 +17,7 @@ EXPECTED = ('table inet chp_nextcloud_egress {\n\tchain apache_out {\n\t\tip dad
 
 
 def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0), addr=ADDR, cert=None,
-        now=NOW, backup_status=None):
+        now=NOW, backup_status=None, result=None):
     """One monitor run in its own state under tmp (state persists across calls with the same tmp)."""
     b = tmp / "bin"; b.mkdir(exist_ok=True)
     (b / "systemctl").write_text("#!/bin/bash\n" + f'case " {active} " in *" $3 "*) exit 0;; esac\nexit 3\n')
@@ -38,6 +39,8 @@ def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0
     st = tmp / "state"; st.mkdir(exist_ok=True)
     if backup_status is not None:
         (st / "backup.status").write_text(backup_status)
+    if result is not None:
+        (st / "check.json").write_text(result if isinstance(result, str) else json.dumps(result))
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_DOCUMENTS_CONF=str(c), CHP_NC_CERT=str(tmp / "chain.pem"),
                CHP_NC_ADDR=str(a), CHP_NC_NFT="/unused", CHP_NC_VALIDATE=str(D / "nextcloud-egress-validate.sh"),
                CHP_DOCS_STATE=str(st), CHP_NOW=str(now), CHP_DOCS_LIB=str(D / "chp-documents-lib.sh"))
@@ -51,7 +54,7 @@ def fresh(tmp_path, n):
 
 
 def test_all_silent_ok_when_documents_off(tmp_path):
-    for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh"):
+    for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh"):
         out = run(fresh(tmp_path, n), n, conf=None)
         assert out.startswith("OK") and "ALERT" not in out, n
 
@@ -142,3 +145,63 @@ def test_79_widened_or_extra_content_in_address_file_alerts(tmp_path):
 def test_79_server_ip_missing_from_documents_conf_alerts(tmp_path):
     out = run(tmp_path, "79-nextcloud-egress.sh", conf="ENABLED=yes\n", live=EXPECTED % (0, 0))
     assert "SERVER_IP is not set" in out
+
+
+# ---------- 81: the nightly tag check and share canary (result of chp-site documents check) ----------
+
+def res(alerts=(), epoch=NOW - 3600, degraded=False):
+    return {"version": 1, "epoch": epoch, "time": "x", "ok": not alerts, "degraded": degraded,
+            "md5": "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)" if degraded
+            else "database MD5: available (folder moves, renames and deletes allowed)",
+            "alerts": [{"key": k, "text": t} for k, t in alerts], "canary": {"public": "refused", "internal": "refused"}}
+
+
+T81 = "81-documents-tags.sh"
+
+
+def test_81_fresh_clean_result_ok(tmp_path):
+    out = run(tmp_path, T81, result=res())
+    assert out.startswith("OK") and "ALERT" not in out
+
+
+def test_81_silent_ok_when_enable_has_not_finished(tmp_path):
+    out = run(tmp_path, T81, conf="ENABLED=no\nFQDN=x\n")
+    assert out.startswith("OK") and "ALERT" not in out
+
+
+def test_81_each_failure_alerts_once_then_again_after_24h(tmp_path):
+    one = res([("untagged:47", "file CUI/a.docx (id 47) in team folder CUI has no CUI tag")])
+    out = run(tmp_path, T81, result=one)
+    assert "ALERT NextCloud check: file CUI/a.docx (id 47) in team folder CUI has no CUI tag" in out
+    held = run(tmp_path, T81, result=one, now=NOW + 3600)
+    assert "ALERT" not in held and "still failing (alerted 2027-01-15T08:00:00Z)" in held
+    assert "NextCloud check OK" not in held                              # never a false all-clear
+    two = res([("untagged:47", "file CUI/a.docx (id 47) in team folder CUI has no CUI tag"),
+               ("canary:public", "share canary: a public link on the CUI canary file was CREATED")])
+    out = run(tmp_path, T81, result=two, now=NOW + 7200)
+    assert out.count("ALERT") == 1 and "ALERT NextCloud check: share canary" in out       # only the new one
+    assert "ALERT" in run(tmp_path, T81, result=one, now=NOW + DAY + 10)
+    assert run(tmp_path, T81, result=res(), now=NOW + DAY + 20).startswith("OK")
+    assert "ALERT" in run(tmp_path, T81, result=one, now=NOW + DAY + 30)  # recovered, then failing again: new
+
+
+def test_81_missing_or_broken_result_alerts(tmp_path):
+    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "a"), T81)
+    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "b"), T81, result="{not json")
+
+
+def test_81_result_older_than_26h_alerts(tmp_path):
+    assert "ALERT" not in run(fresh(tmp_path, "a"), T81, result=res(epoch=NOW - 25 * H))
+    out = run(fresh(tmp_path, "b"), T81, result=res(epoch=NOW - 27 * H))
+    assert "ALERT NextCloud check: last result is 27 h old" in out
+
+
+def test_81_degraded_is_shown_not_alerted(tmp_path):
+    out = run(tmp_path, T81, result=res(degraded=True))
+    assert "ALERT" not in out and "DEGRADED: database MD5 unavailable" in out
+
+
+def test_81_text_from_the_result_is_cleaned(tmp_path):
+    out = run(tmp_path, T81, result=res([("untagged:9", "evil\x1b[31m\nALERT forged")]))
+    assert "\x1b" not in out and not any(x.startswith("ALERT forged") for x in out.splitlines())
+    assert len([x for x in out.splitlines() if x.startswith("ALERT")]) == 1

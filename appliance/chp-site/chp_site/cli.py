@@ -295,6 +295,10 @@ def _documents(a):
     if a.action == "status":
         print("\n".join(documents.status(Path("/"), subprocess.run)))
         return 0
+    if a.action == "check":                              # nightly (chp-documents-check.timer): tag check + canary
+        lines = documents.check(Path("/"), subprocess.run)
+        print("\n".join(lines))
+        return 1 if any(x.startswith("ALERT") for x in lines) else 0
     site, hosts = _load(a.site)
     me = next((h for h in hosts if h.hostname == _host()), None)
     if me is None:
@@ -570,8 +574,9 @@ def main(argv=None):
     se.add_argument("action", choices=("enable", "status")); se.add_argument("--stick"); se.add_argument("--site", default="/etc/chp")
     se.add_argument("--firstboot", action="store_true", help="first boot: no site stick (keys via the pending folder / the staged key)")
     dm = sub.add_parser("documents", help="document server (NextCloud) on the CHP server: enable (DOCUMENTS=yes; "
-                                          "after security enable; with the site stick) or show status")
-    dm.add_argument("action", choices=("enable", "status")); dm.add_argument("--stick"); dm.add_argument("--site", default="/etc/chp")
+                                          "after security enable; with the site stick), show status, or run the "
+                                          "nightly tag check and share canary (check)")
+    dm.add_argument("action", choices=("enable", "status", "check")); dm.add_argument("--stick"); dm.add_argument("--site", default="/etc/chp")
     dm.add_argument("--as", dest="as_", default="idm_admin", help="your Kanidm admin session (kanidm login -D NAME)")
     al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
     al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)

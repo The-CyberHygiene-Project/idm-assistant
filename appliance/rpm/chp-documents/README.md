@@ -2,7 +2,7 @@
 
 The documents role of the CyberHygiene appliance: web and PHP configuration for NextCloud (shipped by `nextcloud-chp`),
 the egress table that keeps NextCloud off the internet, units and timers, backup, certificate renewal, a fapolicyd
-rule and monitor checks 77-79. The package is **site-independent**; `chp-site documents enable` renders the
+rule and monitor checks 77-79 and 81. The package is **site-independent**; `chp-site documents enable` renders the
 site-specific pieces. Installing the package starts and enables nothing, and everything fails closed until rendered.
 
 ## What `chp-site documents enable` must write
@@ -35,6 +35,15 @@ Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron
   certificate is re-issued over ACME with `:80` opened only for the challenge (as Kanidm's renewal does). Check 78 judges
   the certificate against its own lifetime (alert below 25 % left, or 7 days for certificates of 90 days or more).
 * **Checks.** 77: httpd, php-fpm, postgresql, `nextcloud-cron.timer` active. 78: certificate. 79: egress table.
+  81: the result of the nightly `chp-site documents check` (`chp-documents-check.timer`, 03:10), read from
+  `/var/lib/chp/documents/check.json` (0600): every file in CUI, FCI and Archive carries its tag (Archive: CUI), every
+  `CUI_`/`FCI_` file anywhere carries its tag, no CUI/FCI-tagged file outside those folders, no share on anything in
+  them, `chp_foldertag` enabled with `rules`/`contain`/`contain_allow` equal to the site policy, no team folder outside
+  the site's six, CUI/FCI tags restricted, `/etc/nextcloud/config.php` equal to its fapolicyd trust entry, and the
+  share canary (a public link and an internal share on `CUI/CUI_chp-canary.txt` as the local account `chp-canary`,
+  disabled between runs, signed in by a per-run app token that is deleted afterwards) refused. A missing result or
+  one older than 26 h alerts; DEGRADED (database MD5, design §12) is shown, not alerted. The check reads the database
+  with SQL as apache over the socket, so it runs while `chp_foldertag` is off.
   Check 77 also alerts when the last backup failed. Each alerts once per change and again after 24 h (state in
   `/var/lib/chp/documents/`); while an alert is held back the check prints `OK ... still failing (alerted <time>)`.
 

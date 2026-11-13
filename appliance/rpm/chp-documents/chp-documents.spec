@@ -1,7 +1,7 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        2.chp%{?dist}
-Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, checks 77-79
+Release:        3.chp%{?dist}
+Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
 URL:            https://github.com/The-CyberHygiene-Project/idm-assistant
@@ -31,14 +31,18 @@ Source21:       78-nextcloud-cert.sh
 Source22:       79-nextcloud-egress.sh
 Source23:       README.md
 Source24:       LICENSE
+Source25:       chp-documents-check.service
+Source26:       chp-documents-check.timer
+Source27:       81-documents-tags.sh
 Requires:       nextcloud-chp, chp-base, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site
 BuildRequires:  systemd-rpm-macros
 
 %description
 The documents role (ISO 0.7.0 Plan 2). SITE-INDEPENDENT: it ships web/PHP configuration, the egress table, units,
-timers, backup, certificate renewal, a fapolicyd rule and monitor checks 77 (services), 78 (certificate) and 79
-(egress table). Nothing is enabled by installing it; `chp-site documents enable` renders the site-specific pieces
+timers, backup, certificate renewal, a fapolicyd rule, the nightly tag check and share canary
+(chp-documents-check.timer runs `chp-site documents check`) and monitor checks 77 (services), 78 (certificate),
+79 (egress table) and 81 (the nightly check's result). Nothing is enabled by installing it; `chp-site documents enable` renders the site-specific pieces
 and starts the units. Until then everything FAILS CLOSED: httpd denies all, the egress unit refuses to start.
 
 Files that `chp-site documents enable` must render (see /usr/share/doc/chp-documents/README.md):
@@ -77,21 +81,24 @@ install -Dm0755 %{SOURCE21} %{buildroot}%{_prefix}/lib/chp/monitor.d/78-nextclou
 install -Dm0755 %{SOURCE22} %{buildroot}%{_prefix}/lib/chp/monitor.d/79-nextcloud-egress.sh
 install -Dm0644 %{SOURCE23} %{buildroot}%{_docdir}/%{name}/README.md
 install -Dm0644 %{SOURCE24} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+install -Dm0644 %{SOURCE25} %{buildroot}%{_unitdir}/chp-documents-check.service
+install -Dm0644 %{SOURCE26} %{buildroot}%{_unitdir}/chp-documents-check.timer
+install -Dm0755 %{SOURCE27} %{buildroot}%{_prefix}/lib/chp/monitor.d/81-documents-tags.sh
 install -dm0700 %{buildroot}%{_sysconfdir}/pki/nextcloud
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/documents
 
 %post
-%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
+%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer chp-documents-check.timer
 systemctl daemon-reload >/dev/null 2>&1 || :
 # the fapolicyd rule takes effect at the next rules load / fapolicyd restart (chp-site documents enable restarts it
 # and reads fapolicyd-cli --check-status)
 if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1 || :; fi
 
 %preun
-%systemd_preun chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
+%systemd_preun chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer chp-documents-check.timer
 
 %postun
-%systemd_postun nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer
+%systemd_postun nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer chp-documents-check.timer
 # on upgrade the egress table is reloaded from the (possibly new) shipped file
 %systemd_postun_with_restart chp-nextcloud-egress.service
 
@@ -126,10 +133,20 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %{_prefix}/lib/chp/monitor.d/77-nextcloud-services.sh
 %{_prefix}/lib/chp/monitor.d/78-nextcloud-cert.sh
 %{_prefix}/lib/chp/monitor.d/79-nextcloud-egress.sh
+%{_prefix}/lib/chp/monitor.d/81-documents-tags.sh
+%{_unitdir}/chp-documents-check.service
+%{_unitdir}/chp-documents-check.timer
 %dir %attr(0700,root,root) %{_sysconfdir}/pki/nextcloud
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/documents
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-3.chp
+- Nightly tag check and share canary (Plan 2 Task 6): chp-documents-check.timer (03:10, after the backup) runs
+  `chp-site documents check` (SQL outside chp_foldertag; app policy, team folders, config.php trust entry, public
+  link and internal share canary on a CUI file); monitor check 81 reads its result
+  (/var/lib/chp/documents/check.json): alerts once per new failure, again after 24 h, and when the result is missing
+  or older than 26 h; DEGRADED (database MD5) shown, not alerted. Requires chp-site.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-2.chp
 - Review fixes: check 79 builds the expected table from the shipped files in a throwaway netns every run (no
   snapshot to bless) and validates the rendered address file (one line, IPv4, = SERVER_IP), which the egress unit also

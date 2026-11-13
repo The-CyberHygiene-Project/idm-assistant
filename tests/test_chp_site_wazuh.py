@@ -329,3 +329,15 @@ def test_manager_reads_the_audit_log_once():
     for out in (w.documents_manager(MGR), w.documents_manager(w.documents_manager(MGR))):
         locs = [e for x in w.parse_conf(out) for e in x.findall("localfile") if e.findtext("location") == NC_LOG]
         assert len(locs) == 1 and locs[0].findtext("log_format") == "json"
+
+
+def test_nightly_canary_refusal_is_not_a_level_12_page():
+    """Plan 2 Task 6: the nightly canary's expected refusal is level 3 (the check itself alerts when the refusal
+    fails); the same refusal for anyone else, and a share MADE by the canary, stay at 12."""
+    msg = ("Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canary on 47 to "
+           "OCP\\Interaction\\Contacts\\PublicLink is restricted: Node is not shareable.")
+    assert _level(w.NEXTCLOUD_RULES, _nc(msg, user="chp-canary"))[1] == 3
+    assert _level(w.NEXTCLOUD_RULES, _nc(msg.replace("chp-canary", "lab01"), user="lab01"))[1] == 12
+    assert _level(w.NEXTCLOUD_RULES, _nc(msg, user="lab01"))[1] == 12          # the audit's user field decides
+    made = 'The file "/CUI/CUI_chp-canary.txt" with ID "47" has been shared via link with permissions "1" (Share ID: 3)'
+    assert _level(w.NEXTCLOUD_RULES, _nc(made, user="chp-canary"))[1] == 12

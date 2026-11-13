@@ -1099,3 +1099,456 @@ def test_wazuh_rollback_when_new_rules_cannot_be_removed(tmp_path, monkeypatch):
     assert "old rules are back" not in msg
     assert not (e.root / D.MARK).exists() or "wazuh-manager" not in (e.root / D.MARK).read_text()
     assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
+
+
+# ---------- nightly tag check and share-link canary (Plan 2 Task 6) ----------
+import sqlite3
+
+TOKEN = "canary-app-token-0123456789abcdef"
+SCHEMA = """
+CREATE TABLE oc_group_folders (folder_id INTEGER, mount_point TEXT, storage_id INTEGER);
+CREATE TABLE oc_group_folders_groups (folder_id INTEGER, group_id TEXT, permissions INTEGER, circle_id TEXT);
+CREATE TABLE oc_storages (numeric_id INTEGER, id TEXT);
+CREATE TABLE oc_mimetypes (id INTEGER, mimetype TEXT);
+CREATE TABLE oc_filecache (fileid INTEGER, storage INTEGER, path TEXT, name TEXT, mimetype INTEGER);
+CREATE TABLE oc_systemtag (id INTEGER, name TEXT, visibility INTEGER, editable INTEGER);
+CREATE TABLE oc_systemtag_object_mapping (objectid TEXT, objecttype TEXT, systemtagid INTEGER);
+CREATE TABLE oc_appconfig (appid TEXT, configkey TEXT, configvalue TEXT);
+CREATE TABLE oc_share (id INTEGER, share_type INTEGER, file_source INTEGER, uid_owner TEXT, share_with TEXT);
+"""
+IDS = {"CUI": 1, "FCI": 2, "Archive": 3, "Operations": 4, "Internal": 5, "Public": 6}
+CUI_TAG, FCI_TAG = 1, 2
+GOOD_APP = {"enabled": "yes", "rules": '{"1":"1","2":"2","3":"1"}', "contain": "[1,2,3]",
+            "contain_allow": "[[1,3],[3,1]]"}
+
+
+class DB:
+    """NextCloud's database as the nightly check sees it (sqlite stands in for PostgreSQL; the check's SQL is portable)."""
+    def __init__(self, app=None):
+        self.c = sqlite3.connect(":memory:")
+        self.c.row_factory = sqlite3.Row
+        self.c.executescript(SCHEMA)
+        self.queries = []
+        self.next_id = 100
+        self.c.executemany("INSERT INTO oc_mimetypes VALUES (?, ?)", [(1, "httpd/unix-directory"), (2, "text/plain")])
+        self.c.executemany("INSERT INTO oc_systemtag VALUES (?, ?, 1, 0)", [(CUI_TAG, "CUI"), (FCI_TAG, "FCI")])
+        for n, i in IDS.items():
+            self.c.execute("INSERT INTO oc_group_folders VALUES (?, ?, ?)", (i, n, 10 + i))
+            self.c.execute("INSERT INTO oc_storages VALUES (?, ?)", (10 + i, f"local::/data/nextcloud/data/__groupfolders/{i}/"))
+            g, p = ("cui-users", 15) if n in D.CONTROLLED else ("chp-users", 31)
+            self.c.execute("INSERT INTO oc_group_folders_groups VALUES (?, ?, ?, NULL)", (i, g, p))
+            self.file(n, "files", directory=True)
+        self.c.execute("INSERT INTO oc_storages VALUES (20, 'home::lab01')")
+        for k, v in (GOOD_APP if app is None else app).items():
+            self.c.execute("INSERT INTO oc_appconfig VALUES ('chp_foldertag', ?, ?)", (k, v))
+        self.c.execute("INSERT INTO oc_appconfig VALUES ('core', 'rules', 'x')")
+
+    def file(self, where, path, tags=(), directory=False):
+        st = 20 if where == "home" else 10 + IDS[where]
+        self.next_id += 1
+        self.c.execute("INSERT INTO oc_filecache VALUES (?, ?, ?, ?, ?)",
+                       (self.next_id, st, path, path.rsplit("/", 1)[-1], 1 if directory else 2))
+        for t in tags:
+            self.c.execute("INSERT INTO oc_systemtag_object_mapping VALUES (?, 'files', ?)", (str(self.next_id), t))
+        return self.next_id
+
+    def __call__(self, q):
+        self.queries.append(q)
+        return [dict(r) for r in self.c.execute(q)]
+
+
+class CanaryOcc:
+    """occ for the canary: the canary account, its app tokens and its enabled flag."""
+    def __init__(self, exists=True, groups=("cui-users",)):
+        self.exists, self.groups, self.enabled = exists, list(groups), False
+        self.tokens, self.calls, self.envs = [], [], []
+
+    def __call__(self, argv, env=None):
+        argv = list(argv)
+        self.calls.append(argv)
+        self.envs.append(env)
+        c, a = argv[0], argv[1:]
+        if c == "user:info":
+            if not self.exists:
+                return 1, "", "user not found"
+            return 0, json.dumps({"user_id": a[0], "enabled": self.enabled, "groups": self.groups}), ""
+        if c == "user:add":
+            assert env and env.get("OC_PASS") and env["OC_PASS"] not in " ".join(argv)
+            self.exists = True
+            self.groups = [argv[argv.index("--group") + 1]] if "--group" in argv else []
+            return 0, "", ""
+        if c == "group:adduser":
+            self.groups.append(a[0])
+            return 0, "", ""
+        if c == "user:enable":
+            self.enabled = True
+            return 0, "", ""
+        if c == "user:disable":
+            self.enabled = False
+            return 0, "", ""
+        if c == "user:auth-tokens:add":
+            self.tokens.append({"id": len(self.tokens) + 1, "name": argv[argv.index("--name") + 1]})
+            return 0, f"app password:\n{TOKEN}\n", ""
+        if c == "user:auth-tokens:list":
+            return 0, json.dumps(self.tokens), ""
+        if c == "user:auth-tokens:delete":
+            self.tokens = [t for t in self.tokens if str(t["id"]) != a[1]]
+            return 0, "", ""
+        return 0, "", ""
+
+
+class Api:
+    """NextCloud's HTTPS API as the canary uses it: answers per share type (403 = refused, 200 = created)."""
+    def __init__(self, public=403, internal=403, raise_on=None, delete_ok=True, file_exists=True):
+        self.answer = {"3": public, "0": internal}
+        self.raise_on, self.delete_ok, self.file_exists = raise_on, delete_ok, file_exists
+        self.calls, self.shares, self.n = [], {}, 76
+
+    def __call__(self, method, path, user, token, form=None, body=None):
+        self.calls.append((method, path, user, token, dict(form or {})))
+        if self.raise_on and self.raise_on(method, path, form or {}):
+            raise OSError("connection reset")
+        if method == "PROPFIND":
+            return (207 if self.file_exists else 404), b""
+        if method == "PUT":
+            self.file_exists = True
+            return 201, b""
+        if method == "POST" and "/shares" in path:
+            st = self.answer[form["shareType"]]
+            if st == 200:
+                self.n += 1
+                self.shares[self.n] = form
+                return 200, json.dumps({"ocs": {"meta": {"statuscode": 200}, "data": {"id": str(self.n)}}}).encode()
+            return st, json.dumps({"ocs": {"meta": {"statuscode": st, "message": "You are not allowed to share"}}}).encode()
+        if method == "GET" and "/shares" in path:
+            return 200, json.dumps({"ocs": {"meta": {"statuscode": 200},
+                                            "data": [{"id": str(i)} for i in sorted(self.shares)]}}).encode()
+        if method == "DELETE" and "/shares/" in path:
+            if not self.delete_ok:
+                return 500, b""
+            self.shares.pop(int(path.split("?")[0].rsplit("/", 1)[-1]), None)
+            return 200, b""
+        return 404, b""
+
+
+class CheckRun:
+    def __init__(self, md5=True):
+        self.md5, self.calls = md5, []
+
+    def __call__(self, argv, **kw):
+        self.calls.append(list(argv))
+        if "MD5" in " ".join(argv):
+            return R(0, D.MD5_CHP + "\n") if self.md5 else R(1, "", "ERROR: could not compute MD5 hash")
+        return R()
+
+
+def check_root(tmp_path, enabled="yes", trust=True):
+    r = tmp_path / "root"
+    (r / "etc/chp").mkdir(parents=True)
+    (r / "etc/chp/documents.conf").write_text(D.conf_text(FQDN, "192.168.100.30", 14, {n: str(i) for n, i in IDS.items()},
+                                                          enabled))
+    cfg = r / "etc/nextcloud/config.php"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("<?php $CONFIG = array('instanceid' => 'x');\n")
+    tf = r / "etc/fapolicyd/trust.d/nextcloud"
+    tf.parent.mkdir(parents=True)
+    size, sha = D._size_sha(cfg)
+    tf.write_text(f"{D.CONFIG_PHP} {size} {sha}\n" if trust else f"{D.CONFIG_PHP} 1 {'0' * 64}\n")
+    return r
+
+
+def do_check(tmp_path, db=None, api=None, occ=None, run=None, **kw):
+    r = kw.pop("root", None) or check_root(tmp_path, **kw)
+    db, api, occ, run = db or DB(), api or Api(), occ or CanaryOcc(), run or CheckRun()
+    lines = D.check(r, run, sql=db, api=api, occ=occ, now=lambda: 1_800_000_000)
+    res = json.loads((r / D.CHECK_RESULT).read_text())
+    return lines, res, (r, db, api, occ, run)
+
+
+def keys(res):
+    return {a["key"] for a in res["alerts"]}
+
+
+def test_tag_check_clean_site_is_ok_and_result_written_0600(tmp_path):
+    lines, res, (r, *_rest) = do_check(tmp_path)
+    assert res["alerts"] == [], res["alerts"]
+    assert not any(x.startswith("ALERT") for x in lines)
+    p = r / D.CHECK_RESULT
+    assert str(D.CHECK_RESULT) == "var/lib/chp/documents/check.json"
+    assert (p.stat().st_mode & 0o777) == 0o600 and (p.parent.stat().st_mode & 0o777) == 0o700
+    assert res["epoch"] == 1_800_000_000 and res["degraded"] is False
+    assert res["canary"] == {"public": "refused", "internal": "refused"}
+
+
+def test_tag_check_finds_untagged_files_in_cui_and_fci(tmp_path):
+    db = DB()
+    ok_cui = db.file("CUI", "files/plan.docx", [CUI_TAG])
+    bad_cui = db.file("CUI", "files/sub/untagged.docx")
+    db.file("CUI", "files/sub", directory=True)                       # folders need no tag
+    bad_fci = db.file("FCI", "files/note.md", [CUI_TAG])               # wrong tag is no tag
+    db.file("FCI", "files/ok.md", [FCI_TAG])
+    bad_arc = db.file("Archive", "files/old.pdf", [FCI_TAG])           # Archive holds CUI: needs the CUI tag
+    db.file("Archive", "files/kept.pdf", [CUI_TAG])
+    db.file("CUI", "trash/gone.docx")                                  # not under files/: not a live file
+    db.file("Operations", "files/ops.txt")                             # open folders need no tag
+    _, res, _ = do_check(tmp_path, db=db)
+    assert keys(res) == {f"untagged:{bad_cui}", f"untagged:{bad_fci}", f"untagged:{bad_arc}"}, res["alerts"]
+    text = " ".join(a["text"] for a in res["alerts"])
+    assert "CUI/sub/untagged.docx" in text and "FCI/note.md" in text and "Archive/old.pdf" in text
+    assert str(ok_cui) not in keys(res)
+    for q in db.queries:                                               # folder ids/tag ids from conf and DB, SQL only
+        assert "oc_" in q
+
+
+def test_tag_check_finds_untagged_cui_prefixed_anywhere(tmp_path):
+    db = DB()
+    home = db.file("home", "files/CUI_report_v1.docx")
+    lower = db.file("Operations", "files/sub/cui_lower.txt")
+    fci = db.file("Public", "files/FCI_quote.xlsx", [CUI_TAG])           # FCI_ needs the FCI tag
+    db.file("Internal", "files/FCI_tagged.xlsx", [FCI_TAG])            # tagged (but outside: see below)
+    db.file("home", "files/CUI_folder", directory=True)
+    db.file("home", "files_trashbin/files/CUI_deleted.d123")
+    db.file("home", "files/notcui_x.txt")
+    _, res, _ = do_check(tmp_path, db=db)
+    k = keys(res)
+    assert {f"name:{home}", f"name:{lower}", f"name:{fci}"} <= k, res["alerts"]
+    assert not any(x.startswith("name:") for x in k - {f"name:{home}", f"name:{lower}", f"name:{fci}"})
+    assert any("home of lab01" in a["text"] and "CUI_report_v1.docx" in a["text"] for a in res["alerts"])
+
+
+def test_tagged_file_outside_the_controlled_folders_alerts(tmp_path):
+    db = DB()
+    out = db.file("Internal", "files/FCI_tagged.xlsx", [FCI_TAG])
+    home = db.file("home", "files/moved.docx", [CUI_TAG])
+    _, res, _ = do_check(tmp_path, db=db)
+    assert {f"outside:{out}", f"outside:{home}"} <= keys(res)
+
+
+def test_tag_check_works_without_the_app(tmp_path):
+    db = DB(app={**GOOD_APP, "enabled": "no"})
+    bad = db.file("CUI", "files/while-off.docx")
+    _, res, (_, _, _, occ, _) = do_check(tmp_path, db=db)
+    assert "app:enabled" in keys(res) and f"untagged:{bad}" in keys(res)
+    for c in occ.calls:                                              # no app command, no app:* use
+        assert not c[0].startswith(("chp:", "app:")), c
+
+
+@pytest.mark.parametrize("app,key", [
+    ({k: v for k, v in GOOD_APP.items() if k != "rules"}, "app:rules"),
+    ({**GOOD_APP, "rules": ""}, "app:rules"),
+    ({**GOOD_APP, "rules": '{"1":"1","2":"2"}'}, "app:rules"),                   # Archive not covered
+    ({**GOOD_APP, "rules": '{"1":"1","2":"2","3":"2"}'}, "app:rules"),           # Archive -> FCI tag
+    ({**GOOD_APP, "rules": '{"1":"1","2":"2","3":"1","4":"1"}'}, "app:rules"),   # extra rule
+    ({**GOOD_APP, "rules": "not json"}, "app:rules"),
+    ({k: v for k, v in GOOD_APP.items() if k != "contain"}, "app:contain"),     # silently disables containment
+    ({**GOOD_APP, "contain": "[]"}, "app:contain"),
+    ({**GOOD_APP, "contain": "[1,2]"}, "app:contain"),
+    ({k: v for k, v in GOOD_APP.items() if k != "contain_allow"}, "app:contain_allow"),
+    ({**GOOD_APP, "contain_allow": "[[1,3]]"}, "app:contain_allow"),
+    ({**GOOD_APP, "contain_allow": "[[1,3],[3,1],[1,4]]"}, "app:contain_allow"),
+    ({k: v for k, v in GOOD_APP.items() if k != "enabled"}, "app:enabled"),
+])
+def test_app_config_must_be_present_and_match_site_policy(tmp_path, app, key):
+    _, res, _ = do_check(tmp_path, db=DB(app=app))
+    assert key in keys(res), res["alerts"]
+
+
+def test_app_config_order_and_number_types_do_not_matter(tmp_path):
+    app = {**GOOD_APP, "rules": '{"3":1,"1":"1","2":2}', "contain": '["3",1,2]', "contain_allow": "[[3,1],[1,3]]"}
+    _, res, _ = do_check(tmp_path, db=DB(app=app))
+    assert res["alerts"] == []
+
+
+def test_team_folder_not_in_the_rules_is_flagged(tmp_path):
+    db = DB()
+    # a controlled folder renamed in the UI: enable made a new CUI (id 7); the renamed one keeps cui-users
+    db.c.execute("INSERT INTO oc_group_folders VALUES (7, 'CUI old', 17)")
+    db.c.execute("INSERT INTO oc_group_folders_groups VALUES (7, 'cui-users', 15, NULL)")
+    db.c.execute("INSERT INTO oc_group_folders VALUES (8, 'Scratch', 18)")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert {"folder:7", "folder:8"} <= keys(res)
+    t = next(a["text"] for a in res["alerts"] if a["key"] == "folder:7")
+    assert "CUI old" in t and "cui-users" in t
+
+
+def test_ruled_folder_renamed_or_missing_is_flagged(tmp_path):
+    db = DB()
+    db.c.execute("UPDATE oc_group_folders SET mount_point = 'CUI renamed' WHERE folder_id = 1")
+    db.c.execute("DELETE FROM oc_group_folders WHERE folder_id = 2")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert {"folder:1", "folder:2"} <= keys(res)
+
+
+def test_controlled_folder_share_bit_or_stray_group_is_flagged(tmp_path):
+    db = DB()
+    db.c.execute("UPDATE oc_group_folders_groups SET permissions = 31 WHERE folder_id = 1")
+    db.c.execute("INSERT INTO oc_group_folders_groups VALUES (3, 'chp-users', 1, NULL)")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert {"groups:1", "groups:3"} <= keys(res)
+
+
+def test_tags_must_exist_and_be_restricted(tmp_path):
+    db = DB()
+    db.c.execute("UPDATE oc_systemtag SET editable = 1 WHERE name = 'FCI'")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert "tag:FCI" in keys(res)
+    db = DB()
+    db.c.execute("DELETE FROM oc_systemtag WHERE name = 'CUI'")
+    _, res, _ = do_check(tmp_path / "b", db=db)
+    assert "tag:CUI" in keys(res)
+
+
+def test_share_on_a_controlled_file_is_flagged(tmp_path):
+    db = DB()
+    f = db.file("CUI", "files/plan.docx", [CUI_TAG])
+    db.c.execute("INSERT INTO oc_share VALUES (9, 3, ?, 'lab01', NULL)", (f,))
+    _, res, _ = do_check(tmp_path, db=db)
+    assert "share:9" in keys(res)
+
+
+def test_config_php_trust_entry_mismatch_alerts(tmp_path):
+    _, res, _ = do_check(tmp_path, trust=False)
+    assert "trust" in keys(res)
+
+
+def test_degraded_md5_is_reported_not_alerted(tmp_path):
+    lines, res, _ = do_check(tmp_path, run=CheckRun(md5=False))
+    assert res["degraded"] is True and res["alerts"] == []
+    assert res["md5"] == "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)"
+    assert any("DEGRADED: database MD5 unavailable" in x and not x.startswith("ALERT") for x in lines)
+
+
+def test_not_enabled_is_silent(tmp_path):
+    r = tmp_path / "root"
+    (r / "etc/chp").mkdir(parents=True)
+    lines = D.check(r, CheckRun(), sql=DB(), api=Api(), occ=CanaryOcc(), now=lambda: 1)
+    assert lines and "not enabled" in lines[0] and not (r / D.CHECK_RESULT).exists()
+    r2 = check_root(tmp_path / "b", enabled="no")
+    lines = D.check(r2, CheckRun(), sql=DB(), api=Api(), occ=CanaryOcc(), now=lambda: 1)
+    assert "not enabled" in lines[0] or "not finished" in lines[0]
+
+
+def test_canary_public_link_refused(tmp_path):
+    lines, res, (r, _, api, occ, _) = do_check(tmp_path)
+    posts = [c for c in api.calls if c[0] == "POST"]
+    assert [p[4]["shareType"] for p in posts] == ["3", "0"]
+    assert posts[0][4]["path"] == "/" + D.CANARY_FILE and posts[0][4].get("password")
+    assert posts[1][4]["shareWith"] == D.ADMIN                         # not in cui-users
+    assert all(c[2] == D.CANARY_USER and c[3] == TOKEN for c in api.calls)
+    assert res["alerts"] == [] and any("canary" in x and x.startswith("OK") for x in lines)
+    assert occ.tokens == [] and occ.enabled is False                    # token deleted, account disabled again
+
+
+@pytest.mark.parametrize("which", ["public", "internal"])
+def test_canary_link_created_is_alerted_and_deleted_at_once(tmp_path, which):
+    api = Api(**{which: 200})
+    _, res, (_, _, api, occ, _) = do_check(tmp_path, api=api)
+    assert f"canary:{which}" in keys(res)
+    assert api.shares == {}                                            # deleted
+    i = [n for n, c in enumerate(api.calls) if c[0] == "POST"][0 if which == "public" else 1]
+    assert api.calls[i + 1][0] == "DELETE"                              # at once, before anything else
+    assert res["canary"][which].startswith("CREATED")
+    assert occ.tokens == [] and occ.enabled is False
+
+
+def test_canary_link_that_cannot_be_deleted_says_so(tmp_path):
+    _, res, _ = do_check(tmp_path, api=Api(public=200, delete_ok=False))
+    t = next(a["text"] for a in res["alerts"] if a["key"] == "canary:public")
+    assert "could NOT be deleted" in t and "77" in t
+
+
+def test_canary_never_leaves_a_link_behind_on_an_error(tmp_path):
+    # the link is made, then the connection drops before the answer is read back: the sweep finds and deletes it
+    class Drop(Api):
+        def __call__(self, method, path, user, token, form=None, body=None):
+            if method == "POST" and form and form.get("shareType") == "3":
+                super().__call__(method, path, user, token, form)
+                raise OSError("connection reset")
+            return super().__call__(method, path, user, token, form, body)
+    api = Drop(public=200)
+    _, res, (_, _, api, occ, _) = do_check(tmp_path, api=api)
+    assert api.shares == {} and "canary:error" in keys(res)
+    assert occ.tokens == [] and occ.enabled is False
+
+
+def test_canary_inconclusive_answer_alerts(tmp_path):
+    for st in (401, 500, 404):
+        _, res, _ = do_check(tmp_path / str(st), api=Api(public=st))
+        assert "canary:error" in keys(res), st
+
+
+def test_canary_sets_up_its_account_and_file_without_storing_a_secret(tmp_path):
+    occ = CanaryOcc(exists=False)
+    api = Api(file_exists=False)
+    _, res, (r, _, api, occ, _) = do_check(tmp_path, occ=occ, api=api)
+    add = next(c for c in occ.calls if c[0] == "user:add")
+    assert "--password-from-env" in add and D.CANARY_USER in add and "cui-users" in add
+    assert any(c[0] == "PUT" and c[1].endswith("/CUI/CUI_chp-canary.txt") for c in api.calls)
+    assert occ.enabled is False and occ.tokens == []
+    for p in r.rglob("*"):
+        if p.is_file():
+            assert TOKEN not in p.read_text(errors="ignore"), p
+    # leftovers of an earlier, killed run are removed first
+    occ2 = CanaryOcc()
+    occ2.tokens = [{"id": 9, "name": D.CANARY_TOKEN}, {"id": 10, "name": "other"}]
+    occ2.enabled = True
+    do_check(tmp_path / "b", occ=occ2)
+    assert occ2.tokens == [{"id": 10, "name": "other"}] and occ2.enabled is False
+
+
+def test_canary_account_added_back_to_cui_users(tmp_path):
+    occ = CanaryOcc(groups=())
+    do_check(tmp_path, occ=occ)
+    assert ["group:adduser", "cui-users", D.CANARY_USER] in occ.calls
+
+
+def test_names_from_nextcloud_are_cleaned(tmp_path):
+    db = DB()
+    db.file("CUI", "files/evil\x1b[31m\nALERT fake .docx")
+    db.c.execute("INSERT INTO oc_group_folders VALUES (9, 'x\x07`y', 19)")
+    lines, res, (r, *_x) = do_check(tmp_path, db=db)
+    raw = (r / D.CHECK_RESULT).read_text()
+    for a in res["alerts"]:
+        assert not any(ord(ch) < 32 or 127 <= ord(ch) <= 159 or ch in "  `" for ch in a["text"] + a["key"])
+    for x in lines:
+        assert "\n" not in x and "\x1b" not in x
+    assert "\\u001b" not in raw
+
+
+def test_sql_errors_alert_and_the_result_is_still_written(tmp_path):
+    def broken(q):
+        raise SiteError("psql failed: could not connect")
+    _, res, _ = do_check(tmp_path, db=broken)
+    assert "check:sql" in keys(res)
+
+
+def test_default_sql_runs_psql_as_apache_and_reads_json(tmp_path):
+    seen = []
+
+    def run(argv, **kw):
+        seen.append(list(argv))
+        return R(0, '[{"a": 1, "b": "x"}]\n')
+    q = D.sql_runner(run)
+    assert q("SELECT 1 AS a, 'x' AS b") == [{"a": 1, "b": "x"}]
+    a = seen[0]
+    assert a[:4] == ["runuser", "-u", "apache", "--"] and "nextcloud" in a and "ON_ERROR_STOP=1" in a
+    assert "json_agg" in a[-1] and "SELECT 1 AS a, 'x' AS b" in a[-1]
+    with pytest.raises(SiteError):
+        D.sql_runner(lambda argv, **kw: R(2, "", "ERROR: relation does not exist"))("SELECT 1")
+
+
+def test_check_exit_code_and_cli(tmp_path, monkeypatch, capsys):
+    from chp_site import cli
+    monkeypatch.setattr(D, "check", lambda root, run, **kw: ["OK all good", "ALERT bad thing"])
+    assert cli.main(["documents", "check"]) == 1
+    assert "ALERT bad thing" in capsys.readouterr().out
+    monkeypatch.setattr(D, "check", lambda root, run, **kw: ["OK all good"])
+    assert cli.main(["documents", "check"]) == 0
+
+
+def test_tag_check_never_goes_blind_without_the_directory_mimetype(tmp_path):
+    db = DB()
+    db.c.execute("DELETE FROM oc_mimetypes WHERE mimetype = 'httpd/unix-directory'")
+    bad = db.file("CUI", "files/x.docx")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert f"untagged:{bad}" in keys(res)
