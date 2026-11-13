@@ -10,7 +10,7 @@
 # Start it so it outlives the ssh session:  systemd-run --unit=size-guard-NAME size-guard.sh NAME 50
 # Stop it with:  systemctl stop size-guard-NAME      (messages go to: journalctl -u size-guard-NAME)
 set -uo pipefail
-[[ $EUID -eq 0 ]] || { echo "run as root"; exit 1; }
+[[ $EUID -eq 0 || ${SIZE_GUARD_TEST:-} == 1 ]] || { echo "run as root"; exit 1; }
 name=${1:?NAME} limit=${2:?LIMIT_GB}
 [[ $name == iso5-* ]] || { echo "refusing: only iso5-* lab VMs"; exit 1; }
 [[ $limit =~ ^[0-9]+$ ]] || { echo "LIMIT_GB must be a whole number"; exit 1; }
@@ -39,9 +39,9 @@ while sleep "${POLL_S:-10}"; do
   fi
   fails=0; echo "$gb" > "$beat"
   if (( gb > limit )); then
-    if kill_vm; then echo "SIZE-GUARD STOP $name $gb GB (limit $limit GB)"
-    else echo "SIZE-GUARD DESTROY FAILED $name ($gb GB, limit $limit GB)"; fi
+    if kill_vm; then dead=1; echo "SIZE-GUARD STOP $name $gb GB (limit $limit GB)"
+    else dead=0; echo "SIZE-GUARD DESTROY FAILED $name ($gb GB, limit $limit GB)"; fi
     for i in "${imgs[@]}"; do echo "== $i"; qemu-img snapshot -l "$i" 2>&1 || true; done
-    kill_vm && exit 1 || exit 2
+    (( dead )) && exit 1 || exit 2
   fi
 done

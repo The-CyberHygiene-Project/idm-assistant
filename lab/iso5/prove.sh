@@ -12,6 +12,7 @@
 #   ga        ISO Plan 4b: the second factor (bootstrap, enrol, logins, scratch codes, row 36, break-glass, refusals)
 #   (Plan 4a's `ops` stage is not copied: `ga` superseded it in Plan 4b)
 #   negtrust  Review Focus 1 on iso5-cli2: a wrong CA_ROOT_SHA256 pin is refused, the right one restores the anchor
+#   wazuh-on-neg  negative for wazuh-on's bind check: stray /backup/wazuh over /var/ossec must print "no:" (run in Plan 2's lab rebuild)
 #   scan      Plan 5a gate 3: OpenSCAP CUI (dc2 tailoring) on the three PRISTINE hosts -> lab/iso5/scan-results/
 #   adapter   Plan 5b: LAB ADAPTER after this install's scan (sudo rule, pins, idm_admin secret)
 #   nvram / snapspike / golden   Plan 5b: qcow2 NVRAM, vTPM snapshot spike, golden snapshots + reset check
@@ -174,6 +175,9 @@ case ${1:-} in
       check "$1: agent upgrade module off" "$(Rh "$1" "$2" 'grep -c "Module Agent Upgrade started" /var/ossec/logs/ossec.log')" "0"
     done
     check "USBGuard allow events only from export-client (server)" "$(Rv 'journalctl -u usbguard --no-pager | grep -ci "allow"')" "$(Rv 'journalctl -t chp-site --no-pager | grep -c "export-client\|stick allowed"')" ;;
+  wazuh-on-neg) # negative for the wazuh-on bind-mount check: a stray /backup/wazuh over /var/ossec must print "no:" (TEST HOST ONLY; always unmounts)
+    r=$(Rv 'mkdir -p /backup/wazuh && mount --bind /backup/wazuh /var/ossec && { if mountpoint -q /data; then e="$(findmnt -no SOURCE /data)[/wazuh]"; else e="$(findmnt -no SOURCE -T /srv)[/srv/wazuh]"; fi; [ "$(findmnt -no SOURCE /var/ossec)" = "$e" ] && echo match || echo "no: $(findmnt -no SOURCE /var/ossec) want $e"; }; umount /var/ossec; rmdir /backup/wazuh 2>/dev/null')
+    check "stray /backup/wazuh bind is NOT accepted (prints no:)" "$(printf %s "$r" | head -n1 | cut -c1-3)" "no:" ;;
   aidepeek)     # read-only: the Wazuh paths in each host's latest AIDE report (paths only, no hashes)
     for h in "$SRV $SIP" "$C1 $C1IP" "$C2 $C2IP"; do set -- $h; echo "== $1"
       Rh "$1" "$2" 'R=$(sed -n s/^REPORT=//p /var/lib/chp/aide/last-result); grep -E "(/var/ossec|wazuh)" "$R" | grep -v "^ *$" | sed -E "s/ +/ /g" | cut -c1-100 | head -25'
