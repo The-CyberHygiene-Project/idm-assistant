@@ -1,0 +1,11 @@
+                Time zone: America/Denver (MST, -0700)
+NEXT                        LEFT     LAST                        PASSED  UNIT                   ACTIVATES
+Sun 2026-11-15 00:20:00 MST 10h left Sat 2026-11-14 00:20:52 MST 13h ago chp-review-build.timer chp-review-build.service
+
+1 timers listed.
+disabled
+inactive
+OnCalendar=*-*-* 03:10:00
+WantedBy=timers.target
+LAB WORKAROUND W2 for D13: enable the nightly check timer by hand
+Sun 2026-11-15 03:10:00 MST 13h left -    -      chp-documents-check.timer chp-documents-check.service

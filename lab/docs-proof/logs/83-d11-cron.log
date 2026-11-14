@@ -1,0 +1,6 @@
+10:ExecStartPre=+/usr/sbin/nft list table inet chp_nextcloud_egress
+cron run: result=success failed=inactive
+45|2026-11-14 13:47:07-07
+core/lastcron: 1794689227 now: 1794689228
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-14T20:47:07Z
+EXIT=0

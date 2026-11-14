@@ -1,0 +1,4 @@
+20:44:57
+curl-rc=7
+2026-11-14T13:44:57.344-0700 100620 12 journald kernel Nov 14 20:44:57 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.34 LEN=60 
+iso5-srv.iso5.lab.test rule 100620 level 12: NextCloud egress block tripped (the apache user tried to leave the server)

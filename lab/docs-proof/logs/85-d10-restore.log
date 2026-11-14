@@ -1,0 +1,17 @@
+OK 1794689311 backup 20261114T204829Z
+restore 20261114T204829Z
+Fapolicyd was notified
+OK fapolicyd trust entry for /etc/nextcloud/config.php refreshed (fapolicyd-cli --file update, --update): size 2428, sha256 31c11fb2a40963f15cba2169c3f95d31b657fdc85581cfccda7530e61497936b
+restored from /backup/nextcloud/20261114T204829Z
+restore-rc=0
+== documents trust (again, by hand)
+OK fapolicyd trust entry for /etc/nextcloud/config.php already matched the file: size 2428, sha256 31c11fb2a40963f15cba2169c3f95d31b657fdc85581cfccda7530e61497936b
+/etc/nextcloud/config.php 2428 31c11fb2a40963f1
+2428
+31c11fb2a40963f1
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; share canary refused (public link, internal share)
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+check-rc=0
+active active active active 
+Denied accesses: 0
+EXIT=0

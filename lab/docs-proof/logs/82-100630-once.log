@@ -1,0 +1,5 @@
+Reason: incorrect totp 
+2026-11-14T10:40:00.883-0700 7 4f-4d56-457a-aff4-9c17ffcf9a6b ERROR       ┝━ 🚨 [error]: Handler::PasswordMfa -> Result::Denied - TOTP Fail, password - | event_ta
+2026-11-14T10:40:00.883-0700 7 4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┝━ ｉ [info]: Credentials denied | event_tag_id: 10 | reason: incorrect totp
+2026-11-14T10:40:00.883-0700 7 4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┕━ ｉ [info]: Auth result: Denied: incorrect totp | event_tag_id: 10
+2026-11-14T13:46:31.369-0700 7 dbe-9a13-4f4e-9da3-9e60a7628d05 INFO        ┕━ ｉ [info]: Auth result: Denied: incorrect totp | event_tag_id: 10

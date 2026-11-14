@@ -1,0 +1,13 @@
+== break A: cron unit fails (its ExecStartPre made to fail: egress table deleted, so the nft list fails)
+Job for nextcloud-cron.service failed because the control process exited with error code.
+See "systemctl status nextcloud-cron.service" and "journalctl -xeu nextcloud-cron.service" for details.
+cron result=exit-code
+ALERT NextCloud: the last nextcloud-cron.service run failed (exit-code): background jobs did not run (journalctl -u nextcloud-cron.service)
+restored: cron result=success
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-14T20:47:39Z
+== break B: lastcron stale (set 2 h back)
+ALERT NextCloud: background jobs last ran 2026-11-14T18:47:39Z (cron.php, more than 30 min ago; nextcloud-cron.service: success)
+after a real run:
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-14T20:47:40Z
+OK NextCloud egress table present, matches the shipped rules, address file valid
+EXIT=0
