@@ -1,0 +1,19 @@
+# Task 9b D1: wazuh-analysisd -t on aero (wazuh-manager 4.14.7, live install UNTOUCHED): a throwaway copy of /var/ossec
+# bind-mounted over /var/ossec inside 'sudo unshare -m --propagation private', the five generated chp rule files
+# (YARA, Suricata, review, NextCloud, canary(47)) installed in its etc/rules; 'new' = the fixed wazuh.py, 'old' =
+# chp_nextcloud_rules.xml with rule 100618 back on <field name="user"> (reproduces D1). Copy removed after.
+
+== new
+MODE=new analysisd -t rc=0
+== old
+2026/11/13 18:04:46 wazuh-analysisd: ERROR: Failure to read rule 100618. Field 'user' is static.
+2026/11/13 18:04:46 wazuh-analysisd: CRITICAL: (1220): Error loading the rules: 'etc/rules/chp_nextcloud_rules.xml'.
+MODE=old analysisd -t rc=1
+077e13f09894e766885607418561a7edfc1f3b1b6b1dc633ebe2471d503e46cd  /var/tmp/wz-src/chp_nextcloud_rules_canary.xml
+27d9f876ebdc8c1de4a8fc0e325faf4c818cde6c08020119835badf9ec7edd40  /var/tmp/wz-src/chp_nextcloud_rules.xml
+8e0d5983c3a6c8a3f9da9bcc5cba9193b9e13220377af4dd085761c4f17bfaa2  /var/tmp/wz-src/chp_review_rules.xml
+e0781be27c5f8448963da7e0fe3c41af052aa4efca43d16db6b8b3e3d2a58a50  /var/tmp/wz-src/chp_suricata_rules.xml
+f66d7c208a81dbd92b6cb91af358be8405966d889a06515aa07a5a7541172a17  /var/tmp/wz-src/chp_yara_rules.xml
+770944408b55cc1de8b661c72fc9fc8af0ace6ccc6530d17e3d6a4af297b6c49  /var/tmp/wz-src/old_nc.xml
+WAZUH_VERSION="v4.14.7"
+active
