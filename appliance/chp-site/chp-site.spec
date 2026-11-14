@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.14.0-2.chp
+- Wazuh static user field: NextCloud rules 100618 (nightly canary enable) and 100608 (canary refusal) match the audit
+  user with <user>, not <field name="user"> (a static field; wazuh-analysisd -t refused the rule set, so documents
+  enable rolled back). A test bans <field name=...> on any Wazuh static field in every generated rule set.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.14.0-1.chp
 - Documents server role (ISO 0.7.0 Plan 2): DOCUMENTS / FILES_FQDN site keys, the files record and the apache hosts
   file; `chp-site documents enable|status|check|canary-off`: NextCloud enabled idempotently (team folders, Kanidm

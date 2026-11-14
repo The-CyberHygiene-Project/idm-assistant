@@ -229,7 +229,9 @@ _CTRL = "(CUI|FCI|Archive)"                              # the controlled team f
 # Decoder: Wazuh's built-in JSON decoder reads each audit line (`log_format json`); a custom decoder would add nothing.
 # Nested keys arrive flattened (data.event). Every alternation is pcre2 (OS_Regex has none; a bad rule stops the
 # manager, so enable runs wazuh-analysisd -t first). Level 0 = matched but not stored; 3 = stored, in the review;
-# 7 = the daily summary; 12 = ALERT_HOOK at once.
+# 7 = the daily summary; 12 = ALERT_HOOK at once. The JSON decoder puts a key named like a Wazuh STATIC field (user,
+# srcip, ...) in that static field, so rules match it with its own element (<user>), never <field name="user">: analysisd
+# refuses the whole rule set ("Field 'user' is static", lab Plan 2 Task 9 D1).
 NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 design §6): NextCloud admin_audit + chp_foldertag -->
 <group name="chp,nextcloud,">
   <rule id="100600" level="0">
@@ -256,7 +258,7 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
   </rule>
   <rule id="100618" level="3">
     <if_sid>100609</if_sid>
-    <field name="user">^--$</field>
+    <user>^--$</user>
     <time>3:05 am - 3:45 am</time>
     <description>NextCloud: chp-canary enabled by the nightly check (occ, 03:05-03:45): $(message)</description>
   </rule>
@@ -379,7 +381,7 @@ def canary_rules(fileid):
 <group name="chp,nextcloud,">
   <rule id="{CANARY_RULE}" level="3">
     <if_sid>100601</if_sid>
-    <field name="user">^chp-canary$</field>
+    <user>^chp-canary$</user>
     <field name="message" type="pcre2">ShareAction from user chp-canary on {int(fileid)} to \\S+ is restricted</field>
     <description>NextCloud: nightly share canary refused as expected (canary file {int(fileid)}): $(message)</description>
   </rule>

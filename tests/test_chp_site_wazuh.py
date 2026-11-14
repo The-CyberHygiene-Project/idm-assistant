@@ -237,6 +237,8 @@ def _matches(rule, ev, fired):
             return False
         if t == "field" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get(c.get("name"), "\0")):
             return False
+        if t == "user" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get("user", "\0")):
+            return False                                     # static field: the JSON decoder fills it from "user"
         if t == "time" and not _in_window(c.text, ev.get("hhmm")):
             return False
     return True
@@ -377,3 +379,40 @@ def test_canary_account_enable_and_password_rules():
     assert (_level(w.NEXTCLOUD_RULES, {**_nc('User enabled: "lab01"', user="--"), "hhmm": "14:00"})[1] or 0) < 7
     for m in ('Password of user "chp-canary" has been changed', 'Password set for user "chp-canary"'):
         assert _level(w.NEXTCLOUD_RULES, {**_nc(m, user="--"), "hhmm": "03:12"})[1] == 12, m
+
+
+# ---------- Wazuh STATIC fields (Plan 2 Task 9 D1) ----------
+# wazuh-analysisd refuses a rule set in which <field name="X"> names a STATIC field ("Field 'user' is static", lab log
+# lab/docs-proof/PROOF-RECORD-PLAN2.md D1). The list: Wazuh 4.14 documentation (ruleset → decoders syntax, option
+# <order>: the static fields srcip, dstip, srcport, dstport, protocol, action, srcuser, dstuser (alias user), id, url,
+# data, extra_data, status, system_name; plus the pre-decoding fields hostname, program_name, timestamp, location,
+# full_log/log, which rules also match with their own elements). Written from that documentation, not fetched; a
+# longer list only bans more, so it errs safe. Dotted JSON names (data.event) are dynamic and allowed.
+WAZUH_STATIC_FIELDS = frozenset("""srcip dstip srcport dstport protocol action id url data extra_data status
+    system_name user srcuser dstuser hostname program_name timestamp location full_log log""".split())
+
+
+def _all_wazuh_rule_xml():
+    out = {n: v for n, v in vars(w).items() if isinstance(v, str) and "<rule " in v}
+    out["canary_rules(47)"] = w.canary_rules(47)
+    return out
+
+
+def test_every_generated_rule_set_is_found():
+    names = set(_all_wazuh_rule_xml())
+    assert {"YARA_RULES", "SURICATA_RULES", "REVIEW_RULES", "NEXTCLOUD_RULES", "canary_rules(47)"} <= names
+
+
+@pytest.mark.parametrize("name", sorted(_all_wazuh_rule_xml()))
+def test_no_rule_uses_field_name_for_a_static_field(name):
+    import xml.etree.ElementTree as ET
+    xml = _all_wazuh_rule_xml()[name]
+    root = ET.fromstring("<x>" + _re.sub(r"<!--.*?-->", "", xml, flags=_re.S) + "</x>")
+    bad = [(r.get("id"), f.get("name")) for r in root.iter("rule") for f in r.findall("field")
+           if f.get("name") in WAZUH_STATIC_FIELDS]
+    assert not bad, f"{name}: <field name=...> on a Wazuh static field (use its own element, e.g. <user>): {bad}"
+    assert not _re.search(r'<field\s+name="(%s)"' % "|".join(WAZUH_STATIC_FIELDS), xml), name   # raw text too
+
+
+def test_canary_rules_match_the_audit_user_by_the_static_element():
+    assert "<user>^--$</user>" in w.NEXTCLOUD_RULES and "<user>^chp-canary$</user>" in w.canary_rules(47)
