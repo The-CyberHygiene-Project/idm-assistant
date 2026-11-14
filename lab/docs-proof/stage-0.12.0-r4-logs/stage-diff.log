@@ -1,0 +1,42 @@
+== stage (new) vs stage-superseded-r3 (by sha256)
+6,7c6,7
+< a5e8d3604be2a04460e8a2c5b3ae6eb7358c44cac35a427580056a021c15007c  chp-base-0.1.0-11.chp.el9.noarch.rpm
+< 939036ae1eff328284f7004f19f749233456ab42d4e20147afd9af616480ff95  chp-documents-0.1.0-5.chp.el9.noarch.rpm
+---
+> e5893dd3f6961d0695eb193c3da74cd745bb8291242e1485adc26445787b2692  chp-base-0.1.0-12.chp.el9.noarch.rpm
+> 2f4f71d50152eec045a7cf0e8f0afcd50a31d46f32efa9371223329719a8e728  chp-documents-0.1.0-6.chp.el9.noarch.rpm
+12c12
+< 6537a2c159b318cdfbb79ffe8f5c5c9aa707c8830764875bb9706105620c0680  chp-site-0.14.0-3.chp.el9.noarch.rpm
+---
+> 2f8da723bb53762bd8388eec688dade61890a96790c19f48aa9b11211950f581  chp-site-0.14.0-4.chp.el9.noarch.rpm
+32c32
+< 74bf0c4d6ed8d090f98212eb1d2813b221190fc2e6b1dd4fdf4b0a6dd13170b5  nextcloud-chp-35.0.3-4.chp.el9.noarch.rpm
+---
+> bcdf999780b8369920f72b5fa87eeba946c47c595ce7cf3c2fe40763455dbe3c  nextcloud-chp-35.0.3-5.chp.el9.noarch.rpm
+== by NEVRA: signed repo-superseded-r3 vs new stage
+6,7c6,7
+< chp-base-0.1.0-11.chp.el9.noarch
+< chp-documents-0.1.0-5.chp.el9.noarch
+---
+> chp-base-0.1.0-12.chp.el9.noarch
+> chp-documents-0.1.0-6.chp.el9.noarch
+12c12
+< chp-site-0.14.0-3.chp.el9.noarch
+---
+> chp-site-0.14.0-4.chp.el9.noarch
+32c32
+< nextcloud-chp-35.0.3-4.chp.el9.noarch
+---
+> nextcloud-chp-35.0.3-5.chp.el9.noarch
+== counts: stage 61 RPMs, signed r3 61 RPMs; stage 854 MB
+== modules.yaml
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  stage/modules.yaml
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  stage-superseded-r3/modules.yaml
+118cc9cf0b6fe367570d6d3a89a8c1f6187edb0b365aac01a9c48bc8be681aab-modules.yaml.gz
+repo-superseded-d3-d4
+repo-superseded-r3
+repo-superseded-wazuh-static-field
+stage
+stage-superseded-d3-d4
+stage-superseded-r3
+stage-superseded-wazuh-static-field

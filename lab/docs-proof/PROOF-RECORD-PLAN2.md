@@ -242,3 +242,33 @@ two of them important (D9: the egress alert never fires; D11: NextCloud backgrou
 proof files and users in it), lab adapter + fixtures present, size guards active; cli1 untouched since install +
 repo r3. nextcloud-cron.service fails every 5 min (D11). The lab Kanidm admin session and SSH tunnel on the Mac are
 throw-away.
+
+### Before round 4 (Task 9d, 2026-11-14): D6-D11 and the minors fixed, repo 0.12.0 re-staged (r4)
+
+chp-site **0.14.0-4**, chp-base **0.1.0-12**, chp-documents **0.1.0-6**, nextcloud-chp **35.0.3-5** (details:
+`.superpowers/sdd/2026-11-13-iso-0.7.0-plan2-nextcloud-server-role/task-9d-report.md`):
+- **D6:** enable proves its fapolicyd restart (active at 3 samples over ~5 s, a parsed `Denied accesses` counter, then
+  `fapolicyd-fsmark --verify`); dead -> restarted once more; dead again -> the run fails (check 80, POA&M), the restart
+  mark stays. The fsmark helper samples 3 times too and restarts a dead fapolicyd once more when there is no change of
+  its own to revert. **The "recvmesg failed" exit is not caused by allow_filesystem_mark: it was seen at
+  allow_filesystem_mark = 0 too** (logs/28-30). No upstream bug-report draft exists under lab/ or docs/ yet; whoever
+  drafts it (design §13) must say so.
+- **D7:** a refused WebDAV rename/move is 403 (DavGuard asks FolderGuard in Sabre's beforeMove). **D8:** no walk (no
+  false `chp.tag.failed`) for a target where nothing can be tagged, e.g. `/<user>/files` on first sign-in.
+- **D9:** rule 100620 is `<if_sid>4100</if_sid>` + `<match>CHP-NC-EGRESS</match>`; rule 100630 matches only
+  `Auth result: Denied: incorrect totp`. wazuh-logtest 4.14.7 on aero (logs/66): new = 100620 level 12 on the round-3
+  kernel line and 100630 once per wrong code; old = 4100 level 0 and 100630 three times.
+- **D10:** `chp-site documents trust` (new) after restore's `occ maintenance:data-fingerprint`. **D11:** the cron unit's
+  nft line is `ExecStartPre=+...` (root); check 77 also alerts on a failed last cron run and a stale/missing
+  `core/lastcron`.
+- Minors: AIDE note only when the run changed something; OIDC `code` in the audit `url` = SSP/POA&M note in the
+  chp-documents README (NextCloud's own log writer).
+- PHP: `php -l` via stdin on iso5-docs (PHP 8.3.29): all 10 clean (logs/67). Stage: only those 4 packages changed
+  (by sha256 and by NEVRA), modules.yaml unchanged; dry-run on iso5-srv: upgrade = those 4 only; test_sign_repo 52/0
+  (`stage-0.12.0-r4-logs/`). Signed r3 repo kept as `repo-superseded-r3`.
+
+**Round 4 should prove:** after `plan2.sh repo`, `enable 6`: the fapolicyd step line ("active over 5 s; Denied
+accesses: N"); a rename of a non-empty CUI folder = 403; a new user's first sign-in writes no `chp.tag.failed`; an
+egress attempt raises 100620 (level 12) in alerts.json; one wrong TOTP = one 100630; nextcloud-cron.service succeeds,
+`oc_jobs` last_run > 0, check 77 OK (and ALERT when the unit is broken on purpose); backup + restore then
+`documents check` with no "trust" alert; enable run 7 prints "AIDE: this run changed no watched file".

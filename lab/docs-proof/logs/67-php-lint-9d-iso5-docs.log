@@ -1,0 +1,12 @@
+# Task 9d: php -l of every chp_foldertag PHP file (nextcloud-chp 35.0.3-5 sources, commit 956fe4b) on iso5-docs
+# (PHP 8.3.29), via stdin (fapolicyd there denies php opening untrusted files); nothing written on the host.
+66d95dd125988b32  lib/AppInfo/Application.php: No syntax errors detected in Standard input code 
+54fcb0e58570bdb8  lib/Command/Check.php: No syntax errors detected in Standard input code 
+406ab6ad229ae39f  lib/Listener/AppDisableListener.php: No syntax errors detected in Standard input code 
+6aa5863cf8bfd9c9  lib/Listener/ContainListener.php: No syntax errors detected in Standard input code 
+010d14cce9d1bd42  lib/Listener/DavGuardListener.php: No syntax errors detected in Standard input code 
+aaa3f608464bc8f7  lib/Listener/FolderGuardListener.php: No syntax errors detected in Standard input code 
+5ac24a19856855a5  lib/Listener/TagListener.php: No syntax errors detected in Standard input code 
+9ab564287dab9894  lib/Service/Audit.php: No syntax errors detected in Standard input code 
+bafb6a3adfec93f5  lib/Service/Policy.php: No syntax errors detected in Standard input code 
+208cde502de4b47d  lib/Service/PolicyError.php: No syntax errors detected in Standard input code 

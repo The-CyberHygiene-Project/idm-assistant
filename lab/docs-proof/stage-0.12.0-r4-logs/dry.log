@@ -1,0 +1,110 @@
+total 868372
+drwx------. 6 chpadmin chpadmin       191 Nov 14 13:04 .
+drwxr-xr-x. 4 root     root            34 Nov 13 17:06 ..
+-rw-------. 1 chpadmin chpadmin         5 Nov 13 17:06 .bash_history
+-rw-r--r--. 1 chpadmin chpadmin        18 Apr 30  2024 .bash_logout
+-rw-r--r--. 1 chpadmin chpadmin       141 Apr 30  2024 .bash_profile
+-rw-r--r--. 1 chpadmin chpadmin       492 Apr 30  2024 .bashrc
+drwxr-xr-x. 2 chpadmin chpadmin        27 Nov 14 10:30 .cache
+-rw-r--r--. 1 chpadmin chpadmin      1689 Nov 14 13:04 dry-run.sh
+drwx------. 3 chpadmin chpadmin        18 Nov 14 10:30 idm-lab
+drwxr-xr-x. 4 chpadmin chpadmin        39 Nov 13 16:57 .mozilla
+-rw-r--r--. 1 chpadmin chpadmin       626 Nov 14 13:04 outer.sh
+-rw-r--r--. 1 chpadmin chpadmin 889185738 Nov 14 13:04 s012d.tgz
+drwx------. 2 chpadmin chpadmin        29 Nov 13 17:03 .ssh
+== before
+-rw-r--r-- root root 393216 2026-11-14 10:46:55.198872994 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82255872 2026-11-14 09:56:22.340196566 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+drwxr-xr-x. 2 root root  49 2026-11-13 17:44:06.417329924 -0700 .
+drwxr-xr-x. 9 root root 185 2026-11-13 17:03:35.640673105 -0700 ..
+-rw-r--r--. 1 root root  50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root  63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+chp-documents-0.1.0-5.chp.el9.noarch
+nextcloud-chp-35.0.3-4.chp.el9.noarch
+== dry-run
+== whoami inside: 0 ; host module state:
+php.module
+postgresql.module
+[php]
+name=php
+stream=8.3
+profiles=
+state=enabled
+[postgresql]
+name=postgresql
+stream=16
+profiles=
+state=enabled
+== installed (ours):
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-documents-0.1.0-5.chp.el9.noarch
+nextcloud-chp-35.0.3-4.chp.el9.noarch
+== 1. module list (repo s012d only)
+Added s012d repo from file:///var/tmp/s012d/repo
+s012d                                           200 MB/s | 390 kB     00:00    
+s012d
+Name       Stream  Profiles                   Summary                            
+php        8.3 [e] common [d], devel, minimal PHP scripting language             
+postgresql 16 [e]  client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs the applied 0.12.0 r3)
+Added s012d repo from file:///var/tmp/s012d/repo
+Dependencies resolved.
+================================================================================
+ Package              Architecture  Version                  Repository    Size
+================================================================================
+Upgrading:
+ chp-base             noarch        0.1.0-12.chp.el9         s012d         27 k
+ chp-documents        noarch        0.1.0-6.chp.el9          s012d         36 k
+ chp-site             noarch        0.14.0-4.chp.el9         s012d        116 k
+ nextcloud-chp        noarch        35.0.3-5.chp.el9         s012d        212 M
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 212 M
+Operation aborted.
+rc=1
+== 3. check-update
+Added s012d repo from file:///var/tmp/s012d/repo
+Last metadata expiration check: 0:00:01 ago on Sat 14 Nov 2026 01:05:03 PM MST.
+
+chp-base.noarch                        0.1.0-12.chp.el9                    s012d
+chp-documents.noarch                   0.1.0-6.chp.el9                     s012d
+chp-site.noarch                        0.14.0-4.chp.el9                    s012d
+nextcloud-chp.noarch                   35.0.3-5.chp.el9                    s012d
+rc=100 (100 = updates available)
+== 4. install --assumeno nextcloud-chp chp-documents (installed: upgrade only)
+Upgrading:
+ chp-base             noarch        0.1.0-12.chp.el9         s012d         27 k
+ chp-documents        noarch        0.1.0-6.chp.el9          s012d         36 k
+ chp-site             noarch        0.14.0-4.chp.el9         s012d        116 k
+ nextcloud-chp        noarch        35.0.3-5.chp.el9         s012d        212 M
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 212 M
+Operation aborted.
+rc=0
+== after
+-rw-r--r-- root root 393216 2026-11-14 10:46:55.198872994 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82255872 2026-11-14 09:56:22.340196566 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+drwxr-xr-x. 2 root root  49 2026-11-13 17:44:06.417329924 -0700 .
+drwxr-xr-x. 9 root root 185 2026-11-13 17:03:35.640673105 -0700 ..
+-rw-r--r--. 1 root root  50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root  63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+chp-documents-0.1.0-5.chp.el9.noarch
+nextcloud-chp-35.0.3-4.chp.el9.noarch
+ls: cannot access '/var/tmp/s012d': No such file or directory
