@@ -1,0 +1,75 @@
+== before
+-rw-r--r--. 1 root root   393216 2026-11-13 17:44:36.026219416 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r--. 1 root root 82223104 2026-11-13 17:44:36.056219304 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+-rw-r--r--. 1 root root 50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root 63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+== dry-run
+== whoami inside: 0 ; host module state:
+php.module
+postgresql.module
+[php]
+name=php
+stream=8.3
+profiles=
+state=enabled
+[postgresql]
+name=postgresql
+stream=16
+profiles=
+state=enabled
+== installed (ours):
+chp-site-0.14.0-1.chp.el9.noarch
+chp-base-0.1.0-10.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-documents-0.1.0-5.chp.el9.noarch
+nextcloud-chp-35.0.3-4.chp.el9.noarch
+== 1. module list (repo s012b only)
+Added s012b repo from file:///var/tmp/s012b/repo
+s012b                                           230 MB/s | 390 kB     00:00    
+s012b
+Name       Stream  Profiles                   Summary                            
+php        8.3 [e] common [d], devel, minimal PHP scripting language             
+postgresql 16 [e]  client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs the applied 0.12.0)
+Added s012b repo from file:///var/tmp/s012b/repo
+Dependencies resolved.
+================================================================================
+ Package          Architecture   Version                    Repository     Size
+================================================================================
+Upgrading:
+ chp-base         noarch         0.1.0-11.chp.el9           s012b          26 k
+ chp-site         noarch         0.14.0-2.chp.el9           s012b         111 k
+
+Transaction Summary
+================================================================================
+Upgrade  2 Packages
+
+Total size: 137 k
+Operation aborted.
+rc=1
+== 3. check-update
+Added s012b repo from file:///var/tmp/s012b/repo
+Last metadata expiration check: 0:00:01 ago on Fri 13 Nov 2026 06:22:32 PM MST.
+
+chp-base.noarch                      0.1.0-11.chp.el9                      s012b
+chp-site.noarch                      0.14.0-2.chp.el9                      s012b
+rc=100 (100 = updates available)
+== 4. install --assumeno nextcloud-chp chp-documents (already installed: nothing new)
+Package nextcloud-chp-35.0.3-4.chp.el9.noarch is already installed.
+Package chp-documents-0.1.0-5.chp.el9.noarch is already installed.
+Dependencies resolved.
+Nothing to do.
+Complete!
+rc=0
+== after
+-rw-r--r--. 1 root root   393216 2026-11-13 17:44:36.026219416 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r--. 1 root root 82223104 2026-11-13 17:44:36.056219304 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+-rw-r--r--. 1 root root 50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root 63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+chp-site-0.14.0-1.chp.el9.noarch
+chp-base-0.1.0-10.chp.el9.noarch
+ls: cannot access '/var/tmp/s012b': No such file or directory

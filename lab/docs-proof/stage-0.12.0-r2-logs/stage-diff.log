@@ -1,0 +1,21 @@
+== stage (new) vs stage-superseded (by sha256)
+6c6
+< 7c8c5041a79d0dd12fd8718d964f9736c1a90314cc635c51d6d6d3ad92a2b5c6  chp-base-0.1.0-10.chp.el9.noarch.rpm
+---
+> a5e8d3604be2a04460e8a2c5b3ae6eb7358c44cac35a427580056a021c15007c  chp-base-0.1.0-11.chp.el9.noarch.rpm
+12c12
+< f2917e01afe6e6f9a0373d05d7fb5e3e6e095a3432c4f78fccb33325d7085225  chp-site-0.14.0-1.chp.el9.noarch.rpm
+---
+> e75ff452dbc1e6e4155df68d52103d3ce403abe4457b9bfd348e3aef309b991a  chp-site-0.14.0-2.chp.el9.noarch.rpm
+== NEVRA: new stage vs owner-signed superseded repo
+6c6
+< chp-base-(none):0.1.0-10.chp.el9.noarch
+---
+> chp-base-(none):0.1.0-11.chp.el9.noarch
+12c12
+< chp-site-(none):0.14.0-1.chp.el9.noarch
+---
+> chp-site-(none):0.14.0-2.chp.el9.noarch
+== modules.yaml in the signed repo vs new stage
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  -
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  stage/modules.yaml
