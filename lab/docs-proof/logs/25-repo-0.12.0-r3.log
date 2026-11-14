@@ -1,0 +1,124 @@
+== iso5-srv
+CyberHygiene Project Lab Installer packages      10 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     5.0 MB/s | 390 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package           Architecture    Version                   Repository    Size
+================================================================================
+Upgrading:
+ chp-site          noarch          0.14.0-3.chp.el9          chp          113 k
+
+Transaction Summary
+================================================================================
+Upgrade  1 Package
+
+Total size: 113 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Cleanup          : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Verifying        : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+Installed products updated.
+
+Upgraded:
+  chp-site-0.14.0-3.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 1393197
+Denied accesses: 3
+EXIT=0
+== iso5-cli1
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     2.4 MB/s | 390 kB     00:00    
+Last metadata expiration check: 0:00:01 ago on Sat 14 Nov 2026 09:49:21 AM MST.
+Dependencies resolved.
+================================================================================
+ Package           Architecture    Version                   Repository    Size
+================================================================================
+Upgrading:
+ chp-site          noarch          0.14.0-3.chp.el9          chp          113 k
+
+Transaction Summary
+================================================================================
+Upgrade  1 Package
+
+Total size: 113 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Cleanup          : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Verifying        : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+Installed products updated.
+
+Upgraded:
+  chp-site-0.14.0-3.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 723268
+Denied accesses: 0
+EXIT=0
+== iso5-cli2
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     1.2 MB/s | 390 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package           Architecture    Version                   Repository    Size
+================================================================================
+Upgrading:
+ chp-site          noarch          0.14.0-3.chp.el9          chp          113 k
+
+Transaction Summary
+================================================================================
+Upgrade  1 Package
+
+Total size: 113 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Cleanup          : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       1/2 
+  Verifying        : chp-site-0.14.0-2.chp.el9.noarch                       2/2 
+Installed products updated.
+
+Upgraded:
+  chp-site-0.14.0-3.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-3.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 566089
+Denied accesses: 0
+EXIT=0
