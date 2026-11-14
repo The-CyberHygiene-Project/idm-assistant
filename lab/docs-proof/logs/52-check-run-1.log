@@ -1,0 +1,18 @@
+17:40:56
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; share canary refused (public link, internal share)
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+check-rc=0
+canary enabled: False groups: ['cui-users']
+[]
+
+{'alerts': [], 'canary': {'internal': 'refused', 'public': 'refused'}, 'counts': {'name': 0, 'outside': 0, 'share': 0, 'untagged:Archive': 0, 'untagged:CUI': 0, 'untagged:FCI': 0}, 'degraded': True, 'epoch': 1794678056, 'md5': 'DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)', 'ok': True, 'time': '2026-11-14T17:40:56Z', 'version': 1}
+OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accepted; see the daily review)
+OK NextCloud check OK (tags, policy, share canary; last run 2026-11-14T17:40:56Z)
+total 28
+-rw-r-----. 1 root  wazuh  456 Nov 14 10:41 chp_nextcloud_rules_canary.xml
+-rw-r-----. 1 root  wazuh 6799 Nov 14 08:54 chp_nextcloud_rules.xml
+-rw-r-----. 1 root  wazuh  421 Nov 13 17:07 chp_review_rules.xml
+-rw-r-----. 1 root  wazuh  498 Nov 13 17:07 chp_suricata_rules.xml
+-rw-r-----. 1 root  wazuh  722 Nov 13 17:07 chp_yara_rules.xml
+-rw-rw----. 1 wazuh wazuh  497 Oct  8 07:47 local_rules.xml
+EXIT=0

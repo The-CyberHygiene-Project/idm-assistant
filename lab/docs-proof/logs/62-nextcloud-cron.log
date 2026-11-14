@@ -1,0 +1,26 @@
+Nov 14 10:34:21 iso5-srv.iso5.lab.test nft[6194]: Operation not permitted (you must be root)
+Nov 14 10:34:21 iso5-srv.iso5.lab.test nft[6194]: netlink: Error: cache initialization failed: Operation not permitted
+Nov 14 10:34:21 iso5-srv.iso5.lab.test systemd[1]: nextcloud-cron.service: Control process exited, code=exited, status=1/FAILURE
+Nov 14 10:34:21 iso5-srv.iso5.lab.test systemd[1]: nextcloud-cron.service: Failed with result 'exit-code'.
+Nov 14 10:34:21 iso5-srv.iso5.lab.test systemd[1]: Failed to start NextCloud background jobs.
+Nov 14 10:39:25 iso5-srv.iso5.lab.test systemd[1]: Dependency failed for NextCloud background jobs.
+Nov 14 10:39:25 iso5-srv.iso5.lab.test systemd[1]: nextcloud-cron.service: Job nextcloud-cron.service/start failed with result 'dependency'.
+Nov 14 10:44:24 iso5-srv.iso5.lab.test nft[13207]: Operation not permitted (you must be root)
+Nov 14 10:44:24 iso5-srv.iso5.lab.test nft[13207]: netlink: Error: cache initialization failed: Operation not permitted
+Nov 14 10:44:24 iso5-srv.iso5.lab.test systemd[1]: nextcloud-cron.service: Control process exited, code=exited, status=1/FAILURE
+Nov 14 10:44:24 iso5-srv.iso5.lab.test systemd[1]: nextcloud-cron.service: Failed with result 'exit-code'.
+Nov 14 10:44:24 iso5-srv.iso5.lab.test systemd[1]: Failed to start NextCloud background jobs.
+Job for nextcloud-cron.service failed because the control process exited with error code.
+See "systemctl status nextcloud-cron.service" and "journalctl -xeu nextcloud-cron.service" for details.
+manual run: exit-code failed
+Operation not permitted (you must be root)
+netlink: Error: cache initialization failed: Operation not permitted
+nextcloud-cron.service: Control process exited, code=exited, status=1/FAILURE
+nextcloud-cron.service: Failed with result 'exit-code'.
+Failed to start NextCloud background jobs.
+EXIT=0
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active
++--------------------+-----------------------------------------------------------------+---------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| id                 | class                                                           | last_run                  | argument                                                                                                                                                                                                                               |
++--------------------+-----------------------------------------------------------------+---------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1969-12-31 17:00:00-07

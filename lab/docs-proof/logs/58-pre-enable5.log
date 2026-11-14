@@ -1,0 +1,13 @@
+== CUI before
+groups {'cui-users': 15, 'chp-users': 23}
+rules (n/a)
+ERROR:  column reference "permissions" is ambiguous
+LINE 1: select mapping_type, mapping_id, mask, permissions from oc_g...
+                                               ^
+567534e3ea8dde58
+Sat 2026-11-14 17:29:29 UTC
+EXIT=0
+group|chp-users|files|8|0
+group|doc-reviewers|files|31|1
+group|doc-reviewers|files|31|1
+group|doc-reviewers|files|31|1

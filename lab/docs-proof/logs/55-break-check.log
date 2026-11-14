@@ -1,0 +1,41 @@
+untag file id 71
+Config value contain of app chp_foldertag deleted
+== check with everything broken
+check rc=1
+ok: False
+  ALERT {'key': 'folder:3', 'text': 'team folder id 3 must be named Archive but is named "Archive-renamed" (renamed in the web UI?): rename it back'}
+  ALERT {'key': 'app:contain', 'text': 'chp_foldertag contain is missing or empty (copy/move OUT of CUI, FCI and Archive is NOT refused); re-run chp-site documents enable'}
+  ALERT {'key': 'trust', 'text': '/etc/nextcloud/config.php does not match its fapolicyd trust entry (size/sha256): NextCloud changed it since the last enable; check the change, then re-run chp-site documents enable'}
+  ALERT {'key': 'untagged:71', 'text': 'file CUI/CUI_webdav-r1_v1.0.txt (id 71) in team folder CUI has no CUI tag'}
+  ALERT {'key': 'name:71', 'text': "file CUI/CUI_webdav-r1_v1.0.txt (id 71) is named CUI_/FCI_ but has no matching tag (also in its folder's list)"}
+ALERT NextCloud check: team folder id 3 must be named Archive but is named "Archive-renamed" (renamed in the web UI?): rename it back
+ALERT NextCloud check: chp_foldertag contain is missing or empty (copy/move OUT of CUI, FCI and Archive is NOT refused); re-run chp-site documents enable
+ALERT NextCloud check: /etc/nextcloud/config.php does not match its fapolicyd trust entry (size/sha256): NextCloud changed it since the last enable; check the change, then re-run chp-site documents en
+ALERT NextCloud check: file CUI/CUI_webdav-r1_v1.0.txt (id 71) in team folder CUI has no CUI tag
+ALERT NextCloud check: file CUI/CUI_webdav-r1_v1.0.txt (id 71) is named CUI_/FCI_ but has no matching tag (also in its folder's list)
+OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accepted; see the daily review)
+== restore
+System config value chp_lab_marker deleted
+check rc=0 after restore
+ok: True
+== kill the check run mid-canary
+canary enabled during the run: True
+unit: failed / result signal
+pam_unix(runuser:session): session opened for user apache(uid=48) by (uid=0)
+pam_unix(runuser:session): session closed for user apache
+OK canary-off: canary account disabled, its app tokens deleted
+chp-documents-check.service: Failed with result 'signal'.
+Failed to start CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81).
+chp-documents-check.service: Consumed 3.985s CPU time.
+canary enabled after the kill: False; tokens: 0
+== next run
+check rc=0
+ok: True
+== SIGKILL with ExecStopPost bypassed: the canary left on by hand, next run must see it
+check rc=1
+ok: False
+  ALERT {'key': 'canary:leftover', 'text': 'share canary: the canary account was found ENABLED before this run (a killed run, or someone used it): check the NextCloud audit log for chp-canary; cleaned up now'}
+canary after: False
+clean run rc=0
+ok: True
+EXIT=0

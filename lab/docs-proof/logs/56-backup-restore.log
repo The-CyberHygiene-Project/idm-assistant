@@ -1,0 +1,35 @@
+tool: /usr/sbin/chp-nextcloud-backup
+partial dir made (no MANIFEST)
+backup not started: another backup is running (it records the status)
+backup while the lock is held: rc=75 (75 expected)
+backup unit rc=0 result=success
+OK 1794678300 backup 20261114T174459Z
+total 0
+drwx------. 4 root root 79 Nov 14 10:45 20261114T174459Z
+partial: ls: cannot access '/backup/nextcloud/20260101T000000Z': No such file or directory
+stamp 20261114T174459Z
+data
+etc-nextcloud
+MANIFEST
+nextcloud.pgdump
+86
+3.1M	/backup/nextcloud/20261114T174459Z
+700 root
+== after the backup: a new file, a deleted file
+filecache rows (files/) before restore: 59
+after-backup.txt in filecache: 0
+== restore
+restored from /backup/nextcloud/20261114T174459Z
+restore rc=0
+after-backup.txt in filecache: 0; on disk: ls: cannot access '/data/nextcloud/data/__groupfolders/4/after-backup.txt': No such file or directory
+filecache rows (files/) after: 59
+active active active active 
+maintenance False
+unconfined_u:object_r:httpd_sys_rw_content_t:s0 appdata_ocvut1ejdnyt
+unconfined_u:object_r:httpd_sys_rw_content_t:s0 chp-canary
+unconfined_u:object_r:httpd_sys_rw_content_t:s0 files_external
+check after restore rc=1
+ok: False [{'key': 'trust', 'text': '/etc/nextcloud/config.php does not match its fapolicyd trust entry (size/sha256): NextCloud changed it since the last enable; check the change, then re-run chp-site documents enable'}]
+Denied accesses: 0
+0
+EXIT=1

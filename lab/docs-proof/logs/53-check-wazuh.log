@@ -1,0 +1,60 @@
+10:41:15 100608 3 user=None Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to OCP\Interaction\Receivers\LinkReceiver is
+10:41:15 100608 3 user=None Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to ncadmin is restricted: Node is not sharea
+Sat 2026-11-14 10:41:13 MST
+17:40:57 user=-- Console command executed: user:info chp-canary --output=json
+17:40:57 user=-- Console command executed: user:add --password-from-env --display-name CHP share canary (nightly check) --group
+17:40:57 user=-- User created: "chp-canary"
+17:40:57 user=-- Cache entry inserted for fileid "149", path "appdata_ocvut1ejdnyt/avatar/chp-canary" on storageid "1"
+17:40:57 user=-- Cache entry inserted for fileid "149", path "appdata_ocvut1ejdnyt/avatar/chp-canary" on storageid "1"
+17:40:58 user=-- Cache entry inserted for fileid "150", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.png" on storageid "
+17:40:58 user=-- Cache entry inserted for fileid "150", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.png" on storageid "
+17:40:58 user=-- Cache entry inserted for fileid "151", path "appdata_ocvut1ejdnyt/avatar/chp-canary/generated" on storageid "1
+17:40:58 user=-- Cache entry inserted for fileid "151", path "appdata_ocvut1ejdnyt/avatar/chp-canary/generated" on storageid "1
+17:40:58 user=-- Cache entry inserted for fileid "152", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.512.png" on storage
+17:40:58 user=-- Cache entry inserted for fileid "152", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.512.png" on storage
+17:40:58 user=-- Cache entry removed for fileid "150", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.png" on storageid "1
+17:40:58 user=-- Cache entry removed for fileid "151", path "appdata_ocvut1ejdnyt/avatar/chp-canary/generated" on storageid "1"
+17:40:58 user=-- Cache entry removed for fileid "152", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.512.png" on storagei
+17:40:58 user=-- Cache entry inserted for fileid "153", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.png" on storageid "
+17:40:58 user=-- Cache entry inserted for fileid "153", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.png" on storageid "
+17:40:58 user=-- Cache entry inserted for fileid "154", path "appdata_ocvut1ejdnyt/avatar/chp-canary/generated" on storageid "1
+17:40:58 user=-- Cache entry inserted for fileid "154", path "appdata_ocvut1ejdnyt/avatar/chp-canary/generated" on storageid "1
+17:40:58 user=-- Cache entry inserted for fileid "155", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.512.png" on storage
+17:40:58 user=-- Cache entry inserted for fileid "155", path "appdata_ocvut1ejdnyt/avatar/chp-canary/avatar.512.png" on storage
+17:40:58 user=-- User "chp-canary" added to group "cui-users"
+17:40:58 user=-- Console command executed: user:disable chp-canary
+17:40:58 user=-- User disabled: "chp-canary"
+17:40:59 user=-- Console command executed: user:info chp-canary --output=json
+17:41:00 user=-- Console command executed: user:auth-tokens:list chp-canary --output=json
+17:41:00 user=-- Console command executed: user:auth-tokens:list chp-canary --output=json
+17:41:01 user=-- Console command executed: user:enable chp-canary
+17:41:01 user=-- User enabled: "chp-canary"
+17:41:01 user=-- Console command executed: user:auth-tokens:add -n --name chp-canary chp-canary
+17:41:01 user=-- Login attempt: "chp-canary"
+17:41:01 user=-- Login attempt: "chp-canary"
+17:41:01 user=chp-canary Login successful: "chp-canary"
+17:41:01 user=chp-canary chp.tag.failed: mounts below the target are not walked (/chp-canary/files/Archive/, /chp-canary/files/CUI/, /chp-canary/files/FCI/
+17:41:01 user=chp-canary File with id "158" created: "/chp-canary/files"
+17:41:01 user=chp-canary chp.tag.failed: mounts below the target are not walked (/chp-canary/files/Archive/, /chp-canary/files/CUI/, /chp-canary/files/FCI/
+17:41:01 user=chp-canary File with id "158" written to: "/chp-canary/files"
+17:41:01 user=-- Login attempt: "chp-canary"
+17:41:01 user=-- Login attempt: "chp-canary"
+17:41:01 user=chp-canary Login successful: "chp-canary"
+17:41:02 user=chp-canary chp.tag.applied: tag 1 on file 159 (team folder 1, create): /chp-canary/files/CUI/CUI_chp-canary.txt
+17:41:02 user=chp-canary File with id "159" created: "/chp-canary/files/CUI/CUI_chp-canary.txt"
+17:41:02 user=chp-canary File with id "159" written to: "/chp-canary/files/CUI/CUI_chp-canary.txt"
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=chp-canary Login successful: "chp-canary"
+17:41:13 user=chp-canary Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to OCP\Interaction\Receivers\LinkReceiver is restricte
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=chp-canary Login successful: "chp-canary"
+17:41:13 user=chp-canary Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to ncadmin is restricted: Node is not shareable.
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=-- Login attempt: "chp-canary"
+17:41:13 user=chp-canary Login successful: "chp-canary"
+17:41:14 user=-- Console command executed: user:auth-tokens:list chp-canary --output=json
+17:41:15 user=-- Console command executed: user:auth-tokens:delete chp-canary 9
+17:41:15 user=-- Console command executed: user:disable chp-canary
+17:41:15 user=-- User disabled: "chp-canary"

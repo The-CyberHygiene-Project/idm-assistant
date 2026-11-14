@@ -1,0 +1,10 @@
+17:42:23
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; share canary refused (public link, internal share)
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+check-rc=0
+-rw-r-----. 1 root wazuh 456 10:41:02 /var/ossec/etc/rules/chp_nextcloud_rules_canary.xml
+Sat 2026-11-14 10:41:13 MST
+EXIT=0
+10:42:27 100609 12 User enabled: "chp-canary"
+10:42:27 100608 3 Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to OCP\Interaction\Recei
+10:42:27 100608 3 Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to ncadmin is restricted
