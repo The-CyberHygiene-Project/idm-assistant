@@ -26,6 +26,7 @@ def run(tmp_path, active="active", conf="permissive = 0\n", now=1_000_000_000, s
     else:
         env["CHP_FSMARK_PENDING"] = str(tmp_path / "nopending")
     env["CHP_FAPOLICYD_START"] = str(start if start is not None else 0)
+    env["CHP_FSMARK_FAILED"] = str(tmp_path / "fsmark-failed")
     r = subprocess.run(["bash", str(S)], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     return r.stdout
@@ -164,3 +165,16 @@ def test_80_reads_the_daemon_start_in_utc(tmp_path):
 def test_80_never_started_daemon_counts_as_not_applied(tmp_path):
     out, calls = _start_from_systemctl(tmp_path, "n/a")
     assert "date TZ=UTC" not in calls and "restart pending since" in out
+
+
+def test_80_alerts_on_the_fsmark_failure_record(tmp_path):
+    """Task 9b (D2): the fsmark helper reverted after fapolicyd died with allow_filesystem_mark = 1; check 80 alerts
+    while the record exists (even though fapolicyd is active again), then repeats only after 24 h."""
+    (tmp_path / "fsmark-failed").write_text("1000000000 fapolicyd was NOT active ...; REVERTED\n")
+    out = run(tmp_path)
+    a = alerts(out)
+    assert len(a) == 1 and "fsmark" in a[0] and "REVERTED" in a[0] and "FSMARK=0" in a[0]
+    out2 = run(tmp_path, now=1_000_000_600)
+    assert not alerts(out2) and "still failing" in out2
+    (tmp_path / "fsmark-failed").unlink()
+    assert run(tmp_path, now=1_000_000_700).startswith("OK fapolicyd active")

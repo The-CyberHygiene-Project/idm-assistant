@@ -81,6 +81,13 @@ if [ -f "$pend" ]; then
     flag "restart pending" "fapolicyd restart pending since $(when "$mt") (allow_filesystem_mark change not applied): systemctl restart fapolicyd"
   fi
 fi
+# The fsmark helper's failure record (Task 9b, D2): fapolicyd was not active after a restart with
+# allow_filesystem_mark = 1; the helper reverted (or could not). ALERT until the operator sets FSMARK=0 and re-runs it.
+failf=${CHP_FSMARK_FAILED:-/var/lib/chp/fapolicyd-fsmark-failed}
+if [ -f "$failf" ]; then
+  fm=$(head -n 1 "$failf" 2>/dev/null | cut -c1-400); ft=${fm%% *}; case $ft in ''|*[!0-9]*) ft=$now ;; esac
+  flag "fsmark failed" "chp-fapolicyd-fsmark: fapolicyd failed after an allow_filesystem_mark change at $(when "$ft"): ${fm#* } (fix: FSMARK=0 in /etc/chp/fapolicyd-fsmark.conf, then /usr/libexec/chp/fapolicyd-fsmark)"
+fi
 mkdir -p "$sd" 2>/dev/null
 printf '%s' "$new" > "$sf.tmp" 2>/dev/null && mv "$sf.tmp" "$sf"
 [ "$emitted" -eq 0 ] && echo "OK fapolicyd active and enforcing"

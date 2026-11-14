@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        10.chp%{?dist}
+Release:        11.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,14 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-11.chp
+- fapolicyd-fsmark (lab D2: fapolicyd 1.4.3-3.el9 exits with allow_filesystem_mark = 1, "recvmesg failed"): after
+  each restart it performs, checks fapolicyd is still active after 5 s; if not, reverts its marked change, restarts
+  again, logs at crit (journal), writes /var/lib/chp/fapolicyd-fsmark-failed and exits non-zero; FSMARK=1 refused
+  while that record exists (FSMARK=0 + a run clears it). --verify does the same after a later restart (pending marker).
+- Check 80 alerts while the fsmark failure record exists. Header, flag file and README: FSMARK=1 must not be used on
+  fapolicyd 1.4.3-3.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-10.chp
 - Check 80: the pending-restart rule equals fapolicyd-fsmark's (applied only when the daemon started strictly later
   than the marker; start read with TZ=UTC; "n/a" or unknown = not applied), so the two never disagree.

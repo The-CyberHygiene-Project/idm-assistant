@@ -16,7 +16,9 @@ def apply(tmp_path, flag, conf=CONF, runs=1, no_restart=False, start=None):
     (b / "systemctl").write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/calls\n'); (b / "systemctl").chmod(0o755)
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_FSMARK_CONF=str(tmp_path / "flag"),
                CHP_FAPOLICYD_CONF=str(tmp_path / "fapolicyd.conf"),
-               CHP_FSMARK_PENDING=str(tmp_path / "pending"))
+               CHP_FSMARK_PENDING=str(tmp_path / "pending"), CHP_FSMARK_SETTLE="0",
+               CHP_FSMARK_FAILED=str(tmp_path / "failed"))
+    (b / "logger").write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/journal\n'); (b / "logger").chmod(0o755)
     if no_restart:
         env["CHP_NO_RESTART"] = "1"
     if start is not None:
@@ -64,7 +66,7 @@ def test_rules_file_ships_empty_of_rules():
 
 def test_spec_ships_mechanism_check_80_and_bumps_release():
     s = (B / "chp-base.spec").read_text()
-    assert "Release:        10.chp" in s
+    assert "Release:        11.chp" in s
     for needle in ("80-fapolicyd.sh", "%{_libexecdir}/chp/fapolicyd-fsmark", "%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf",
                    "%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules", "%posttrans"):
         assert needle in s
@@ -192,3 +194,94 @@ def test_values_tested_separately_and_temp_file_trapped():
     assert 'isnum "$mt" && isnum "$st" && [ "$st" -gt "$mt" ]' in s and '"$mt$st"' not in s
     assert s.index("trap 'rm -f \"$tmp\" 2>/dev/null' EXIT") < s.index("rewrite() {")
     assert "Race:" in s
+
+
+# ---------- Task 9b (D2): fapolicyd 1.4.3-3 exits with allow_filesystem_mark = 1; the helper must notice and roll back ----------
+def crashy(tmp_path, flag, conf=CONF, args=(), mode="crash", failed=None, state="active", rpmq="fapolicyd-1.4.3-3.el9.x86_64"):
+    """A fake systemctl whose fapolicyd dies after a restart while the conf says allow_filesystem_mark = 1 (as the lab
+    saw on fapolicyd 1.4.3-3.el9); mode "dead": it never comes back at all; "ok": it always comes back."""
+    (tmp_path / "flag").write_text(f"FSMARK={flag}\n")
+    cf = tmp_path / "fapolicyd.conf"; cf.write_text(conf)
+    st = tmp_path / "state"; st.write_text(state + "\n")
+    b = tmp_path / "bin"; b.mkdir(exist_ok=True)
+    restart = {"crash": f'if grep -q "^allow_filesystem_mark = 1" {cf}; then echo failed > {st}; else echo active > {st}; fi',
+               "dead": f"echo failed > {st}", "ok": f"echo active > {st}"}[mode]
+    (b / "systemctl").write_text(f"""#!/bin/bash
+echo "$*" >> {tmp_path}/calls
+case "$1" in
+  is-active) [ "$(cat {st})" = active ] ;;
+  restart) {restart} ;;
+esac
+""")
+    (b / "logger").write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/journal\n')
+    (b / "rpm").write_text(f'#!/bin/bash\necho {rpmq}\n')
+    for x in ("systemctl", "logger", "rpm"):
+        (b / x).chmod(0o755)
+    if failed is not None:
+        (tmp_path / "failed").write_text(failed)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_FSMARK_CONF=str(tmp_path / "flag"),
+               CHP_FAPOLICYD_CONF=str(cf), CHP_FSMARK_PENDING=str(tmp_path / "pending"), CHP_FSMARK_SETTLE="0",
+               CHP_FSMARK_FAILED=str(tmp_path / "failed"))
+    r = subprocess.run(["bash", str(S), *args], env=env, capture_output=True, text=True)
+    rd = lambda n: (tmp_path / n).read_text() if (tmp_path / n).exists() else ""
+    return r, cf.read_text(), rd("calls"), rd("journal"), rd("failed"), rd("state").strip()
+
+
+def test_fsmark_crash_after_restart_is_reverted_restarted_logged_and_nonzero(tmp_path):
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 1)
+    assert r.returncode != 0
+    assert "allow_filesystem_mark = 0" in conf and "chp-managed" not in conf and "= 1" not in conf   # our change undone
+    assert calls.count("restart fapolicyd") == 2 and state == "active"                   # restarted again: back up
+    assert "-p daemon.crit -t chp-fapolicyd-fsmark" in journal and "REVERTED" in journal   # the journal, loudly
+    assert "REVERTED" in r.stderr and failed.split()[0].isdigit() and "REVERTED" in failed  # status file for check 80
+    assert "fapolicyd-1.4.3-3.el9" in failed
+
+
+def test_fsmark_one_is_refused_while_the_failure_record_exists(tmp_path):
+    r, conf, calls, journal, failed, _ = crashy(tmp_path, 1, failed="1700000000 earlier failure\n")
+    assert r.returncode != 0 and conf == CONF and calls == ""          # no write, no restart: no crash loop
+    assert "refused" in r.stderr and "refused" in journal
+
+
+def test_fsmark_zero_run_clears_the_failure_record(tmp_path):
+    r, conf, calls, _, failed, _ = crashy(tmp_path, 0, failed="1700000000 earlier failure\n")
+    assert r.returncode == 0 and conf == CONF and calls == "" and not (tmp_path / "failed").exists()
+
+
+def test_fsmark_still_down_after_the_revert_says_so(tmp_path):
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 1, mode="dead")
+    assert r.returncode != 0 and "allow_filesystem_mark = 0" in conf and state == "failed"
+    assert "STILL NOT ACTIVE" in failed and "STILL NOT ACTIVE" in journal
+
+
+def test_fsmark_healthy_restart_is_quiet(tmp_path):
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 1, mode="ok")    # a fapolicyd that survives the setting
+    assert r.returncode == 0 and "allow_filesystem_mark = 1" in conf and calls.count("restart fapolicyd") == 1
+    assert journal == "" and failed == "" and state == "active"
+
+
+def test_verify_after_a_later_restart_for_a_pending_marker(tmp_path):
+    """The pending-marker path: rpm wrote the setting (CHP_NO_RESTART), a later step restarted fapolicyd and it died;
+    --verify reverts exactly as the helper's own restart would."""
+    on = CONF.replace("allow_filesystem_mark = 0\n", "") + "# chp-managed: allow_filesystem_mark\nallow_filesystem_mark = 1\n"
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 1, conf=on, args=("--verify",), state="failed")
+    assert r.returncode != 0 and "allow_filesystem_mark = 0" in conf and "chp-managed" not in conf
+    assert calls.count("restart fapolicyd") == 1 and state == "active" and "REVERTED" in failed
+
+
+def test_verify_when_active_changes_nothing(tmp_path):
+    on = CONF.replace("allow_filesystem_mark = 0\n", "") + "# chp-managed: allow_filesystem_mark\nallow_filesystem_mark = 1\n"
+    r, conf, calls, journal, failed, _ = crashy(tmp_path, 1, conf=on, args=("--verify",))
+    assert r.returncode == 0 and conf == on and "restart" not in calls and journal == "" and failed == ""
+
+
+def test_verify_never_reverts_an_admin_setting(tmp_path):
+    adm = CONF.replace("mark = 0", "mark = 1")
+    r, conf, calls, journal, failed, _ = crashy(tmp_path, 0, conf=adm, args=("--verify",), state="failed")
+    assert r.returncode != 0 and conf == adm and "restart" not in calls and "not ours" in failed
+
+
+def test_header_and_readme_warn_against_fsmark_on_fapolicyd_1_4_3():
+    for t in (S.read_text(), (B / "README.md").read_text(), (B / "fapolicyd-fsmark.conf").read_text()):
+        assert "1.4.3-3" in t and "recvmesg failed" in t and "13-fsmark-fapolicyd-failed.log" in t
+    assert (ROOT / "lab" / "docs-proof" / "logs" / "13-fsmark-fapolicyd-failed.log").read_text().count("recvmesg failed") >= 1
