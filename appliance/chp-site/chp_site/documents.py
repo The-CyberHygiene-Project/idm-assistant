@@ -311,6 +311,10 @@ def _trust_entry(trust_file, target):
     return m[0] if len(m) == 1 else None
 
 
+# NOTE: between this sync and the next one, every occ config write (settings, apps, ...) changes config.php, so the
+# recorded size+sha256 is stale for the rest of the run. That is harmless ONLY because CHP's fapolicyd runs with
+# `integrity = none` (path trust: the entry's size/hash are not checked). With integrity = size or sha256, php would be
+# denied config.php after the first write; enable would then need a sync after every write.
 def _trust_sync(run, root, tf, cfg):
     """Make fapolicyd's trust entry for config.php equal the file as it is now ("<path> <size> <sha256>"): added when
     there is none, updated when it differs (stale, malformed or duplicated). Stateless: the entry is compared with
