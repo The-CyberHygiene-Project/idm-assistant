@@ -3,5 +3,8 @@
 # the third-party dir as appstream-modules.yaml.gz, copied unchanged from the Rocky 9.8 DVD (sha256 1fc6cf45a603…b101,
 # = the checksum in the DVD's AppStream repomd.xml). The document server (chp-documents) runs
 # `dnf module enable php:8.3 postgresql:16` from this repo.
+# "vendor-sha256 <hex>": the pinned sha256 of that vendor file as given to stage-modules.sh (the .gz itself);
+# stage-modules.sh refuses any other file. verify-repo.sh checks a repo's modules record carries exactly these streams.
+vendor-sha256 1fc6cf45a6030195d3d53b752dc5f7ba8ded80e52ad6169489c333d2b9e2b101
 php 8.3
 postgresql 16

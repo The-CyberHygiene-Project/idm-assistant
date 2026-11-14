@@ -1,0 +1,56 @@
+# Task 9b: test_sign_repo.sh on aero from /data/chp-release/tools (tools sha256 == repo), throwaway gpg keys, 2026-11-14T01:16:38Z
+PASS  signs a stage of unsigned + EPEL-signed RPMs
+PASS  verify-repo passes on the result
+PASS  our RPM now carries OUR key id
+PASS  EPEL's RPM keeps EPEL's signature
+PASS  the stage itself is untouched (still unsigned)
+PASS  refuses an existing out-dir
+PASS  refuses an RPM signed by an unpinned key
+PASS  …and creates no out-dir
+PASS  fails when the signer key is unavailable
+PASS  …and creates no out-dir
+PASS  …and leaves no temp dir behind
+PASS  verify: an unsigned RPM added later fails
+PASS  verify: edited repomd.xml fails
+PASS  verify: missing repomd.xml.asc fails
+PASS  verify: repomd signed by another key fails
+PASS  verify: a key file that doesn't match its pin fails
+PASS  verify: an empty repo fails
+PASS  refuses to sign an unsigned RPM that is not ours (vendor/release)
+PASS  …and creates no out-dir
+PASS  assemble: our package missing from built/ is MISSING, not taken from third-party
+PASS  assemble: ours from built/, EPEL from third-party
+PASS  fixture: v7's RPM really is signed by the subkey (else the next check is vacuous)
+PASS  verify: an RPM signed by a SUBKEY of a pinned key fails
+PASS  fixture: v8's RPM really is signed by the second key
+PASS  verify: a key file carrying a second key is rejected
+PASS  modules: the fixture vendor file is the pinned one (MODULES.txt vendor-sha256)
+PASS  modules: keeps only the listed stream
+PASS  modules: refuses a modular RPM outside the listed streams
+PASS  modules: refuses modular RPMs when no stream is listed
+PASS  repodata: refuses modular RPMs without modules.yaml
+PASS  repodata: adds the modules metadata, no loose copy
+PASS  verify: modular RPMs without modules metadata fail
+PASS  sign-repo: signed repo carries the modules metadata
+PASS  modules: refuses a vendor file whose sha256 is not the pin
+PASS  modules: refuses streams without a vendor-sha256 pin
+PASS  modules: refuses a changed vendor file (one byte) against its pin
+PASS  fixture: block.yaml really has a block-style php profile
+PASS  modules post-check: refuses block-style profiles of an unlisted stream
+PASS  modules post-check: refuses defaults with intents
+PASS  modules post-check: the real vendor file passes (pinned, plain)
+PASS  repodata: a modular RPM with a plain file name is still refused
+PASS  modules: a renamed modular RPM outside the streams is still refused
+PASS  verify: a renamed modular RPM without modules metadata fails
+PASS  verify: a signed RPM not listed in primary.xml fails
+PASS  verify: an RPM listed in primary.xml but missing fails
+PASS  verify: a repodata file changed under a signed repomd fails
+PASS  verify: a repodata file listed in repomd but missing fails
+PASS  verify: the clean repo still passes (2 packages)
+PASS  verify: the modular repo passes against its own stream list
+PASS  verify: modules streams != the tools' MODULES.txt (php+postgresql) fails
+PASS  verify: a repo without modules metadata fails against the tools' MODULES.txt
+PASS  verify: a changed modules record fails its repomd checksum
+exit=0
+# new verify-repo.sh on the owner-signed 0.12.0 repo (before it was moved aside):
+REPO OK: 61 packages, all signed by pinned keys; repomd.xml signed by 2DE0D71BF37D8F5E4201A590521276F43C908F8E (rc=0)

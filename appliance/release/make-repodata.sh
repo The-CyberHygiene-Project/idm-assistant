@@ -6,14 +6,21 @@
 # stage-modules.sh: the vendor module documents of the streams the repo carries), add it as the "modules" metadata
 # (modifyrepo_c) and remove the loose copy, so `dnf module enable` works from this repo alone. The file is moved out
 # before createrepo_c, which would otherwise pick it up by itself (one explicit source of the modules record).
-# Refuses modular RPMs (".module+" in the file name) without modules.yaml: dnf could not enable their streams.
+# Refuses modular RPMs (".module+"/".module_" in the RPM RELEASE tag, read with rpm -qp, not the file name) without
+# modules.yaml: dnf could not enable their streams.
 # Signs nothing; sign-repo.sh signs repomd.xml afterwards, which covers the modules metadata by checksum.
+# RUN IT ON A COPY, never on the stage: it changes <dir> in place (writes repodata/, MOVES modules.yaml into it).
+# sign-repo.sh runs it on its own temp work copy; a dry-run uses a temp copy of the stage.
 set -Eeuo pipefail
 R=$1
 shopt -s nullglob
-mod=("$R"/*.module+*.rpm)
-if (( ${#mod[@]} )) && [[ ! -f $R/modules.yaml ]]; then
-  echo "refusing: ${#mod[@]} modular RPM(s) in $R but no modules.yaml (run stage-modules.sh)"; exit 1
+nmod=0
+for f in "$R"/*.rpm; do
+  rel=$(rpm -qp --nosignature --qf '%{RELEASE}' "$f" 2>/dev/null) || { echo "refusing: cannot read $f"; exit 1; }
+  if [[ $rel == *.module[+_]* ]]; then nmod=$((nmod + 1)); fi
+done
+if (( nmod )) && [[ ! -f $R/modules.yaml ]]; then
+  echo "refusing: $nmod modular RPM(s) in $R but no modules.yaml (run stage-modules.sh)"; exit 1
 fi
 t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
 if [[ -f $R/modules.yaml ]]; then mv "$R/modules.yaml" "$t/modules.yaml"; fi

@@ -201,3 +201,31 @@ def test_update_0_5_0_update1_notes():                                       # R
         assert row in k, row
     s = (R.parent / "site-stick-kit" / "SITE-STICK.md").read_text()
     assert "### From 0.5.0 update 1 on: the daily security review" in s and "REVIEW_DELEGATES" in s
+
+
+# ---- ISO 0.7.0 Plan 2 Task 9b: signing-tool hardening (behaviour proven by test_sign_repo.sh on aero) ----
+def test_modules_vendor_file_is_pinned_and_enforced():
+    m = (R / "MODULES.txt").read_text()
+    assert "\nvendor-sha256 1fc6cf45a6030195d3d53b752dc5f7ba8ded80e52ad6169489c333d2b9e2b101\n" in m
+    s = (R / "stage-modules.sh").read_text()
+    assert "no single vendor-sha256 pin" in s and "sha256sum \"$SRC\"" in s and "post-check" in s
+
+
+def test_modular_detection_reads_the_rpm_release_not_the_file_name():
+    for f in ("stage-modules.sh", "make-repodata.sh", "verify-repo.sh"):
+        t = (R / f).read_text()
+        assert "--qf '%{RELEASE}'" in t and "*.module[+_]*" in t, f
+        assert '"$R"/*.module+*.rpm' not in t, f
+
+
+def test_verify_repo_checks_repodata_rpm_set_and_module_streams():
+    v = (R / "verify-repo.sh").read_text()
+    for s in ("BAD repodata checksum", "EXTRA RPM not in primary.xml", "MISSING RPM listed in primary.xml",
+              "MODULES MISMATCH", "CHP_MODULES_TXT"):
+        assert s in v, s
+
+
+def test_make_repodata_says_run_on_a_copy_and_last_sign_test_chains():
+    assert "RUN IT ON A COPY" in (R / "make-repodata.sh").read_text()
+    t = (R / "test_sign_repo.sh").read_text()
+    assert "'$T/k9' >/dev/null 2>&1 && [[ -f $T/m4out" in t

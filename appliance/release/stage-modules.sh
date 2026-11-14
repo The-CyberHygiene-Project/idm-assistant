@@ -7,25 +7,33 @@
 # nothing, so the repo carries the vendor's module documents for exactly those streams: the modulemd documents of the
 # MODULES.txt streams ("<module> <stream>" lines), copied unchanged from the vendor metadata (Rocky's AppStream
 # modules.yaml from the DVD), plus the vendor defaults of those modules cut down to the same streams. Refuses (exit 1,
-# nothing written) when a listed stream is missing from the vendor metadata or has no RPM in the stage, when a modular
-# RPM in the stage (".module+" in its release) is not an artifact of a listed stream, or when modulemd-validator
-# rejects the result. make-repodata.sh (sign-repo.sh) adds the file to repodata before repomd.xml is signed.
+# nothing written) when the vendor file's sha256 is not the "vendor-sha256 <hex>" pin of MODULES.txt (required as soon
+# as a stream is listed), when a listed stream is missing from the vendor metadata or has no RPM in the stage, when a
+# modular RPM in the stage (".module+"/".module_" in its RPM RELEASE tag, read with rpm -qp, never the file name) is
+# not an artifact of a listed stream, when the post-check of the output finds a stream, default stream, profile key or
+# defaults key that is not a listed stream (YAML the one-pass cut does not understand: e.g. block-style profile
+# lists, intents), or when modulemd-validator rejects the result. make-repodata.sh (sign-repo.sh) adds the file to repodata before repomd.xml is signed.
 # Shell + awk on purpose: aero's fapolicyd refuses untrusted Python files.
 set -Eeuo pipefail
 SRC=$1; LIST=$2; S=$3; OUT=$S/modules.yaml
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 die() { echo "refusing: $*"; exit 1; }
-want=$(sed 's/#.*//' "$LIST" | awk 'NF==2{print $1":"$2} NF!=2 && NF{print "BAD:"$0}')
+want=$(sed 's/#.*//' "$LIST" | awk '$1=="vendor-sha256"{next} NF==2{print $1":"$2} NF!=2 && NF{print "BAD:"$0}')
+pin=$(sed 's/#.*//' "$LIST" | awk '$1=="vendor-sha256" && NF==2{print $2}')
 if grep -q '^BAD:' <<<"$want"; then die "bad line in $LIST: $(grep -m1 '^BAD:' <<<"$want" | cut -c5-)"; fi
 shopt -s nullglob
 for f in "$S"/*.rpm; do
+  rel=$(rpm -qp --nosignature --qf '%{RELEASE}' "$f" 2>/dev/null) || die "cannot read $f"
   r=$(rpm -qp --nosignature --qf '%{NAME}-%{EPOCH}:%{VERSION}-%{RELEASE}.%{ARCH}' "$f" 2>/dev/null | sed 's/-(none):/-0:/')
-  if [[ $r == *.module+* ]]; then echo "$r"; fi
+  if [[ $rel == *.module[+_]* ]]; then echo "$r"; fi
 done | sort -u > "$tmp/modular"
 if [[ -z $want ]]; then
   [[ ! -s $tmp/modular ]] || die "modular RPMs in the stage but no streams in $LIST: $(tr '\n' ' ' < "$tmp/modular")"
   exit 0
 fi
+[[ $(grep -c . <<<"$pin") == 1 && $pin =~ ^[0-9a-f]{64}$ ]] || die "$LIST lists streams but no single vendor-sha256 pin"
+got=$(sha256sum "$SRC" 2>/dev/null | cut -d' ' -f1)
+[[ $got == "$pin" ]] || die "vendor modules file $SRC has sha256 ${got:-unreadable}, $LIST pins $pin"
 case $(head -c 6 "$SRC" | od -An -tx1 | tr -d ' \n') in
   1f8b*) dec=(gzip -dc) ;; fd377a585a00) dec=(xz -dc) ;; *) dec=(cat) ;;
 esac
@@ -73,6 +81,41 @@ for ws in $want; do
   awk -v ws="$ws" '$1==ws{print $2}' "$tmp/arts" | sort -u | comm -12 - "$tmp/modular" | grep -q . \
     || die "no RPM of $ws is in the stage"
 done
+# Post-check of the OUTPUT (independent of the cut above): every modulemd document is a listed stream and every listed
+# stream is there; a defaults document is for a listed module and holds only "module", "stream" (a listed
+# stream) and "profiles" whose keys are all listed streams of that module. Anything else is refused, not fixed.
+post=$(awk -v want="$want" '
+  BEGIN { n = split(want, w, "\n"); for (i = 1; i <= n; i++) { W[w[i]] = 1; split(w[i], p, ":"); M[p[1]] = 1 } }
+  function uq(s) { gsub(/"/, "", s); gsub(/\047/, "", s); return s }
+  function end() {
+    if (type == "modulemd") { k = name ":" stream; if (!(k in W)) print "modulemd document " k " is not a listed stream"; else F[k]++ }
+    if (type == "modulemd-defaults" && !(dmod in M)) print "defaults for module " dmod " which is not listed"
+    for (i = 1; i <= nd; i++) if (!((dmod ":" D[i]) in W)) print "defaults of " dmod " name stream " D[i] " which is not listed"
+    type = name = stream = dmod = ""; nd = 0; inprof = 0
+  }
+  /^---$/ || /^\.\.\.$/ { end(); next }
+  /^document: / { type = $2; next }
+  type == "modulemd" && /^  name: /   { name = uq($2) }
+  type == "modulemd" && /^  stream: / { stream = uq($2) }
+  type != "modulemd-defaults" { next }
+  /^(version|data):/ { next }
+  /^  [^ ]/ {
+    inprof = 0; k = $1; sub(/:$/, "", k)
+    if (k == "module") { dmod = uq($2); next }
+    if (k == "stream") { D[++nd] = uq($2); next }
+    if (k == "profiles" && NF == 1) { inprof = 1; next }
+    print "defaults key \"" k "\" not understood (only module, stream, profiles)"; next
+  }
+  inprof && /^    [^ ]/ {
+    if ($0 ~ /^    - /) { print "defaults profiles of " dmod ": block-style list not understood"; next }
+    k = $1; sub(/:$/, "", k); D[++nd] = uq(k)
+    if ($0 !~ /^    [^ :]+: \[[^]]*\]$/) print "defaults profile line not understood: " $0
+    next
+  }
+  /^ / { print "defaults line not understood: " $0 }
+  END { end(); for (k in W) if (!(F[k] > 0)) print "listed stream " k " is not in the output" }
+' "$tmp/out")
+[[ -z $post ]] || die "post-check of the cut-down metadata: $(head -n 3 <<<"$post" | tr '\n' ';')"
 modulemd-validator "$tmp/out" >/dev/null 2>&1 || die "modulemd-validator rejects the cut-down metadata"
 cp "$tmp/out" "$OUT.tmp"; mv "$OUT.tmp" "$OUT"
 echo "  modules.yaml: $(tr '\n' ' ' <<<"$want")($(wc -l < "$tmp/modular") modular RPMs in the stage, all artifacts of these streams)"
