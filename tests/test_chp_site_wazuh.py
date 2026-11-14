@@ -288,7 +288,7 @@ def test_wazuh_rules_levels():
         (_ft("chp.app.disabled", app_id="chp_foldertag", control="true"), 12),
         (_nc('App "chp_foldertag" disabled', user="--"), 12),
         (_ft("chp.tag.failed", op="create"), 12),
-        ({"decoder": "kernel", "location": "journald", "program_name": "kernel",
+        ({"decoder": "iptables", "location": "journald", "program_name": "kernel", "pre_fired": {"4100"},
           "log": "kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.30 DST=1.1.1.1 UID=48"}, 12),
         (_nc('Login failed: "lab02"', user="--"), 7),                                              # failed sign-in
         (_nc('File with id "47" deleted: "/lab01/files/CUI/plan.docx"'), 7),                      # CUI delete
@@ -296,7 +296,7 @@ def test_wazuh_rules_levels():
         (_nc('File with id "47" accessed: "/lab01/files/CUI/plan.docx"'), 3),                     # CUI download
         (_ft("chp.folderop.refused", op="move"), 7),                                               # the first refusal
         ({"decoder": "kanidmd", "location": "journald", "program_name": "kanidmd",
-          "log": "kanidmd: authentication failed: incorrect totp for lab03"}, 7),               # Kanidm failed TOTP
+          "log": "kanidmd: [info]: Auth result: Denied: incorrect totp | event_tag_id: 10"}, 7),               # Kanidm failed TOTP
     ]
     for ev, want in cases:
         rid, lvl = _level(x, ev)
@@ -416,3 +416,50 @@ def test_no_rule_uses_field_name_for_a_static_field(name):
 
 def test_canary_rules_match_the_audit_user_by_the_static_element():
     assert "<user>^--$</user>" in w.NEXTCLOUD_RULES and "<user>^chp-canary$</user>" in w.canary_rules(47)
+
+
+# ---- Task 9d: D9 (egress rule hangs off Wazuh's firewall rule 4100) and the one-alert-per-wrong-TOTP rule ----
+# the kernel line of the round-3 egress proof (lab/docs-proof/logs/51, as wazuh-logtest printed it)
+EGRESS_LINE = ("Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 "
+               "DST=93.184.216.34 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8687 DF PROTO=TCP SPT=40512 DPT=80 WINDOW=64240 "
+               "RES=0x00 SYN URGP=0 UID=48 GID=48")
+
+
+def _rule(rid):
+    import xml.etree.ElementTree as ET
+    g = ET.fromstring(_re.sub(r"<!--.*?-->", "", w.NEXTCLOUD_RULES, flags=_re.S))
+    return next(r for r in g.findall("rule") if r.get("id") == rid)
+
+
+def test_d9_egress_rule_is_a_child_of_the_firewall_rule_4100():
+    # Wazuh's firewall decoder takes the kernel line and stock rule 4100 (level 0) matches first; a rule without
+    # if_sid is never evaluated for it (lab round 3, D9: 100620 never fired). Proven with wazuh-logtest 4.14.7.
+    r = _rule("100620")
+    assert r.findtext("if_sid") == "4100"
+    assert r.findtext("match") == "CHP-NC-EGRESS"
+    assert int(r.get("level")) == 12
+    ev = {"decoder": "iptables", "location": "journald", "program_name": "kernel", "log": EGRESS_LINE}
+    assert _level(w.NEXTCLOUD_RULES, {**ev, "pre_fired": {"4100"}}) == ("100620", 12)
+    # the same line seen by no 4100 (not the firewall decoder) is not ours to level
+    assert _level(w.NEXTCLOUD_RULES, ev)[0] != "100620"
+
+
+def test_d9_egress_rule_never_from_a_forwarded_alert_even_under_4100():
+    rid, lvl = _level(w.NEXTCLOUD_RULES, {"decoder": "x", "location": "journald", "program_name": "chp-wazuh",
+                                          "log": "chp-wazuh: level 12 CHP-NC-EGRESS", "pre_fired": {"4100"}})
+    assert rid != "100620"
+
+
+KANIDM_TOTP_LINES = [   # one wrong TOTP = these three kanidmd lines (lab/docs-proof/logs/50)
+    "cace8f4f ERROR       ┝━ 🚨 [error]: Handler::PasswordMfa -> Result::Denied - TOTP Fail, password - | event_tag_id: 12",
+    "cace8f4f INFO        ┝━ ｉ [info]: Credentials denied | event_tag_id: 10 | reason: incorrect totp",
+    "cace8f4f INFO        ┕━ ｉ [info]: Auth result: Denied: incorrect totp | event_tag_id: 10",
+]
+
+
+def test_kanidm_wrong_totp_alerts_once_not_three_times():
+    ev = lambda log: {"decoder": "kanidmd", "location": "journald", "program_name": "kanidmd", "log": log}
+    hits = [_level(w.NEXTCLOUD_RULES, ev(x))[0] == w.KANIDM_TOTP_RULE for x in KANIDM_TOTP_LINES]
+    assert hits == [False, False, True]
+    assert _level(w.NEXTCLOUD_RULES, ev("[info]: Auth result: Continue (TOTP) | event_tag_id: 10"))[0] is None
+    assert _level(w.NEXTCLOUD_RULES, ev("[info]: Auth result: Denied: incorrect totp"))[1] == 7

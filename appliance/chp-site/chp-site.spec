@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,18 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sat Nov 14 2026 The CyberHygiene Project - 0.14.0-4.chp
+- documents enable (lab round 3, D6): the fapolicyd restart is proven: active at three samples over about 5 s, a
+  parsed "Denied accesses" counter, then chp-base's fapolicyd-fsmark --verify; a fapolicyd found dead (the known
+  1.4.3-3 "recvmesg failed" exit) is restarted once more; dead again, or no counter, fails the run loudly (check 80,
+  POA&M) and keeps the restart mark for the next run. "Denied accesses: unknown" is never printed as success.
+- documents enable: the AIDE note names what the run changed, and says no refresh is needed when nothing changed.
+- documents trust (new, D10): config.php's fapolicyd trust entry made equal to the file and read back, no fapolicyd
+  restart; chp-nextcloud-backup restore runs it after occ maintenance:data-fingerprint.
+- Wazuh (D9): rule 100620 (egress block) is a child of the firewall rule 4100 that takes the kernel line first
+  (it never fired); rule 100630 matches only "Auth result: Denied: incorrect totp" (one alert per wrong code, not 3).
+  Both proven with wazuh-logtest on Wazuh 4.14.7.
+
 * Sat Nov 14 2026 The CyberHygiene Project - 0.14.0-3.chp
 - documents enable: /etc/nextcloud/config.php (a minimal empty config when absent) and its fapolicyd trust entry
   exist BEFORE the first occ call: maintenance:install reads back the config.php it writes, which fapolicyd denied

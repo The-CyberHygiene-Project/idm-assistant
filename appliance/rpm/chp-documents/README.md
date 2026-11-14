@@ -17,7 +17,10 @@ site-specific pieces. Installing the package starts and enables nothing, and eve
 
 Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron.timer`, `chp-nextcloud-backup.timer`,
 `chp-nextcloud-cert-renew.timer`, and restart `fapolicyd` (rule `65-chp-nextcloud.rules`; read
-`fapolicyd-cli --check-status` after the restart).
+`fapolicyd-cli --check-status` after the restart). enable proves that restart: fapolicyd must be active at three samples
+over about 5 s and answer a `Denied accesses` counter, then `fapolicyd-fsmark --verify` must pass; a fapolicyd found
+dead is restarted once more, and dead again fails the run (fapolicyd 1.4.3-3 can exit about one second after a
+restart, "recvmesg failed": lab round 3, D6).
 
 ## Behaviour
 
@@ -27,7 +30,12 @@ Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron
   `SERVER_IP` (the unit refuses to load otherwise). Check 79 rebuilds the expected table from the shipped files in a
   throwaway network namespace on every run and alerts when the live table is missing or differs, or the address file
   is invalid. php-fpm, httpd and `nextcloud-cron.service` `BindsTo=` the unit and run
-  `nft list table ...` before starting.
+  `nft list table ...` before starting (in the cron unit as `ExecStartPre=+...`: that line runs as root, the job as
+  apache; lab round 3, D11).
+* **Background jobs (check 77).** Besides the units and the timer, check 77 alerts when the last
+  `nextcloud-cron.service` run failed, and when NextCloud's own record of its last finished cron run (`core/lastcron`,
+  written by `cron.php`) is older than 30 minutes (or absent 30 minutes after enable): the robust signal that the
+  jobs really ran.
 * **httpd** listens on 8443 only. `/usr/libexec/chp/nextcloud-httpd-stock-off` (run before every httpd start) comments
   out the stock `Listen` lines and the sample sites (`ssl.conf`, `welcome.conf`, `userdir.conf`, `autoindex.conf`),
   because Kanidm owns `:443` and a mod_ssl update would bring them back.
@@ -80,7 +88,10 @@ Restore, on a server with `nextcloud-chp` and `chp-documents` installed and rend
 1. `chp-nextcloud-backup restore /backup/nextcloud/<stamp>` (checks the MANIFEST first and refuses on a mismatch; stops
    httpd/php-fpm/cron, recreates the database, restores the dump and the files, restores SELinux labels, restarts, turns
    maintenance mode off).
-2. `occ maintenance:data-fingerprint` is run for you; clients resync. Verify with `chp-site documents check`.
+2. `occ maintenance:data-fingerprint` is run for you; clients resync. It rewrites `/etc/nextcloud/config.php`, so the
+   restore then runs `chp-site documents trust`: config.php's fapolicyd trust entry is refreshed (`fapolicyd-cli
+   --file update`, `--update`; no fapolicyd restart) and read back equal to the file; if not, the restore fails
+   (exit 1). Verify with `chp-site documents check`.
 
 ## CUI boundary
 
@@ -89,6 +100,19 @@ names of controlled material. Treat both as **CUI-boundary records**: keep them 
 policy sets (Wazuh retention is `RETENTION_DAYS`), keep them on the appliance, and do **not** forward them off it
 (no external syslog, no cloud log service). Backups under `/backup/nextcloud` hold the documents themselves and are
 equally inside the boundary.
+
+## Known limitations (SSP / POA&M notes)
+
+* **OIDC authorization code in the audit log.** NextCloud's audit log (`/var/log/nextcloud/audit.log`, written by
+  admin_audit and by NextCloud's log writer, not by CHP code) records the request URL of each line; for the sign-in
+  callback that URL carries the OIDC `code` and `state` query values, so they reach the Wazuh `full_log` too. The code
+  is single-use, bound to the client secret and to PKCE (S256), and expires within minutes, so it cannot be replayed
+  from the log; the log itself is a CUI-boundary record (above). CHP does not control that writer, so it is not
+  redacted: record it in the SSP (AU-9 / AU-3) and as a POA&M item until NextCloud can omit query strings from the
+  log (lab Plan 2 round 3).
+* **fapolicyd 1.4.3-3 can exit about 1 s after a restart** ("recvmesg failed", with `allow_filesystem_mark = 0` too):
+  every CHP restart is verified and retried once (above, and chp-base's `fapolicyd-fsmark`); check 80 alerts while it
+  is down. POA&M item until Rocky ships a fixed fapolicyd.
 
 ## Notes for Tasks 5 and 9
 

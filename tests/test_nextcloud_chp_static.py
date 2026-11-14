@@ -188,21 +188,38 @@ def _handle(src):
     return src[src.index("public function handle(Event $event): void {"):]
 
 
+def _refusal(src):
+    return src[src.index("public function refusal(Node $node, string $op, ?string $target): ?string {"):]
+
+
 def test_before_listeners_fail_closed_on_any_error():
     # NextCloud's OC_Hook::emit swallows every exception except AbortedEventException and lets the operation
     # proceed, so each Before-listener must turn any other error into an AbortedEventException.
-    for f, const in (("Listener/ContainListener.php", "REFUSED"), ("Listener/FolderGuardListener.php", "FOLDEROP_REFUSED")):
-        h = _handle(php(f))
-        i_try = h.index("try {")
-        i_dec = h.index("$this->decide(")
-        i_rethrow = h.index("catch (AbortedEventException $e) {\n\t\t\tthrow $e;")
-        i_any = h.index("catch (\\Throwable $e) {")
-        assert i_try < i_dec < i_rethrow < i_any, f
-        tail = h[i_any:h.index("\n\t}\n")]
-        assert f"Audit::{const}" in tail and "'internal error: ' . get_class($e)" in tail, f
-        assert "throw new AbortedEventException(" in tail, f
-    fg = _handle(php("Listener/FolderGuardListener.php"))
-    assert "$node instanceof Folder || ($node instanceof File && $target !== null && $this->leavesOrUnknown($node, $target))" in fg
+    h = _handle(php("Listener/ContainListener.php"))
+    i_try = h.index("try {")
+    i_dec = h.index("$this->decide(")
+    i_rethrow = h.index("catch (AbortedEventException $e) {\n\t\t\tthrow $e;")
+    i_any = h.index("catch (\\Throwable $e) {")
+    assert i_try < i_dec < i_rethrow < i_any
+    tail = h[i_any:h.index("\n\t}\n")]
+    assert "Audit::REFUSED" in tail and "'internal error: ' . get_class($e)" in tail
+    assert "throw new AbortedEventException(" in tail
+    # FolderGuard (Task 9d, D7): the decision is refusal(), shared by the hook and DavGuard's MOVE check; it never
+    # throws, any error inside it is a refusal (fail closed), and the hook turns every refusal into an abort
+    fg = php("Listener/FolderGuardListener.php")
+    h = fg[fg.index("public function handle(Event $event): void {"):fg.index("public function refusal(")]
+    assert "$refusal = $this->refusal($node, $op, $target);" in h
+    assert "if ($refusal !== null) {\n\t\t\tthrow new AbortedEventException($refusal);" in h
+    r = _refusal(fg)
+    r = r[:r.index("\n\t}\n")]
+    i_try, i_dec, i_any = r.index("try {"), r.index("return $this->decide($node, $op, $target);"), r.index("catch (\\Throwable $e) {")
+    assert i_try < i_dec < i_any
+    tail = r[i_any:]
+    assert "Audit::FOLDEROP_REFUSED" in tail and "'internal error: ' . get_class($e)" in tail
+    assert "return 'chp_foldertag: ' . $op . ' refused (internal error)';" in tail
+    assert "$node instanceof Folder || ($node instanceof File && $target !== null && $this->leavesOrUnknown($node, $target))" in tail
+    d = fg[fg.index("private function decide("):fg.index("private function leavesOrUnknown(")]
+    assert "throw" not in d and "return 'chp_foldertag: ' . $what" in d     # a refusal is returned, not thrown
 
 
 def test_tag_listener_reports_every_failure():
@@ -218,13 +235,13 @@ def test_tag_listener_reports_every_failure():
 def test_before_listener_refusal_survives_a_failing_audit_write():
     # an exception from the audit/logger call in the catch-all must not replace the AbortedEventException
     for f in ("Listener/ContainListener.php", "Listener/FolderGuardListener.php"):
-        h = _handle(php(f))
+        h = _handle(php(f)) if f.startswith("Listener/Contain") else _refusal(php(f))
         tail = h[h.index("catch (\\Throwable $e) {"):h.index("\n\t}\n")]
         i_try = tail.index("try {   // the refusal below must happen even when the audit write fails")
         i_audit = tail.index("$this->audit->event(")
         i_ign = tail.index("} catch (\\Throwable $auditError) {")
         assert "error_log('chp_foldertag: could not audit a refused '" in tail, f
-        i_throw = tail.index("throw new AbortedEventException(")
+        i_throw = tail.index("throw new AbortedEventException(" if f.startswith("Listener/Contain") else "return 'chp_foldertag: '")
         assert i_try < i_audit < i_ign < i_throw, f
 
 
@@ -270,3 +287,42 @@ def test_subtree_walk_is_bounded_and_reports_what_it_skips():
     assert "$this->failedAt(" in walk[i:i + 300]
     h = _handle(t)
     assert "foreach ($this->files($target, $reason) as" in h   # a throw lands in the walk's catch -> chp.tag.failed
+
+
+# ---- Task 9d: D7 (FolderGuard's rename refusal was HTTP 500) and D8 (false chp.tag.failed on first sign-in) ----
+def test_d7_folderguard_refusal_of_a_webdav_move_is_a_403():
+    # A refusal in the BeforeNodeRenamedEvent hook makes View::rename return false; Sabre's rename in the same parent
+    # (apps/dav Node::setName) answers that with a generic Exception = 500 "Failed to rename" (lab round 3). The same
+    # decision is made first in Sabre's beforeMove, where a thrown Forbidden is a 403 and nothing moves.
+    g = php("Listener/DavGuardListener.php")
+    assert "private FolderGuardListener $folderGuard," in g
+    on = g[g.index("public function handle("):g.index("private function guard(")]
+    assert "if ($op === 'move') {\n\t\t\t\t\t$this->folderGuard($server, $source, $destination);" in on
+    fgd = g[g.index("private function folderGuard("):]
+    assert "$server->tree->getNodeForPath($source)" in fgd and "\\Sabre\\Uri\\split($destination)" in fgd
+    assert "$server->tree->getNodeForPath($dstDir)" in fgd and "instanceof SabreNode" in fgd
+    assert "$refusal = $this->folderGuard->refusal($node, 'move', $target);" in fgd
+    assert "throw new Forbidden($refusal);" in fgd
+    # what it cannot resolve is left to the hook, which still refuses (fail closed); it never allows on an error
+    assert "return;   // left to the BeforeNodeRenamedEvent hook" in fgd
+    assert "use OCA\\DAV\\Connector\\Sabre\\Node as SabreNode;" in g
+    fg = php("Listener/FolderGuardListener.php")
+    assert "public function refusal(Node $node, string $op, ?string $target): ?string {" in fg
+
+
+def test_d8_no_walk_when_nothing_can_be_tagged():
+    # A user's first sign-in creates /<user>/files (NodeCreatedEvent): no team folder, no rule, no copy source, so no
+    # file below it can get a tag; walking it only reported the team-folder mounts below it as chp.tag.failed (level
+    # 12, rule 100613) for every user. Skip exactly that case; a target in a ruled folder, and every copy (whose
+    # source tags are carried), is still walked and still reports nested mounts.
+    t = php("Listener/TagListener.php")
+    h = _handle(t)
+    i_folder = h.index("$folder = Policy::folderOfMount($target->getMountPoint());")
+    i_skip = h.index("if ($source === null && ($folder === null || !isset($rules[$folder]))) {\n\t\t\treturn;")
+    i_walk = h.index("foreach ($this->files($target, $reason) as")
+    assert i_folder < i_skip < i_walk
+    # the folder lookup failing is still reported, never a silent skip
+    pre = h[:i_skip]
+    assert pre.count("catch (\\Throwable $e)") >= 2 and "could not read the team folder of the target" in pre
+    walk = t[t.index("private function files(Node $node, string $op)"):t.index("private function children(")]
+    assert "mounts below the target are not walked" in walk                   # still reported inside ruled folders

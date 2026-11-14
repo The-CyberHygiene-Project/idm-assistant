@@ -353,15 +353,21 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <group>chp_degraded,</group>
   </rule>
 
+  <!-- the kernel's log line is decoded by Wazuh's firewall decoder and taken by stock rule 4100 ("Firewall rules
+       grouped", level 0) first: a rule without if_sid is never evaluated for it (lab Plan 2 round 3, D9) -->
   <rule id="100620" level="12">
+    <if_sid>4100</if_sid>
     <program_name>^kernel$</program_name>
     <match>CHP-NC-EGRESS</match>
     <description>NextCloud egress block tripped (the apache user tried to leave the server)</description>
     <group>chp_egress,</group>
   </rule>
+  <!-- one wrong code = three kanidmd lines ("Handler::PasswordMfa -> Result::Denied - TOTP Fail", "Credentials
+       denied | reason: incorrect totp", "Auth result: Denied: incorrect totp"): only the last one is matched, so one
+       failure is one alert (lab Plan 2 round 3) -->
   <rule id="100630" level="7">
     <program_name>^kanidmd$</program_name>
-    <regex type="pcre2">(?i)((incorrect|invalid|wrong)\\W+totp|totp\\W+(fail|denied|incorrect|invalid))</regex>
+    <regex type="pcre2">(?i)Auth result: Denied:\\W+(incorrect|invalid|wrong)\\W+totp</regex>
     <description>Kanidm: failed sign-in (authenticator code refused)</description>
     <group>authentication_failed,</group>
   </rule>

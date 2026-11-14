@@ -80,6 +80,17 @@ class TagListener implements IEventListener {
 		$managed = array_values(array_unique(array_values($rules)));
 		try {
 			$folder = Policy::folderOfMount($target->getMountPoint());   // the whole subtree is in the target's mount
+		} catch (\Throwable $e) {
+			$this->failed($reason, $target, 'could not read the team folder of the target (' . get_class($e) . '), nothing tagged', $e);
+			return;
+		}
+		// Nothing below the target can get a tag: no rule for its folder and no copy source whose tags travel. This is
+		// e.g. a user's first sign-in creating /<user>/files, whose walk only found the team-folder mounts below it and
+		// reported them as chp.tag.failed (lab Plan 2 round 3, D8). Those folders are tagged by their own events.
+		if ($source === null && ($folder === null || !isset($rules[$folder]))) {
+			return;
+		}
+		try {
 			foreach ($this->files($target, $reason) as [$id, $path, $rel]) {
 				try {
 					$want = ($folder !== null && isset($rules[$folder])) ? [$rules[$folder]] : [];

@@ -299,6 +299,9 @@ def _documents(a):
         lines = documents.check(Path("/"), subprocess.run)
         print("\n".join(lines))
         return 1 if any(x.startswith("ALERT") for x in lines) else 0
+    if a.action == "trust":                              # config.php's fapolicyd trust entry = the file (restore, D10)
+        print("\n".join(documents.trust(Path("/"), subprocess.run)))
+        return 0
     if a.action == "canary-off":                         # ExecStopPost of the check: canary account off, tokens gone
         print("\n".join(documents.canary_off(Path("/"), documents.occ_run)))
         return 0
@@ -581,8 +584,9 @@ def main(argv=None):
     se.add_argument("--firstboot", action="store_true", help="first boot: no site stick (keys via the pending folder / the staged key)")
     dm = sub.add_parser("documents", help="document server (NextCloud) on the CHP server: enable (DOCUMENTS=yes; "
                                           "after security enable; with the site stick), show status, or run the "
-                                          "nightly tag check and share canary (check; canary-off switches the canary account off)")
-    dm.add_argument("action", choices=("enable", "status", "check", "canary-off")); dm.add_argument("--stick"); dm.add_argument("--site", default="/etc/chp")
+                                          "nightly tag check and share canary (check; canary-off switches the canary account off; trust "
+                                          "refreshes config.php's fapolicyd trust entry, e.g. after a backup restore)")
+    dm.add_argument("action", choices=("enable", "status", "check", "canary-off", "trust")); dm.add_argument("--stick"); dm.add_argument("--site", default="/etc/chp")
     dm.add_argument("--as", dest="as_", default="idm_admin", help="your Kanidm admin session (kanidm login -D NAME)")
     al = sub.add_parser("alerts", help="summarise Wazuh alerts by host and rule (server; root)")
     al.add_argument("--since", default="24h"); al.add_argument("--level", type=int, default=7)

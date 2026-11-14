@@ -1,0 +1,113 @@
+# Task 9d D9 + rule 100630: wazuh-logtest-legacy on aero (wazuh-manager 4.14.7, live install UNTOUCHED, still active
+# after): a throwaway copy of /var/ossec bind-mounted over /var/ossec inside 'sudo unshare -m --propagation private',
+# the five generated chp rule files in its etc/rules (script below). 'new' = this fix, 'old' = HEAD's
+# chp_nextcloud_rules.xml (reproduces D9: 4100 level 0; and 3 alerts per wrong TOTP). Lines 1-2: the round-3 egress kernel
+# line (line 1 exactly as logs/51 printed it, truncated; line 2 completed in the spike's logs/21 format). Lines 3-5: the
+# three kanidmd lines of one wrong TOTP (logs/50). Copy removed after.
+
+077e13f09894e766885607418561a7edfc1f3b1b6b1dc633ebe2471d503e46cd  chp_nextcloud_rules_canary.xml
+d2b92ac739037cf5b31107165eeeefed3cf1f69a4ccc852f4f533d3b65e36e56  chp_nextcloud_rules.xml
+8e0d5983c3a6c8a3f9da9bcc5cba9193b9e13220377af4dd085761c4f17bfaa2  chp_review_rules.xml
+e0781be27c5f8448963da7e0fe3c41af052aa4efca43d16db6b8b3e3d2a58a50  chp_suricata_rules.xml
+f66d7c208a81dbd92b6cb91af358be8405966d889a06515aa07a5a7541172a17  chp_yara_rules.xml
+27d9f876ebdc8c1de4a8fc0e325faf4c818cde6c08020119835badf9ec7edd40  old_nc.xml
+378f6012182e6281d52760a538e4cf19bd96811602d2cbae3a3d6859a1434cf2  lines.txt
+MODE=new analysisd -t rc=0
+== MODE=new line 1: Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.
+          program_name: 'kernel'
+          decoder: 'kernel'
+          Rule id: '100620'
+          Level: '12'
+          Description: 'NextCloud egress block tripped (the apache user tried to leave the server)'
+   **Alert to be generated.
+== MODE=new line 2: Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.
+          program_name: 'kernel'
+          decoder: 'kernel'
+          Rule id: '100620'
+          Level: '12'
+          Description: 'NextCloud egress block tripped (the apache user tried to leave the server)'
+   **Alert to be generated.
+== MODE=new line 3: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b ERROR       ┝━ 🚨 [e
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '1002'
+          Level: '2'
+          Description: 'Unknown problem somewhere in the system.'
+== MODE=new line 4: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┝━ ｉ [i
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '1002'
+          Level: '2'
+          Description: 'Unknown problem somewhere in the system.'
+== MODE=new line 5: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┕━ ｉ [i
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '100630'
+          Level: '7'
+          Description: 'Kanidm: failed sign-in (authenticator code refused)'
+   **Alert to be generated.
+MODE=old analysisd -t rc=0
+== MODE=old line 1: Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.
+          program_name: 'kernel'
+          decoder: 'kernel'
+          Rule id: '4100'
+          Level: '0'
+          Description: 'Firewall rules grouped.'
+== MODE=old line 2: Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.
+          program_name: 'kernel'
+          decoder: 'kernel'
+          Rule id: '4100'
+          Level: '0'
+          Description: 'Firewall rules grouped.'
+== MODE=old line 3: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b ERROR       ┝━ 🚨 [e
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '100630'
+          Level: '7'
+          Description: 'Kanidm: failed sign-in (authenticator code refused)'
+   **Alert to be generated.
+== MODE=old line 4: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┝━ ｉ [i
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '100630'
+          Level: '7'
+          Description: 'Kanidm: failed sign-in (authenticator code refused)'
+   **Alert to be generated.
+== MODE=old line 5: Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┕━ ｉ [i
+          program_name: 'kanidmd'
+          No decoder matched.
+          Rule id: '100630'
+          Level: '7'
+          Description: 'Kanidm: failed sign-in (authenticator code refused)'
+   **Alert to be generated.
+WAZUH_VERSION="v4.14.7"
+WAZUH_REVISION="rc1"
+WAZUH_TYPE="server"
+active
+
+# ---- lt.sh ----
+#!/bin/bash
+# Task 9d: wazuh-logtest-legacy (wazuh-manager 4.14.7 on aero, live install UNTOUCHED) inside a private mount
+# namespace over a throwaway copy of /var/ossec holding the generated chp rule files; MODE=new|old (old = HEAD's
+# chp_nextcloud_rules.xml). Each line of lines.txt is fed on its own; the copy is removed afterwards.
+set -u
+W=/var/tmp/wz-lt.$$; SRC=$1; MODE=$2
+mkdir -p $W
+for d in /var/ossec/*; do b=$(basename $d)
+  case $b in logs|queue|stats|backup|framework|tmp|var|api|wodles) mkdir -p $W/$b; chown --reference=$d $W/$b; chmod --reference=$d $W/$b ;;
+  *) cp -a $d $W/ ;; esac
+done
+cp -a /var/ossec/logs/. $W/logs/ 2>/dev/null; : > $W/logs/ossec.log 2>/dev/null
+for q in sockets alerts db diff fts rids; do mkdir -p $W/queue/$q; chown root:wazuh $W/queue/$q; chmod 770 $W/queue/$q; done
+mkdir -p $W/var/run; chown root:wazuh $W/var/run; chmod 770 $W/var/run
+for f in chp_yara_rules.xml chp_suricata_rules.xml chp_review_rules.xml chp_nextcloud_rules.xml chp_nextcloud_rules_canary.xml; do
+  install -m 640 -o root -g wazuh $SRC/$f $W/etc/rules/$f; done
+[ "$MODE" = old ] && install -m 640 -o root -g wazuh $SRC/old_nc.xml $W/etc/rules/chp_nextcloud_rules.xml
+mount --bind $W /var/ossec
+/var/ossec/bin/wazuh-analysisd -t; echo "MODE=$MODE analysisd -t rc=$?"
+n=0
+while IFS= read -r line; do n=$((n+1))
+  echo "== MODE=$MODE line $n: ${line:0:110}"
+  printf '%s\n' "$line" | timeout 60 /var/ossec/bin/wazuh-logtest-legacy 2>&1 | grep -E "Rule id|Level|Description|program_name|decoder|^\*\*Alert" | sed 's/^/   /'
+done < $SRC/lines.txt
+umount /var/ossec; rm -rf $W

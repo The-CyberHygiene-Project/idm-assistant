@@ -6,5 +6,6 @@ After=postgresql.service chp-nextcloud-egress.service
 [Service]
 Type=oneshot
 User=apache
-ExecStartPre=/usr/sbin/nft list table inet chp_nextcloud_egress
+# "+": this one line runs as root (nft needs it; as apache it failed and no background job ever ran: lab round 3, D11)
+ExecStartPre=+/usr/sbin/nft list table inet chp_nextcloud_egress
 ExecStart=/usr/bin/php -d apc.enable_cli=1 -f /usr/lib/nextcloud/cron.php

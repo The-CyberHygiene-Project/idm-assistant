@@ -14,6 +14,7 @@
 set -Eeuo pipefail
 CONF=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
 B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=${CHP_NC_DATA:-/data/nextcloud/data}; OCC=${CHP_OCC:-/usr/bin/occ}
+CHP_SITE=${CHP_SITE:-/usr/bin/chp-site}
 SD=${CHP_DOCS_STATE:-/var/lib/chp/documents}; MIN_KEEP=2
 keep_days() {
   local v; v=$(sed -n 's/^DOCUMENTS_BACKUP_DAYS=//p' "$CONF" 2>/dev/null | head -1)
@@ -83,6 +84,10 @@ case ${1:-backup} in
     restorecon -R /data/nextcloud /etc/nextcloud
     systemctl start php-fpm httpd nextcloud-cron.timer
     occ maintenance:mode --off >/dev/null; occ maintenance:data-fingerprint >/dev/null
+    # data-fingerprint rewrote config.php (and the copy from the backup may differ too): its fapolicyd trust entry must
+    # equal the file again, else the nightly check alerts "trust" (lab round 3, D10). Refreshed and read back; no occ
+    # call may follow it.
+    "$CHP_SITE" documents trust || { log "restore FAILED: the fapolicyd trust entry for /etc/nextcloud/config.php was not refreshed (run chp-site documents trust)"; exit 1; }
     log "restored from $o" ;;
   *) echo "usage: chp-nextcloud-backup [backup|restore DIR|keep-days]"; exit 2 ;;
 esac

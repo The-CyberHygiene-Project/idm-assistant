@@ -33,6 +33,9 @@ class Run:
         self.pg_role = self.pg_db = False
         self.rich, self.sebool, self.mta, self.pkgs = set(), False, mta, set()
         self.pgver, self.fail_restart, self.wazuh_active = "16.13", None, True
+        # fapolicyd: the n-th restarts (1-based) in fapo_dies leave the daemon dead ~1 s later ("recvmesg failed",
+        # lab round 3 D6); a dead daemon answers no --check-status counter; no_counter: alive but no counter line
+        self.fapo_dies, self.fapo_restarts, self.no_counter, self.fsmark_rc = set(), 0, False, 0
 
     def __call__(self, argv, **kw):
         argv = list(argv)
@@ -96,17 +99,28 @@ class Run:
             t.write_text("\n".join(lines + [f"{argv[3]} {len(b)} {hashlib.sha256(b).hexdigest()}"]) + "\n")
             return R()
         if argv[:2] == ["fapolicyd-cli", "--check-status"]:
+            if self.fapo_dead() or self.no_counter:
+                return R(1, "", "")
             return R(0, "Allowed accesses: 100\nDenied accesses: 0\n")
         if argv[:2] == ["systemctl", "is-active"]:
             if argv[-1] == "wazuh-manager" and not self.wazuh_active:
                 return R(3, "inactive\n")
+            if argv[-1] == "fapolicyd" and self.fapo_dead():
+                return R(3, "failed\n")
             return R(0, "active\n")
+        if argv == ["systemctl", "restart", "fapolicyd"]:
+            self.fapo_restarts += 1
+        if argv == ["/usr/libexec/chp/fapolicyd-fsmark", "--verify"]:
+            return R(self.fsmark_rc, "", "chp-fapolicyd-fsmark: fapolicyd is NOT active after a restart" if self.fsmark_rc else "")
         if argv[:2] == ["systemctl", "restart"] and self.fail_restart and self.fail_restart in argv:
             if kw.get("check"):
                 import subprocess
                 raise subprocess.CalledProcessError(1, argv)
             return R(1)
         return R()
+
+    def fapo_dead(self):
+        return self.fapo_restarts in self.fapo_dies
 
 
 DEFAULT_APPS = {"files", "dav", "viewer", "files_pdfviewer", "text", "firstrunwizard", "recommendations", "dashboard",
@@ -286,12 +300,13 @@ class Env:
         self.stick = tmp_path / "stick"
         self.stick.mkdir()
         self.pending = tmp_path / "pending"
+        self.sleeps = []
 
     def enable(self, host=SRV, site=None, data_is_mount=True, stick="default"):
         return D.enable(host, dict(site or SITE), HS, run=self.run, occ=self.nc, kanidm=self.k, root=self.root,
                         record=lambda *a, **k: self.records.append((a, k)), data_is_mount=data_is_mount,
                         stick=self.stick if stick == "default" else stick, pending=self.pending,
-                        chown=lambda *a: None, now=lambda: "20261113T120000Z")
+                        chown=lambda *a: None, now=lambda: "20261113T120000Z", sleep=self.sleeps.append)
 
 
 def occ_names(nc, name):
@@ -362,7 +377,7 @@ def test_enable_order(tmp_path):
     e2.k = Kanidm("idm_admin", run=rec("k", k0))
     D.enable(SRV, dict(SITE), HS, run=rec("run", run0), occ=rec("occ", occ0), kanidm=e2.k, root=e2.root,
              record=lambda *a, **k: tl.append(("rec", [a[0], a[1].get("step", "")])), data_is_mount=True,
-             stick=e2.stick, pending=e2.pending, chown=lambda *a: None, now=lambda: "20261113T120000Z")
+             stick=e2.stick, pending=e2.pending, chown=lambda *a: None, now=lambda: "20261113T120000Z", sleep=lambda s: None)
     hosts_txt = (e2.root / "etc/hosts").read_text()
     assert FQDN in hosts_txt and "idm.iso2.lab.test" in hosts_txt
     i = lambda pred, what: _index(tl, pred, what)
@@ -862,7 +877,7 @@ def test_config_php_trust_refreshed_after_the_last_write(tmp_path):
         tl.append(["OCC", *argv])
         return nc(argv, env)
     D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
-             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x")
+             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x", sleep=lambda s: None)
     u = _index(tl, lambda c: c[:3] == ["fapolicyd-cli", "--file", "update"], "trust update")
     assert tl[u + 1] == ["fapolicyd-cli", "--update"]
     assert _index(tl, lambda c: c == ["systemctl", "restart", "fapolicyd"], "restart") > u
@@ -1838,7 +1853,7 @@ def test_d3_config_php_and_its_trust_entry_exist_before_the_first_occ_call(tmp_p
         return nc(argv, env)
     D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
              data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda p: owners.append(p.name),
-             now=lambda: "x")
+             now=lambda: "x", sleep=lambda s: None)
     first = _index(tl, lambda c: c[:1] == ["OCC"], "first occ call")
     assert tl[first] == ["OCC", "status", "--output=json"]
     add = _index(tl, lambda c: c[:3] == ["fapolicyd-cli", "--file", "add"], "trust add")
@@ -1898,7 +1913,7 @@ def test_d3_existing_config_php_is_never_overwritten(tmp_path):
         seen.append(cfg.read_text())
         return e.nc(argv, env)
     D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
-             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x")
+             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x", sleep=lambda s: None)
     assert seen[0] == orig                                      # what NextCloud (or a failed install) left is kept
     assert ["restorecon", D.CONFIG_PHP] not in e.run.calls
 
@@ -1928,3 +1943,131 @@ def test_d5_kanidm_group_get_missing_is_none_not_an_error(tmp_path):
     e.enable()
     assert [c[:3] for c in e.kcli.calls if c[:2] == ["group", "create"]] == [["group", "create", "cui-users"],
                                                                             ["group", "create", "doc-reviewers"]]
+
+
+# ---- Task 9d: D6 (fapolicyd can die ~1 s after enable's restart), the AIDE note, D10 (documents trust) ----
+def _fapo_restarts(calls):
+    return [i for i, c in enumerate(calls) if c == ["systemctl", "restart", "fapolicyd"]]
+
+
+def test_d6_restart_is_verified_by_several_samples_and_fsmark_verify(tmp_path):
+    e = Env(tmp_path)
+    done = e.enable()
+    r = _fapo_restarts(e.run.calls)
+    assert len(r) == 1
+    after = e.run.calls[r[0]:]
+    assert [c for c in after if c == ["systemctl", "is-active", "fapolicyd"]] == [["systemctl", "is-active", "fapolicyd"]] * 3
+    assert sum(e.sleeps) >= 5                                             # ~5 s: the crash comes ~1 s after start
+    v = _index(after, lambda c: c == ["/usr/libexec/chp/fapolicyd-fsmark", "--verify"], "fsmark --verify")
+    assert v > _index(after, lambda c: c[:2] == ["fapolicyd-cli", "--check-status"], "status")
+    assert any("Denied accesses: 0" in d for d in done) and not any("unknown" in d for d in done)
+
+
+def test_d6_daemon_dead_after_restart_is_restarted_once_more(tmp_path):
+    e = Env(tmp_path)
+    e.run.fapo_dies = {1}
+    done = e.enable()
+    assert len(_fapo_restarts(e.run.calls)) == 2
+    assert any("restarted again" in d and "Denied accesses: 0" in d for d in done)
+    assert "fapolicyd" not in D._restart_marks(e.root)
+    assert D._kv(e.root / "etc/chp/documents.conf")["ENABLED"] == "yes"
+
+
+def test_d6_daemon_dead_twice_fails_loudly_and_keeps_the_mark(tmp_path):
+    e = Env(tmp_path)
+    e.run.fapo_dies = {1, 2}
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    m = str(x.value)
+    assert "fapolicyd is NOT running" in m and "check 80" in m and "POA&M" in m and "recvmesg" in m
+    assert "unknown" not in m
+    assert len(_fapo_restarts(e.run.calls)) == 2
+    assert "fapolicyd" in D._restart_marks(e.root)                       # the next run restarts it again
+    assert D._kv(e.root / "etc/chp/documents.conf").get("ENABLED") != "yes"
+    e.run.fapo_dies = set()
+    e.enable()                                                            # a re-run recovers
+    assert "fapolicyd" not in D._restart_marks(e.root)
+
+
+def test_d6_no_denied_counter_is_never_success(tmp_path):
+    e = Env(tmp_path)
+    e.run.no_counter = True
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    assert "Denied accesses" in str(x.value) and "fapolicyd is NOT running" not in str(x.value)
+    assert D._kv(e.root / "etc/chp/documents.conf").get("ENABLED") != "yes"
+
+
+def test_d6_fsmark_verify_failure_fails_the_run(tmp_path):
+    e = Env(tmp_path)
+    e.run.fsmark_rc = 1
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    assert "fapolicyd-fsmark --verify" in str(x.value) and "NOT active" in str(x.value)
+    assert D._kv(e.root / "etc/chp/documents.conf").get("ENABLED") != "yes"
+
+
+def test_d6_systemctl_restart_failure_is_retried_once(tmp_path):
+    e = Env(tmp_path)
+    e.run.fail_restart = "fapolicyd"
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    assert "fapolicyd is NOT running" in str(x.value)
+    assert len(_fapo_restarts(e.run.calls)) == 2
+
+
+def test_aide_note_only_when_this_run_changed_something(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    e.records.clear()
+    done = e.enable()                                                     # nothing changed
+    assert not any("aide-accept" in d for d in done)
+    assert any(a[1].get("aide_refresh") == "none" for a, _ in e.records)
+    (e.root / "etc/hosts").write_text("127.0.0.1 localhost\n")            # drift: enable puts /etc/hosts back
+    done = e.enable()
+    assert any("aide-accept" in d and "/etc/hosts" in d for d in done)
+
+
+def test_d10_documents_trust_refreshes_a_stale_entry_and_verifies(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    cfg = e.root / "etc/nextcloud/config.php"
+    cfg.write_text(cfg.read_text() + "  'data-fingerprint' => 'x',\n")    # what restore's data-fingerprint does
+    tf = e.root / "etc/fapolicyd/trust.d/nextcloud"
+    assert D._trust_entry(tf, D.CONFIG_PHP) != D._size_sha(cfg)
+    n = len(e.run.calls)
+    out = D.trust(e.root, e.run)
+    assert D._trust_entry(tf, D.CONFIG_PHP) == D._size_sha(cfg)
+    assert out[0].startswith("OK") and "refreshed" in out[0]
+    assert e.run.calls[n:] == [["fapolicyd-cli", "--file", "update", D.CONFIG_PHP, "--trust-file", "nextcloud"],
+                               ["fapolicyd-cli", "--update"]]               # no restart, nothing marked
+    assert "fapolicyd" not in D._restart_marks(e.root)
+    assert D.trust(e.root, e.run)[0].startswith("OK") and len(e.run.calls) == n + 2      # already equal: no call
+
+
+def test_d10_documents_trust_fails_when_the_entry_still_differs(tmp_path):
+    e = Env(tmp_path)
+    e.enable()
+    cfg = e.root / "etc/nextcloud/config.php"
+    cfg.write_text("changed\n")
+
+    class NoUpdate(Run):
+        def __call__(self, argv, **kw):
+            if argv[:2] == ["fapolicyd-cli", "--file"]:
+                self.calls.append(list(argv))
+                return R()                                                # "succeeds" but writes nothing
+            return super().__call__(argv, **kw)
+    with pytest.raises(SiteError) as x:
+        D.trust(e.root, NoUpdate(e.root))
+    assert "still does not match" in str(x.value)
+
+
+def test_d10_documents_trust_when_not_enabled(tmp_path):
+    r = make_root(tmp_path)
+    assert D.trust(r, Run(r))[0].startswith("OK documents: not enabled")
+
+
+def test_cli_documents_trust(monkeypatch, capsys):
+    from chp_site import cli
+    monkeypatch.setattr(D, "trust", lambda root, run: ["OK fapolicyd trust entry for x refreshed"])
+    assert cli.main(["documents", "trust"]) == 0 and "trust entry for x refreshed" in capsys.readouterr().out

@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -34,8 +34,8 @@ Source24:       LICENSE
 Source25:       chp-documents-check.service
 Source26:       chp-documents-check.timer
 Source27:       81-documents-tags.sh
-Requires:       nextcloud-chp, chp-base, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0
+Requires:       nextcloud-chp >= 35.0.3-5, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-4
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -140,6 +140,16 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/documents
 
 %changelog
+* Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-6.chp
+- nextcloud-cron.service (lab round 3, D11): ExecStartPre=+/usr/sbin/nft ... runs as root (as apache it failed, "you
+  must be root", and no background job ever ran); the job itself still runs as apache.
+- Check 77 also alerts when the last nextcloud-cron.service run failed, and when NextCloud's core/lastcron (written by
+  cron.php after each run) is older than 30 min, or absent 30 min after enable.
+- chp-nextcloud-backup restore (D10): runs chp-site documents trust after occ maintenance:data-fingerprint (which
+  rewrites config.php), so config.php's fapolicyd trust entry matches again; restore fails if it does not.
+- README: restart verification (D6), background-job check, SSP/POA&M notes (OIDC code in the audit log url,
+  fapolicyd 1.4.3-3 exit). Requires chp-site >= 0.14.0-4, chp-base >= 0.1.0-12, nextcloud-chp >= 35.0.3-5.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-5.chp
 - chp-nextcloud-backup: only directories named as UTC stamps are copies or partials (nothing else under
   /backup/nextcloud is touched); a lock that cannot be opened records FAILED (check 77 alerts)

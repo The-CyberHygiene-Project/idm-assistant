@@ -66,7 +66,7 @@ def test_rules_file_ships_empty_of_rules():
 
 def test_spec_ships_mechanism_check_80_and_bumps_release():
     s = (B / "chp-base.spec").read_text()
-    assert "Release:        11.chp" in s
+    assert "Release:        12.chp" in s
     for needle in ("80-fapolicyd.sh", "%{_libexecdir}/chp/fapolicyd-fsmark", "%config(noreplace) %{_sysconfdir}/chp/fapolicyd-fsmark.conf",
                    "%config(noreplace) %{_sysconfdir}/fapolicyd/rules.d/66-chp-fsmark.rules", "%posttrans"):
         assert needle in s
@@ -197,7 +197,8 @@ def test_values_tested_separately_and_temp_file_trapped():
 
 
 # ---------- Task 9b (D2): fapolicyd 1.4.3-3 exits with allow_filesystem_mark = 1; the helper must notice and roll back ----------
-def crashy(tmp_path, flag, conf=CONF, args=(), mode="crash", failed=None, state="active", rpmq="fapolicyd-1.4.3-3.el9.x86_64"):
+def crashy(tmp_path, flag, conf=CONF, args=(), mode="crash", failed=None, state="active", rpmq="fapolicyd-1.4.3-3.el9.x86_64",
+           die_after=None):
     """A fake systemctl whose fapolicyd dies after a restart while the conf says allow_filesystem_mark = 1 (as the lab
     saw on fapolicyd 1.4.3-3.el9); mode "dead": it never comes back at all; "ok": it always comes back."""
     (tmp_path / "flag").write_text(f"FSMARK={flag}\n")
@@ -209,7 +210,9 @@ def crashy(tmp_path, flag, conf=CONF, args=(), mode="crash", failed=None, state=
     (b / "systemctl").write_text(f"""#!/bin/bash
 echo "$*" >> {tmp_path}/calls
 case "$1" in
-  is-active) [ "$(cat {st})" = active ] ;;
+  is-active) n=$(grep -c '^is-active' {tmp_path}/calls)
+     {"" if die_after is None else f'[ "$n" -gt {die_after} ] && [ ! -f {tmp_path}/died ] && {{ touch {tmp_path}/died; echo failed > {st}; }}'}
+     [ "$(cat {st})" = active ] ;;
   restart) {restart} ;;
 esac
 """)
@@ -278,7 +281,40 @@ def test_verify_when_active_changes_nothing(tmp_path):
 def test_verify_never_reverts_an_admin_setting(tmp_path):
     adm = CONF.replace("mark = 0", "mark = 1")
     r, conf, calls, journal, failed, _ = crashy(tmp_path, 0, conf=adm, args=("--verify",), state="failed")
-    assert r.returncode != 0 and conf == adm and "restart" not in calls and "not ours" in failed
+    # restarted once more (Task 9d, D6), never reverted; still dead -> recorded, non-zero
+    assert r.returncode != 0 and conf == adm and calls.count("restart fapolicyd") == 1 and "not ours" in failed
+    assert "STILL NOT ACTIVE" in failed
+
+
+# ---------- Task 9d (D6): the "recvmesg failed" exit also happens at allow_filesystem_mark = 0 ----------
+def test_verify_samples_several_times_over_the_settle_time(tmp_path):
+    r, conf, calls, journal, failed, _ = crashy(tmp_path, 0, args=("--verify",), mode="ok")
+    assert r.returncode == 0 and calls.count("is-active") == 3 and "restart" not in calls
+
+
+def test_verify_sees_a_daemon_that_dies_after_the_first_sample(tmp_path):
+    # active at the first sample, dead at the second (the crash comes ~1 s after start), comes back after a restart
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 0, args=("--verify",), mode="ok", die_after=1)
+    assert r.returncode == 0 and calls.count("restart fapolicyd") == 1 and state == "active"
+    assert "restarted again" in journal and failed == ""
+
+
+def test_crash_at_fsmark_zero_is_restarted_once_more_not_reverted(tmp_path):
+    # no marker of ours (FSMARK=0): a dead daemon after a restart is restarted once more; back -> exit 0, no record
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 0, args=("--verify",), mode="ok", state="failed")
+    assert r.returncode == 0 and conf == CONF and calls.count("restart fapolicyd") == 1 and state == "active"
+    assert "restarted again" in journal and "-p daemon.warning" in journal and failed == ""
+
+
+def test_crash_at_fsmark_zero_twice_is_recorded_and_nonzero(tmp_path):
+    r, conf, calls, journal, failed, state = crashy(tmp_path, 0, args=("--verify",), mode="dead", state="failed")
+    assert r.returncode != 0 and conf == CONF and calls.count("restart fapolicyd") == 1
+    assert "STILL NOT ACTIVE" in failed and "STILL NOT ACTIVE" in journal and "-p daemon.crit" in journal
+
+
+def test_docs_say_the_crash_is_also_seen_at_fsmark_zero():
+    for t in (S.read_text(), (B / "README.md").read_text()):
+        assert "allow_filesystem_mark = 0 too" in t and "28-fapolicyd-failed-after-enable.log" in t
 
 
 def test_header_and_readme_warn_against_fsmark_on_fapolicyd_1_4_3():

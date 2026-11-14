@@ -20,7 +20,7 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
 # chp_foldertag: Apache-2.0 (this repository's licence)
@@ -113,6 +113,15 @@ fi
 %dir %attr(0750,apache,apache) %{_localstatedir}/log/nextcloud
 
 %changelog
+* Sat Nov 14 2026 The CyberHygiene Project - 35.0.3-5.chp
+- chp_foldertag 1.0.0 (lab round 3, D7): FolderGuardListener's decision is refusal(), also asked by DavGuardListener
+  in Sabre's beforeMove, so a refused rename/move is WebDAV 403 with nothing moved (a rename in the same parent was a
+  generic 500 "Failed to rename"); the BeforeNodeRenamedEvent hook still refuses (fail closed) what the DAV check
+  cannot resolve.
+- chp_foldertag 1.0.0 (D8): no subtree walk when nothing below the target can get a tag (no rule for its folder, no
+  copy source), e.g. a user's first sign-in creating /<user>/files: no more false chp.tag.failed (rule 100613, level
+  12) for the team-folder mounts below it. Targets in ruled folders, and copies, are walked as before.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 35.0.3-4.chp
 - chp_foldertag 1.0.0: a copy's source file is found jail-independently (from the source id down the path by
   parent + name); a source file that cannot be found writes chp.tag.failed instead of silently dropping its tags

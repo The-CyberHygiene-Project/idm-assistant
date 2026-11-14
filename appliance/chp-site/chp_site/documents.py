@@ -33,6 +33,11 @@ MIN_CONFIG = "<?php\n$CONFIG = array (\n);\n"
 SITE_ROOT_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
 CERT = "etc/pki/nextcloud/chain.pem"
 FSMARK_PENDING = "var/lib/chp/fapolicyd-restart-pending"
+FSMARK_HELPER = "/usr/libexec/chp/fapolicyd-fsmark"      # chp-base: its --verify is the allow_filesystem_mark safety net
+# After enable restarts fapolicyd: seconds to wait before each `systemctl is-active` (about 5 s in all). fapolicyd
+# 1.4.3-3 can exit about one second after a restart ("recvmesg failed"), seen in 3 of about 18 restarts on the lab with
+# allow_filesystem_mark = 0 too (Plan 2 round 3, D6), so one early check is not enough.
+FAPOLICYD_SAMPLES = (1, 2, 2)
 MARK = "var/lib/chp/documents/restart-pending"           # units still to restart (a failed run leaves them here)
 PORT = 8443
 ADMIN = "ncadmin"
@@ -202,7 +207,7 @@ def _refuse(host, site, hosts, root, data_is_mount):
 
 
 def enable(host, site, hosts, *, run, occ, kanidm, root=Path("/"), record=None, stick=None,
-           pending=Path("/root/chp-escrow-pending"), data_is_mount=None, chown=None, now=None, secret=None):
+           pending=Path("/root/chp-escrow-pending"), data_is_mount=None, chown=None, now=None, secret=None, sleep=None):
     """Returns the list of steps done. `stick`: the site stick (the break-glass secret is escrowed there at once);
     None leaves it in the pending folder for export-client (monitor 40 warns until then)."""
     from . import audit
@@ -214,7 +219,7 @@ def enable(host, site, hosts, *, run, occ, kanidm, root=Path("/"), record=None, 
         return _enable(me, site, hosts, run=run, occ=_Occ(occ), k=kanidm, root=Path(root), record=record, stick=stick,
                        pending=Path(pending), chown=chown, now=now or (lambda: time.strftime("%Y%m%dT%H%M%SZ",
                                                                                             time.gmtime())),
-                       secret=secret)
+                       secret=secret, sleep=sleep or time.sleep)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
         raise SiteError(f"{cmd} failed (exit {e.returncode}); see its log, fix the cause, then re-run "
@@ -315,16 +320,18 @@ def _trust_entry(trust_file, target):
 # recorded size+sha256 is stale for the rest of the run. That is harmless ONLY because CHP's fapolicyd runs with
 # `integrity = none` (path trust: the entry's size/hash are not checked). With integrity = size or sha256, php would be
 # denied config.php after the first write; enable would then need a sync after every write.
-def _trust_sync(run, root, tf, cfg):
+def _trust_sync(run, root, tf, cfg, mark=True):
     """Make fapolicyd's trust entry for config.php equal the file as it is now ("<path> <size> <sha256>"): added when
     there is none, updated when it differs (stale, malformed or duplicated). Stateless: the entry is compared with
     the file itself, so a failed run, or NextCloud rewriting config.php between runs, is caught by the next call.
-    Returns "add", "update" or None (already equal)."""
+    Returns "add", "update" or None (already equal). `mark`: also mark fapolicyd for enable's restart (enable);
+    `fapolicyd-cli --update` alone makes the running daemon reload the entry (documents trust, no restart)."""
     lines = _trust_lines(tf, CONFIG_PHP)
     if lines and _trust_entry(tf, CONFIG_PHP) == _size_sha(cfg):
         return None
     op = "update" if lines else "add"
-    _mark(root, ["fapolicyd"])
+    if mark:
+        _mark(root, ["fapolicyd"])
     run(["fapolicyd-cli", "--file", op, CONFIG_PHP, "--trust-file", "nextcloud"], check=True)
     run(["fapolicyd-cli", "--update"], check=True)
     return op
@@ -345,6 +352,56 @@ def _restart(run, root, units, extra=()):
         run(["systemctl", "restart", *todo], check=True)
         _unmark(root, todo)
     return todo
+
+
+def _fapolicyd_alive(run, sleep):
+    """fapolicyd still active at every sample (FAPOLICYD_SAMPLES, ~5 s): one early check misses the D6 crash."""
+    for wait in FAPOLICYD_SAMPLES:
+        sleep(wait)
+        if _out(run, ["systemctl", "is-active", "fapolicyd"]).strip() != "active":
+            return False
+    return True
+
+
+def _denied(run):
+    """fapolicyd-cli --check-status's "Denied accesses: N" counter, or None (no answer: the daemon is not serving)."""
+    m = re.search(r"^\s*Denied accesses:\s*(\d+)\s*$", _out(run, ["fapolicyd-cli", "--check-status"]), re.M)
+    return m.group(1) if m else None
+
+
+def _fapolicyd_restart(run, sleep):
+    """Restart fapolicyd and PROVE it runs (lab round 3, D6): active at every sample, then a parsed denial counter,
+    then chp-base's `fapolicyd-fsmark --verify` (its allow_filesystem_mark safety net). A daemon found dead is
+    restarted once more; dead again (or no counter) fails the run loudly, never a quiet "Denied: unknown".
+    Returns (restarts, denied counter)."""
+    why = []
+    for n in (1, 2):
+        r = run(["systemctl", "restart", "fapolicyd"], capture_output=True, text=True)
+        if r.returncode != 0:
+            why.append(f"restart {n}: systemctl restart fapolicyd exited {r.returncode}")
+            continue
+        if not _fapolicyd_alive(run, sleep):
+            why.append(f"restart {n}: fapolicyd was not active within {sum(FAPOLICYD_SAMPLES)} s of the restart")
+            continue
+        denied = _denied(run)
+        if denied is None:
+            why.append(f"restart {n}: fapolicyd is active but fapolicyd-cli --check-status printed no "
+                       "'Denied accesses' counter")
+            continue
+        v = run([FSMARK_HELPER, "--verify"], capture_output=True, text=True)
+        if v.returncode != 0:
+            raise SiteError(f"{FSMARK_HELPER} --verify failed after the fapolicyd restart (exit {v.returncode}): "
+                            + _clean(v.stderr or v.stdout or "", 300)
+                            + "; see /var/lib/chp/fapolicyd-fsmark-failed and monitor check 80, then re-run chp-site "
+                            "documents enable")
+        return n, denied
+    dead = any("not active" in w_ or "exited" in w_ for w_ in why)
+    head = ("fapolicyd is NOT running after enable restarted it (twice): nothing checks file execution on this "
+            "server (fail-open)" if dead else "fapolicyd did not answer after enable restarted it (twice)")
+    raise SiteError(head + " (" + "; ".join(why) + "). Known: fapolicyd 1.4.3-3 can exit about 1 s after a restart "
+                    "(\"recvmesg failed\"; POA&M item, see journalctl -u fapolicyd). Monitor check 80 alerts until it "
+                    "runs. Start it (systemctl restart fapolicyd; systemctl is-active fapolicyd; fapolicyd-cli "
+                    "--check-status), then re-run chp-site documents enable")
 
 
 def _mta_check(run):
@@ -414,12 +471,32 @@ def _exact_controlled(occ, ids):
             raise SiteError(f"team folder {n} still gives cui-users the share permission; share must be off")
 
 
-def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown, now, secret):
+def _aide_files(d):
+    """The files enable writes that AIDE watches (the AIDE note names the ones a run changed)."""
+    return ["/etc/hosts", f"/var/named/{d}.zone", "/" + LAN_INC, "/" + EGRESS_ADDR, "/" + CONF,
+            f"/{PGDATA}/postgresql.conf", f"/{PGDATA}/pg_hba.conf", CONFIG_PHP, "/etc/fapolicyd/trust.d/nextcloud",
+            OIDC_SECRET, "/" + CERT, "/etc/pki/nextcloud/key.pem", "/var/ossec/etc/ossec.conf",
+            f"/var/ossec/etc/rules/{w.NC_RULES_FILE}"]
+
+
+def _snapshot(root, files):
+    def one(rel):
+        p = _p(root, rel)
+        try:
+            return _size_sha(p), (p.stat().st_mode & 0o7777) if p.exists() else None
+        except OSError as e:
+            raise SiteError(f"could not read {p} ({e.strerror or e})") from None
+    return {f: one(f) for f in files}
+
+
+def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown, now, secret, sleep):
     host = me.hostname
     fqdn, d = dr.fqdn(site), site["DOMAIN"]
     sip, cidr = server_of(hosts).ip, str(site["SUBNET"])
     origin = f"https://{fqdn}:{PORT}"
     done = []
+    aide_before = _snapshot(root, _aide_files(d))   # the AIDE note only when this run changed something
+    acts = []                                       # changes outside those files (packages, SELinux, firewall)
 
     def step(name, text, **fields):
         done.append(text)
@@ -433,6 +510,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         capture_output=True, text=True)
     if not all(_ok(run, ["rpm", "-q", p]) for p in PACKAGES):
         _mark(root, ["fapolicyd"])
+        acts.append("packages installed")
         run(["dnf", "-y", "--enablerepo=chp", "install", *PACKAGES], check=True)
     pgv = _out(run, ["rpm", "-q", "--qf", "%{VERSION}", "postgresql-server"]).strip()
     if pgv.split(".")[0] != "16":
@@ -578,6 +656,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
 
     # 11. NextCloud -> Kanidm: SELinux relay (the egress table limits where), the site CA, the provider
     if "--> on" not in _out(run, ["getsebool", "httpd_can_network_relay"]):
+        acts.append("SELinux boolean httpd_can_network_relay")
         run(["setsebool", "-P", "httpd_can_network_relay", "on"], check=True)
     if "chp-root.crt" not in occ("security:certificates")[1]:
         occ("security:certificates:import", SITE_ROOT_CA)
@@ -633,6 +712,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     # 14. web: LAN-only firewall, certificate, services
     rich = f'rule family="ipv4" source address="{cidr}" port port="{PORT}" protocol="tcp" accept'
     if rich not in _out(run, ["firewall-cmd", "--permanent", "--list-rich-rules"]).splitlines():
+        acts.append("firewalld rule")
         run(["firewall-cmd", "-q", "--permanent", "--add-rich-rule", rich], check=True)
         run(["firewall-cmd", "-q", "--reload"], check=True)
     if not _p(root, CERT).exists():
@@ -650,13 +730,16 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         step("trust", f"fapolicyd trust entry for {CONFIG_PHP} refreshed (it did not match the file)")
 
     # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or
-    # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet
+    # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet. The restart is
+    # proven (D6): the mark stays until fapolicyd runs, so a failed run restarts it again next time.
     fsmark = _p(root, FSMARK_PENDING)
-    if _restart(run, root, ["fapolicyd"], extra=["fapolicyd"] if fsmark.exists() else []):
+    if "fapolicyd" in _restart_marks(root) or fsmark.exists():
+        n, denied = _fapolicyd_restart(run, sleep)
+        _unmark(root, ["fapolicyd"])
         fsmark.unlink(missing_ok=True)
-        denied = next((ln.strip() for ln in _out(run, ["fapolicyd-cli", "--check-status"]).splitlines()
-                       if ln.strip().startswith("Denied")), "Denied accesses: unknown")
-        step("fapolicyd", f"fapolicyd restarted (rule 65 loaded); {denied}")
+        again = " (it was not running after the first restart: restarted again)" if n > 1 else ""
+        step("fapolicyd", f"fapolicyd restarted (rule 65 loaded){again}; active over {sum(FAPOLICYD_SAMPLES)} s; "
+                          f"Denied accesses: {denied}", restarts=n, denied=denied)
     else:
         step("fapolicyd", "fapolicyd: no restart needed")
 
@@ -671,8 +754,14 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
                            "chp-site export-client")
     _put(cp, conf_text(fqdn, sip, days, ids, "yes"), 0o644)
     step("enabled", "documents.conf ENABLED=yes")
-    step("aide", "AIDE: httpd, /etc/hosts and new units changed: refresh the baseline now with "
-                 "chp-site aide-accept --approver \"<ISSO>\" --reason \"documents enable\"", aide_refresh="needed")
+    after = _snapshot(root, _aide_files(d))
+    changed = [f for f in after if after[f] != aide_before[f]] + acts
+    if changed:
+        what = ", ".join(changed[:8]) + (f" and {len(changed) - 8} more" if len(changed) > 8 else "")
+        step("aide", f"AIDE: this run changed {what}: refresh the baseline now with chp-site aide-accept "
+                     "--approver \"<ISSO>\" --reason \"documents enable\"", aide_refresh="needed", changed=changed)
+    else:
+        step("aide", "AIDE: this run changed no watched file (no baseline refresh needed)", aide_refresh="none")
     return done
 
 
@@ -805,6 +894,31 @@ def _wazuh(root, run, chown):
         raise SiteError("the Wazuh rule check (wazuh-analysisd -t) fails on the installed rules (nothing was changed "
                         "by this run); the manager was not restarted: " + why)
     _restart(run, root, ["wazuh-manager"], extra=["wazuh-manager"])
+
+
+def trust(root, run):
+    """`chp-site documents trust` (root): make config.php's fapolicyd trust entry equal the file again and prove it.
+    For chp-nextcloud-backup restore (its occ maintenance:data-fingerprint rewrites config.php: lab round 3, D10) and
+    for an operator who has checked an out-of-band config.php change that the nightly check reported ("trust").
+    `fapolicyd-cli --update` makes the running daemon reload the entry: no fapolicyd restart."""
+    root = Path(root)
+    if not _kv(_p(root, CONF)):
+        return ["OK documents: not enabled on this host (no trust entry to keep)"]
+    cfg, tf = _p(root, CONFIG_PHP), _p(root, "etc/fapolicyd/trust.d/nextcloud")
+    if not cfg.exists():
+        raise SiteError(f"{CONFIG_PHP} is missing: restore it (or re-run chp-site documents enable) first")
+    try:
+        op = _trust_sync(run, root, tf, cfg, mark=False)
+    except subprocess.CalledProcessError as e:
+        cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
+        raise SiteError(f"{cmd} failed (exit {e.returncode}): the fapolicyd trust entry for {CONFIG_PHP} was not "
+                        "refreshed") from None
+    entry, have = _trust_entry(tf, CONFIG_PHP), _size_sha(cfg)
+    if entry != have:
+        raise SiteError(f"the fapolicyd trust entry for {CONFIG_PHP} still does not match the file after "
+                        f"fapolicyd-cli --file {op or 'update'} (entry {entry}, file {have}); check {tf}")
+    state = f"refreshed (fapolicyd-cli --file {op}, --update)" if op else "already matched the file"
+    return [f"OK fapolicyd trust entry for {CONFIG_PHP} {state}: size {have[0]}, sha256 {have[1]}"]
 
 
 def status(root, run):

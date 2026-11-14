@@ -46,7 +46,7 @@ def test_bindsto_dropins_for_phpfpm_and_httpd():
     assert "/etc/systemd/system/php-fpm.service.d/chp-egress.conf" in SPEC
     assert "/etc/systemd/system/httpd.service.d/chp-egress.conf" in SPEC
     cron = t("nextcloud-cron.service")
-    assert "BindsTo=chp-nextcloud-egress.service" in cron and "ExecStartPre=/usr/sbin/nft list table" in cron
+    assert "BindsTo=chp-nextcloud-egress.service" in cron and "ExecStartPre=+/usr/sbin/nft list table" in cron
 
 
 def test_httpd_listens_on_8443_only_and_fails_closed():
@@ -111,7 +111,7 @@ def test_no_file_references_the_internet():
 def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        5.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        6.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
@@ -121,7 +121,7 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
     assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
     assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
-    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        5.chp" in SPEC
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        6.chp" in SPEC
     assert "UMask=0077" in t("chp-nextcloud-backup.service")
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
@@ -243,4 +243,28 @@ def test_nightly_check_timer_and_service():
         assert "%{_unitdir}/" + u in SPEC
     assert "%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer " \
            "chp-nextcloud-cert-renew.timer chp-documents-check.timer" in SPEC
-    assert re.search(r"^Requires:.*\bchp-site >= 0\.14\.0\b", SPEC, re.M)
+    assert re.search(r"^Requires:.*\bchp-site >= 0\.14\.0-4\b", SPEC, re.M)
+    # Task 9d: documents trust (restore), the proven fapolicyd restart, the D7/D8 app fixes
+    assert re.search(r"^Requires:.*\bchp-base >= 0\.1\.0-12\b", SPEC, re.M)
+    assert re.search(r"^Requires:.*\bnextcloud-chp >= 35\.0\.3-5\b", SPEC, re.M)
+
+
+# ---- Task 9d: D11 (the cron unit's nft check ran as apache) and D10 (restore refreshes config.php's trust entry) ----
+def test_d11_cron_unit_runs_the_egress_check_as_root_and_the_job_as_apache():
+    cron = t("nextcloud-cron.service")
+    assert re.search(r"^User=apache$", cron, re.M)
+    pre = re.findall(r"^ExecStartPre=(.*)$", cron, re.M)
+    assert pre == ["+/usr/sbin/nft list table inet chp_nextcloud_egress"]      # "+": this line as root (nft needs it)
+    assert re.findall(r"^ExecStart=(.*)$", cron, re.M) == ["/usr/bin/php -d apc.enable_cli=1 -f /usr/lib/nextcloud/cron.php"]
+
+
+def test_d10_restore_refreshes_the_config_php_trust_entry_after_its_last_occ_call():
+    b = t("chp-nextcloud-backup")
+    r = b[b.index("  restore)"):b.index("  *) echo")]
+    fp = r.index("occ maintenance:data-fingerprint")
+    tr = r.index('"$CHP_SITE" documents trust')
+    assert fp < tr and "occ " not in r[tr:]                                  # nothing rewrites config.php after it
+    assert "CHP_SITE=${CHP_SITE:-/usr/bin/chp-site}" in b
+    assert "restore FAILED" in r[tr:]                                         # loud, non-zero
+    readme = t("README.md")
+    assert "chp-site documents trust" in readme

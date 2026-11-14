@@ -17,10 +17,16 @@ EXPECTED = ('table inet chp_nextcloud_egress {\n\tchain apache_out {\n\t\tip dad
 
 
 def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0), addr=ADDR, cert=None,
-        now=NOW, backup_status=None, result=None):
-    """One monitor run in its own state under tmp (state persists across calls with the same tmp)."""
+        now=NOW, backup_status=None, result=None, cron_result="success", lastcron="default", conf_age=DAY):
+    """One monitor run in its own state under tmp (state persists across calls with the same tmp). cron_result: the
+    last nextcloud-cron.service run (systemctl show -p Result); lastcron: NextCloud's core/lastcron (None = no row,
+    "ERR" = the query fails); conf_age: seconds since documents.conf last changed."""
     b = tmp / "bin"; b.mkdir(exist_ok=True)
-    (b / "systemctl").write_text("#!/bin/bash\n" + f'case " {active} " in *" $3 "*) exit 0;; esac\nexit 3\n')
+    (b / "systemctl").write_text("#!/bin/bash\n" + f'if [ "$1" = show ]; then echo "{cron_result}"; exit 0; fi\n'
+                                 + f'case " {active} " in *" $3 "*) exit 0;; esac\nexit 3\n')
+    lc = str(now - 300) if lastcron == "default" else lastcron
+    (b / "runuser").write_text("#!/bin/bash\n" + ("echo 'psql: error' >&2; exit 2\n" if lc == "ERR" else
+                                                  f"echo '{lc}'\n" if lc is not None else "exit 0\n"))
     (b / "nft").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{live}EOF\n" if live is not None else "exit 1\n"))
     # the fake unshare stands for "build the expected table from the files in a throwaway netns"
     if expected is not None and expected.startswith("ERR:"):
@@ -35,6 +41,7 @@ def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0
     c = tmp / "documents.conf"
     if conf is not None:
         c.write_text(conf)
+        os.utime(c, (now - conf_age, now - conf_age))
     a = tmp / "addr.nft"
     if addr is not None:
         a.write_text(addr)
@@ -214,3 +221,37 @@ def test_81_text_from_the_result_is_cleaned(tmp_path):
     out = run(tmp_path, T81, result=res([("untagged:9", "evil\x1b[31m\nALERT forged")]))
     assert "\x1b" not in out and not any(x.startswith("ALERT forged") for x in out.splitlines())
     assert len([x for x in out.splitlines() if x.startswith("ALERT")]) == 1
+
+
+# ---- Task 9d, D11: check 77 also sees background jobs that do not run (the timer alone said OK) ----
+def test_77_failed_cron_run_alerts(tmp_path):
+    out = run(tmp_path, "77-nextcloud-services.sh", cron_result="exit-code")
+    assert "ALERT NextCloud: the last nextcloud-cron.service run failed (exit-code)" in out
+
+
+def test_77_stale_or_missing_lastcron_alerts(tmp_path):
+    out = run(fresh(tmp_path, "stale"), "77-nextcloud-services.sh", lastcron=str(NOW - 3 * H))
+    assert "ALERT NextCloud: background jobs last ran 2027-01-15T05:00:00Z" in out and "cron.php" in out
+    out = run(fresh(tmp_path, "never"), "77-nextcloud-services.sh", lastcron="0")
+    assert "ALERT NextCloud: background jobs have never run" in out
+    out = run(fresh(tmp_path, "norow"), "77-nextcloud-services.sh", lastcron=None)
+    assert "ALERT NextCloud: background jobs have never run" in out
+
+
+def test_77_never_run_is_not_alerted_right_after_enable(tmp_path):
+    assert run(tmp_path, "77-nextcloud-services.sh", lastcron=None, conf_age=600).startswith("OK NextCloud services")
+
+
+def test_77_recent_lastcron_and_success_is_ok(tmp_path):
+    out = run(tmp_path, "77-nextcloud-services.sh", lastcron=str(NOW - 600))
+    assert out.startswith("OK NextCloud services") and "background jobs" in out
+
+
+def test_77_unreadable_lastcron_alerts(tmp_path):
+    out = run(tmp_path, "77-nextcloud-services.sh", lastcron="ERR")
+    assert "ALERT NextCloud: cannot read when background jobs last ran" in out
+
+
+def test_77_lastcron_not_checked_while_enable_has_not_finished(tmp_path):
+    out = run(tmp_path, "77-nextcloud-services.sh", conf=CONF.replace("ENABLED=yes", "ENABLED=no"), lastcron=None)
+    assert "ALERT" not in out

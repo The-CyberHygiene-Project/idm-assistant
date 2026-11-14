@@ -17,11 +17,15 @@
 # !! DO NOT USE FSMARK=1 WITH fapolicyd 1.4.3-3.el9 (Rocky 9.8). With allow_filesystem_mark = 1 that version exits about
 # !! one second after start ("recvmesg failed", status=1/FAILURE): fapolicyd is then DOWN and nothing checks file
 # !! execution (fail-open). Lab proof: lab/docs-proof/logs/13-fsmark-fapolicyd-failed.log (ISO 0.7.0 Plan 2 Task 9, D2).
-# Safety net (Task 9b): after every restart this script performs, it waits CHP_FSMARK_SETTLE seconds (default 5) and
-# checks that fapolicyd is still active. If not, it reverts OUR marked change (allow_filesystem_mark = 0, marker
-# removed), restarts fapolicyd again, logs at crit to the journal (logger -t chp-fapolicyd-fsmark), writes the status
-# file /var/lib/chp/fapolicyd-fsmark-failed (check 80 ALERTs while it exists) and exits non-zero. While that file
+# !! The same exit was later seen with allow_filesystem_mark = 0 too (3 of about 18 restarts on the lab, round 3, D6:
+# !! lab/docs-proof/logs/28-fapolicyd-failed-after-enable.log): it is intermittent in 1.4.3-3, not caused by the setting.
+# Safety net (Task 9b, 9d): after every restart this script performs, it checks that fapolicyd is still active at three
+# samples over CHP_FSMARK_SETTLE seconds (default 5). If not, it reverts OUR marked change (allow_filesystem_mark = 0,
+# marker removed), restarts fapolicyd again, logs at crit to the journal (logger -t chp-fapolicyd-fsmark), writes the
+# status file /var/lib/chp/fapolicyd-fsmark-failed (check 80 ALERTs while it exists) and exits non-zero. While that file
 # exists FSMARK=1 is refused (no crash loop on the next chp-base update). To clear it: set FSMARK=0 and run this script.
+# With no change of ours to revert, a dead fapolicyd is restarted once more (warning in the journal if it comes back;
+# recorded and non-zero if it does not).
 # A restart done LATER for a pending marker (chp-site documents enable, or the operator) must be followed by
 #   /usr/libexec/chp/fapolicyd-fsmark --verify
 # which runs the same check and the same rollback (no change is made when fapolicyd is active).
@@ -75,23 +79,39 @@ rewrite() {   # CONF without our marker/setting lines plus the given lines; chan
   rm -f "$tmp" 2>/dev/null
   [ "$changed" = 1 ] || echo "chp-fapolicyd-fsmark: could not write $conf; left unchanged" >&2
 }
-# After a restart (ours, or with --verify one done by someone else): fapolicyd must still be active after the settle time.
-# If not and the setting is OURS, revert it, restart again, record the failure and exit non-zero. A failure without our
-# marker is not ours to revert: it is still recorded and reported (check 80 alerts on the service state anyway).
+# fapolicyd active at three samples spread over CHP_FSMARK_SETTLE seconds (default 5: after 1, 3 and 5 s). The
+# "recvmesg failed" exit comes about one second after the start, so a single early check can miss it (Task 9d, D6).
+alive() {
+  local s=${CHP_FSMARK_SETTLE:-5} i
+  for i in 1 2 3; do
+    sleep "$(( s * i / 3 - s * (i - 1) / 3 ))"
+    systemctl is-active --quiet fapolicyd 2>/dev/null || return 1
+  done
+  return 0
+}
+warn() { echo "chp-fapolicyd-fsmark: $*" >&2; logger -p daemon.warning -t chp-fapolicyd-fsmark -- "$*" 2>/dev/null || :; }
+# After a restart (ours, or with --verify one done by someone else): fapolicyd must still be active over the settle time.
+# If not and the setting is OURS, revert it, restart again, record the failure and exit non-zero. Without our marker
+# there is nothing of ours to revert: the crash is fapolicyd's own (seen with allow_filesystem_mark = 0 too, Task 9d),
+# so fapolicyd is restarted ONCE more; back up = a warning in the journal and exit 0; still down = recorded, exit 1.
 verify() {
-  sleep "${CHP_FSMARK_SETTLE:-5}"
-  systemctl is-active --quiet fapolicyd 2>/dev/null && return 0
+  alive && return 0
   local now; now=$(date +%s)
   if grep -qxF "$mark" "$conf"; then
     changed=0; rewrite "allow_filesystem_mark = 0"
-    systemctl restart fapolicyd 2>/dev/null; sleep "${CHP_FSMARK_SETTLE:-5}"
-    if [ "$changed" = 1 ] && systemctl is-active --quiet fapolicyd 2>/dev/null; then
+    systemctl restart fapolicyd 2>/dev/null
+    if [ "$changed" = 1 ] && alive; then
       msg="fapolicyd was NOT active after a restart with allow_filesystem_mark = 1 (fapolicyd $(rpm -q fapolicyd 2>/dev/null)); REVERTED to allow_filesystem_mark = 0 and restarted: fapolicyd active again. FSMARK=1 is refused until FSMARK=0 is set and this script re-run"
     else
       msg="fapolicyd was NOT active after a restart with allow_filesystem_mark = 1; revert attempted (conf written: $changed) but fapolicyd is STILL NOT ACTIVE: nothing checks file execution (systemctl status fapolicyd; journalctl -u fapolicyd)"
     fi
   else
-    msg="fapolicyd is NOT active after a restart, and allow_filesystem_mark is not ours to revert (systemctl status fapolicyd; journalctl -u fapolicyd)"
+    systemctl restart fapolicyd 2>/dev/null
+    if alive; then
+      warn "fapolicyd was NOT active after a restart (allow_filesystem_mark is not ours; fapolicyd $(rpm -q fapolicyd 2>/dev/null), the known \"recvmesg failed\" exit); restarted again: fapolicyd active"
+      return 0
+    fi
+    msg="fapolicyd is NOT active after a restart and STILL NOT ACTIVE after one more restart; allow_filesystem_mark is not ours to revert: nothing checks file execution (systemctl status fapolicyd; journalctl -u fapolicyd)"
   fi
   mkdir -p "$(dirname "$failf")" 2>/dev/null; printf '%s %s\n' "$now" "$msg" > "$failf" 2>/dev/null
   say "$msg"

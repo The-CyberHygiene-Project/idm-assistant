@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        11.chp%{?dist}
+Release:        12.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,12 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-12.chp
+- fapolicyd-fsmark (lab round 3, D6: the "recvmesg failed" exit also happens with allow_filesystem_mark = 0, 3 of
+  about 18 restarts): fapolicyd must be active at three samples over the settle time (not one check); with no change
+  of ours to revert, a dead fapolicyd is restarted once more (warning in the journal if it comes back, failure record
+  and non-zero if not). Header and README say the crash is not caused by the setting.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.0-11.chp
 - fapolicyd-fsmark (lab D2: fapolicyd 1.4.3-3.el9 exits with allow_filesystem_mark = 1, "recvmesg failed"): after
   each restart it performs, checks fapolicyd is still active after 5 s; if not, reverts its marked change, restarts

@@ -29,11 +29,13 @@ use OCP\IDBConnection;
  * MD5 ("could not compute MD5 hash: unsupported"). The files are already moved on disk when that query fails, so
  * the request ends in a 500 with the database and the disk out of step, and the moved files reappear later as NEW,
  * UNTAGGED entries. While the database refuses MD5, this listener refuses such operations before anything moves
- * (chp.folderop.refused; WebDAV answers 403, or 500 "Failed to rename" for a rename in the same parent, with
- * nothing changed). The same happens to a FILE moved from a team folder to another place when it has old
- * versions: groupfolders then moves the file's versions folder. It checks the database at most every 10 minutes
- * and stops refusing by itself once MD5 works (the fix belongs in the database set-up). Empty folders, files
- * without old versions, and moves inside one team folder are not affected.
+ * (chp.folderop.refused; WebDAV answers 403, nothing changed). The same happens to a FILE moved from a team folder
+ * to another place when it has old versions: groupfolders then moves the file's versions folder. It checks the
+ * database at most every 10 minutes and stops refusing by itself once MD5 works (the fix belongs in the database
+ * set-up). Empty folders, files without old versions, and moves inside one team folder are not affected.
+ * The decision is refusal(): this hook turns a refusal into AbortedEventException; DavGuardListener asks the same
+ * before a WebDAV MOVE and answers 403 there (a refusal from the hook alone makes a rename in the same parent a
+ * generic 500 "Failed to rename": lab Plan 2 round 3, D7).
  *
  * @template-implements IEventListener<Event>
  */
@@ -54,15 +56,24 @@ class FolderGuardListener implements IEventListener {
 		} else {
 			return;
 		}
-		// NextCloud's hook layer swallows any exception except AbortedEventException and lets the operation go on;
-		// on any other error refuse folders and files leaving their team folder (fail closed), let the rest pass.
+		$refusal = $this->refusal($node, $op, $target);
+		if ($refusal !== null) {
+			throw new AbortedEventException($refusal);
+		}
+	}
+
+	/**
+	 * Why $op ('move' or 'delete') of $node (to the absolute path $target) must be refused, or null when it may go
+	 * on. Each refusal is audited (chp.folderop.refused). Never throws: NextCloud's hook layer swallows any exception
+	 * except AbortedEventException and lets the operation go on, so on any error this refuses folders and files
+	 * leaving their team folder (fail closed) and lets the rest pass.
+	 */
+	public function refusal(Node $node, string $op, ?string $target): ?string {
 		try {
-			$this->decide($node, $op, $target);
-		} catch (AbortedEventException $e) {
-			throw $e;
+			return $this->decide($node, $op, $target);
 		} catch (\Throwable $e) {
 			if (!($node instanceof Folder || ($node instanceof File && $target !== null && $this->leavesOrUnknown($node, $target)))) {
-				return;
+				return null;
 			}
 			$path = '';
 			try {
@@ -78,26 +89,26 @@ class FolderGuardListener implements IEventListener {
 			} catch (\Throwable $auditError) {   // make the audit gap visible in the PHP error log
 				error_log('chp_foldertag: could not audit a refused ' . $op . ': ' . get_class($auditError) . ': ' . $auditError->getMessage());
 			}
-			throw new AbortedEventException('chp_foldertag: ' . $op . ' refused (internal error)');
+			return 'chp_foldertag: ' . $op . ' refused (internal error)';
 		}
 	}
 
-	private function decide(Node $node, string $op, ?string $target): void {
+	private function decide(Node $node, string $op, ?string $target): ?string {
 		if ($node instanceof Folder && $this->hasChildren($node)) {
 			$what = 'a non-empty folder';
 		} elseif ($node instanceof File && $target !== null && $this->leavesTeamFolder($node, $target) && $this->hasOldVersions($node)) {
 			$what = 'a file with old versions to another folder';
 		} else {
-			return;
+			return null;
 		}
 		if ($this->md5Works()) {
-			return;
+			return null;
 		}
 		$reason = 'the database refuses MD5 (FIPS), so NextCloud cannot move ' . $what;
 		$this->audit->event(Audit::FOLDEROP_REFUSED, 'refused ' . $op . ' of ' . $what . ': ' . $reason . ': ' . $node->getPath()
 			. ($target !== null ? ' -> ' . $target : ''),
 			['op' => $op, 'source' => $node->getPath(), 'target' => $target, 'reason' => $reason]);
-		throw new AbortedEventException('chp_foldertag: ' . $what . ' cannot be moved or deleted on this server yet (database MD5 unavailable)');
+		return 'chp_foldertag: ' . $what . ' cannot be moved or deleted on this server yet (database MD5 unavailable)';
 	}
 
 	private function leavesOrUnknown(File $file, string $target): bool {
