@@ -32,6 +32,7 @@ Rbg() { local vm=$1 ip=$2 name=$3 cmd=$4 log=/root/$3.log
 # Rh output passes through expect (buffer ~2 KB): large root files are fetched instead (copied to chpadmin's home, read, removed)
 Fetch() { local vm=$1 ip=$2 f=$3 n; n=lab-fetch-$RANDOM
   Rh "$vm" "$ip" "install -m 0600 -o chpadmin $f /home/chpadmin/$n" >/dev/null; Vh "$ip" "cat ~/$n; rm -f ~/$n"; }
+H() { ssh -F "$here/../iso5/ssh_config" -o BatchMode=yes srv1 "$@" 2>/dev/null; }
 case ${1:-} in
   repo)
     A "cd /data/chp-release/$REPO_V && tar -czf /tmp/iso2/repo-$REPO_V.tgz repo && chmod 644 /tmp/iso2/repo-$REPO_V.tgz"
@@ -55,6 +56,23 @@ case ${1:-} in
     # detached (setsid nohup), as an admin's terminal would, and wait for its log.
     Rbg "$SRV" "$SIP" "docs-enable-$n" "date -u +%FT%TZ; chp-site documents enable; echo enable-rc=\$?; date -u +%FT%TZ"
     A "sudo virsh detach-disk $SRV sdz --live >/dev/null && echo stick-detached" ;;
+  # ---- after the lab adapter + fixtures: the harness ssh_config (chpadmin + adapter sudo) ----
+  groups)   # Kanidm memberships of the lab users: lab01 cui-users; lab02 none; lab03 doc-reviewers; lab04 both
+    H "sudo kanidm group add-members cui-users lab01 lab04 -D idm_admin && sudo kanidm group add-members doc-reviewers lab03 lab04 -D idm_admin && for g in cui-users doc-reviewers chp_users; do sudo kanidm group get \$g -D idm_admin | grep -E '^(name|member):' | sed 's/@.*//' | tr '\n' ' '; echo; done" ;;
+  tunnel)   # NextCloud :8443 -> 18443, Kanidm :443 -> 18444 on the Mac
+    pkill -f "18443:$SIP:8443" 2>/dev/null; ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -f -N -L 18443:$SIP:8443 -L 18444:$SIP:443 aero && echo "tunnel up" ;;
+  ca)       H 'cat /etc/pki/ca-trust/source/anchors/chp-root.crt' > ~/idm-lab-secrets/iso5-root-ca.pem; grep -c "BEGIN CERTIFICATE" ~/idm-lab-secrets/iso5-root-ca.pem ;;
+  signin)   # signin USER [extra oidc_login args]: scripted browser sign-in through Kanidm (password + TOTP from the fixtures file)
+    u=$2; shift 2
+    python3 -c 'import json,os,sys; d=json.load(open(os.path.expanduser(f"~/idm-lab-secrets/iso5-{sys.argv[1]}.json"))); d["user"]=sys.argv[1]; print(json.dumps(d))' "$u" \
+      | python3 -I "$here/oidc_login.py" ~/idm-lab-secrets/iso5-root-ca.pem 18443 18444 "$@" ;;
+  apppw)    # an app password per lab user -> ~/idm-lab-secrets/iso5-nc-<u>-app.txt (0600, never printed)
+    for u in ${2:-lab01 lab02 lab03 lab04}; do
+      H "sudo occ user:auth-tokens:add -n --name plan2-lab $u" | tail -1 | (umask 077; cat > ~/idm-lab-secrets/iso5-nc-$u-app.txt)
+      [[ $(wc -c < ~/idm-lab-secrets/iso5-nc-$u-app.txt) -gt 20 ]] && echo "app password for $u stored (0600, not printed)" || echo "FAIL app password $u"
+    done ;;
+  proofs)   shift; python3 -I "$here/proofs.py" ~/idm-lab-secrets/iso5-root-ca.pem 18443 "$@" ;;
+  H)        shift; H "$*" ;;
   R)  shift; Rh "$SRV" "$SIP" "$*" | sed '/^RC=/d' ;;
   RH) shift; vm=$1 ip=$2; shift 2; Rh "$vm" "$ip" "$*" | sed '/^RC=/d' ;;
   RL) shift; Rlong "$SRV" "$SIP" "$1" "$2" ;;

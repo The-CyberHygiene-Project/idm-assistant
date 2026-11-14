@@ -2,8 +2,8 @@
      Loaded: loaded (/usr/lib/systemd/system/chp-wazuh-alerts.service; enabled; preset: disabled)
      Active: inactive (dead) since Fri 2026-11-13 17:49:54 MST; 8min ago
    Duration: 41min 55.771s
-    Process: 37053 ExecStart=/usr/bin/chp-site wazuh-forward (code=killed, signal=TERM)
-   Main PID: 37053 (code=killed, signal=TERM)
+    Process: 37053 ExecStart=/usr/bin/chp-site wazuh-forward (code=<REDACTED>, signal=TERM)
+   Main PID: 37053 (code=<REDACTED>, signal=TERM)
         CPU: 653ms
 Nov 13 17:08:23 iso5-srv.iso5.lab.test chp-wazuh[38288]: iso5-srv.iso5.lab.test rule 80710 level 10: Auditd: Device enables promiscuous mode.
 Nov 13 17:21:06 iso5-srv.iso5.lab.test chp-wazuh[40776]: iso5-cli1 rule 80710 level 10: Auditd: Device enables promiscuous mode.

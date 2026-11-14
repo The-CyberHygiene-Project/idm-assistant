@@ -22,7 +22,7 @@ Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: Started File Access Policy D
 Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4451]: Initializing the trust database
 Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4451]: fapolicyd integrity is 0
 Nov 13 17:51:28 iso5-cli2.iso5.lab.test fapolicyd[4451]: recvmesg failed
-Nov 13 17:51:28 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 13 17:51:28 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=<REDACTED>, status=1/FAILURE
 Nov 13 17:51:28 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
 Result=exit-code
 ExecMainStatus=1
@@ -54,7 +54,7 @@ Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: Started File Access Policy Da
 Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: Initializing the trust database
 Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: fapolicyd integrity is 0
 Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: recvmesg failed
-Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=<REDACTED>, status=1/FAILURE
 Nov 13 17:53:58 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
 Result=exit-code
 ExecMainStatus=1

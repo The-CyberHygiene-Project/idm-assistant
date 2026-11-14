@@ -1,0 +1,37 @@
+######## contain
+PASS COPY CUI file -> FCI REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> FCI REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Operations REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> Operations REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> home REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> home REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Public REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Internal REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS source still in CUI and tagged
+PASS COPY FCI file -> Operations REFUSED (HTTP 403)
+PASS MOVE FCI file -> CUI REFUSED (only CUI<->Archive allowed) (HTTP 403)
+PASS COPY CUI file -> Archive ALLOWED, copy tagged CUI (HTTP 201, tags ['CUI'])
+PASS MOVE CUI file (no old versions) -> Archive ALLOWED, tagged CUI (HTTP 201, tags ['CUI'])
+PASS MOVE Archive file -> CUI ALLOWED, tagged CUI (HTTP 201)
+PASS COPY CUI folder with a subfolder -> Archive ALLOWED, every file in the copy tagged CUI (HTTP 201, file tags [['CUI'], ['CUI']]; folder tags [[], []])
+PASS COPY CUI folder -> Operations REFUSED, nothing created (HTTP 403)
+contain: ALL PASS
+######## inside
+PASS rename a file inside CUI ALLOWED, tag kept (HTTP 201)
+PASS make a subfolder in CUI (folders are not tagged, by design) (folder tags [])
+PASS move a file into a CUI subfolder ALLOWED, tag kept (HTTP 201)
+PASS rename an EMPTY folder inside CUI ALLOWED (HTTP 201)
+PASS rename a NON-EMPTY folder inside CUI REFUSED while DEGRADED (FolderGuard), folder intact (HTTP 500 (DEFECT D7: 500, not 403))
+PASS delete a NON-EMPTY folder REFUSED while DEGRADED (FolderGuard) (HTTP 403)
+PASS delete an EMPTY folder ALLOWED (HTTP 204)
+inside: ALL PASS
+######## trash
+PASS delete a CUI file -> in lab01's trash (HTTP 204, trash ['/remote.php/dav/trashbin/lab01/trash/CUI_t-r2.txt.d1794677839'])
+PASS DavGuard: MOVE trash item -> files path (Operations) REFUSED (HTTP 403)
+PASS DavGuard: COPY trash item -> files path REFUSED (HTTP 403)
+PASS restore from trash (restore endpoint) -> back in CUI, same id, tag kept (HTTP 201, id 125 vs 125, tags ['CUI'])
+PASS an old version exists after the change (1 versions)
+PASS DavGuard: COPY old version -> files path REFUSED (HTTP 403)
+FAIL version restore -> content v1, tag kept (HTTP 201, body b'v2 changed', tags ['CUI'])
+PASS MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard), file intact (HTTP 403)
+trash: 1 FAIL

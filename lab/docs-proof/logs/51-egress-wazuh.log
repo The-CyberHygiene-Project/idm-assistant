@@ -1,0 +1,24 @@
+43
+Nov 14 09:51:06 iso5-srv nft[92568]: #011#011log prefix "CHP-NC-EGRESS " flags skuid counter packets 0 bytes 0 reject
+Nov 14 09:51:06 iso5-srv nft[92575]: #011#011log prefix "CHP-NC-EGRESS " flags skuid counter packets 0 bytes 0 reject
+0
+      1     <location>journald</location>
+      1     <location>/var/log/audit/audit.log</location>
+      1     <location>/var/log/chp-review.json</location>
+      1     <location>/var/log/chp-yara.json</location>
+      1     <location>/var/log/nextcloud/audit.log</location>
+      1     <location>/var/log/suricata/eve.json</location>
+      1     <location>/var/ossec/logs/active-responses.log</location>
+      1     <log_format>audit</log_format>
+      1     <log_format>command</log_format>
+      2     <log_format>full_command</log_format>
+      1     <log_format>journald</log_format>
+      4     <log_format>json</log_format>
+      1     <log_format>syslog</log_format>
+sample: Nov 14 10:39:09 iso5-srv.iso5.lab.test kernel: CHP-NC-EGRESS IN= OUT=enp1s0 SRC=192.168.100.50 DST=93.184.216.34 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8687 DF PRO
+	program_name: 'kernel'
+	id: '4100'
+	level: '0'
+	description: 'Firewall rules grouped.'
+    <logall>no</logall>
+    <logall_json>no</logall_json>

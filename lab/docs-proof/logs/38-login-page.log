@@ -1,0 +1,4 @@
+GET /login -> 302 /index.php/apps/user_oidc/login/1
+GET /login?direct=1 -> 200 (password form present: True )
+GET / -> 302 https://files.iso5.lab.test:8443/index.php/login
+GET /status.php -> 200 b'{"installed":true,"maintenance":false,"needsDbUpgrade":false,"version":"35.0.3.2","versionstring":"35.0.3","edition":"",'

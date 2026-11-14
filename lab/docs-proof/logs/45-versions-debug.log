@@ -1,0 +1,7 @@
+versions: ['/remote.php/dav/versions/lab01/versions/135/1794677873', '/remote.php/dav/versions/lab01/versions/135/1794677876']
+/remote.php/dav/versions/lab01/versions/135/1794677873 (200, b'v1\n')
+/remote.php/dav/versions/lab01/versions/135/1794677876 (200, b'v2\n')
+restore 201 b'v1\n' ['CUI']
+trash ['/remote.php/dav/trashbin/lab01/trash/CUI_vtrash-1794677885.txt.d1794677877']
+restore 201
+after trash-restore + change, versions: [('/remote.php/dav/versions/lab01/versions/139/1794677879', b'v2\n')]

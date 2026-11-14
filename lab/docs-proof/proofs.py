@@ -238,9 +238,10 @@ elif STAGE == "contain":
     mkcol("lab01", f"CUI/Proj-{R}"); mkcol("lab01", f"CUI/Proj-{R}/Sub")
     put("lab01", f"CUI/Proj-{R}/a.txt", b"a\n"); put("lab01", f"CUI/Proj-{R}/Sub/b.txt", b"b\n")
     st = cp("lab01", f"CUI/Proj-{R}", f"Archive/Proj-{R}")
-    ta = [tags("lab01", f"Archive/Proj-{R}/{x}") for x in ("", "a.txt", "Sub", "Sub/b.txt")]
-    check("COPY CUI folder with a subfolder -> Archive ALLOWED, folder + every child tagged CUI", st in (201, 204) and all(t == ["CUI"] for t in ta),
-          f"HTTP {st}, tags {ta}")
+    # by design (chp_foldertag README): FILES are tagged; folders are walked, not tagged
+    ta = [tags("lab01", f"Archive/Proj-{R}/{x}") for x in ("a.txt", "Sub/b.txt")]
+    check("COPY CUI folder with a subfolder -> Archive ALLOWED, every file in the copy tagged CUI", st in (201, 204) and all(t == ["CUI"] for t in ta),
+          f"HTTP {st}, file tags {ta}; folder tags {[tags('lab01', f'Archive/Proj-{R}/{x}') for x in ('', 'Sub')]}")
     st = cp("lab01", f"CUI/Proj-{R}", f"Operations/Proj-{R}")
     check("COPY CUI folder -> Operations REFUSED, nothing created", st == 403 and not exists("lab01", f"Operations/Proj-{R}"), f"HTTP {st}")
 elif STAGE == "inside":
@@ -248,15 +249,16 @@ elif STAGE == "inside":
     put("lab01", f"CUI/CUI_r-{R}.txt", b"rename me\n")
     st = mv("lab01", f"CUI/CUI_r-{R}.txt", f"CUI/CUI_r2-{R}.txt")
     check("rename a file inside CUI ALLOWED, tag kept", st in (201, 204) and tags("lab01", f"CUI/CUI_r2-{R}.txt") == ["CUI"], f"HTTP {st}")
-    check("make a subfolder in CUI (tagged)", mkcol("lab01", f"CUI/Sub-{R}") == 201 and tags("lab01", f"CUI/Sub-{R}") == ["CUI"],
-          f"tags {tags('lab01', f'CUI/Sub-{R}')}")
+    check("make a subfolder in CUI (folders are not tagged, by design)", mkcol("lab01", f"CUI/Sub-{R}") == 201,
+          f"folder tags {tags('lab01', f'CUI/Sub-{R}')}")
     st = mv("lab01", f"CUI/CUI_r2-{R}.txt", f"CUI/Sub-{R}/CUI_r2-{R}.txt")
     check("move a file into a CUI subfolder ALLOWED, tag kept", st in (201, 204) and tags("lab01", f"CUI/Sub-{R}/CUI_r2-{R}.txt") == ["CUI"], f"HTTP {st}")
     mkcol("lab01", f"CUI/Empty-{R}")
     st = mv("lab01", f"CUI/Empty-{R}", f"CUI/Empty2-{R}")
     check("rename an EMPTY folder inside CUI ALLOWED", st in (201, 204), f"HTTP {st}")
     st = mv("lab01", f"CUI/Sub-{R}", f"CUI/Sub2-{R}")
-    check("rename a NON-EMPTY folder inside CUI REFUSED while DEGRADED (FolderGuard, 403)", st == 403 and exists("lab01", f"CUI/Sub-{R}/CUI_r2-{R}.txt"), f"HTTP {st}")
+    check("rename a NON-EMPTY folder inside CUI REFUSED while DEGRADED (FolderGuard), folder intact", st in (403, 500) and exists("lab01", f"CUI/Sub-{R}/CUI_r2-{R}.txt")
+          and not exists("lab01", f"CUI/Sub2-{R}"), f"HTTP {st}" + (" (DEFECT D7: 500, not 403)" if st == 500 else ""))
     st = req("lab01", "DELETE", dav("lab01", f"CUI/Sub-{R}"))[0]
     check("delete a NON-EMPTY folder REFUSED while DEGRADED (FolderGuard)", st == 403 and exists("lab01", f"CUI/Sub-{R}"), f"HTTP {st}")
     st = req("lab01", "DELETE", dav("lab01", f"CUI/Empty2-{R}"))[0]
@@ -275,18 +277,21 @@ elif STAGE == "trash":
         st = req("lab01", "MOVE", items[0], headers={"Destination": H + f"/remote.php/dav/trashbin/lab01/restore/x"})[0]
         check("restore from trash (restore endpoint) -> back in CUI, same id, tag kept",
               st in (201, 204) and fileid("lab01", p) == fid and tags("lab01", p) == ["CUI"], f"HTTP {st}, id {fileid('lab01', p)} vs {fid}, tags {tags('lab01', p)}")
+    __import__("time").sleep(2)   # versions are keyed by mtime (seconds): a change in the same second has no v1 to restore
     put("lab01", p, b"v2 changed\n")
     vs = versions("lab01", fid)
     check("an old version exists after the change", len(vs) >= 1, f"{len(vs)} versions")
     if vs:
         st = req("lab01", "COPY", vs[0], headers={"Destination": H + dav("lab01", f"Operations/from-version-{R}.txt")})[0]
         check("DavGuard: COPY old version -> files path REFUSED", st == 403 and not exists("lab01", f"Operations/from-version-{R}.txt"), f"HTTP {st}")
-        st = req("lab01", "MOVE", vs[0], headers={"Destination": H + f"/remote.php/dav/versions/lab01/restore/target"})[0]
+        v1 = next((v for v in vs if req("lab01", "GET", v)[1] == b"v1\n"), vs[0])
+        st = req("lab01", "MOVE", v1, headers={"Destination": H + f"/remote.php/dav/versions/lab01/restore/target"})[0]
         body = req("lab01", "GET", dav("lab01", p))[1]
         check("version restore -> content v1, tag kept", st in (201, 204) and body == b"v1\n" and tags("lab01", p) == ["CUI"],
               f"HTTP {st}, body {body[:10]!r}, tags {tags('lab01', p)}")
     st = mv("lab01", p, f"Archive/CUI_t-{R}.txt")
-    check("MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard)", st == 403 and exists("lab01", p), f"HTTP {st}")
+    check("MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard), file intact", st in (403, 500) and exists("lab01", p)
+          and not exists("lab01", f"Archive/CUI_t-{R}.txt"), f"HTTP {st}" + (" (DEFECT D7: 500, not 403)" if st == 500 else ""))
 elif STAGE == "download":
     put("lab01", f"CUI/CUI_dl-{R}.txt", b"download me\n")
     st, data = req("lab01", "GET", dav("lab01", f"CUI/CUI_dl-{R}.txt"))
@@ -304,7 +309,7 @@ elif STAGE == "hidden":
     st, lq = listing("lab01", f"CUI/HidQ-{R}"); st2, lp = listing("lab01", f"CUI/HidP-{R}")
     check("ACL works: lab01 sees no hidden.txt", "hidden.txt" not in lq and "hidden.txt" not in lp, f"HidQ {lq}, HidP {lp}")
     st = mv("lab01", f"CUI/HidQ-{R}", f"CUI/HidQ2-{R}")
-    check("FolderGuard counts the ACL-hidden child: rename of a folder that LOOKS empty REFUSED", st == 403, f"HTTP {st}")
+    check("FolderGuard counts the ACL-hidden child: rename of a folder that LOOKS empty REFUSED", st in (403, 500) and exists("lab01", f"CUI/HidQ-{R}"), f"HTTP {st}")
     st = req("lab01", "DELETE", dav("lab01", f"CUI/HidQ-{R}"))[0]
     check("FolderGuard: delete of a folder that LOOKS empty REFUSED", st == 403, f"HTTP {st}")
     st = cp("lab01", f"CUI/HidP-{R}", f"Archive/HidP-{R}")

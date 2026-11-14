@@ -1,0 +1,9 @@
+PASS delete a CUI file -> in lab01's trash (HTTP 204, trash ['/remote.php/dav/trashbin/lab01/trash/CUI_t-r3.txt.d1794677858'])
+PASS DavGuard: MOVE trash item -> files path (Operations) REFUSED (HTTP 403)
+PASS DavGuard: COPY trash item -> files path REFUSED (HTTP 403)
+PASS restore from trash (restore endpoint) -> back in CUI, same id, tag kept (HTTP 201, id 131 vs 131, tags ['CUI'])
+PASS an old version exists after the change (1 versions)
+PASS DavGuard: COPY old version -> files path REFUSED (HTTP 403)
+FAIL version restore -> content v1, tag kept (HTTP 201, body b'v2 changed', tags ['CUI'])
+PASS MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard), file intact (HTTP 403)
+trash: 1 FAIL

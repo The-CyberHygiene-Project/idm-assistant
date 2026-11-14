@@ -1,0 +1,41 @@
+== as apache (the php-fpm/httpd/cron/occ user)
+outbound 93.184.216.34:80 -> 000 rc=7
+outbound 1.1.1.1:443 -> 000 rc=7
+DNS lookup example.com rc=2 (2 = not found)
+hosts: 192.168.100.50  idm.iso5.lab.test
+hosts: 192.168.100.50  files.iso5.lab.test
+to this server idm:443 -> 200
+php fsockopen out: refused (Connection refused)
+false
+null
+control, as root: outbound 93.184.216.34:80 -> 000 rc=28
+== kernel log
+     16 CHP-NC-EGRESS-DNS IN= OUT=lo DST=192.168.100.50 DF PROTO=UDP DPT=53
+      1 CHP-NC-EGRESS IN= OUT=enp1s0 DST=1.1.1.1 DF PROTO=TCP DPT=443
+      2 CHP-NC-EGRESS IN= OUT=enp1s0 DST=93.184.216.34 DF PROTO=TCP DPT=80
+meta l4proto { tcp, udp } th dport 53 log prefix "CHP-NC-EGRESS-DNS " flags skuid counter packets 16 bytes 1080 reject
+log prefix "CHP-NC-EGRESS " flags skuid counter packets 3 bytes 180 reject
+== break 1: table removed
+79: ALERT NextCloud egress table chp_nextcloud_egress is missing (NextCloud is not contained; restart chp-nextcloud-egress.service)
+Job for php-fpm.service failed because the control process exited with error code.
+See "systemctl status php-fpm.service" and "journalctl -xeu php-fpm.service" for details.
+php-fpm restart rc=1 state=failed
+Job for httpd.service failed because the control process exited with error code.
+See "systemctl status httpd.service" and "journalctl -xeu httpd.service" for details.
+httpd restart rc=1 state=failed
+restored: egress=active php-fpm=active httpd=active; 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+== break 2: table edited at run time (an accept rule added)
+79: ALERT NextCloud egress table chp_nextcloud_egress differs from the shipped rules (edited, or files changed and not reloaded?)
+after egress restart 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+== break 3: address file widened
+79: ALERT NextCloud egress address file invalid: /etc/chp/nextcloud-egress-addr.nft is not 'define CHP_NC_SERVER_IP = <IPv4>'
+ALERT NextCloud egress table chp_nextcloud_egress differs from the shipped rules (edited, or files changed and not reloaded?)
+Job for chp-nextcloud-egress.service failed because the control process exited with error code.
+See "systemctl status chp-nextcloud-egress.service" and "journalctl -xeu chp-nextcloud-egress.service" for details.
+egress restart rc=1 state=failed
+chp-nextcloud-egress.service: Control process exited, code=exited, status=1/FAILURE
+chp-nextcloud-egress.service: Failed with result 'exit-code'.
+Failed to start CHP: NextCloud (the apache user) may reach only this server.
+php-fpm=inactive httpd=inactive
+restored: egress=active php-fpm=active httpd=active; 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+EXIT=0

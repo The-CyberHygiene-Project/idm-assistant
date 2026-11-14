@@ -1,0 +1,89 @@
+######## upload
+PASS lab01 WebDAV PUT CUI file
+PASS lab01 browser-style chunked upload into CUI (MKCOL 201, MOVE 201)
+PASS lab01 WebDAV PUT FCI file
+PASS lab01 WebDAV PUT Archive file
+PASS lab01 WebDAV PUT Operations file
+PASS lab01 PUT non-ASCII NFC name into CUI
+PASS lab01 PUT non-ASCII NFD name into CUI
+PASS tag on CUI/CUI_webdav-r1_v1.0.txt (tags ['CUI'])
+PASS tag on CUI/browser-r1.docx (tags ['CUI'])
+PASS tag on FCI/fci-r1.md (tags ['FCI'])
+PASS tag on Archive/arch-r1.txt (tags ['CUI'])
+PASS tag on Operations/ops-r1.txt (tags [])
+PASS tag on CUI/Résumé-ü-r1-nfc.txt (tags ['CUI'])
+PASS tag on CUI/Résumé-ü-r1-nfd.txt (tags ['CUI'])
+PASS lab01 cannot remove the CUI tag (restricted tag) (DELETE -> 403)
+PASS CUI tag still on the file afterwards
+upload: ALL PASS
+######## share
+PASS internal share of a CUI file to lab02 REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r1.txt".)
+PASS internal share of a CUI file to lab04 (cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r1.txt".)
+PASS public link on a CUI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r1.txt".)
+PASS public link on an FCI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "fci-share-r1.txt".)
+PASS internal share of an FCI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "fci-share-r1.txt".)
+PASS public link on an Archive file REFUSED (HTTP 403, OCS 403: You are not allowed to share "arch-share-r1.txt".)
+PASS internal share of the CUI folder itself REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI".)
+PASS control: internal share of an Operations file to lab02 ALLOWED (HTTP 200, OCS 200: OK)
+PASS control: public link (with password) on an Operations file ALLOWED (HTTP 200, OCS 200: OK)
+share: ALL PASS
+######## see
+  lab03 (doc-reviewers, NOT cui-users) sees: ['Internal', 'Operations', 'Public']
+PASS lab03 sees no CUI/FCI/Archive, sees Operations
+PASS lab03 cannot read the CUI file by path
+PASS lab03 reads Operations
+PASS lab03 writes in Operations (owner decision 7: normal access outside CUI/FCI/Archive)
+  lab02 (plain user) sees: ['Internal', 'Operations', 'Public', 'ops-share-r1.txt']
+PASS lab02 sees no CUI/FCI/Archive
+  lab04 (doc-reviewers + cui-users) sees: ['Archive', 'CUI', 'FCI', 'Internal', 'Operations', 'Public']
+PASS lab04 sees CUI, FCI, Archive
+PASS lab04 reads (downloads) the CUI file (GET 200)
+PASS lab04 cannot change the CUI file (PUT)
+PASS lab04 cannot add a file to CUI (PUT new)
+PASS lab04 cannot delete the CUI file
+PASS lab04 cannot add a file to FCI or Archive
+PASS lab04 writes in Operations
+PASS CUI file unchanged afterwards
+see: ALL PASS
+######## contain
+PASS COPY CUI file -> FCI REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> FCI REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Operations REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> Operations REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> home REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS MOVE CUI file -> home REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Public REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS COPY CUI file -> Internal REFUSED (403, nothing created) (HTTP 403, target exists False)
+PASS source still in CUI and tagged
+PASS COPY FCI file -> Operations REFUSED (HTTP 403)
+PASS MOVE FCI file -> CUI REFUSED (only CUI<->Archive allowed) (HTTP 403)
+PASS COPY CUI file -> Archive ALLOWED, copy tagged CUI (HTTP 201, tags ['CUI'])
+PASS MOVE CUI file (no old versions) -> Archive ALLOWED, tagged CUI (HTTP 201, tags ['CUI'])
+PASS MOVE Archive file -> CUI ALLOWED, tagged CUI (HTTP 201)
+FAIL COPY CUI folder with a subfolder -> Archive ALLOWED, folder + every child tagged CUI (HTTP 201, tags [[], ['CUI'], [], ['CUI']])
+PASS COPY CUI folder -> Operations REFUSED, nothing created (HTTP 403)
+contain: 1 FAIL
+######## inside
+PASS rename a file inside CUI ALLOWED, tag kept (HTTP 201)
+FAIL make a subfolder in CUI (tagged) (tags [])
+PASS move a file into a CUI subfolder ALLOWED, tag kept (HTTP 201)
+PASS rename an EMPTY folder inside CUI ALLOWED (HTTP 201)
+FAIL rename a NON-EMPTY folder inside CUI REFUSED while DEGRADED (FolderGuard, 403) (HTTP 500)
+PASS delete a NON-EMPTY folder REFUSED while DEGRADED (FolderGuard) (HTTP 403)
+PASS delete an EMPTY folder ALLOWED (HTTP 204)
+inside: 2 FAIL
+######## trash
+PASS delete a CUI file -> in lab01's trash (HTTP 204, trash ['/remote.php/dav/trashbin/lab01/trash/CUI_t-r1.txt.d1794677790'])
+PASS DavGuard: MOVE trash item -> files path (Operations) REFUSED (HTTP 403)
+PASS DavGuard: COPY trash item -> files path REFUSED (HTTP 403)
+PASS restore from trash (restore endpoint) -> back in CUI, same id, tag kept (HTTP 201, id 104 vs 104, tags ['CUI'])
+PASS an old version exists after the change (1 versions)
+PASS DavGuard: COPY old version -> files path REFUSED (HTTP 403)
+FAIL version restore -> content v1, tag kept (HTTP 201, body b'v2 changed', tags ['CUI'])
+PASS MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard) (HTTP 403)
+trash: 1 FAIL
+######## download
+PASS download a CUI file (browser GET of the WebDAV URL) (GET 200)
+PASS upload a user .so into Operations
+PASS download the user .so back unchanged (no fapolicyd 42-trusted-elf denial for php-fpm) (GET 200)
+download: ALL PASS

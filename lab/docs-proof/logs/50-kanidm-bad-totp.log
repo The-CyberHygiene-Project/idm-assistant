@@ -1,0 +1,12 @@
+  form /ui/login/totp fields=['password', 'totp']
+  POST idm.iso5.lab.test/ui/login/totp -> 200
+FAIL: no form at /ui/login/totp (title 'Login'): Login Kanidm idm.iso5.lab.test Login Failed Reason: incorrect totp Operation ID: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b Return to Login Powered by Kanidm
+a9b051d5-7168-44db-adf3-2f4b0657c1b8 INFO        ┕━ ｉ [info]: Auth result: Continue (TOTP) | event_tag_id: 10
+cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO     request [ 524µs | 82.09% / 100.00% ] method: POST | uri: /ui/login/totp | version: HTTP/1.1 | connection_address: "192.168.100.1:59072" | client_address: "192.168.100.1" | status_code: 200 | latency: 0 | kopid: "cace8f4f-4d56-457a-aff4-9c17ffcf9a6b"
+cace8f4f-4d56-457a-aff4-9c17ffcf9a6b ERROR       ┝━ 🚨 [error]: Handler::PasswordMfa -> Result::Denied - TOTP Fail, password - | event_tag_id: 12
+cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┝━ ｉ [info]: Credentials denied | event_tag_id: 10 | reason: incorrect totp
+cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┕━ ｉ [info]: Auth result: Denied: incorrect totp | event_tag_id: 10
+00000000-0000-0000-0000-000000000000 WARN     🚧 [warn]:  | audit_event: {"AuthenticationDenied":{"source":{"Https":"192.168.100.1"},"uuid":"d2f879f3-adee-4821-8580-d967d0272a3c","spn":"lab02@idm.iso5.lab.test","time":1794678000}}
+      1 100630 7 Kanidm: failed sign-in (authenticator code refused) Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b ERROR       ┝━ 🚨 [error]: Handler::PasswordMfa -> Result::Denied - TO
+      1 100630 7 Kanidm: failed sign-in (authenticator code refused) Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┕━ ｉ [info]: Auth result: Denied: incorrect totp | event_
+      1 100630 7 Kanidm: failed sign-in (authenticator code refused) Nov 14 17:40:00 iso5-srv.iso5.lab.test kanidmd[1706]: cace8f4f-4d56-457a-aff4-9c17ffcf9a6b INFO        ┝━ ｉ [info]: Credentials denied | event_tag_id: 10 | reas

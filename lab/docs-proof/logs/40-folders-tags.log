@@ -1,0 +1,9 @@
+{"1":{"name":"CUI","access":"restricted"},"2":{"name":"FCI","access":"restricted"}}
+1 CUI {'cui-users': {'displayName': 'cui-users', 'permissions': 15, 'type': 'group'}} True
+2 FCI {'cui-users': {'displayName': 'cui-users', 'permissions': 15, 'type': 'group'}} True
+3 Archive {'cui-users': {'displayName': 'cui-users', 'permissions': 15, 'type': 'group'}} True
+4 Operations {'chp-users': {'displayName': 'chp-users', 'permissions': 31, 'type': 'group'}} True
+5 Internal {'chp-users': {'displayName': 'chp-users', 'permissions': 31, 'type': 'group'}} True
+6 Public {'chp-users': {'displayName': 'chp-users', 'permissions': 31, 'type': 'group'}} True
+{"1":"1","2":"2","3":"1"}
+[[1,3],[3,1]]

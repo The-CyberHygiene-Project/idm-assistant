@@ -1,0 +1,18 @@
+active
+active
+active
+active
+active
+active
+active
+active
+Denied accesses: 0
+2026-11-14 10:29:21
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active
+OK NextCloud egress table present, matches the shipped rules, address file valid
+0
+Nov 14 10:29:30.061500 iso5-srv.iso5.lab.test systemd[1]: Starting CHP: NextCloud (the apache user) may reach only this server...
+Nov 14 10:29:30.296017 iso5-srv.iso5.lab.test systemd[1]: Starting The PHP FastCGI Process Manager...
+Nov 14 10:29:30.641324 iso5-srv.iso5.lab.test systemd[1]: Starting The Apache HTTP Server...
+Nov 14 10:29:30.744739 iso5-srv.iso5.lab.test systemd[1]: Started The PHP FastCGI Process Manager.
+Nov 14 10:29:31.150576 iso5-srv.iso5.lab.test systemd[1]: Started The Apache HTTP Server.

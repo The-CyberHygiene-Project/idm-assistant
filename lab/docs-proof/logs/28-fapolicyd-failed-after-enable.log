@@ -32,7 +32,7 @@ Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: Started File Access Policy Da
 Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: Initializing the trust database
 Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: fapolicyd integrity is 0
 Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: recvmesg failed
-Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=<REDACTED>, status=1/FAILURE
 Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
 node=iso5-srv.iso5.lab.test type=AVC msg=audit(1794671598.213:19320): avc:  denied  { transition } for  pid=82375 comm="runcon" path="/usr/bin/chp-site" dev="dm-1" ino=2472520 scontext=system_u:system_r:initrc_t:s0 tcontext=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 tclass=process permissive=0
 EXIT=0

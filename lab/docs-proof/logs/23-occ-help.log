@@ -38,7 +38,7 @@ Options:
       --mapping-birthdate=MAPPING-BIRTHDATE                                  Attribute mapping of the birth date
       --mapping-address=MAPPING-ADDRESS                                      Attribute mapping of the address
       --mapping-street_address=MAPPING-STREET_ADDRESS                        Attribute mapping of the street address
-      --mapping-postal_code=MAPPING-POSTAL_CODE                              Attribute mapping of the postal code
+      --mapping-postal_code=<REDACTED>                              Attribute mapping of the postal code
 === groupfolders:create
 Usage:
   groupfolders:create [options] [--] <name>
