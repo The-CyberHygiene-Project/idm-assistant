@@ -57,8 +57,9 @@ without checking that fapolicyd stays up: it should wait a few seconds after the
 roll back to 0 (and say so) if the daemon died. **Check 80 did its job:** it alerted at the next monitor run (cli2
 00:52:50Z, srv 00:55:37Z, about 80 s after the failure) and then held the repeat back. Rollback: FSMARK=0 + helper
 (it removes its own setting; since fapolicyd was not active it did not restart it), then a manual
-`systemctl reset-failed; start`: active, 0 denials, check 80 OK on both (logs/14). The helper leaves the line
-`allow_filesystem_mark = 0` in `fapolicyd.conf` (stock has none): rpm -V/AIDE will show the file changed; minor.
+`systemctl reset-failed; start`: active, 0 denials, check 80 OK on both (logs/14). (Correction, round 2: the
+stock `fapolicyd.conf` already has `allow_filesystem_mark = 0`, as untouched cli1 shows; the helper's undo restores it.)
+**Owner decision §13 (2026-11-14): `allow_filesystem_mark` stays OFF in 0.7.0; checklist item 11 is dropped.**
 
 ## Observations (not defects of this release, or lab-caused)
 
@@ -90,7 +91,7 @@ roll back to 0 (and say so) if the daemon died. **Check 80 did its job:** it ale
 | 8 | Wazuh rules at their levels | **FAILED (D1)**; rule syntax with the 2-line fix: loads (logs/09); levels NOT RUN | logs/06, 09 |
 | 9 | Nightly check + canary + break-on-purpose | NOT RUN (blocked) | |
 | 10 | fapolicyd details | PARTLY: chp-documents `%post` `fagenrules --load` recompiled the rules (compiled.rules 17:44) **without** a fapolicyd restart (NRestarts=0, start time unchanged, the daemon only re-synced its trust DB for the rpm transaction): it does not violate "no restart in a scriptlet". Check 80 after two back-to-back installs (cli2, `dnf reinstall chp-site` then `chp-base`): fapolicyd stayed up, start time unchanged, no pending marker, **check 80 OK, 0 denials**. trust.d format / `--file update` / config.php sha256 across runs / .so download: NOT RUN (blocked) | logs/08, 11 |
-| 11 | allow_filesystem_mark trial | **FAILED (D2)**: fapolicyd exits with FSMARK=1 on srv and cli2; no rules can be derived; rolled back | logs/12, 13, 14 |
+| 11 | allow_filesystem_mark trial | **DROPPED** by owner decision §13 (after D2: fapolicyd exits with FSMARK=1). FSMARK=1 is not used: all three hosts run FSMARK=0 (stock `allow_filesystem_mark = 0`, no `chp-managed` marker, no restart-pending marker, fapolicyd active, chp-base 0.1.0-11) | logs/12, 13, 14, 24 |
 | 12 | Backup + restore | NOT RUN (blocked) | |
 | 13 | Daily review rows | NOT RUN (blocked) | |
 | 14 | Reboot srv + client | NOT RUN (after enable) | |
@@ -110,3 +111,40 @@ roll back to 0 (and say so) if the daemon died. **Check 80 did its job:** it ale
 
 **Resume:** after a fixed chp-site (D1) is signed into the repo: `plan2.sh repo` (REPO_V=…), `plan2.sh enable 2`, then the
 checklist from the AIDE refresh on. D2 needs an owner decision (FSMARK cannot ship as is) before item 11 can close.
+
+## Round 2 (2026-11-14): re-signed repo 0.12.0 (chp-site 0.14.0-2 = D1 fix, chp-base 0.1.0-11 = fsmark helper verifies)
+
+| Step | Result | Log |
+|---|---|---|
+| Re-signed repo on all three hosts | upgrade = **chp-site 0.14.0-2 + chp-base 0.1.0-11 only** on srv, cli1, cli2 (confirmed); no pending marker; 0 denials | `17-repo-0.12.0-resigned.log` |
+| FSMARK status | FSMARK=0 everywhere (see item 11) | `24-fsmark-off-status.log` |
+| enable run 2 | first attempt from a transient unit with `runcon` refused (lab driver; logs/18 first lines); driver changed to run from the root console shell itself (detached), SELinux context `unconfined_t`, a test file gets `etc_t`. Then: **past the Wazuh step (D1 fixed: `chp_nextcloud_rules.xml` installed, manager active)**, database (PostgreSQL 16 initialised and started), then **FAILED at install (D3)** | `18-documents-enable-2.log`, `19-install-failure.log` |
+| Lab workaround W1 | the operator command enable itself runs right after the install, run before it: `fapolicyd-cli --file add /etc/nextcloud/config.php --trust-file nextcloud; fapolicyd-cli --update` | `20-workaround-w1-trust.log` |
+| enable run 3 | install, settings done; **FAILED at apps (D4)** | `21-documents-enable-3.log`, `22-apps-state.log` |
+| Read-only pre-check of the next steps' occ commands | every option enable uses exists in this NextCloud (`user_oidc:provider` incl. `--mapping-groups`, `--group-provisioning`, `--group-whitelist-regex`, `--check-bearer`, `--send-id-token-hint`; `groupfolders:create/group/permissions/list`; `tag:add NAME restricted`; `security:certificates:import`; `user:add --password-from-env`) | `23-occ-help.log` |
+
+**D3 (blocking): `occ maintenance:install` is denied by fapolicyd reading the config.php it just wrote.**
+`fopen(/usr/lib/nextcloud/config/config.php): Failed to open stream: Operation not permitted at lib/private/Config.php#222`
+(`/usr/lib/nextcloud/config` -> `/etc/nextcloud`). `config.php` is `text/x-php` (`%languages`) and untrusted, so rule
+`deny_audit perm=any all : ftype=%languages` refuses php opening it. enable adds the path trust entry only **after**
+`maintenance:install` (documents.py ~line 480-487); the install already re-reads the file. The spike hit the same denial
+(SPIKE-NEXTCLOUD.md table row 2) and trusted the file before installing. Fix: before the install, create
+`/etc/nextcloud/config.php` (e.g. `<?php $CONFIG = array();`, 0640 apache:apache) and add its trust entry, then
+install; step 15a keeps the entry current. After a failed install the half-written config.php also breaks every later
+occ call (`occ status` denied too) until it is trusted, so a re-run cannot recover by itself. fapolicyd counted 3
+denials on srv from these attempts (`--check-status`; they stay counted until enable's fapolicyd restart).
+Trust file format seen: header comments, then `/etc/nextcloud/config.php 886 <sha256>` (path size sha256).
+
+**D4 (blocking): `occ app:disable appstore` fails: "appstore can't be disabled".** `appstore` is in NextCloud 35's
+`core/shipped.json` `alwaysEnabled` list; enable's `APPS_OFF` contains it. Everything else in `APPS_OFF` was disabled and
+every app in `APPS_ON` is enabled (logs/22). Fix: drop `appstore` from `APPS_OFF` (the app store is already off by
+`appstoreenabled=false`), and do not count always-enabled apps in the "exact" re-list. alwaysEnabled in 35.0.3:
+appstore, cloud_federation_api, dav, federatedfilesharing, files, lookup_server_connector, oauth2, profile,
+provisioning_api, settings, sharing, theming, twofactor_backupcodes, viewer, workflowengine (none other is in APPS_OFF).
+
+**Lab-script fix:** `plan2.sh` output through the root console (expect) is cut at about 2 KB; large logs are now fetched
+(copied to chpadmin's home, read, removed).
+
+**Lab state after round 2:** srv: NextCloud installed (config.php trusted by W1), settings applied, apps as in logs/22,
+`documents.conf ENABLED=no`; NextCloud rules in Wazuh; php-fpm/httpd not started. Re-running enable after a D4 fix
+continues from here (Kanidm, folders, tags, web, fapolicyd restart). Everything else as at the end of round 1.

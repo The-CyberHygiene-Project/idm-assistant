@@ -1,0 +1,4 @@
+alwaysEnabled: appstore cloud_federation_api dav federatedfilesharing files lookup_server_connector oauth2 profile provisioning_api settings sharing theming twofactor_backupcodes viewer workflowengine
+ON missing (not enabled): [] not present at all: []
+OFF still enabled: ['appstore']
+step="start" step="packages" step="mail" step="hosts" step="dns" step="render" step="egress" step="wazuh" step="database" step="start" step="packages" step="mail" step="hosts" step="dns" step="render" step="egress" step="wazuh" step="database" step="install" step="settings" 

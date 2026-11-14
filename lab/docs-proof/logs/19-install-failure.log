@@ -1,0 +1,76 @@
+/data/nextcloud/data:
+total 0
+drwxr-x---. 2 apache apache  6 Nov 14 08:54 .
+drwxr-x---. 3 apache apache 18 Nov 14 08:54 ..
+/var/log/nextcloud/:
+total 4
+drwxr-x---.  2 apache apache   23 Nov 13 17:44 .
+drwxr-xr-x. 21 root   root   4096 Nov 13 17:53 ..
+-rw-r-----.  1 apache apache    0 Nov 13 17:44 audit.log
+total 124
+drwxr-x---.   2 apache apache     66 Nov 14 08:54 .
+drwxr-xr-x. 150 root   root     8192 Nov 14 08:52 ..
+-rw-r-----.   1 apache apache    886 Nov 14 08:54 config.php
+-rw-r-----.   1 apache apache 105966 Nov 12 07:03 config.sample.php
+-rw-r-----.   1 apache apache    665 Nov 12 07:03 .htaccess
+Denied accesses: 1
+<?php
+/*
+ * WARNING
+ *
+ * This file gets modified by automatic processes and all lines that are not
+ * active code (ie. comments) are lost during that process.
+ *
+ * If you want to document things with comments or use constants add your settings
+ * in a '<NAME>.config.php' file which will be included and rendered into this file.
+ *
+ * Example:
+ *   <?php
+ *   $CONFIG = [];
+ *
+ * See also: https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/config_sample_php_parameters.html#multiple-merged-configuration-files
+ */
+$CONFIG = array (
+  'trusted_domains' => 
+  array (
+    0 => 'localhost',
+  ),
+  'datadirectory' => '/data/nextcloud/data',
+  'dbtype' => 'pgsql',
+  'version' => '35.0.3.2',
+  'overwrite.cli.url' => 'http://localhost',
+);
+  - maintenance: false
+  - needsDbUpgrade: false
+  - productname: Nextcloud
+  - extendedSupport: false
+{"reqId":"J4tSUxsUKAItQNlxM2b3","level":3,"time":"2026-11-14T15:55:28+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/lib/nextcloud/config/config.php): Failed to open stream: Operation not permitted at /usr/lib/nextcloud/lib/private/Config.php#222","userAgent":"--","version":"","occ_command":["/usr/lib/nextcloud/occ","status"],"data":{"app":"PHP"}}
+lrwxrwxrwx. 1 root root 14 Nov 13 16:16 /usr/lib/nextcloud/config -> /etc/nextcloud
+# 65-chp-nextcloud.rules (chp-documents): NextCloud may READ (open, never execute) users' files of any type in its data
+# directory, including script types fapolicyd would otherwise deny (a .py or .php a user stored is a document here).
+# No ftype= filter: open-only, scoped by dir=, so a user-stored .so or binary (not just script types) never reaches the
+# 42-trusted-elf denials (Task 9 proof: store one and read it). Needed once allow_filesystem_mark = 1 (otherwise php-fpm's private mount namespace escapes fapolicyd entirely).
+allow perm=open exe=/usr/sbin/php-fpm : dir=/data/nextcloud/data/
+allow perm=open exe=/usr/bin/php : dir=/data/nextcloud/data/
+# the nightly backup copies users' files (any type) into /backup/nextcloud and back on a restore
+allow perm=open exe=/usr/bin/rsync : dir=/data/nextcloud/data/
+allow perm=open exe=/usr/bin/rsync : dir=/backup/nextcloud/
+allow perm=open exe=/usr/bin/sha256sum : dir=/backup/nextcloud/
+10-languages.rules  41-shared-obj.rules     72-shell.rules
+20-dracut.rules     42-trusted-elf.rules    90-deny-execute.rules
+21-updaters.rules   65-chp-nextcloud.rules  95-allow-open.rules
+30-patterns.rules   66-chp-fsmark.rules
+40-bad-elf.rules    70-trusted-lang.rules
+total 0
+permissive = 0
+integrity = none
+syslog_format = rule,dec,perm,auid,pid,exe,:,path,ftype,trust
+rpm_sha256_only = 0
+1:-> %languages=application/x-bytecode.ocaml,application/x-bytecode.python,application/java-archive,text/x-java,application/x-java-applet,application/javascript,text/javascript,text/x-awk,text/x-gawk,text/x-lisp,application/x-elc,text/x-lua,text/x-m4,text/x-nftables,text/x-perl,text/x-php,text/x-script.python,text/x-python,text/x-R,text/x-ruby,text/x-script.guile,text/x-tcl,text/x-luatex,text/x-systemtap
+11:10. allow perm=open exe=/usr/sbin/php-fpm : dir=/data/nextcloud/data/
+12:11. allow perm=open exe=/usr/bin/php : dir=/data/nextcloud/data/
+13:12. allow perm=open exe=/usr/bin/rsync : dir=/data/nextcloud/data/
+14:13. allow perm=open exe=/usr/bin/rsync : dir=/backup/nextcloud/
+15:14. allow perm=open exe=/usr/bin/sha256sum : dir=/backup/nextcloud/
+16:15. allow perm=open all : ftype=%languages trust=1
+17:16. deny_audit perm=any all : ftype=%languages

@@ -1,0 +1,10 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-14T15:54:30Z
+Created symlink /etc/systemd/system/multi-user.target.wants/postgresql.service → /usr/lib/systemd/system/postgresql.service.
+chp-site: occ maintenance:install failed: {"reqId":"RcQf61fa7qHqEEIOBeJR","level":3,"time":"2026-11-14T15:54:49+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/; fix the cause, then re-run chp-site documents enable (it is safe to repeat)
+enable-rc=2
+2026-11-14T15:54:49Z
+EXIT=0
+stick-detached

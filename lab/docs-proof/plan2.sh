@@ -23,7 +23,15 @@ Rs() { local b; b=$(printf '%s' "$1" | base64 | tr -d '\n'); A "sudo bash /tmp/i
 Rlong() { local vm=$1 ip=$2 unit=$3 cmd=$4 log=/root/$3.log
   Rh "$vm" "$ip" "systemctl reset-failed $unit 2>/dev/null; systemd-run --unit=$unit -E HOME=/root -p WorkingDirectory=/root bash -c $(printf %q "($cmd) > $log 2>&1; echo EXIT=\$? >> $log")" >/dev/null
   for _ in $(seq 240); do sleep 15; [[ $(Rh "$vm" "$ip" "grep -c '^EXIT=' $log 2>/dev/null") == 1* ]] && break; done
-  Rh "$vm" "$ip" "cat $log" | sed '/^RC=/d'; }
+  Fetch "$vm" "$ip" "$log"; }
+# like Rlong, but detached from the root console shell (keeps the admin shell's SELinux context, unconfined_t)
+Rbg() { local vm=$1 ip=$2 name=$3 cmd=$4 log=/root/$3.log
+  Rh "$vm" "$ip" "rm -f $log; HOME=/root setsid nohup bash -c $(printf %q "($cmd) > $log 2>&1; echo EXIT=\$? >> $log") >/dev/null 2>&1 < /dev/null & sleep 1; echo started" >/dev/null
+  for _ in $(seq 240); do sleep 15; [[ $(Rh "$vm" "$ip" "grep -c '^EXIT=' $log 2>/dev/null") == 1* ]] && break; done
+  Fetch "$vm" "$ip" "$log"; }
+# Rh output passes through expect (buffer ~2 KB): large root files are fetched instead (copied to chpadmin's home, read, removed)
+Fetch() { local vm=$1 ip=$2 f=$3 n; n=lab-fetch-$RANDOM
+  Rh "$vm" "$ip" "install -m 0600 -o chpadmin $f /home/chpadmin/$n" >/dev/null; Vh "$ip" "cat ~/$n; rm -f ~/$n"; }
 case ${1:-} in
   repo)
     A "cd /data/chp-release/$REPO_V && tar -czf /tmp/iso2/repo-$REPO_V.tgz repo && chmod 644 /tmp/iso2/repo-$REPO_V.tgz"
@@ -43,13 +51,16 @@ case ${1:-} in
     bash "$0" login
     A "sudo virsh attach-disk $SRV $STICK sdz --targetbus usb --type disk --live >/dev/null && echo stick-attached"; sleep 6
     # run 1 showed: files written from a transient unit get etc_runtime_t (init_t), not etc_t as from a root shell
-    # (logs/15): a LAB artifact; run the command as the root shell's context so the labels are what an admin gets
-    Rlong "$SRV" "$SIP" "docs-enable-$n" "date -u +%FT%TZ; runcon unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 chp-site documents enable; echo enable-rc=\$?; date -u +%FT%TZ"
+    # (logs/15): a LAB artifact; and runcon from the unit is refused. So run it from the root console shell itself,
+    # detached (setsid nohup), as an admin's terminal would, and wait for its log.
+    Rbg "$SRV" "$SIP" "docs-enable-$n" "date -u +%FT%TZ; chp-site documents enable; echo enable-rc=\$?; date -u +%FT%TZ"
     A "sudo virsh detach-disk $SRV sdz --live >/dev/null && echo stick-detached" ;;
   R)  shift; Rh "$SRV" "$SIP" "$*" | sed '/^RC=/d' ;;
   RH) shift; vm=$1 ip=$2; shift 2; Rh "$vm" "$ip" "$*" | sed '/^RC=/d' ;;
   RL) shift; Rlong "$SRV" "$SIP" "$1" "$2" ;;
   RLH) shift; Rlong "$1" "$2" "$3" "$4" ;;
+  RBG) shift; Rbg "$1" "$2" "$3" "$4" ;;
+  fetch) shift; Fetch "$@" ;;
   fsmark)   # fsmark VM IP PHASE: lab/docs-proof/fsmark-trial.sh PHASE on that host (as a transient unit)
     b=$(base64 < "$here/fsmark-trial.sh" | tr -d '\n')
     Rh "$2" "$3" "echo $b | base64 -d > /root/fsmark-trial.sh" >/dev/null

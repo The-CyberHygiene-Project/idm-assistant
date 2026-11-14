@@ -1,0 +1,21 @@
+== iso5-srv
+FSMARK=0
+23:allow_filesystem_mark = 0
+pending: No such file or directory
+active
+Denied accesses: 3
+chp-base-0.1.0-11.chp.el9.noarch
+== iso5-cli1
+FSMARK=0
+22:allow_filesystem_mark = 0
+pending: No such file or directory
+active
+Denied accesses: 0
+chp-base-0.1.0-11.chp.el9.noarch
+== iso5-cli2
+FSMARK=0
+23:allow_filesystem_mark = 0
+pending: No such file or directory
+active
+Denied accesses: 0
+chp-base-0.1.0-11.chp.el9.noarch

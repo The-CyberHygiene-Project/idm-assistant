@@ -1,0 +1,9 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-14T15:56:18Z
+chp-site: occ app:disable failed: appstore can't be disabled.; fix the cause, then re-run chp-site documents enable (it is safe to repeat)
+enable-rc=2
+2026-11-14T15:57:17Z
+EXIT=0
+stick-detached

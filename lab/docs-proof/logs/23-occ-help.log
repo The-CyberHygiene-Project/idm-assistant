@@ -1,0 +1,135 @@
+=== user_oidc:provider
+Usage:
+  user_oidc:provider [options] [--] [<identifier>]
+Arguments:
+  identifier                                                                 Administrative identifier name of the provider in the setup
+Options:
+  -c, --clientid=CLIENTID                                                    OpenID client identifier
+  -s, --clientsecret=CLIENTSECRET                                            OpenID client secret
+      --clientsecret-file=CLIENTSECRET-FILE                                  File that contains the OpenID client secret
+      --clientsecret-env=CLIENTSECRET-ENV                                    Environment variable that contains the OpenID client secret
+  -d, --discoveryuri=DISCOVERYURI                                            OpenID discovery endpoint uri
+  -e, --endsessionendpointuri=ENDSESSIONENDPOINTURI                          OpenID end session endpoint uri
+  -p, --postlogouturi=POSTLOGOUTURI                                          Post logout URI
+  -o, --scope[=SCOPE]                                                        OpenID requested value scopes, if not set defaults to "openid email profile"
+      --unique-uid=UNIQUE-UID                                                Determines if unique user ids shall be used or not. 1 to enable, 0 to disable
+      --use-private-key-jwt=USE-PRIVATE-KEY-JWT                              If enabled, user_oidc will use the private key JWT authentication method instead of using the client secret. 1 to enable, 0 to disable (default when creating a new provider)
+      --check-bearer=CHECK-BEARER                                            Determines if Nextcloud API/WebDav calls should check the Bearer token against this provider or not. 1 to enable, 0 to disable (default when creating a new provider)
+      --bearer-provisioning=BEARER-PROVISIONING                              Determines if Nextcloud API/WebDav calls should automatically provision the user, when sending API and WebDav Requests with a Bearer token. 1 to enable, 0 to disable (default when creating a new provider)
+      --send-id-token-hint=SEND-ID-TOKEN-HINT                                Determines if ID token should be included as a parameter to the end_session_endpoint URL when using unified logout. 1 to enable, 0 to disable
+      --mapping-display-name=MAPPING-DISPLAY-NAME                            Attribute mapping of the display name
+      --mapping-email=MAPPING-EMAIL                                          Attribute mapping of the email address
+      --mapping-quota=MAPPING-QUOTA                                          Attribute mapping of the quota
+      --mapping-uid=MAPPING-UID                                              Attribute mapping of the user id
+      --extra-claims=EXTRA-CLAIMS                                            Extra claims to request when getting tokens
+      --mapping-language=MAPPING-LANGUAGE                                    Attribute mapping of the account language
+      --mapping-locale=MAPPING-LOCALE                                        Attribute mapping of the account locale
+      --mapping-website=MAPPING-WEBSITE                                      Attribute mapping of the website
+      --mapping-avatar=MAPPING-AVATAR                                        Attribute mapping of the avatar
+      --mapping-twitter=MAPPING-TWITTER                                      Attribute mapping of twitter
+      --mapping-fediverse=MAPPING-FEDIVERSE                                  Attribute mapping of the fediverse
+      --mapping-organisation=MAPPING-ORGANISATION                            Attribute mapping of the organisation
+      --mapping-role=MAPPING-ROLE                                            Attribute mapping of the role
+      --mapping-headline=MAPPING-HEADLINE                                    Attribute mapping of the headline
+      --mapping-biography=MAPPING-BIOGRAPHY                                  Attribute mapping of the biography
+      --mapping-phone=MAPPING-PHONE                                          Attribute mapping of the phone
+      --mapping-gender=MAPPING-GENDER                                        Attribute mapping of the gender
+      --mapping-pronouns=MAPPING-PRONOUNS                                    Attribute mapping of the pronouns
+      --mapping-birthdate=MAPPING-BIRTHDATE                                  Attribute mapping of the birth date
+      --mapping-address=MAPPING-ADDRESS                                      Attribute mapping of the address
+      --mapping-street_address=MAPPING-STREET_ADDRESS                        Attribute mapping of the street address
+      --mapping-postal_code=MAPPING-POSTAL_CODE                              Attribute mapping of the postal code
+=== groupfolders:create
+Usage:
+  groupfolders:create [options] [--] <name>
+Arguments:
+  name                             Name or mount point of the new folder
+Options:
+      --bucket=BUCKET              Overwrite the bucket used for the new folder
+      --acl-no-default-permission  Do not grant any advanced permission by default
+      --silent                     Do not output any message
+=== groupfolders:group
+Usage:
+  groupfolders:group [options] [--] <folder_id> <group> [<permissions>...]
+Arguments:
+  folder_id              Id of the folder to configure
+  group                  The group to configure
+  permissions            The permissions to set for the group as a white space separated list (ex: read write). Leave empty for read only
+Options:
+  -d, --delete           Remove access for the group
+      --silent           Do not output any message
+=== groupfolders:permissions
+Usage:
+  groupfolders:permissions [options] [--] <folder_id> [<path> [<permissions>...]]
+Arguments:
+  folder_id              Id of the folder to configure
+  path                   The path within the folder to set permissions for
+  permissions            The permissions to set for the user or group as a white space separated list (ex: +read "-write"). Use "clear" to remove all permissions. Prepend the permission list with -- to allow parsing the - character.
+Options:
+  -e, --enable           Enable advanced permissions for the folder
+  -d, --disable          Disable advanced permissions for the folder
+  -m, --manage-add       Add manage permission for user or group
+  -r, --manage-remove    Remove manage permission for user or group
+  -u, --user=USER        The user to configure the permissions for
+  -g, --group=GROUP      The group to configure the permissions for
+  -c, --team=TEAM        The circle/team to configure the permissions for
+  -t, --test             Test the permissions for the set path
+      --silent           Do not output any message
+=== groupfolders:list
+Usage:
+  groupfolders:list [options]
+Options:
+  -u, --user=USER        List Team folders applicable for a user
+      --silent           Do not output any message
+=== tag:add
+Usage:
+  tag:add [options] [--] <name> <access>
+Arguments:
+  name                   name of the tag
+  access                 access level of the tag (public, restricted or invisible)
+Options:
+      --silent           Do not output any message
+=== tag:list
+Usage:
+  tag:list [options]
+Options:
+      --visibilityFilter[=VISIBILITYFILTER]    filter by visibility (1,0)
+      --nameSearchPattern[=NAMESEARCHPATTERN]  optional search pattern for the tag name (infix)
+      --silent                                 Do not output any message
+=== security:certificates:import
+Usage:
+  security:certificates:import <path>
+Arguments:
+  path                  path to the PEM certificate to import
+Options:
+      --silent          Do not output any message
+=== user:add
+Usage:
+  user:add [options] [--] <uid>
+Arguments:
+  uid                                Account ID used to login (must only contain a-z, A-Z, 0-9, -, _ and @)
+Options:
+      --password-from-env            read password from environment variable NC_PASS/OC_PASS
+      --generate-password            Generate a secure password. A welcome email with a reset link will be sent to the user via an email if --email option and newUser.sendEmail config are set
+      --display-name[=DISPLAY-NAME]  Login used in the web UI (can contain any characters)
+  -g, --group[=GROUP]                groups the account should be added to (The group will be created if it does not exist) (multiple values allowed)
+      --email=EMAIL                  When set, users may register using the default email verification workflow
+      --silent                       Do not output any message
+chp_nextcloud_rules.xml
+chp_review_rules.xml
+chp_suricata_rules.xml
+chp_yara_rules.xml
+local_rules.xml
+active
+EXIT=0
+  -o, --scope[=SCOPE]                                                        OpenID requested value scopes, if not set defaults to "openid email profile"
+      --use-private-key-jwt=USE-PRIVATE-KEY-JWT                              If enabled, user_oidc will use the private key JWT authentication method instead of using the client secret. 1 to enable, 0 to disable (default when creating a new provider)
+      --group-provisioning=GROUP-PROVISIONING                                Flag to toggle group provisioning. 1 to enable, 0 to disable (default)
+      --group-whitelist-regex=GROUP-WHITELIST-REGEX                          Group whitelist regex
+      --group-restrict-login-to-whitelist=GROUP-RESTRICT-LOGIN-TO-WHITELIST  Restrict login for users that are not in any whitelisted groups. 1 to enable, 0 to disable (default)
+      --group-forbid-login-without-group=GROUP-FORBID-LOGIN-WITHOUT-GROUP    Forbid login for users that are not member of any group provided by the OIDC group claim. 1 to enable, 0 to disable (default)
+      --mapping-groups=MAPPING-GROUPS                                        Attribute mapping of the groups
+      --mapping-group-admin-for=MAPPING-GROUP-ADMIN-FOR                      Attribute mapping for the "Group admin for" field
+      --entraid-group-names=ENTRAID-GROUP-NAMES                              Turn on usage of mapping guid to names with Microsoft Graph. 1 to enable, 0 to disable (default)
+      --resolve-nested-claims=RESOLVE-NESTED-CLAIMS                          Enable support for dot-separated and fallback claim mappings (e.g. "a.b | c.d | e"). 1 to enable, 0 to disable (default)
+EXIT=0
