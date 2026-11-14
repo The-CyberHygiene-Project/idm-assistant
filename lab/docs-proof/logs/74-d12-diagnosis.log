@@ -1,0 +1,19 @@
+17:33:31 GET chp_foldertag chp.tag.failed: mounts below the target are not walked (/lab02/files/Internal/, /lab02/files/Operations/, /lab02/files/Public/), files in them may be untagged: nested mount: /lab02/files
+17:33:31 GET chp_foldertag chp.tag.failed: mounts below the target are not walked (/lab02/files/Internal/, /lab02/files/Operations/, /lab02/files/Public/), files in them may be untagged: nested mount: /lab02/files
+20:42:05 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to 2 (out of contained team folder): /lab01/files/CUI/CUI_c-r5.txt -> /lab01/files/FCI/c-r5.txt
+20:42:05 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to 4 (out of contained team folder): /lab01/files/CUI/CUI_c-r5.txt -> /lab01/files/Operations/c-r5.txt
+20:42:05 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to none (out of contained team folder): /lab01/files/CUI/CUI_c-r5.txt -> /lab01/files/home-c-r5.txt
+20:42:06 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to 6 (out of contained team folder): /lab01/files/CUI/CUI_c-r5.txt -> /lab01/files/Public/c-r5.txt
+20:42:06 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to 5 (out of contained team folder): /lab01/files/CUI/CUI_c-r5.txt -> /lab01/files/Internal/c-r5.txt
+20:42:07 COPY chp_foldertag chp.contain.refused: refused copy from team folder 2 to 4 (out of contained team folder): /lab01/files/FCI/f-r5.txt -> /lab01/files/Operations/f-r5.txt
+20:42:07 MOVE chp_foldertag chp.contain.refused: refused move from team folder 2 to 1 (out of contained team folder): /lab01/files/FCI/f-r5.txt -> /lab01/files/CUI/f-r5.txt
+20:42:09 COPY chp_foldertag chp.contain.refused: refused copy from team folder 1 to 4 (out of contained team folder): /lab01/files/CUI/Proj-r5 -> /lab01/files/Operations/Proj-r5
+20:42:09 MOVE admin_audit File renamed with id "188" from "/lab01/files/CUI/CUI_r-r5.txt" to "/lab01/files/CUI/CUI_r2-r5.txt"
+20:42:10 MOVE admin_audit File renamed with id "190" from "/lab01/files/CUI/Empty-r5" to "/lab01/files/CUI/Empty2-r5"
+20:42:10 MOVE admin_audit File renamed with id "189" from "/lab01/files/CUI/Sub-r5" to "/lab01/files/CUI/Sub2-r5"
+17:36:29 webdav Failed to rename /CUI/Sub-r1 to /CUI/Sub2-r1
+17:36:29 no app in context Uncaught exception
+17:37:18 webdav Failed to rename /CUI/Sub-r2 to /CUI/Sub2-r2
+17:37:18 no app in context Uncaught exception
+17:38:18 webdav Failed to rename /CUI/HidQ-r4 to /CUI/HidQ2-r4
+17:38:18 no app in context Uncaught exception

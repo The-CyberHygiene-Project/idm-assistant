@@ -1,0 +1,7 @@
+MOVE CUI file -> Archive: HTTP 403 files/lab01/CUI/CUI_a-r6.txt cannot be deleted
+MOVE CUI file -> CUI subfolder: HTTP 403 files/lab01/CUI/CUI_b-r6.txt cannot be deleted
+DELETE empty CUI folder: HTTP 403 b'<?xml version="1.0" encoding="utf-8"?>\n<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n  <s:exception>Sabre\\DA'
+MOVE Operations file -> Operations subfolder: HTTP 201 b''
+rename NON-EMPTY Operations folder: HTTP 403 chp_foldertag: a non-empty folder cannot be moved or deleted on this server yet (database MD5 unavailable)
+rename NON-EMPTY CUI folder: HTTP 403 chp_foldertag: a non-empty folder cannot be moved or deleted on this server yet (database MD5 unavailable)
+N still there: True N2 exists: False

@@ -1,0 +1,15 @@
+PASS delete a CUI file -> in lab01's trash (HTTP 204, trash ['/remote.php/dav/trashbin/lab01/trash/CUI_t-r9.txt.d1794689073'])
+PASS DavGuard: MOVE trash item -> files path (Operations) REFUSED (HTTP 403)
+PASS DavGuard: COPY trash item -> files path REFUSED (HTTP 403)
+PASS restore from trash (restore endpoint) -> back in CUI, same id, tag kept (HTTP 201, id 237 vs 237, tags ['CUI'])
+PASS an old version exists after the change (2 versions)
+PASS DavGuard: COPY old version -> files path REFUSED (HTTP 403)
+PASS version restore -> content v1, tag kept (HTTP 201, body b'v1\n', tags ['CUI'])
+PASS MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard), file intact (HTTP 403)
+trash: ALL PASS
+PASS ACL works: lab01 sees no hidden.txt (HidQ [], HidP ['visible.txt'])
+PASS FolderGuard counts the ACL-hidden child: rename of a folder that LOOKS empty REFUSED (HTTP 403)
+PASS FolderGuard: delete of a folder that LOOKS empty REFUSED (HTTP 403)
+  COPY CUI/HidP-r8 -> Archive: HTTP 412; lab01 sees in the copy ['visible.txt']
+FAIL COPY folder with an ACL-hidden child -> Archive: copy + visible child tagged CUI (HTTP 412 (folders are not tagged, by design))
+hidden: 1 FAIL

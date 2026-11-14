@@ -1,0 +1,175 @@
+== iso5-srv
+CyberHygiene Project Lab Installer packages      12 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     5.1 MB/s | 390 kB     00:00    
+Last metadata expiration check: 0:00:01 ago on Sat 14 Nov 2026 01:35:09 PM MST.
+Dependencies resolved.
+================================================================================
+ Package              Architecture  Version                    Repository  Size
+================================================================================
+Upgrading:
+ chp-base             noarch        0.1.0-12.chp.el9           chp         27 k
+ chp-documents        noarch        0.1.0-6.chp.el9            chp         36 k
+ chp-site             noarch        0.14.0-4.chp.el9           chp        116 k
+ nextcloud-chp        noarch        35.0.3-5.chp.el9           chp        212 M
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 212 M
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-4.chp.el9.noarch                       1/8 
+  Upgrading        : chp-base-0.1.0-12.chp.el9.noarch                       2/8 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       2/8 
+  Upgrading        : nextcloud-chp-35.0.3-5.chp.el9.noarch                  3/8 
+  Running scriptlet: nextcloud-chp-35.0.3-5.chp.el9.noarch                  3/8 
+File context for /etc/nextcloud(/.*)? already defined, modifying instead
+File context for /data/nextcloud(/.*)? already defined, modifying instead
+File context for /var/log/nextcloud(/.*)? already defined, modifying instead
+File context for /usr/lib/nextcloud(/.*)? already defined, modifying instead
+
+  Upgrading        : chp-documents-0.1.0-6.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-documents-0.1.0-6.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-documents-0.1.0-5.chp.el9.noarch                   5/8 
+  Cleanup          : chp-documents-0.1.0-5.chp.el9.noarch                   5/8 
+  Running scriptlet: chp-documents-0.1.0-5.chp.el9.noarch                   5/8 
+  Running scriptlet: chp-base-0.1.0-11.chp.el9.noarch                       6/8 
+  Cleanup          : chp-base-0.1.0-11.chp.el9.noarch                       6/8 
+  Cleanup          : chp-site-0.14.0-3.chp.el9.noarch                       7/8 
+  Cleanup          : nextcloud-chp-35.0.3-4.chp.el9.noarch                  8/8 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       8/8 
+  Running scriptlet: nextcloud-chp-35.0.3-5.chp.el9.noarch                  8/8 
+nextcloud-chp: occ upgrade done
+
+  Running scriptlet: nextcloud-chp-35.0.3-4.chp.el9.noarch                  8/8 
+  Verifying        : chp-base-0.1.0-12.chp.el9.noarch                       1/8 
+  Verifying        : chp-base-0.1.0-11.chp.el9.noarch                       2/8 
+  Verifying        : chp-documents-0.1.0-6.chp.el9.noarch                   3/8 
+  Verifying        : chp-documents-0.1.0-5.chp.el9.noarch                   4/8 
+  Verifying        : chp-site-0.14.0-4.chp.el9.noarch                       5/8 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       6/8 
+  Verifying        : nextcloud-chp-35.0.3-5.chp.el9.noarch                  7/8 
+  Verifying        : nextcloud-chp-35.0.3-4.chp.el9.noarch                  8/8 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-12.chp.el9.noarch     chp-documents-0.1.0-6.chp.el9.noarch     
+  chp-site-0.14.0-4.chp.el9.noarch     nextcloud-chp-35.0.3-5.chp.el9.noarch    
+
+Complete!
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 734483
+Denied accesses: 0
+EXIT=0
+== iso5-cli1
+CyberHygiene Project Lab Installer packages      12 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     2.6 MB/s | 390 kB     00:00    
+Last metadata expiration check: 0:00:01 ago on Sat 14 Nov 2026 01:36:03 PM MST.
+Dependencies resolved.
+================================================================================
+ Package           Architecture    Version                   Repository    Size
+================================================================================
+Upgrading:
+ chp-base          noarch          0.1.0-12.chp.el9          chp           27 k
+ chp-site          noarch          0.14.0-4.chp.el9          chp          116 k
+
+Transaction Summary
+================================================================================
+Upgrade  2 Packages
+
+Total size: 143 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-4.chp.el9.noarch                       1/4 
+  Upgrading        : chp-base-0.1.0-12.chp.el9.noarch                       2/4 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       2/4 
+  Running scriptlet: chp-base-0.1.0-11.chp.el9.noarch                       3/4 
+  Cleanup          : chp-base-0.1.0-11.chp.el9.noarch                       3/4 
+  Cleanup          : chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       4/4 
+  Running scriptlet: chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+  Verifying        : chp-base-0.1.0-12.chp.el9.noarch                       1/4 
+  Verifying        : chp-base-0.1.0-11.chp.el9.noarch                       2/4 
+  Verifying        : chp-site-0.14.0-4.chp.el9.noarch                       3/4 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-12.chp.el9.noarch       chp-site-0.14.0-4.chp.el9.noarch      
+
+Complete!
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 843273
+Denied accesses: 0
+EXIT=0
+== iso5-cli2
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     4.4 MB/s | 390 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package           Architecture    Version                   Repository    Size
+================================================================================
+Upgrading:
+ chp-base          noarch          0.1.0-12.chp.el9          chp           27 k
+ chp-site          noarch          0.14.0-4.chp.el9          chp          116 k
+
+Transaction Summary
+================================================================================
+Upgrade  2 Packages
+
+Total size: 143 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-4.chp.el9.noarch                       1/4 
+  Upgrading        : chp-base-0.1.0-12.chp.el9.noarch                       2/4 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       2/4 
+  Running scriptlet: chp-base-0.1.0-11.chp.el9.noarch                       3/4 
+  Cleanup          : chp-base-0.1.0-11.chp.el9.noarch                       3/4 
+  Cleanup          : chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+  Running scriptlet: chp-base-0.1.0-12.chp.el9.noarch                       4/4 
+  Running scriptlet: chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+  Verifying        : chp-base-0.1.0-12.chp.el9.noarch                       1/4 
+  Verifying        : chp-base-0.1.0-11.chp.el9.noarch                       2/4 
+  Verifying        : chp-site-0.14.0-4.chp.el9.noarch                       3/4 
+  Verifying        : chp-site-0.14.0-3.chp.el9.noarch                       4/4 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-12.chp.el9.noarch       chp-site-0.14.0-4.chp.el9.noarch      
+
+Complete!
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-1.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 82778
+Denied accesses: 0
+EXIT=0

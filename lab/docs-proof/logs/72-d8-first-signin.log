@@ -1,0 +1,8 @@
+tag.failed lines before: 10
+SIGNED IN: id=lab06 display='Lab User 6' groups=['chp-users'] backend=user_oidc
+tag.failed lines after: 10
+0
+20:41:31 admin_audit User "lab06" added to group "chp-users"
+20:41:31 admin_audit User created: "lab06"
+20:41:32 admin_audit File with id "166" created: "/lab06/files"
+20:41:32 admin_audit File with id "166" written to: "/lab06/files"

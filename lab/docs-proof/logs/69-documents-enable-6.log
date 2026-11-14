@@ -1,0 +1,29 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-14T20:37:02Z
+- packages: nextcloud-chp, chp-documents (PHP 8.3, PostgreSQL 16.13, httpd from Rocky)
+- mail: no mail server installed (postfix, sendmail, exim, opensmtpd absent); NextCloud mail off
+- /etc/hosts: the site names -> 192.168.100.50 (apache has no DNS)
+- DNS: files.iso5.lab.test IN A 192.168.100.50 in the site zone
+- rendered: LAN-only httpd (192.168.100.0/24), egress address 192.168.100.50, /etc/chp/documents.conf
+- egress table inet chp_nextcloud_egress loaded (apache: this server only, no DNS)
+- Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress at 12)
+- database: PostgreSQL 16.13, socket only, peer authentication, database nextcloud (owner apache)
+- NextCloud installed offline (data /data/nextcloud/data); /etc/nextcloud/config.php trusted by fapolicyd first
+- settings: no internet connection, app store and update checker off, mail off, trusted domain files.iso5.lab.test, https://files.iso5.lab.test:8443, sharing locked down
+- apps on: admin_audit, groupfolders, files_accesscontrol, user_oidc, chp_foldertag, systemtags, password_policy, bruteforcesettings, files_downloadlimit, workflowengine, viewer, files_pdfviewer; editors and outbound apps off
+- break-glass NextCloud admin ncadmin present
+- Kanidm: groups cui-users, doc-reviewers; OAuth2 client nextcloud (ES256, PKCE), chp_groups claim
+- sign-in: user_oidc provider kanidm; the login page goes straight to Kanidm
+- team folders: CUI=1, FCI=2, Archive=3, Operations=4, Internal=5, Public=6; read back: CUI/FCI/Archive mapped to cui-users only, share off; reviewers read-only there
+- tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive
+- certificate for files.iso5.lab.test from the site CA (renewed by chp-nextcloud-cert-renew.timer)
+- started: php-fpm, httpd, nextcloud-cron.timer, chp-nextcloud-backup.timer, chp-nextcloud-cert-renew.timer (HTTPS 8443, LAN 192.168.100.0/24 only)
+- fapolicyd: no restart needed
+- documents.conf ENABLED=yes
+- AIDE: this run changed /var/ossec/etc/rules/chp_nextcloud_rules.xml: refresh the baseline now with chp-site aide-accept --approver "<ISSO>" --reason "documents enable"
+enable-rc=0
+2026-11-14T20:38:01Z
+EXIT=0
+stick-detached

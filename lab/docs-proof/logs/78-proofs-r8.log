@@ -1,0 +1,48 @@
+PASS delete a CUI file -> in lab01's trash (HTTP 204, trash ['/remote.php/dav/trashbin/lab01/trash/CUI_t-r8.txt.d1794689053'])
+PASS DavGuard: MOVE trash item -> files path (Operations) REFUSED (HTTP 403)
+PASS DavGuard: COPY trash item -> files path REFUSED (HTTP 403)
+PASS restore from trash (restore endpoint) -> back in CUI, same id, tag kept (HTTP 201, id 216 vs 216, tags ['CUI'])
+PASS an old version exists after the change (1 versions)
+PASS DavGuard: COPY old version -> files path REFUSED (HTTP 403)
+FAIL version restore -> content v1, tag kept (HTTP 201, body b'v2 changed', tags ['CUI'])
+PASS MOVE a CUI file WITH old versions -> Archive REFUSED while DEGRADED (FolderGuard), file intact (HTTP 403)
+trash: 1 FAIL
+hidden-setup: made CUI/HidP-r8 (visible.txt, hidden.txt) and CUI/HidQ-r8 (hidden.txt)
+hidden-setup: ALL PASS
+PASS ACL works: lab01 sees no hidden.txt (HidQ [], HidP ['visible.txt'])
+PASS FolderGuard counts the ACL-hidden child: rename of a folder that LOOKS empty REFUSED (HTTP 403)
+PASS FolderGuard: delete of a folder that LOOKS empty REFUSED (HTTP 403)
+  COPY CUI/HidP-r8 -> Archive: HTTP 201; lab01 sees in the copy ['visible.txt']
+FAIL COPY folder with an ACL-hidden child -> Archive: copy + visible child tagged CUI (HTTP 201)
+hidden: 1 FAIL
+PASS internal share of a CUI file to lab02 REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r8.txt".)
+PASS internal share of a CUI file to lab04 (cui-users) REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r8.txt".)
+PASS public link on a CUI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI_share-r8.txt".)
+PASS public link on an FCI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "fci-share-r8.txt".)
+PASS internal share of an FCI file REFUSED (HTTP 403, OCS 403: You are not allowed to share "fci-share-r8.txt".)
+PASS public link on an Archive file REFUSED (HTTP 403, OCS 403: You are not allowed to share "arch-share-r8.txt".)
+PASS internal share of the CUI folder itself REFUSED (HTTP 403, OCS 403: You are not allowed to share "CUI".)
+PASS control: internal share of an Operations file to lab02 ALLOWED (HTTP 200, OCS 200: OK)
+PASS control: public link (with password) on an Operations file ALLOWED (HTTP 200, OCS 200: OK)
+share: ALL PASS
+  lab03 (doc-reviewers, NOT cui-users) sees: ['Internal', 'Operations', 'Public']
+PASS lab03 sees no CUI/FCI/Archive, sees Operations
+PASS lab03 cannot read the CUI file by path
+PASS lab03 reads Operations
+PASS lab03 writes in Operations (owner decision 7: normal access outside CUI/FCI/Archive)
+  lab02 (plain user) sees: ['Internal', 'Operations', 'Public', 'ops-share-r1.txt', 'ops-share-r8.txt']
+PASS lab02 sees no CUI/FCI/Archive
+  lab04 (doc-reviewers + cui-users) sees: ['Archive', 'CUI', 'FCI', 'Internal', 'Operations', 'Public']
+PASS lab04 sees CUI, FCI, Archive
+PASS lab04 reads (downloads) the CUI file (GET 200)
+PASS lab04 cannot change the CUI file (PUT)
+PASS lab04 cannot add a file to CUI (PUT new)
+PASS lab04 cannot delete the CUI file
+PASS lab04 cannot add a file to FCI or Archive
+PASS lab04 writes in Operations
+PASS CUI file unchanged afterwards
+see: ALL PASS
+PASS download a CUI file (browser GET of the WebDAV URL) (GET 200)
+PASS upload a user .so into Operations
+PASS download the user .so back unchanged (no fapolicyd 42-trusted-elf denial for php-fpm) (GET 200)
+download: ALL PASS

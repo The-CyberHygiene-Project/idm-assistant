@@ -1,0 +1,8 @@
+hidden-setup: made CUI/HidP-r10 (visible.txt, hidden.txt) and CUI/HidQ-r10 (hidden.txt)
+hidden-setup: ALL PASS
+PASS ACL works: lab01 sees no hidden.txt (HidQ [], HidP ['visible.txt'])
+PASS FolderGuard counts the ACL-hidden child: rename of a folder that LOOKS empty REFUSED (HTTP 403)
+PASS FolderGuard: delete of a folder that LOOKS empty REFUSED (HTTP 403)
+  COPY CUI/HidP-r10 -> Archive: HTTP 201; lab01 sees in the copy ['visible.txt']
+PASS COPY folder with an ACL-hidden child -> Archive: copy + visible child tagged CUI (HTTP 201 (folders are not tagged, by design))
+hidden: ALL PASS
