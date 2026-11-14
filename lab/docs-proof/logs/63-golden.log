@@ -1,0 +1,6 @@
+PASS iso5-srv: golden snapshot
+PASS iso5-cli2: golden snapshot
+PASS reset.sh from golden
+PASS engine findings on srv1 at golden
+PASS engine findings on client2 at golden
+stage golden: ALL PASS

@@ -1,4 +1,8 @@
-# Proof record: ISO 0.7.0 Plan 2 Task 9 (NextCloud server role) on the iso5 lab, round 1
+# Proof record: ISO 0.7.0 Plan 2 Task 9 (NextCloud server role) on the iso5 lab
+
+**Round 3 (2026-11-14) supersedes the status tables of rounds 1 and 2 below: see "Round 3" at the end.**
+
+## Round 1
 
 **Result: BLOCKED by a product defect.** `chp-site documents enable` (chp-site 0.14.0-1 from the owner-signed repo 0.12.0)
 stops at its Wazuh step on every run, so NextCloud is never configured or started and almost every product proof in the
@@ -158,3 +162,78 @@ Kanidm call: Kanidm 1.11.2 `group get <missing>` prints `No matching group '<nam
 unexpected output) and **A1** (the `office` app was left enabled; the spike disabled it). Repo 0.12.0 re-staged
 (only chp-site changed; modules.yaml unchanged), dry-run on iso5-srv: upgrade = chp-site 0.14.0-3 only
 (`stage-0.12.0-r3-logs/`). Resume after the owner re-signs: `plan2.sh repo`, then `plan2.sh enable 4`.
+
+## Round 3 (2026-11-14): repo 0.12.0 r3 (chp-site 0.14.0-3: D3, D4, D5, office off)
+
+**Result: `documents enable` SUCCEEDED (run 4, exit 0); most product proofs PASS; 6 new product defects (D6-D11),
+two of them important (D9: the egress alert never fires; D11: NextCloud background jobs never run).**
+
+| Step | Result | Log |
+|---|---|---|
+| Repo r3 on all three hosts | upgrade = **chp-site 0.14.0-3 only** on srv, cli1, cli2 (confirmed) | 25 |
+| enable run 4 | continued from the round-2 state, exit 0, every step listed, `ENABLED=yes`. The new pre-install config.php path **did not run** (NextCloud was already installed, trusted by W1): a fresh-site enable is a Plan 4 item. The Kanidm group steps (D5 fix) ran: groups made | 26 |
+| enable run 5 (idempotence) | exit 0; config.php sha256 **unchanged** (`567534e3…`) and **"fapolicyd: no restart needed"**, start time unchanged | 58-60 |
+| AIDE | `aide-accept` after enable: 35,491 paths explained by 36 signed packages; 94 not explained, all from enable (documents.conf, hosts, httpd conf, trust.d/nextcloud, config.php, **oidc-secret**, **/etc/pki/nextcloud/key.pem**, units, selinux file contexts, users/groups for apache/postgres, ossec.conf, rules) or the lab (/root files); new baseline pinned to the stick | 31 |
+| Gate 3: CUI scan, all three hosts, after enable | **108 pass / 2 fail on every host** (the two accepted AIDE rules); **no rule changed vs 0.6.0** (rule-by-rule diff); `deviations.py` **Gate 3: MET**; no DEVIATIONS.md entry needed. Results: `lab/docs-proof/scan-results/` | 32, 33 |
+| adapter, nvram, snapspike | ALL PASS (after the scan) | 34 |
+| Reboot (nvram stage reboots srv and cli2) | srv back: egress unit started **before** php-fpm and httpd (10:29:30.06 / .29 / .64), all NextCloud services active, 79 OK, 0 AVC, 0 denials | 35 |
+| fixtures (lab01-06), golden (reset + 0 findings on both) | FIXTURES OK; golden ALL PASS | 36, 63 |
+
+### Checklist (round 3)
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| 1 | OIDC sign-in with TOTP through Kanidm | **PASS**: lab01-04 signed in by a scripted browser (NextCloud -> Kanidm /ui/login/begin -> totp -> pw -> consent -> NextCloud); groups mapped exactly: lab01 [chp-users, cui-users], lab02 [chp-users], lab03 [chp-users, doc-reviewers], lab04 [all three]; backend user_oidc. `/login` -> 302 to `/apps/user_oidc/login/1`; `/login?direct=1` shows the password form; break-glass `ncadmin` with the escrowed secret: 207; a wrong one 401. Kanidm 1.11.2 `oauth2 get`: `oauth2_jwt_legacy_crypto_enable` and `oauth2_allow_insecure_client_disable_pkce` are **absent** (= false) on the new client; `oauth2_prefer_short_username: true`. Escrow file keys: `NEXTCLOUD_ADMIN_USER`, `NEXTCLOUD_ADMIN_PASSWORD`. Host sign-in (row 36): with the gates | 37-39, 27 |
+| 2 | Team folders, share off, reviewers | **PASS** (`proofs.py share`, `see`): internal share CUI->lab02 and ->lab04, public link on CUI/FCI/Archive, FCI internal share, the CUI folder itself: all refused (OCS 404 "Node is not shareable"); Operations internal share and password link allowed. Wazuh 100601 level 12 x7. lab03 (reviewer, not cui-users) sees only Operations/Internal/Public, CUI path 404, may write in Operations (decision 7); lab02 sees no CUI; lab04 reads/downloads CUI, cannot change/add/delete in CUI/FCI/Archive, writes in Operations. Folder map read back: CUI/FCI/Archive = cui-users perms 15 (no share), others chp-users 31, ACL on | 41, 40, 48 |
+| 3 | Containment, CUI<->Archive, rename/trash/version, DavGuard | **PASS**: COPY/MOVE CUI -> FCI, Operations, home, Public, Internal: 403, nothing created; FCI -> Operations/CUI 403; CUI -> Archive copy and move (no old versions) allowed and tagged CUI; Archive -> CUI allowed; rename and move into a subfolder inside CUI keep the tag; trash restore keeps file id and tag; DavGuard: MOVE/COPY trash item -> files 403, COPY old version -> files 403; **version restore keeps the tag** (content v1, CUI). Wazuh 100611 level 12 per refusal. **Defect D7**: FolderGuard's refusal of a rename/move is HTTP **500** (data intact), the delete refusal is 403. **Observation O4 (upstream)**: after a trash restore, the next change keeps no earlier version (1 version listed) | 41, 43, 44, 45 |
+| 4 | Tagging | **PASS** for files: WebDAV PUT, browser-style chunked upload, NFC and NFD non-ASCII names, CUI folder copy into Archive (every file tagged CUI); the restricted tag cannot be removed by the user (DELETE 404). By design **folders are not tagged** (chp_foldertag README: files are tagged; folders walked) — my first expectation was wrong. ACL-hidden child: lab01 cannot see `hidden.txt`; FolderGuard counts it (rename and delete of the folder that looks empty: refused); a copy of the folder into Archive copies the **visible** child only (tagged), the hidden child is not copied (no leak). **Defect D8**: false `chp.tag.failed` (Wazuh **level 12**, rule 100613) on every user's first sign-in | 41, 43, 46, 47 |
+| 5 | MD5/FIPS DEGRADED | **PASS**: `documents status` and the check print "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)"; FolderGuard refuses non-empty folder rename/delete and a move of a file with old versions; Wazuh **100616 level 7 once**, then **100615 level 3** (x8): the `ignore` fallback works | 27, 41, 43, 48 |
+| 6 | Egress | **PASS** for enforcement: as apache, outbound 93.184.216.34:80 and 1.1.1.1:443 refused (curl rc 7, php fsockopen "Connection refused"), DNS refused (`CHP-NC-EGRESS-DNS`, 16 packets), /etc/hosts names resolve, the server itself reachable (idm:443 -> 200); kernel log `CHP-NC-EGRESS` lines; table removed -> check 79 ALERT and php-fpm + httpd refuse to start; table edited at run time -> 79 ALERT ("differs"); address file widened -> 79 ALERT and the egress unit refuses to start, php-fpm/httpd go down (BindsTo); all restored. **Defect D9 (important): rule 100620 never fires**: the kernel line is decoded by Wazuh's firewall decoder and taken by rule **4100 (level 0)** (`wazuh-logtest`); 0 egress alerts in alerts.json | 49, 51 |
+| 7 | Mail | PARTLY: `mail_smtpmode` = null, no MTA installed (enable's check: none). The refusal with an MTA installed: NOT RUN (no MTA package in the offline repo) | 26, 49 |
+| 8 | Wazuh rules at their levels | Seen live: 100601 (12, share refused), 100604 (7, NextCloud "Login failed" — taken by 100604, not 2501/100605), 100606 (7, delete in CUI), 100607 (3, download from CUI), 100608 (3, canary refusal anchored to file 159), 100609 (12, canary enabled outside the window), 100611 (12, contain), 100613 (12: D8 false alarms), 100615/100616 (3/7), 100617 (3, apps switched off by enable), **100630 (7) fires 3x per wrong TOTP** (three kanidmd lines match; real line: `Handler::PasswordMfa -> Result::Denied - TOTP Fail`, `Credentials denied | reason: incorrect totp`, `Auth result: Denied: incorrect totp`). `user` for occ = `--` (canary enable lines). Rule-file order: `chp_nextcloud_rules_canary.xml` loads after the main file (100608 fired). NOT SEEN: 100602/100603/100612 (no share made, no control app disabled), 100618 (needs the 03:05-03:45 window), 100620 (D9) | 48, 50, 53, 54 |
+| 9 | Nightly check + canary + break on purpose | **PASS**: manual check (outside the window; ISSO = lab): OK, canary refused both ways, check 81 OK, DEGRADED shown not alerted. Broken on purpose (untag a CUI file, delete `contain`, rename team folder 3, config.php changed out of band): **5 alerts** (untagged, name, app:contain, folder:3 renamed, trust) and check 81 ALERT; restored -> OK. SIGKILL of the check unit mid-canary: `ExecStopPost` canary-off ran ("canary account disabled, its app tokens deleted"), canary disabled, 0 tokens; canary left enabled by hand -> next run `canary:leftover` ALERT and cleanup. Inside the 03:05-03:45 window: NOT RUN. **Observation O6**: the first check run writes the canary rules and restarts the manager in the middle of the run; the canary "User enabled" line written during the restart was not seen by Wazuh (100609 missed that once; seen on the next run) | 52-55 |
+| 10 | fapolicyd | trust.d format `<path> <size> <sha256>` under a header; enable run 5: config.php sha256 unchanged, **no fapolicyd restart**; `%post fagenrules --load`: no restart (round 1); user-stored `.so` (ELF) uploaded and downloaded unchanged (rule 65, no ftype=); check 80 after back-to-back installs OK (round 1). `--check-status` read after a restart: **0 denials** (restart -> baseline -> all the proofs -> 0 at the end). **Defect D6**: enable's own fapolicyd restart left fapolicyd **dead** ("recvmesg failed", exit 1, 1 s after start) and enable still exited 0 ("Denied accesses: unknown"); check 80 alerted. 5 manual restarts and 5 restarts right after a trust update or a dnf transaction all worked: intermittent (3 of about 18 restarts on this lab, incl. round 1's two under FSMARK=1, so round 1's D2 was probably this, not the setting) | 26-30 |
+| 11 | allow_filesystem_mark trial | DROPPED (§13); FSMARK=0 on all hosts | 24 |
+| 12 | Backup + restore | **PASS** with one defect: a held lock -> "another backup is running", exit 75; a partial dir (no MANIFEST) deleted at the next run; backup unit OK (`/backup/nextcloud/<stamp>`, 0700 root, MANIFEST 86 lines, pgdump, data, etc-nextcloud, 3.1 MB); a backup leaves config.php unchanged; restore: a file added after the backup is gone, services back, maintenance off, labels `httpd_sys_rw_content_t`, 0 denials, 0 AVC. **Defect D10**: after a restore config.php no longer matches its fapolicyd trust entry (restore's `maintenance:data-fingerprint` rewrites it), so the README's own verify step (`documents check`) alerts "trust" | 56, 57 |
+| 13 | Daily review rows | NOT RUN: the NextCloud rows appear in the 2026-11-14 report, built at 00:20 on 11-15 (a report is never rebuilt, so I did not build today early) | |
+| 14 | Reboot srv + client | **PASS** (nvram stage): see the table above | 35 |
+| 15 | Gates | CUI scan **MET** (no change); wazuh-on-neg PASS (round 1); regression and row 36: see below | 32-34 |
+| 16 | groupfolders `--delete` cascade | **PASS (no cascade)**: a stray chp-users mapping (perms 23 incl. share) + an ACL rule for chp-users on CUI; enable run 5 removed the mapping (CUI back to cui-users 15) and left the **doc-reviewers ACL rules intact**; the stray group's own ACL row stays behind (orphan, harmless) | 58-60 |
+| 17 | chp-canary disabled outside the window | **PASS**: disabled after every run (incl. a SIGKILLed run), 0 app tokens left | 52-55 |
+
+### Product defects found in round 3 (for the controller; nothing patched)
+
+- **D6 (important)** — `documents.py` step 17 (fapolicyd restart): after `systemctl restart fapolicyd` it reads
+  `--check-status` once, gets nothing ("Denied accesses: unknown") and exits 0 although fapolicyd died ("recvmesg
+  failed"): the server ran with **no file-execution control** until check 80 alerted. Fix: after the restart wait (a
+  few seconds), require `systemctl is-active fapolicyd` and a parsed counter; on failure retry the restart once, then
+  fail the run loudly (as chp-base 0.1.0-11's helper now does). Root cause of the intermittent "recvmesg failed" in
+  fapolicyd 1.4.3: open (upstream research).
+- **D7 (minor)** — FolderGuardListener on `BeforeNodeRenamedEvent` (rename/move of a non-empty folder, or a file with
+  old versions): the client gets **HTTP 500** and nextcloud.log "Uncaught exception" / webdav "Failed to rename"; the
+  data is intact and the audit/Wazuh lines are right. The delete refusal is 403. Fix: throw a Sabre `Forbidden` (as
+  DavGuard does) or an exception the DAV layer maps to 403 for the rename path.
+- **D8 (important: false level-12 pages)** — TagListener: on a user's **first sign-in** NextCloud creates
+  `/<user>/files` (NodeCreatedEvent); the walk finds the team-folder mounts below it and writes `chp.tag.failed:
+  mounts below the target are not walked (...)` twice per user (rule 100613, level 12 -> ALERT_HOOK). Seen for lab01-04
+  and chp-canary. Fix: skip the nested-mount report (or the whole walk) when the target is not inside a ruled team
+  folder (`$folder === null` / no rule), i.e. a user's home root.
+- **D9 (important)** — rule 100620 (`<program_name>^kernel$</program_name><match>CHP-NC-EGRESS</match>`, no
+  `if_sid`): Wazuh's firewall decoder takes the kernel line and rule **4100 (level 0, "Firewall rules grouped")**
+  matches first, so 100620 is never evaluated. The design's "outbound block tripped -> level 12" does not happen.
+  Fix: `<if_sid>4100</if_sid>` (or `<if_group>firewall</if_group>`) + `<match>CHP-NC-EGRESS</match>`; prove with
+  `wazuh-logtest` on a real line (logs/51 has one).
+- **D10 (minor)** — `chp-nextcloud-backup restore`: `occ maintenance:data-fingerprint` rewrites config.php, so its
+  fapolicyd trust entry is stale afterwards; the nightly check (and the README's verify step) alerts "trust". Fix: the
+  restore runs `fapolicyd-cli --file update /etc/nextcloud/config.php --trust-file nextcloud; fapolicyd-cli --update`
+  after its last occ call (or the README says to re-run `chp-site documents enable`).
+- **D11 (important)** — `chp-documents/nextcloud-cron.service` line 9 `ExecStartPre=/usr/sbin/nft list table inet
+  chp_nextcloud_egress` runs as `User=apache` (line 8): "Operation not permitted (you must be root)", so **NextCloud's
+  background jobs never run** (`oc_jobs` max last_run = 0; the unit fails every 5 minutes; `systemctl --failed` shows
+  it). Check 77 says OK because it checks only the timer. Fix: `ExecStartPre=+/usr/sbin/nft list table …` (the `+`
+  runs that line as root), and check 77 should also alert on a failed `nextcloud-cron.service` / a stale `oc_jobs`.
+- Minor notes: rule 100630 fires 3 times per wrong TOTP (three kanidmd lines match; anchor it on `Auth result: Denied`);
+  enable prints "AIDE: … refresh the baseline now" even on a no-change run; the AIDE baseline hashes
+  `/etc/nextcloud/oidc-secret` and `/etc/pki/nextcloud/key.pem` (as the progress carry noted; hashes, not contents);
+  NextCloud's audit log (and so Wazuh `full_log`) records the OIDC authorization code in the `url` of the sign-in
+  request (single-use, short-lived; redacted in these logs).
