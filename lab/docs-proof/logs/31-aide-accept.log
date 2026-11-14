@@ -1,0 +1,139 @@
+AIDE changes since the baseline: 35510 added, 0 removed, 75 changed
+
+Explained by signed package updates: 35491 paths in 36 packages
+  apr: 11 paths
+  apr-util: 8 paths
+  apr-util-bdb: 3 paths
+  capstone: 12 paths
+  chp-base: 16 paths
+  chp-documents: 28 paths
+  chp-identity-server: 11 paths
+  chp-site: 5 paths
+  httpd: 19 paths
+  httpd-core: 541 paths
+  httpd-filesystem: 8 paths
+  httpd-tools: 21 paths
+  libpq: 17 paths
+  libzip: 5 paths
+  mod_ssl: 8 paths
+  nextcloud-chp: 33897 paths
+  nginx-filesystem: 8 paths
+  php-bcmath: 5 paths
+  php-cli: 12 paths
+  php-common: 69 paths
+  php-fpm: 21 paths
+  php-gd: 3 paths
+  php-gmp: 3 paths
+  php-intl: 3 paths
+  php-mbstring: 5 paths
+  php-opcache: 4 paths
+  php-pdo: 9 paths
+  php-pecl-apcu: 9 paths
+  php-pecl-zip: 26 paths
+  php-pgsql: 6 paths
+  php-process: 15 paths
+  php-xml: 18 paths
+  postgresql: 316 paths
+  postgresql-private-libs: 3 paths
+  postgresql-server: 341 paths
+  rocky-logos-httpd: 5 paths
+
+NOT explained: 94 paths (review every one)
+  added    /etc/chp/documents.conf
+  added    /etc/dnf/modules.d/php.module
+  added    /etc/dnf/modules.d/postgresql.module
+  added    /etc/fapolicyd/compiled.rules.prev
+  added    /etc/fapolicyd/rules.d/65-chp-nextcloud.rules
+  added    /etc/fapolicyd/trust.d/nextcloud
+  added    /etc/httpd/conf/httpd.conf
+  added    /etc/httpd/conf.d/autoindex.conf
+  added    /etc/httpd/conf.d/chp-nextcloud-lan.inc
+  added    /etc/httpd/conf.d/ssl.conf
+  added    /etc/httpd/conf.d/userdir.conf
+  added    /etc/httpd/conf.d/welcome.conf
+  added    /etc/nextcloud/config.php
+  added    /etc/nextcloud/oidc-secret
+  added    /etc/pki/nextcloud/chain.pem
+  added    /etc/pki/nextcloud/key.pem
+  added    /etc/selinux/targeted/contexts/files/file_contexts.local.bin
+  added    /etc/systemd/system/httpd.service.d
+  added    /etc/systemd/system/multi-user.target.wants/chp-nextcloud-egress.service
+  added    /etc/systemd/system/multi-user.target.wants/httpd.service
+  added    /etc/systemd/system/multi-user.target.wants/php-fpm.service
+  added    /etc/systemd/system/multi-user.target.wants/postgresql.service
+  added    /etc/systemd/system/timers.target.wants/chp-nextcloud-backup.timer
+  added    /etc/systemd/system/timers.target.wants/chp-nextcloud-cert-renew.timer
+  added    /etc/systemd/system/timers.target.wants/nextcloud-cron.timer
+  added    /root/applist.json
+  added    /root/docs-enable-1.log
+  added    /root/docs-enable-2.log
+  added    /root/docs-enable-3.log
+  added    /root/docs-enable-4.log
+  added    /root/fapolicyd-fsmark.conf.orig
+  added    /root/fsmark-t0
+  added    /root/fsmark-trial.sh
+  added    /root/lab-aide-accept.log
+  added    /root/lab-ctx.log
+  added    /root/lab-fapo-fail.log
+  added    /root/lab-fapo-repro.log
+  added    /root/lab-fapo-restart.log
+  added    /root/lab-fsmark-act-175439.log
+  added    /root/lab-fsmark-on-175404.log
+  added    /root/lab-occhelp.log
+  added    /root/lab-oidchelp.log
+  added    /root/lab-repo-upgrade.log
+  added    /root/lab-state-1.log
+  added    /usr/share/doc/chp-documents
+  added    /usr/share/licenses/chp-documents
+  added    /var/ossec/etc/rules/chp_nextcloud_rules.xml
+  changed  /etc/chp/site.conf
+  changed  /etc/dnf/modules.d
+  changed  /etc/fapolicyd
+  changed  /etc/fapolicyd/compiled.rules
+  changed  /etc/fapolicyd/fapolicyd.conf
+  changed  /etc/fapolicyd/rules.d
+  changed  /etc/fapolicyd/trust.d
+  changed  /etc/firewalld/zones/public.xml
+  changed  /etc/firewalld/zones/public.xml.old
+  changed  /etc/group
+  changed  /etc/group-
+  changed  /etc/gshadow
+  changed  /etc/gshadow-
+  changed  /etc/hosts
+  changed  /etc/ld.so.cache
+  changed  /etc/passwd
+  changed  /etc/passwd-
+  changed  /etc/pki
+  changed  /etc/selinux/targeted
+  changed  /etc/selinux/targeted/contexts/files
+  changed  /etc/selinux/targeted/contexts/files/file_contexts
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.local
+  changed  /etc/selinux/targeted/policy
+  changed  /etc/selinux/targeted/policy/policy.33
+  changed  /etc/selinux/targeted/seusers
+  changed  /etc/shadow
+  changed  /etc/shadow-
+  changed  /etc/systemd/system
+  changed  /etc/systemd/system/multi-user.target.wants
+  changed  /etc/systemd/system/timers.target.wants
+  changed  /root/.cache/kanidm_tokens
+  changed  /usr/lib
+  changed  /usr/lib/systemd/system
+  changed  /usr/lib64
+  changed  /usr/libexec/initscripts/legacy-actions
+  changed  /usr/sbin
+  changed  /usr/share
+  changed  /usr/share/doc
+  changed  /usr/share/licenses
+  changed  /usr/share/man/man7
+  changed  /var/log
+  changed  /var/ossec/etc
+  changed  /var/ossec/etc/ossec.conf
+  changed  /var/ossec/etc/rules
+accepted by D. Shannon: new baseline fabbddd87c4ed99a… (recorded in the audit log)
+Pinning the new baseline: plug in the site stick.
+pinned: aide/iso5-srv.txt on the site stick (SHA-512 fabbddd87c4ed99a…)
+EXIT=0

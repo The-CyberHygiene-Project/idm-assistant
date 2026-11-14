@@ -1,0 +1,6 @@
+update+20s+restart try 1: active Trust database checks OK|Starting to listen for events|
+update+20s+restart try 2: active Trust database checks OK|Starting to listen for events|
+update+20s+restart try 3: active Trust database checks OK|Starting to listen for events|
+dnf+30s+restart try 1: active
+dnf+30s+restart try 2: active
+EXIT=0

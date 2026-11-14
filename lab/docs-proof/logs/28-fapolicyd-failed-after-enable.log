@@ -1,0 +1,38 @@
+NRestarts=0
+ExecMainStatus=1
+ActiveEnterTimestamp=Sat 2026-11-14 16:51:08 UTC
+InactiveEnterTimestamp=Sat 2026-11-14 16:51:08 UTC
+Nov 14 09:49:01 iso5-srv.iso5.lab.test fapolicyd[52168]: It looks like there was an update of the system... Syncing DB.
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Updating trust database
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Creating trust database
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Loading trust data from rpmdb backend
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Loading trust data from file backend
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Trust database at 14% capacity - might consider shrinking the size to save space
+Nov 14 09:49:02 iso5-srv.iso5.lab.test fapolicyd[52168]: Updated
+Nov 14 09:50:12 iso5-srv.iso5.lab.test fapolicyd[52168]: It looks like there was an update of the system... Syncing DB.
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Updating trust database
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Creating trust database
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Loading trust data from rpmdb backend
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Loading trust data from file backend
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Trust database at 14% capacity - might consider shrinking the size to save space
+Nov 14 09:50:13 iso5-srv.iso5.lab.test fapolicyd[52168]: Updated
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: Stopping File Access Policy Daemon...
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[52168]: shutting down...
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[52168]: Processes are being evicted from the subject cache before pattern detection completes: increase subj_cache_size (total early evictions: 57)
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[52168]: object cache eviction ratios high: increase obj_cache_size
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Deactivated successfully.
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: Stopped File Access Policy Daemon.
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Consumed 1min 6.948s CPU time.
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: Starting File Access Policy Daemon...
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fagenrules[92842]: /usr/sbin/fagenrules: No change
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92868]: 11/14/2026 09:51:08 [ INFO ]: Can handle 524288 file descriptors
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92868]: 11/14/2026 09:51:08 [ INFO ]: Ruleset identity: dea429437f17f1a0b83300481cbfc7060cef57fd94f7886c96ea0dd410b584cb
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92868]: 11/14/2026 09:51:08 [ NOTICE ]: SHA256HASH object name is deprecated; use FILE_HASH instead
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: Started File Access Policy Daemon.
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: Initializing the trust database
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: fapolicyd integrity is 0
+Nov 14 09:51:08 iso5-srv.iso5.lab.test fapolicyd[92869]: recvmesg failed
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 14 09:51:08 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
+node=iso5-srv.iso5.lab.test type=AVC msg=audit(1794671598.213:19320): avc:  denied  { transition } for  pid=82375 comm="runcon" path="/usr/bin/chp-site" dev="dm-1" ino=2472520 scontext=system_u:system_r:initrc_t:s0 tcontext=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 tclass=process permissive=0
+EXIT=0

@@ -1,0 +1,60 @@
+documents: https://files.iso5.lab.test:8443 (server 192.168.100.50); folders CUI=1 FCI=2 Archive=3 Operations=4 Internal=5 Public=6
+chp-nextcloud-egress: active
+postgresql: active
+php-fpm: active
+httpd: active
+nextcloud-cron.timer: active
+chp-nextcloud-backup.timer: active
+chp-nextcloud-cert-renew.timer: active
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+== fapolicyd
+Sat 2026-11-14 16:51:08 UTC
+== AVC since enable
+1
+== services
+active
+active
+active
+active
+active
+active
+active
+inactive
+active
+active
+== monitors
+77-nextcloud-services.sh: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active
+78-nextcloud-cert.sh: OK NextCloud certificate: 23 h left of 24 h
+79-nextcloud-egress.sh: OK NextCloud egress table present, matches the shipped rules, address file valid
+80-fapolicyd.sh: ALERT fapolicyd.service is failed: nothing is checking file execution (systemctl status fapolicyd; journalctl -u fapolicyd)
+81-documents-tags.sh: ALERT NextCloud check: no result in /var/lib/chp/documents/check.json (or unreadable): is chp-documents-check.timer running? run chp-site documents check
+== oauth2
+displayname: NextCloud
+name: nextcloud
+oauth2_prefer_short_username: true
+oauth2_rs_origin: https://files.iso5.lab.test:8443/index.php/apps/user_oidc/code
+oauth2_rs_origin_landing: https://files.iso5.lab.test:8443/
+== egress table
+table inet chp_nextcloud_egress {
+	chain output {
+		type filter hook output priority filter; policy accept;
+		meta skuid 48 jump apache_out
+	}
+
+	chain apache_out {
+		meta l4proto { tcp, udp } th dport 53 log prefix "CHP-NC-EGRESS-DNS " flags skuid counter packets 0 bytes 0 reject
+		oifname "lo" accept
+		ip daddr { 127.0.0.0/8, 192.168.100.50 } accept
+		ip6 daddr ::1 accept
+		ct state established,related accept
+		log prefix "CHP-NC-EGRESS " flags skuid counter packets 0 bytes 0 reject
+	}
+}
+== listen
+LISTEN 0      128    192.168.100.50:443        0.0.0.0:*    users:(("kanidmd",pid=87474,fd=15))                                                                        
+LISTEN 0      511                 *:8443             *:*    users:(("httpd",pid=92740,fd=5),("httpd",pid=92737,fd=5),("httpd",pid=92736,fd=5),("httpd",pid=92734,fd=5))
+== trust
+/etc/nextcloud/config.php 2342 d4a931143b4b983f
+2342
+d4a931143b4b983f
+EXIT=0

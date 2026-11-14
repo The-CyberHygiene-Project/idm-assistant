@@ -1,0 +1,12 @@
+try 1: active Loaded trust info from all backends (without duplicates): 64460|Trust database checks OK|Starting to listen for events|
+try 2: active Loaded trust info from all backends (without duplicates): 64460|Trust database checks OK|Starting to listen for events|
+try 3: active Loaded trust info from all backends (without duplicates): 64460|Trust database checks OK|Starting to listen for events|
+try 4: active Loaded trust info from all backends (without duplicates): 64460|Trust database checks OK|Starting to listen for events|
+try 5: active Loaded trust info from all backends (without duplicates): 64460|Trust database checks OK|Starting to listen for events|
+/usr/sbin/fapolicyd
+/usr/sbin/fapolicyd-cli
+/usr/bin/fapolicyd-rpm-loader
+/usr/sbin/fagenrules
+/usr/sbin/fapolicyd
+/usr/sbin/fapolicyd-cli
+EXIT=0
