@@ -1,0 +1,26 @@
+○ chp-wazuh-alerts.service - CyberHygiene: send important Wazuh alerts to the log and ALERT_HOOK (security bundle spec §5)
+     Loaded: loaded (/usr/lib/systemd/system/chp-wazuh-alerts.service; enabled; preset: disabled)
+     Active: inactive (dead) since Fri 2026-11-13 17:49:54 MST; 8min ago
+   Duration: 41min 55.771s
+    Process: 37053 ExecStart=/usr/bin/chp-site wazuh-forward (code=killed, signal=TERM)
+   Main PID: 37053 (code=killed, signal=TERM)
+        CPU: 653ms
+Nov 13 17:08:23 iso5-srv.iso5.lab.test chp-wazuh[38288]: iso5-srv.iso5.lab.test rule 80710 level 10: Auditd: Device enables promiscuous mode.
+Nov 13 17:21:06 iso5-srv.iso5.lab.test chp-wazuh[40776]: iso5-cli1 rule 80710 level 10: Auditd: Device enables promiscuous mode.
+Nov 13 17:34:47 iso5-srv.iso5.lab.test chp-wazuh[41143]: iso5-cli2 rule 506 level 3: Wazuh agent stopped.
+Nov 13 17:35:15 iso5-srv.iso5.lab.test chp-wazuh[41146]: iso5-cli2 rule 80710 level 10: Auditd: Device enables promiscuous mode.
+Nov 13 17:21:06 iso5-srv.iso5.lab.test chp-wazuh[40776]: iso5-cli1 rule 80710 level 10: Auditd: Device enables promiscuous mode.
+Nov 13 17:34:47 iso5-srv.iso5.lab.test chp-wazuh[41143]: iso5-cli2 rule 506 level 3: Wazuh agent stopped.
+Nov 13 17:35:15 iso5-srv.iso5.lab.test chp-wazuh[41146]: iso5-cli2 rule 80710 level 10: Auditd: Device enables promiscuous mode.
+Nov 13 17:35:41 iso5-srv.iso5.lab.test chp-wazuh[41147]: iso5-cli1 rule 506 level 3: Wazuh agent stopped. (1 more in the last 15 min)
+Nov 13 17:36:07 iso5-srv.iso5.lab.test chp-wazuh[41150]: iso5-cli1 rule 80710 level 10: Auditd: Device enables promiscuous mode. (1 more in the last 15 min)
+Nov 13 17:49:48 iso5-srv.iso5.lab.test chp-wazuh[46434]: iso5-cli2 rule 506 level 3: Wazuh agent stopped. (1 more in the last 15 min)
+Nov 13 17:49:54 iso5-srv.iso5.lab.test systemd[1]: Stopping CyberHygiene: send important Wazuh alerts to the log and ALERT_HOOK (security bundle spec §5)...
+Nov 13 17:49:54 iso5-srv.iso5.lab.test systemd[1]: chp-wazuh-alerts.service: Deactivated successfully.
+Nov 13 17:49:54 iso5-srv.iso5.lab.test systemd[1]: Stopped CyberHygiene: send important Wazuh alerts to the log and ALERT_HOOK (security bundle spec §5).
+After=wazuh-manager.service
+Requires=wazuh-manager.service
+Restart=always
+RestartSec=10
+WantedBy=multi-user.target
+active

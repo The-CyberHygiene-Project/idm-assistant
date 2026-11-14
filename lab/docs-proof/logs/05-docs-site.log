@@ -1,0 +1,4 @@
+DOCUMENTS=yes
+DOCUMENTS=yes
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+RC=0

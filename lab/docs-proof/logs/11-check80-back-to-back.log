@@ -1,0 +1,9 @@
+80-fapolicyd.sh
+r1=0
+r2=0
+active
+start before=Sat 2026-11-14 00:37:09 UTC after=Sat 2026-11-14 00:37:09 UTC
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+OK fapolicyd active and enforcing
+c80-rc=0
+Denied accesses: 0

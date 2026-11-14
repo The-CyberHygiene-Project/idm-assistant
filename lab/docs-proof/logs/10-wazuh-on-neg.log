@@ -1,0 +1,5 @@
+PASS stray /backup/wazuh bind is NOT accepted (prints no:) and cleaned up (no FAILED line)
+stage wazuh-on-neg: ALL PASS
+active
+/dev/mapper/chp-data[/wazuh]
+ls: cannot access '/backup/wazuh': No such file or directory

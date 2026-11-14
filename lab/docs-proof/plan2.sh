@@ -42,10 +42,17 @@ case ${1:-} in
     n=${2:-1}
     bash "$0" login
     A "sudo virsh attach-disk $SRV $STICK sdz --targetbus usb --type disk --live >/dev/null && echo stick-attached"; sleep 6
-    Rlong "$SRV" "$SIP" "docs-enable-$n" "date -u +%FT%TZ; chp-site documents enable; echo enable-rc=\$?; date -u +%FT%TZ"
+    # run 1 showed: files written from a transient unit get etc_runtime_t (init_t), not etc_t as from a root shell
+    # (logs/15): a LAB artifact; run the command as the root shell's context so the labels are what an admin gets
+    Rlong "$SRV" "$SIP" "docs-enable-$n" "date -u +%FT%TZ; runcon unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 chp-site documents enable; echo enable-rc=\$?; date -u +%FT%TZ"
     A "sudo virsh detach-disk $SRV sdz --live >/dev/null && echo stick-detached" ;;
   R)  shift; Rh "$SRV" "$SIP" "$*" | sed '/^RC=/d' ;;
   RH) shift; vm=$1 ip=$2; shift 2; Rh "$vm" "$ip" "$*" | sed '/^RC=/d' ;;
   RL) shift; Rlong "$SRV" "$SIP" "$1" "$2" ;;
+  RLH) shift; Rlong "$1" "$2" "$3" "$4" ;;
+  fsmark)   # fsmark VM IP PHASE: lab/docs-proof/fsmark-trial.sh PHASE on that host (as a transient unit)
+    b=$(base64 < "$here/fsmark-trial.sh" | tr -d '\n')
+    Rh "$2" "$3" "echo $b | base64 -d > /root/fsmark-trial.sh" >/dev/null
+    Rlong "$2" "$3" "lab-fsmark-$4-$(date +%H%M%S)" "bash /root/fsmark-trial.sh $4" ;;
   *) echo "usage: $0 repo|docs-site|login|enable [N]|R CMD|RH VM IP CMD|RL UNIT CMD"; exit 2 ;;
 esac

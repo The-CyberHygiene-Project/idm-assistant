@@ -1,0 +1,4 @@
+analysisd-t-rc=0
+chp_review_rules.xml	chp_yara_rules.xml
+chp_suricata_rules.xml	local_rules.xml
+active

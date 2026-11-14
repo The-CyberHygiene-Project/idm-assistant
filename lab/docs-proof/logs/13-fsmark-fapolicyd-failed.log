@@ -1,0 +1,64 @@
+######## iso5-cli2
+Nov 13 17:50:18 iso5-cli2.iso5.lab.test fapolicyd[1490]: Updated
+Nov 13 17:50:19 iso5-cli2.iso5.lab.test fapolicyd[1490]: It looks like there was an update of the system... Syncing DB.
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Updating trust database
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Creating trust database
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Loading trust data from rpmdb backend
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Loading trust data from file backend
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Trust database at 4% capacity - might consider shrinking the size to save space
+Nov 13 17:50:20 iso5-cli2.iso5.lab.test fapolicyd[1490]: Updated
+Nov 13 17:51:26 iso5-cli2.iso5.lab.test fapolicyd[1490]: shutting down...
+Nov 13 17:51:26 iso5-cli2.iso5.lab.test systemd[1]: Stopping File Access Policy Daemon...
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[1490]: object cache eviction ratios high: increase obj_cache_size
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Deactivated successfully.
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: Stopped File Access Policy Daemon.
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Consumed 5.114s CPU time, 107.8M memory peak.
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: Starting File Access Policy Daemon...
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fagenrules[4425]: /usr/sbin/fagenrules: No change
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4450]: 11/13/2026 17:51:27 [ INFO ]: Can handle 524288 file descriptors
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4450]: 11/13/2026 17:51:27 [ INFO ]: Ruleset identity: d9f2caa6dbaeed11c29719e026150d5f36cc883e19da4bdb79197a683b6bcc5d
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4450]: 11/13/2026 17:51:27 [ NOTICE ]: SHA256HASH object name is deprecated; use FILE_HASH instead
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test systemd[1]: Started File Access Policy Daemon.
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4451]: Initializing the trust database
+Nov 13 17:51:27 iso5-cli2.iso5.lab.test fapolicyd[4451]: fapolicyd integrity is 0
+Nov 13 17:51:28 iso5-cli2.iso5.lab.test fapolicyd[4451]: recvmesg failed
+Nov 13 17:51:28 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 13 17:51:28 iso5-cli2.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
+Result=exit-code
+ExecMainStatus=1
+ActiveEnterTimestamp=Sat 2026-11-14 00:51:27 UTC
+InactiveEnterTimestamp=Sat 2026-11-14 00:51:28 UTC
+fapolicyd 1.4.3
+fapolicyd-1.4.3-3.el9.x86_64
+######## iso5-srv
+Nov 13 17:44:35 iso5-srv.iso5.lab.test fapolicyd[1874]: It looks like there was an update of the system... Syncing DB.
+Nov 13 17:44:36 iso5-srv.iso5.lab.test fapolicyd[1874]: Updating trust database
+Nov 13 17:44:36 iso5-srv.iso5.lab.test fapolicyd[1874]: Creating trust database
+Nov 13 17:44:36 iso5-srv.iso5.lab.test fapolicyd[1874]: Loading trust data from rpmdb backend
+Nov 13 17:44:37 iso5-srv.iso5.lab.test fapolicyd[1874]: Loading trust data from file backend
+Nov 13 17:44:37 iso5-srv.iso5.lab.test fapolicyd[1874]: Trust database at 14% capacity - might consider shrinking the size to save space
+Nov 13 17:44:37 iso5-srv.iso5.lab.test fapolicyd[1874]: Updated
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[1874]: shutting down...
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: Stopping File Access Policy Daemon...
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[1874]: Processes are being evicted from the subject cache before pattern detection completes: increase subj_cache_size (total early evictions: 14)
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[1874]: object cache eviction ratios high: increase obj_cache_size
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Deactivated successfully.
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: Stopped File Access Policy Daemon.
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Consumed 17.357s CPU time, 161.6M memory peak.
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: Starting File Access Policy Daemon...
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fagenrules[48416]: /usr/sbin/fagenrules: No change
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48442]: 11/13/2026 17:53:57 [ INFO ]: Can handle 524288 file descriptors
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48442]: 11/13/2026 17:53:57 [ INFO ]: Ruleset identity: dea429437f17f1a0b83300481cbfc7060cef57fd94f7886c96ea0dd410b584cb
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48442]: 11/13/2026 17:53:57 [ NOTICE ]: SHA256HASH object name is deprecated; use FILE_HASH instead
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: Started File Access Policy Daemon.
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: Initializing the trust database
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: fapolicyd integrity is 0
+Nov 13 17:53:57 iso5-srv.iso5.lab.test fapolicyd[48443]: recvmesg failed
+Nov 13 17:53:57 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Main process exited, code=exited, status=1/FAILURE
+Nov 13 17:53:58 iso5-srv.iso5.lab.test systemd[1]: fapolicyd.service: Failed with result 'exit-code'.
+Result=exit-code
+ExecMainStatus=1
+ActiveEnterTimestamp=Sat 2026-11-14 00:53:57 UTC
+InactiveEnterTimestamp=Sat 2026-11-14 00:53:58 UTC
+fapolicyd 1.4.3
+fapolicyd-1.4.3-3.el9.x86_64

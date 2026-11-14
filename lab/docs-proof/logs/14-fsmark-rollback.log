@@ -1,0 +1,30 @@
+######## iso5-cli2
+check 80 while failed:
+OK fapolicyd.service is failed: nothing is checking file execution (systemctl status fapolicyd; journalctl -u fapolicyd) - still failing (alerted 2026-11-14T00:52:50Z)
+c80-rc=0
+helper-rc=0
+0
+0
+failed
+denied=
+failed
+active
+23:allow_filesystem_mark = 0
+active
+Denied accesses: 0
+OK fapolicyd active and enforcing
+######## iso5-srv
+check 80 while failed:
+OK fapolicyd.service is failed: nothing is checking file execution (systemctl status fapolicyd; journalctl -u fapolicyd) - still failing (alerted 2026-11-14T00:55:37Z)
+c80-rc=0
+helper-rc=0
+0
+0
+failed
+denied=
+failed
+active
+23:allow_filesystem_mark = 0
+active
+Denied accesses: 0
+OK fapolicyd active and enforcing

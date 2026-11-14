@@ -1,0 +1,87 @@
+PASS iso5-cli1: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)
+PASS iso5-cli1: first boot unlocked
+PASS iso5-cli1: client first boot finished
+PASS iso5-cli1: stick blocked during first boot
+PASS iso5-cli1: AIDE baseline built at first boot
+PASS iso5-cli1: baseline after client.done
+PASS iso5-cli1: stick hash pinned before the baseline
+PASS iso5-cli1: daily AIDE timer enabled
+PASS iso5-cli1: escrow folder not in AIDE
+PASS iso5-cli1: escrow-lookalike sibling still checked
+PASS iso5-cli1: aide-pin (pinned: aide/iso5-cli1.txt on the site stick (SHA-512 44deddf8ebbdd339…))
+PASS iso5-cli1: stick detached
+PASS iso5-cli1: anchor = pinned root
+PASS iso5-cli1: no staged token copy left
+PASS iso5-cli1: kanidm-unixd online
+PASS iso5-cli1: authselect custom/kanidm + CUI features
+PASS iso5-cli1: nsswitch passwd/group/initgroups start with kanidm
+PASS iso5-cli1: sshd methods (user / chpadmin)
+PASS iso5-cli1: unixd token 600 root
+PASS iso5-cli1: chp_kanidm loaded, socket dir labelled
+PASS iso5-cli1: fapolicyd no denials (--check-status counter)
+PASS iso5-cli1: SELinux no AVC since boot
+PASS iso5-cli1: boot-loader password set
+PASS iso5-cli1: Rocky release key imported
+PASS iso5-cli1: clients allow chp_users
+PASS iso5-cli1: chpcache pinned to the server + exact sudo
+PASS iso5-cli1: monitors quiet
+PASS iso5-cli1: TPM unlock after reboot
+stage client1: ALL PASS
+PASS iso5-cli2: installed from the ISO (menu entry chosen, nothing typed; stick: client.conf + its token)
+PASS iso5-cli2: first boot unlocked
+PASS iso5-cli2: client first boot finished
+PASS iso5-cli2: stick blocked during first boot
+PASS iso5-cli2: AIDE baseline built at first boot
+PASS iso5-cli2: baseline after client.done
+PASS iso5-cli2: stick hash pinned before the baseline
+PASS iso5-cli2: daily AIDE timer enabled
+PASS iso5-cli2: escrow folder not in AIDE
+PASS iso5-cli2: escrow-lookalike sibling still checked
+PASS iso5-cli2: aide-pin (pinned: aide/iso5-cli2.txt on the site stick (SHA-512 8b089636d06dca0e…))
+PASS iso5-cli2: stick detached
+PASS iso5-cli2: anchor = pinned root
+PASS iso5-cli2: no staged token copy left
+PASS iso5-cli2: kanidm-unixd online
+PASS iso5-cli2: authselect custom/kanidm + CUI features
+PASS iso5-cli2: nsswitch passwd/group/initgroups start with kanidm
+PASS iso5-cli2: sshd methods (user / chpadmin)
+PASS iso5-cli2: unixd token 600 root
+PASS iso5-cli2: chp_kanidm loaded, socket dir labelled
+PASS iso5-cli2: fapolicyd no denials (--check-status counter)
+PASS iso5-cli2: SELinux no AVC since boot
+PASS iso5-cli2: boot-loader password set
+PASS iso5-cli2: Rocky release key imported
+PASS iso5-cli2: clients allow chp_users
+PASS iso5-cli2: chpcache pinned to the server + exact sudo
+PASS iso5-cli2: monitors quiet
+PASS iso5-cli2: TPM unlock after reboot
+stage client2: ALL PASS
+PASS agents Active (2)
+PASS pending wazuh folder empty after export
+PASS server: default API logins refused
+PASS server: listeners
+PASS server: update_check off
+PASS iso5-srv: no 'No such tag' warnings
+PASS iso5-srv: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-srv: security step done
+PASS iso5-srv: 0 Wazuh SELinux denials
+PASS iso5-srv: 0 fapolicyd denials (--check-status counter)
+PASS iso5-srv: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: no 'No such tag' warnings
+PASS iso5-cli1: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli1: security step done
+PASS iso5-cli1: 0 Wazuh SELinux denials
+PASS iso5-cli1: 0 fapolicyd denials (--check-status counter)
+PASS iso5-cli1: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli2: no 'No such tag' warnings
+PASS iso5-cli2: data bind-mounted (/data/wazuh if /data is a mount, else /srv/wazuh)
+PASS iso5-cli2: security step done
+PASS iso5-cli2: 0 Wazuh SELinux denials
+PASS iso5-cli2: 0 fapolicyd denials (--check-status counter)
+PASS iso5-cli2: AIDE baseline includes Wazuh (no Wazuh path in the next check)
+PASS iso5-cli1: staged agent.key shredded
+PASS iso5-cli1: agent upgrade module off
+PASS iso5-cli2: staged agent.key shredded
+PASS iso5-cli2: agent upgrade module off
+PASS USBGuard allow events only from export-client (server)
+stage iso5-cli2: ALL PASS

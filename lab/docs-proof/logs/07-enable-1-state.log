@@ -1,0 +1,67 @@
+== enable log (tail, no package lines)
+ postgresql-server      x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 6.9 M
+ rocky-logos-httpd      noarch 90.17-1.el9                            chp  24 k
+Transaction Summary
+================================================================================
+Install  33 Packages
+Total size: 232 M
+Installed size: 887 M
+Downloading Packages:
+Transaction check succeeded.
+Transaction test succeeded.
+File context for /etc/nextcloud(/.*)? already defined, modifying instead
+Installed products updated.
+Installed:
+Complete!
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-nextcloud-egress.service → /usr/lib/systemd/system/chp-nextcloud-egress.service.
+chp-site: the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; the old rules are back and the manager was not restarted: 2026/11/13 17:44:38 wazuh-analysisd: ERROR: Failure to read rule 100618. Field 'user' is static.
+2026/11/13 17:44:38 wazuh-analysisd: CRITICAL: (1220): Error loading the rules: 'etc/rules/chp_nextclou
+enable-rc=2
+2026-11-14T00:44:38Z
+EXIT=0
+== rules files
+total 16
+-rw-r-----. 1 root  wazuh 421 Nov 13 17:07 chp_review_rules.xml
+-rw-r-----. 1 root  wazuh 498 Nov 13 17:07 chp_suricata_rules.xml
+-rw-r-----. 1 root  wazuh 722 Nov 13 17:07 chp_yara_rules.xml
+-rw-rw----. 1 wazuh wazuh 497 Oct  8 07:47 local_rules.xml
+0
+== services
+active
+active
+inactive
+inactive
+inactive
+inactive
+disabled
+disabled
+== documents status
+documents: enable has not finished on this host (ENABLED is not yes): re-run chp-site documents enable
+== documents.conf
+# written by chp-site documents enable; no secrets here
+ENABLED=no
+FQDN=files.iso5.lab.test
+SERVER_IP=192.168.100.50
+DOCUMENTS_BACKUP_DAYS=14
+== marker
+fapolicyd
+httpd
+php-fpm
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+== fapolicyd
+active
+Allowed accesses: 575350
+Denied accesses: 0
+== AVC since boot
+0
+== monitors
+ALERT SELinux labels drifted on identity paths: Would relabel /etc/chp/nextcloud-egress-addr.nft from system_u:object_r:etc_runtime_t:s0 to system_u:object_r:etc_t:s0
+Would relabel /etc/chp/documents.conf from system_u:object_r:etc_runtime_t:s0 to system_u:object_r:etc_t:s0
+== audit
+Nov 13 17:44:05 iso5-srv.iso5.lab.test chp-site[42972]: chp-site documents-enable host="iso5-srv" step="start" fqdn="files.iso5.lab.test"
+Nov 13 17:44:36 iso5-srv.iso5.lab.test chp-site[44770]: chp-site documents-enable host="iso5-srv" step="packages"
+Nov 13 17:44:36 iso5-srv.iso5.lab.test chp-site[44805]: chp-site documents-enable host="iso5-srv" step="mail" mta="none"
+Nov 13 17:44:36 iso5-srv.iso5.lab.test chp-site[44811]: chp-site documents-enable host="iso5-srv" step="hosts"
+Nov 13 17:44:36 iso5-srv.iso5.lab.test chp-site[44845]: chp-site documents-enable host="iso5-srv" step="dns"
+Nov 13 17:44:36 iso5-srv.iso5.lab.test chp-site[44848]: chp-site documents-enable host="iso5-srv" step="render"
+Nov 13 17:44:38 iso5-srv.iso5.lab.test chp-site[44993]: chp-site documents-enable host="iso5-srv" step="egress"

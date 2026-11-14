@@ -1,0 +1,12 @@
+    unconfined_u:object_r:etc_t:s0 /etc/chp/zz-labtest-shell
+system_u:object_r:etc_runtime_t:s0 /etc/chp/zz-labtest-unit
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
+ system_u:object_r:etc_runtime_t:s0 /etc/chp/documents.conf
+ system_u:object_r:etc_runtime_t:s0 /etc/chp/nextcloud-egress-addr.nft
+ system_u:object_r:etc_runtime_t:s0 /etc/hosts
+system_u:object_r:httpd_config_t:s0 /etc/httpd/conf.d/chp-nextcloud-lan.inc
+Relabeled /etc/chp/documents.conf from system_u:object_r:etc_runtime_t:s0 to system_u:object_r:etc_t:s0
+Relabeled /etc/chp/nextcloud-egress-addr.nft from system_u:object_r:etc_runtime_t:s0 to system_u:object_r:etc_t:s0
+Relabeled /etc/hosts from system_u:object_r:etc_runtime_t:s0 to system_u:object_r:net_conf_t:s0
+ALERT AIDE found changes: 35486 added, 0 removed, 72 changed (/var/log/aide/check-20261114T005537Z.log): review, then chp-site aide-accept
+ALERT Wazuh chp-wazuh-alerts is not running: systemctl status chp-wazuh-alerts

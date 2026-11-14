@@ -177,6 +177,9 @@ case ${1:-} in
     check "USBGuard allow events only from export-client (server)" "$(Rv 'journalctl -u usbguard --no-pager | grep -ci "allow"')" "$(Rv 'journalctl -t chp-site --no-pager | grep -c "export-client\|stick allowed"')" ;;
   wazuh-on-neg) # negative for the wazuh-on bind-mount check: a stray /backup/wazuh over /var/ossec must print "no:". Runs on the live server ($SRV): it STOPS wazuh-manager, bind-mounts the stray dir over /var/ossec, reads findmnt, unmounts and RESTARTS wazuh-manager; an EXIT trap unmounts if ssh drops (cleared only after a successful umount; a failed umount is loud)
     r=$(Rv 'mkdir -p /backup/wazuh; systemctl stop wazuh-manager; m=0; mount --bind /backup/wazuh /var/ossec && m=1; [ "$m" = 1 ] || { systemctl start wazuh-manager; echo "no mount made"; exit 0; }; trap "umount /var/ossec 2>/dev/null; systemctl start wazuh-manager" EXIT; if mountpoint -q /data; then e="$(findmnt -no SOURCE /data)[/wazuh]"; else e="$(findmnt -no SOURCE -T /srv)[/srv/wazuh]"; fi; [ "$(findmnt -no SOURCE /var/ossec)" = "$e" ] && echo match || echo "no: $(findmnt -no SOURCE /var/ossec) want $e"; if umount /var/ossec; then trap - EXIT; systemctl start wazuh-manager; rmdir /backup/wazuh 2>/dev/null; else echo "FAILED: umount /var/ossec (stray bind may be left; the EXIT trap retries it)"; exit 1; fi')
+    # chp-wazuh-alerts Requires= wazuh-manager: the stop above stopped it and a start of the manager does not bring it back
+    Rv 'systemctl start chp-wazuh-alerts' >/dev/null
+    check "chp-wazuh-alerts running again after the negative" "$(Rv 'systemctl is-active chp-wazuh-alerts')" "active"
     # FAILED goes to STDOUT (Rh drops stderr); any FAILED line fails the check whatever the first line says
     bad=$(printf '%s\n' "$r" | grep -m1 '^FAILED')
     check "stray /backup/wazuh bind is NOT accepted (prints no:) and cleaned up (no FAILED line)" "${bad:-$(printf %s "$r" | head -n1 | cut -c1-3)}" "no:" ;;

@@ -1,0 +1,69 @@
+######## iso5-cli2 on
+FSMARK=1
+helper-rc=0
+23:# chp-managed: allow_filesystem_mark
+24:allow_filesystem_mark = 1
+active
+Sat 2026-11-14 00:51:27 UTC
+denied after restart: 
+EXIT=0
+######## iso5-cli2 act
+wazuh-agent: active denied=
+suricata: active denied=
+sssd: inactive denied=
+kanidm-unixd: active denied=
+kanidm-unixd-tasks: active denied=
+chronyd: active denied=
+sshd: active denied=
+usbguard: active denied=
+auditd: active denied=
+firewalld: active denied=
+monitor: denied=
+yara-scan /etc rc=0 denied=
+aide check: denied=
+chp-site security status rc=0 denied=
+chp-site validate rc=0 denied=
+unixd/nss lookups: denied=
+wazuh tools: denied=
+● fapolicyd.service loaded failed failed File Access Policy Daemon
+== denials since 2026-11-14T00:51:54Z (audit FANOTIFY)
+== fapolicyd journal deny lines
+Failed to parse timestamp: 2026-11-14T00:51:54Z
+TOTAL denied=
+EXIT=0
+######## iso5-srv on
+FSMARK=1
+helper-rc=0
+23:# chp-managed: allow_filesystem_mark
+24:allow_filesystem_mark = 1
+active
+Sat 2026-11-14 00:53:57 UTC
+denied after restart: 
+EXIT=0
+######## iso5-srv act
+kanidmd: active denied=
+named: active denied=
+step-ca: active denied=
+wazuh-manager: active denied=
+suricata: active denied=
+sssd: inactive denied=
+kanidm-unixd: active denied=
+kanidm-unixd-tasks: active denied=
+chronyd: active denied=
+sshd: active denied=
+usbguard: active denied=
+auditd: active denied=
+firewalld: active denied=
+monitor: denied=
+yara-scan /etc rc=0 denied=
+aide check: denied=
+chp-site security status rc=0 denied=
+chp-site validate rc=0 denied=
+unixd/nss lookups: denied=
+wazuh tools: denied=
+● fapolicyd.service loaded failed failed File Access Policy Daemon
+== denials since 2026-11-14T00:54:23Z (audit FANOTIFY)
+== fapolicyd journal deny lines
+Failed to parse timestamp: 2026-11-14T00:54:23Z
+TOTAL denied=
+EXIT=0
