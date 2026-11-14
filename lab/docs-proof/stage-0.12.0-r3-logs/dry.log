@@ -1,0 +1,75 @@
+total 868416
+-rw-r--r--. 1 chpadmin chpadmin      1728 Nov 14 09:30 dry-run.sh
+-rw-r--r--. 1 chpadmin chpadmin       396 Nov 14 09:30 outer.sh
+-rw-r--r--. 1 chpadmin chpadmin 889248547 Nov 14 09:30 s012c.tgz
+== before
+-rw-r--r-- root root 393216 2026-11-14 08:56:20.627594979 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82255872 2026-11-14 08:52:12.732517958 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+-rw-r--r--. 1 root root 50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root 63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+chp-site-0.14.0-2.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+== dry-run
+== whoami inside: 0 ; host module state:
+php.module
+postgresql.module
+[php]
+name=php
+stream=8.3
+profiles=
+state=enabled
+[postgresql]
+name=postgresql
+stream=16
+profiles=
+state=enabled
+== installed (ours):
+chp-site-0.14.0-2.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-documents-0.1.0-5.chp.el9.noarch
+nextcloud-chp-35.0.3-4.chp.el9.noarch
+== 1. module list (repo s012c only)
+Added s012c repo from file:///var/tmp/s012c/repo
+s012c                                           223 MB/s | 390 kB     00:00    
+s012c
+Name       Stream  Profiles                   Summary                            
+php        8.3 [e] common [d], devel, minimal PHP scripting language             
+postgresql 16 [e]  client, server [d]         PostgreSQL server and client module
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs the applied 0.12.0)
+Added s012c repo from file:///var/tmp/s012c/repo
+Dependencies resolved.
+================================================================================
+ Package          Architecture   Version                    Repository     Size
+================================================================================
+Upgrading:
+ chp-site         noarch         0.14.0-3.chp.el9           s012c         113 k
+Transaction Summary
+================================================================================
+Upgrade  1 Package
+Total size: 113 k
+Operation aborted.
+rc=1
+== 3. check-update
+Added s012c repo from file:///var/tmp/s012c/repo
+Last metadata expiration check: 0:00:01 ago on Sat 14 Nov 2026 09:30:35 AM MST.
+chp-site.noarch                      0.14.0-3.chp.el9                      s012c
+rc=100 (100 = updates available)
+== 4. install --assumeno nextcloud-chp chp-documents (already installed: nothing new)
+Package nextcloud-chp-35.0.3-4.chp.el9.noarch is already installed.
+Package chp-documents-0.1.0-5.chp.el9.noarch is already installed.
+Dependencies resolved.
+Nothing to do.
+Complete!
+rc=0
+== after
+-rw-r--r-- root root 393216 2026-11-14 08:56:20.627594979 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82255872 2026-11-14 08:52:12.732517958 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+-rw-r--r--. 1 root root 50 2026-11-13 17:44:06.417329924 -0700 php.module
+-rw-r--r--. 1 root root 63 2026-11-13 17:44:06.417329924 -0700 postgresql.module
+chp-site-0.14.0-2.chp.el9.noarch
+chp-base-0.1.0-11.chp.el9.noarch
+ls: cannot access '/var/tmp/s012c': No such file or directory

@@ -148,3 +148,13 @@ provisioning_api, settings, sharing, theming, twofactor_backupcodes, viewer, wor
 **Lab state after round 2:** srv: NextCloud installed (config.php trusted by W1), settings applied, apps as in logs/22,
 `documents.conf ENABLED=no`; NextCloud rules in Wazuh; php-fpm/httpd not started. Re-running enable after a D4 fix
 continues from here (Kanidm, folders, tags, web, fapolicyd restart). Everything else as at the end of round 1.
+
+### Before round 3 (Task 9c, 2026-11-14): D3 + D4 fixed, enable audited against iso5-srv
+
+chp-site **0.14.0-3**: D3 (config.php and its trust entry before the first occ call; a re-run after a failed install
+recovers), D4 (no always-enabled app in APPS_OFF). The read-only audit of every later command
+(`enable-audit.md`) found two more, fixed in the same build: **D5** (blocking, would have stopped round 3 at the first
+Kanidm call: Kanidm 1.11.2 `group get <missing>` prints `No matching group '<name>'`, which chp-site took for
+unexpected output) and **A1** (the `office` app was left enabled; the spike disabled it). Repo 0.12.0 re-staged
+(only chp-site changed; modules.yaml unchanged), dry-run on iso5-srv: upgrade = chp-site 0.14.0-3 only
+(`stage-0.12.0-r3-logs/`). Resume after the owner re-signs: `plan2.sh repo`, then `plan2.sh enable 4`.

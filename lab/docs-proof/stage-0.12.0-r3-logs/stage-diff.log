@@ -1,0 +1,13 @@
+== stage (new) vs stage-superseded-d3-d4 (by sha256)
+12c12
+< e75ff452dbc1e6e4155df68d52103d3ce403abe4457b9bfd348e3aef309b991a  chp-site-0.14.0-2.chp.el9.noarch.rpm
+---
+> 6537a2c159b318cdfbb79ffe8f5c5c9aa707c8830764875bb9706105620c0680  chp-site-0.14.0-3.chp.el9.noarch.rpm
+== by NEVRA: signed repo-superseded-d3-d4 vs new stage
+12c12
+< chp-site-0.14.0-2.chp.el9.noarch
+---
+> chp-site-0.14.0-3.chp.el9.noarch
+== modules.yaml
+6b0eb335a5e672b05258f32a9ea656b74d6fe0cdf6eadfc4f1ee4d1b3cff012c  stage/modules.yaml
+repo-superseded-d3-d4/repodata/118cc9cf0b6fe367570d6d3a89a8c1f6187edb0b365aac01a9c48bc8be681aab-modules.yaml.gz
