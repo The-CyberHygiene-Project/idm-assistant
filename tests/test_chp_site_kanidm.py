@@ -167,3 +167,10 @@ def test_oauth2_refuses_bad_urls_and_empty_secret():
         k.oauth2_create("nextcloud", "NextCloud", "http://files.x.test")
     with pytest.raises(SiteError):
         k.oauth2_basic_secret("nextcloud")
+
+
+def test_parse_entry_group_get_missing_kanidm_1_11():
+    # `kanidm group get <missing>` on Kanidm 1.11.2 (iso5-srv, Task 9c audit) prints this, exit 0
+    assert parse_entry("No matching group 'cui-users'\n") is None
+    with pytest.raises(SiteError):
+        parse_entry("No matching groups found\n")

@@ -26,6 +26,10 @@ PGDATA = "var/lib/pgsql/data"
 DATA = "/data/nextcloud"
 OIDC_SECRET = "/etc/nextcloud/oidc-secret"
 CONFIG_PHP = "/etc/nextcloud/config.php"
+# What enable writes before the first occ call when NextCloud has no config.php yet: fapolicyd denies php reading an
+# untrusted PHP file (%languages), and maintenance:install reads back the config.php it writes, so the file and its
+# trust entry must exist BEFORE the install (spike §Under the CUI profile, fix 2; lab round 2, D3).
+MIN_CONFIG = "<?php\n$CONFIG = array (\n);\n"
 SITE_ROOT_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
 CERT = "etc/pki/nextcloud/chain.pem"
 FSMARK_PENDING = "var/lib/chp/fapolicyd-restart-pending"
@@ -50,7 +54,13 @@ APPS_OFF = ("text", "richdocuments", "richdocumentscode", "onlyoffice", "whitebo
             "firstrunwizard", "recommendations", "survey_client", "nextcloud_announcements", "updatenotification",
             "federation", "sharebymail", "weather_status", "support", "app_api", "webhook_listeners", "files_external",
             "contactsinteraction", "dashboard", "circles", "photos", "related_resources", "user_status",
-            "files_reminders", "privacy", "suspicious_login", "twofactor_nextcloud_notification", "appstore")
+            "files_reminders", "privacy", "suspicious_login", "twofactor_nextcloud_notification", "office")
+# NextCloud 35.0.3 core/shipped.json "alwaysEnabled" (sha256 d3942fca...cc57, as installed by nextcloud-chp 35.0.3-4):
+# occ app:disable refuses these ("<app> can't be disabled"), so none may be in APPS_OFF (test-enforced). The app
+# store is kept off by config instead (appstoreenabled=false); federation's settings are off (SHARING).
+ALWAYS_ENABLED = ("appstore", "cloud_federation_api", "dav", "federatedfilesharing", "files", "lookup_server_connector",
+                  "oauth2", "profile", "provisioning_api", "settings", "sharing", "theming", "twofactor_backupcodes",
+                  "viewer", "workflowengine")
 UNITS = ("php-fpm", "httpd", "nextcloud-cron.timer", "chp-nextcloud-backup.timer", "chp-nextcloud-cert-renew.timer")
 STATUS_UNITS = ("chp-nextcloud-egress.service", "postgresql") + UNITS
 
@@ -301,6 +311,21 @@ def _trust_entry(trust_file, target):
     return m[0] if len(m) == 1 else None
 
 
+def _trust_sync(run, root, tf, cfg):
+    """Make fapolicyd's trust entry for config.php equal the file as it is now ("<path> <size> <sha256>"): added when
+    there is none, updated when it differs (stale, malformed or duplicated). Stateless: the entry is compared with
+    the file itself, so a failed run, or NextCloud rewriting config.php between runs, is caught by the next call.
+    Returns "add", "update" or None (already equal)."""
+    lines = _trust_lines(tf, CONFIG_PHP)
+    if lines and _trust_entry(tf, CONFIG_PHP) == _size_sha(cfg):
+        return None
+    op = "update" if lines else "add"
+    _mark(root, ["fapolicyd"])
+    run(["fapolicyd-cli", "--file", op, CONFIG_PHP, "--trust-file", "nextcloud"], check=True)
+    run(["fapolicyd-cli", "--update"], check=True)
+    return op
+
+
 def _put_r(root, path, text, mode, units, chown=None):
     """_put, with `units` marked for a restart first when the file is about to change."""
     if _differs(path, text, mode):
@@ -475,18 +500,20 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     if not _p(root, f"{DATA}/data").is_dir():                # labelled once; NextCloud's files inherit the label
         run(["install", "-d", "-m", "0750", "-o", "apache", "-g", "apache", DATA, f"{DATA}/data"], check=True)
         run(["restorecon", "-R", DATA], check=True)
+    # fapolicyd: config.php is PHP that NextCloud writes and reads back -> a path trust entry, BEFORE the first occ
+    # call (D3): the install reads back the config.php it writes, and every occ call reads it. A config.php left by a
+    # failed install (or rewritten since) gets its entry refreshed here, so a re-run recovers.
+    tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
+    if not cfg.exists():
+        _put(cfg, MIN_CONFIG, 0o640, _owner(chown, "apache", "apache"))
+        run(["restorecon", CONFIG_PHP], check=True)
+    _trust_sync(run, root, tf, cfg)
     st = occ.json("status", "--output=json")
     if not st.get("installed"):
         occ("maintenance:install", "--database", "pgsql", "--database-name", "nextcloud", "--database-host",
             "/run/postgresql", "--database-user", "apache", "--database-pass", "", "--disable-admin-user",
             "--data-dir", f"{DATA}/data")
-    # fapolicyd: config.php is PHP NextCloud itself writes -> a path trust entry (spike, trust step)
-    tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
-    if not _trust_lines(tf, CONFIG_PHP):                    # no entry at all (a stale one: step 15a)
-        _mark(root, ["fapolicyd"])
-        run(["fapolicyd-cli", "--file", "add", "/etc/nextcloud/config.php", "--trust-file", "nextcloud"], check=True)
-        run(["fapolicyd-cli", "--update"], check=True)
-    step("install", f"NextCloud installed offline (data {DATA}/data)")
+    step("install", f"NextCloud installed offline (data {DATA}/data); {CONFIG_PHP} trusted by fapolicyd first")
 
     # 7. settings: offline, hardening, logs; bcrypt (FIPS breaks PHP Argon2id) before any local account
     occ("config:system:set", "hashing_default_password", "--type=boolean", "--value=true")
@@ -503,7 +530,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     for a in APPS_ON:
         if a not in enabled:
             occ("app:enable", a)
-    for a in APPS_OFF:
+    for a in APPS_OFF:                                 # never an always-enabled app (occ refuses those: D4)
         if a in enabled:
             occ("app:disable", a)
     enabled = set(occ.json("app:list", "--output=json").get("enabled", {}))
@@ -615,10 +642,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     # 15a. config.php's trust entry follows its content (spike §Under the CUI profile fix 2). Stateless: the entry
     # fapolicyd holds (trust.d/nextcloud: "<path> <size> <sha256>") is compared with the file itself on every run,
     # so a failed update in an earlier run, or NextCloud rewriting config.php between runs, is caught and fixed.
-    if _trust_entry(tf, CONFIG_PHP) != _size_sha(cfg):
-        _mark(root, ["fapolicyd"])
-        run(["fapolicyd-cli", "--file", "update", CONFIG_PHP, "--trust-file", "nextcloud"], check=True)
-        run(["fapolicyd-cli", "--update"], check=True)
+    if _trust_sync(run, root, tf, cfg):
         step("trust", f"fapolicyd trust entry for {CONFIG_PHP} refreshed (it did not match the file)")
 
     # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or

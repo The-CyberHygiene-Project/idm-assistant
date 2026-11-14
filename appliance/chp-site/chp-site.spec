@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,14 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sat Nov 14 2026 The CyberHygiene Project - 0.14.0-3.chp
+- documents enable: /etc/nextcloud/config.php (a minimal empty config when absent) and its fapolicyd trust entry
+  exist BEFORE the first occ call: maintenance:install reads back the config.php it writes, which fapolicyd denied
+  (lab D3). A config.php left by a failed install gets its entry refreshed, so a re-run recovers.
+- documents enable: appstore is no longer disabled (always enabled in NextCloud 35, lab D4); the store stays off by
+  appstoreenabled=false; APPS_OFF never holds an always-enabled app (test). The office app is disabled (as the spike).
+- Kanidm 1.11 `group get` of a missing group prints "No matching group '<name>'": read as absent, not an error.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.14.0-2.chp
 - Wazuh static user field: NextCloud rules 100618 (nightly canary enable) and 100608 (canary refusal) match the audit
   user with <user>, not <field name="user"> (a static field; wazuh-analysisd -t refused the rule set, so documents

@@ -110,7 +110,14 @@ class Run:
 
 
 DEFAULT_APPS = {"files", "dav", "viewer", "files_pdfviewer", "text", "firstrunwizard", "recommendations", "dashboard",
-                "photos", "federatedfilesharing", "updatenotification", "weather_status", "systemtags", "workflowengine"}
+                "photos", "federatedfilesharing", "updatenotification", "weather_status", "systemtags", "workflowengine",
+                "appstore", "office"}
+DENIED = "fopen(/usr/lib/nextcloud/config/config.php): Failed to open stream: Operation not permitted"
+
+
+def _trusted(root):
+    """fapolicyd (integrity = none): php may read config.php only while trust.d/nextcloud holds a valid entry for it."""
+    return any(x is not None for x in D._trust_lines(root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP))
 
 
 class NC:
@@ -134,9 +141,18 @@ class NC:
         self.calls.append(argv)
         self.envs.append(env)
         c, a = argv[0], argv[1:]
+        cfg = self.root / "etc/nextcloud/config.php" if self.root is not None else None
+        # fapolicyd's %languages rule: an untrusted config.php cannot be read back by php (lab round 2, D3)
+        if cfg is not None and cfg.exists() and not _trusted(self.root):
+            return 1, "", DENIED
         if c == "status":
             return 0, json.dumps({"installed": self.installed}), ""
         if c == "maintenance:install":
+            if cfg is not None and not cfg.exists():
+                return 1, "", "Can't write into config directory!"     # the RPM ships no config.php
+            self._cfg()                                                  # written, then read back
+            if not _trusted(self.root):
+                return 1, "", DENIED
             self.installed = True
             self._cfg()
             return 0, "Nextcloud was successfully installed", ""
@@ -159,6 +175,8 @@ class NC:
             self.enabled.add(a[0])
             return 0, "", ""
         if c == "app:disable":
+            if a[0] in D.ALWAYS_ENABLED:
+                return 1, "", f"{a[0]} can't be disabled."                # NextCloud 35 core/shipped.json (D4)
             self.enabled.discard(a[0])
             return 0, "", ""
         if c == "user:info":
@@ -223,7 +241,7 @@ class KanidmCli:
         self.calls.append(argv)
         a = argv[:-2]                                  # drop -D idm_admin
         if a[:2] == ["group", "get"]:
-            return (0, f"name: {a[2]}\n", "") if a[2] in self.groups else (0, "No matching entries\n", "")
+            return (0, f"name: {a[2]}\n", "") if a[2] in self.groups else (0, f"No matching group '{a[2]}'\n", "")
         if a[:2] == ["group", "create"]:
             self.groups.add(a[2])
             return 0, "", ""
@@ -959,24 +977,29 @@ def test_unwritable_pending_secret_is_a_plain_error(tmp_path):
 def test_change_then_later_failure_then_rerun_refreshes_trust(tmp_path):
     e = Env(tmp_path)
     e.enable()
-    e.nc.sysconf[("maintenance",)] = "false"; e.nc._cfg()       # config.php changed...
-    (e.root / D.CERT).unlink()                                  # ...and this run fails before the trust step
+    assert len(_upd(e.run.calls)) == 1                          # run 1: add before the install, refresh after it
+    e.nc.sysconf[("maintenance",)] = "false"; e.nc._cfg()       # config.php changed between runs...
+    (e.root / D.CERT).unlink()
+    nc = e.nc
 
     class FailCert(Run):
         def __call__(self, argv, **kw):
             if argv[:1] == ["/usr/libexec/chp/cert-renew-nextcloud"]:
+                nc.sysconf[("instanceid",)] = "rotated"; nc._cfg()   # ...and again during the run, then it fails
                 import subprocess
                 raise subprocess.CalledProcessError(1, argv)
             return super().__call__(argv, **kw)
     e.run.__class__ = FailCert
+    n = len(e.run.calls)
     with pytest.raises(SiteError):
         e.enable()
-    # run 1 refreshed the entry once (config.php changed after the add); run 2 failed before step 15a: no update
-    assert len(_upd(e.run.calls)) == 1
+    assert len(_upd(e.run.calls[n:])) == 1                      # run 2: refreshed before its first occ call only
+    assert D._trust_entry(e.root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP) != \
+        D._size_sha(e.root / "etc/nextcloud/config.php")        # the write during run 2 left the entry stale
     e.run.__class__ = Run
     n = len(e.run.calls)
     e.enable()
-    assert len(_upd(e.run.calls[n:])) == 1                      # run 3 refreshes the entry exactly once
+    assert len(_upd(e.run.calls[n:])) == 1                      # run 3 refreshes it before its first occ call
     assert D._trust_entry(e.root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP) == \
         D._size_sha(e.root / "etc/nextcloud/config.php")
 
@@ -1802,3 +1825,106 @@ def test_check_never_tries_to_make_the_account_when_occ_is_broken(tmp_path):
     occ = BrokenOcc()
     _, res, _ = do_check(tmp_path, occ=occ)
     assert "canary:error" in keys(res) and not any(c[0] == "user:add" for c in occ.calls)
+
+
+# ---------- Task 9c: lab round 2 defects (D3 config.php trust, D4 always-enabled apps, D5 Kanidm group get) ----------
+
+def test_d3_config_php_and_its_trust_entry_exist_before_the_first_occ_call(tmp_path):
+    e = Env(tmp_path)
+    nc, tl, owners = e.nc, e.run.calls, []
+
+    def occ(argv, env=None):
+        tl.append(["OCC", *argv])
+        return nc(argv, env)
+    D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
+             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda p: owners.append(p.name),
+             now=lambda: "x")
+    first = _index(tl, lambda c: c[:1] == ["OCC"], "first occ call")
+    assert tl[first] == ["OCC", "status", "--output=json"]
+    add = _index(tl, lambda c: c[:3] == ["fapolicyd-cli", "--file", "add"], "trust add")
+    assert tl[add] == ["fapolicyd-cli", "--file", "add", D.CONFIG_PHP, "--trust-file", "nextcloud"]
+    assert tl[add + 1] == ["fapolicyd-cli", "--update"]
+    rc = _index(tl, lambda c: c == ["restorecon", D.CONFIG_PHP], "restorecon config.php")
+    assert rc < add < first < _index(tl, lambda c: c[:2] == ["OCC", "maintenance:install"], "install")
+    assert "config.php.chp-tmp" in owners                      # written as apache:apache (0640), then put in place
+    assert len([c for c in tl if c[:3] == ["fapolicyd-cli", "--file", "add"]]) == 1
+    cfg = e.root / "etc/nextcloud/config.php"
+    assert D._trust_entry(e.root / "etc/fapolicyd/trust.d/nextcloud", D.CONFIG_PHP) == D._size_sha(cfg)
+    assert ["systemctl", "restart", "fapolicyd"] in tl
+
+
+def test_d3_minimal_config_is_valid_php_with_an_empty_config_array():
+    assert D.MIN_CONFIG == "<?php\n$CONFIG = array (\n);\n"
+
+
+def test_d3_the_fake_denies_an_untrusted_config_php_like_fapolicyd(tmp_path):
+    e = Env(tmp_path)                                           # the regression the fix is for (lab round 2)
+    cfg = e.root / "etc/nextcloud/config.php"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text(D.MIN_CONFIG)
+    assert e.nc(["status", "--output=json"])[0] == 1
+    assert e.nc(["maintenance:install"])[0] == 1 and not e.nc.installed
+
+
+@pytest.mark.parametrize("left", ["none", "stale"])
+def test_d3_rerun_after_a_failed_install_recovers(tmp_path, left):
+    """Round 2: the install wrote a partial config.php, fapolicyd denied reading it back, every occ call then failed.
+    A re-run refreshes the trust entry before its first occ call and completes."""
+    e = Env(tmp_path)
+    cfg = e.root / "etc/nextcloud/config.php"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text("<?php\n$CONFIG = array (\n  'datadirectory' => '/data/nextcloud/data',\n  'dbtype' => 'pgsql',\n);\n")
+    t = e.root / "etc/fapolicyd/trust.d/nextcloud"
+    t.parent.mkdir(parents=True)
+    t.write_text(f"{D.CONFIG_PHP} 1 {'b' * 64}\n" if left == "stale" else "")
+    if left == "none":
+        assert e.nc(["status", "--output=json"])[0] == 1        # the state the lab was left in
+    done = e.enable()
+    assert any("ENABLED=yes" in d for d in done) and e.nc.installed
+    pre = _index(e.run.calls, lambda c: c[:2] == ["fapolicyd-cli", "--file"], "first trust call")
+    assert e.run.calls[pre][2] == ("add" if left == "none" else "update")
+    assert D._trust_entry(t, D.CONFIG_PHP) == D._size_sha(cfg)
+
+
+def test_d3_existing_config_php_is_never_overwritten(tmp_path):
+    e = Env(tmp_path)
+    cfg = e.root / "etc/nextcloud/config.php"
+    cfg.parent.mkdir(parents=True)
+    orig = "<?php\n$CONFIG = array ('instanceid' => 'keep');\n"
+    cfg.write_text(orig)
+    seen = []
+
+    def occ(argv, env=None):
+        seen.append(cfg.read_text())
+        return e.nc(argv, env)
+    D.enable(SRV, dict(SITE), HS, run=e.run, occ=occ, kanidm=e.k, root=e.root, record=lambda *a, **k: None,
+             data_is_mount=True, stick=e.stick, pending=e.pending, chown=lambda *a: None, now=lambda: "x")
+    assert seen[0] == orig                                      # what NextCloud (or a failed install) left is kept
+    assert ["restorecon", D.CONFIG_PHP] not in e.run.calls
+
+
+def test_d4_apps_off_never_holds_an_always_enabled_app():
+    assert not set(D.APPS_OFF) & set(D.ALWAYS_ENABLED)
+    assert "appstore" in D.ALWAYS_ENABLED and "appstore" not in D.APPS_OFF
+    # NextCloud 35.0.3 core/shipped.json alwaysEnabled (read from the installed nextcloud-chp 35.0.3-4 tree)
+    assert set(D.ALWAYS_ENABLED) == {"appstore", "cloud_federation_api", "dav", "federatedfilesharing", "files",
+                                     "lookup_server_connector", "oauth2", "profile", "provisioning_api", "settings",
+                                     "sharing", "theming", "twofactor_backupcodes", "viewer", "workflowengine"}
+
+
+def test_d4_enable_passes_with_the_app_store_app_enabled_and_keeps_it_off_by_config(tmp_path):
+    e = Env(tmp_path)
+    assert "appstore" in e.nc.enabled and "office" in e.nc.enabled
+    e.enable()
+    assert not [c for c in e.nc.calls if c[:1] == ["app:disable"] and c[1] in D.ALWAYS_ENABLED]
+    assert "appstore" in e.nc.enabled                            # cannot be disabled; the store is off by config
+    assert e.nc.sysconf[("appstoreenabled",)] == "false"
+    assert "office" not in e.nc.enabled                          # the spike disabled it (editors' landing app)
+
+
+def test_d5_kanidm_group_get_missing_is_none_not_an_error(tmp_path):
+    e = Env(tmp_path)
+    assert e.k.group("cui-users") is None                       # Kanidm 1.11.2: "No matching group 'cui-users'"
+    e.enable()
+    assert [c[:3] for c in e.kcli.calls if c[:2] == ["group", "create"]] == [["group", "create", "cui-users"],
+                                                                            ["group", "create", "doc-reviewers"]]

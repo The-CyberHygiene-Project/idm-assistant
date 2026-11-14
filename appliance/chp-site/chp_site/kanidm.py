@@ -32,9 +32,11 @@ def _sa(n):
 
 
 def parse_entry(text):
-    """`kanidm person|group get` -> {attr: [values]}; None for "No matching entries". Anything else is an error, never
-    'absent' (reading garbage as 'no such user' would make onboard try to create an existing account)."""
-    if text.strip() == "No matching entries":
+    """`kanidm person|group get` -> {attr: [values]}; None for "No matching entries" (person, service-account, oauth2)
+    or "No matching group '<name>'" (group get, Kanidm 1.11.2). Anything else is an error, never 'absent' (reading
+    garbage as 'no such user' would make onboard try to create an existing account)."""
+    t = text.strip()
+    if t == "No matching entries" or re.fullmatch(r"No matching group '[^'\n]*'", t):
         return None
     e = {}
     for line in text.splitlines():
