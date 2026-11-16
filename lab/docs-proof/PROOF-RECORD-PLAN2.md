@@ -322,3 +322,22 @@ not excluded from AIDE). One lab artifact found and cleared (an orphan ACL from 
 
 ### Not provable on demand
 - D6's failure branch (fapolicyd dying twice in a row): intermittent; only the success line was shown.
+
+### Round 4 gates (after the fresh golden)
+- **Regression:** the full run (`lab/iso5/regression-2026-11-16.md`) was **32/33**: 10 of 11 scenarios 3/3; **c4 2/3**.
+  c4 run 3 (`cases/20261116T164231994402Z-c4-run3`): the model chose the right repair (ssh-ca-trust-restore, valid,
+  agreeing), the repair applied and verified, final findings empty on both hosts, but the certificate-login probe
+  of lab02@client2 11 s after the verify was still DENIED -> NOT-CLEARED. c4 then re-run alone 3 times
+  (`lab/iso5/regression-2026-11-16-c4-rerun.md`): **3/3 GREEN**. So c4 is 5/6 today. I read this as a probe-timing flake
+  on client2's sshd reload. c4 touches client2's sshd only, none of the round-4 packages. It is **not** the clean
+  33/33-in-one-pass the gate asks for. The controller decides whether the re-run is enough or the full run is
+  repeated. Model: 33/33 valid, 33/33 agreeing in the full run.
+- **Row 36: 3/3**, label `var_auth_t`.
+- Lab state: srv and cli2 at the **round-4 golden** (r4 packages, NextCloud enabled, W2 timer on, proof data present);
+  cli1 at r4 packages. Size guards active.
+
+### Status of every checklist item after round 4
+PASS: 1, 2, 3, 4, 5, 6, 9 (window + break tests), 10, 12, 13 (rows present; counts wrong = D14), 14, 16, 17; gate 3, row 36.
+PARTLY: 7 (the refusal with an MTA installed was not run: there is no MTA package offline), 8 (100602/100603/100612 not
+exercised: no share was made, no control app was switched off), regression (32/33 + c4 re-run 3/3).
+DROPPED: 11 (§13). Open defects: D13, D14, D15 (plus O8, and D6's failure branch, which cannot be provoked on demand).

@@ -1,0 +1,107 @@
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 1: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 2: GREEN
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on client2: repair ssh-ca-trust-restore
+========================================================================
+ PROBLEM DETECTED
+   Nobody's SSH certificate login to this workstation works; password
+   logins still do.
+   Why it matters: People who log in remotely with certificates are
+   locked out of this machine.
+
+ LIKELY CAUSE  (found by the diagnostic tool: SSH_CA_NOT_TRUSTED)
+   The SSH service here does not trust the project's SSH certificate
+   authority (setting missing, empty, or a different key).
+   Found on this host: sshd TrustedUserCAKeys: none; no SSH user CA is
+   trusted: certificate logins fail
+
+ PROPOSED ACTION
+   Trust the project's SSH certificate authority again (only the key
+   matching the pinned fingerprint), check the SSH settings are valid,
+   then reload the SSH service.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the SSH settings are broken in some other way, the
+   validity check stops the reload; sessions already open stay open.
+   Undo: The previous SSH files (or their absence) are saved and put
+   back if the check afterwards fails.
+
+ SAY NO IF
+   The site deliberately changed SSH certificate authorities and this
+   tool's pinned key is the old one.
+
+ If unsure, type no: nothing on client2 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+c4 run 3: GREEN
+wrote /Users/dshannon/idm-assistant/lab/iso5/regression-2026-11-16-c4-rerun.md
+rc=0
