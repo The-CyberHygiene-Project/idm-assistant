@@ -272,3 +272,53 @@ accesses: N"); a rename of a non-empty CUI folder = 403; a new user's first sign
 egress attempt raises 100620 (level 12) in alerts.json; one wrong TOTP = one 100630; nextcloud-cron.service succeeds,
 `oc_jobs` last_run > 0, check 77 OK (and ALERT when the unit is broken on purpose); backup + restore then
 `documents check` with no "trust" alert; enable run 7 prints "AIDE: this run changed no watched file".
+
+## Round 4 (2026-11-14 to 11-16): repo 0.12.0 r4 (chp-site 0.14.0-4, chp-base 0.1.0-12, chp-documents 0.1.0-6, nextcloud-chp 35.0.3-5)
+
+**Result: D6-D11 fixes proven live; the overnight items 9 and 13 ran; gates re-run. New: D13 (the nightly check timer is
+never enabled), D14 (the daily review counts 0 share attempts and 0 canary refusals), D15 (the NextCloud certificate is
+not excluded from AIDE). One lab artifact found and cleared (an orphan ACL from my item-16 test).**
+
+| Step / proof | Result | Log |
+|---|---|---|
+| Repo r4 | srv: upgrade = **exactly the 4** (chp-base 0.1.0-12, chp-documents 0.1.0-6, chp-site 0.14.0-4, nextcloud-chp 35.0.3-5); cli1/cli2: chp-base + chp-site (the other two are not installed there). 0 denials, no pending marker | 68 |
+| enable 6 / 7 | exit 0; run 6 "AIDE: this run changed /var/ossec/etc/rules/chp_nextcloud_rules.xml", **run 7 "AIDE: this run changed no watched file"** (minor fixed); "fapolicyd: no restart needed" both | 69, 70 |
+| **D6** | restart forced (chp-base marker `/var/lib/chp/fapolicyd-restart-pending`), enable 8: **"fapolicyd restarted (rule 65 loaded); active over 5 s; Denied accesses: 0"**, marker cleared, check 80 OK. The failure branch (daemon dies twice) could not be provoked on demand (intermittent) | 71 |
+| **D7** | refused rename of a non-empty folder: **403** with the message "chp_foldertag: a non-empty folder cannot be moved or deleted on this server yet (database MD5 unavailable)", in **CUI and in Operations**; data intact (source present, target absent); refused move of a file with old versions 403; ACL-hidden-child folder rename 403 | 75, 77, 79, 80 |
+| **D8** | lab06's first sign-in (`/lab06/files` created): **no `chp.tag.failed`** (count 10 before and after; all 10 are round 3's); a CUI folder copy into Archive still tags every file; no new `chp.tag.failed` across all round-4 proofs | 72, 73, 80 |
+| **D9** | egress attempt as apache at 20:44:57Z -> **rule 100620 level 12** in alerts.json (location `journald`, decoder `kernel`), and the `chp-wazuh` forwarder line "rule 100620 level 12: NextCloud egress block tripped" | 81 |
+| **100630** | one wrong TOTP -> **one** 100630 (the `Auth result: Denied: incorrect totp` line); round 3's same test gave three | 82 |
+| **D10** | backup -> restore: restore printed "fapolicyd trust entry … refreshed (fapolicyd-cli --file update, --update): size 2428, sha256 31c11fb2…"; `chp-site documents trust` by hand: "already matched"; trust entry = file; **`documents check` OK, no "trust" alert**; services up; 0 denials | 85 |
+| **D11** | unit line 10 `ExecStartPre=+/usr/sbin/nft …`; `nextcloud-cron.service` **result success**; `oc_jobs` 45 jobs, max last_run 13:47:07 MST; `core/lastcron` = now; check 77 "background jobs ran 2026-11-14T20:47:07Z". Broken on purpose: (A) egress table deleted -> the cron unit fails -> check 77 **ALERT "the last nextcloud-cron.service run failed (exit-code)"**; restored -> OK. (B) `core/lastcron` set 2 h back -> **ALERT "background jobs last ran … more than 30 min ago"**; after a real run -> OK. Two days later: cron ran every 5 min (lastcron 211 s old at 11-16 14:54Z) | 83, 84, 88 |
+| Reboot srv (after r4) | TPM unlock, all NextCloud units + check timer active, 77-81 OK, 0 denials, 0 failed units | 87 |
+| Proofs re-run on the new packages | upload, share, see, contain, inside, trash, download, hidden: **ALL PASS** (r5/r7/r8/r9/r10). Proof-script fixes: the version test uses a file never trashed (O4), the hidden copy checks the file not the folder | 73, 77-80 |
+| **Lab artifact (not a product defect)** | the first r5 run showed 403 "cannot be deleted" on legal moves/deletes in CUI: the ACL rule `chp-users -delete` on CUI from my round-3 item-16 test outlived the stray mapping that enable removed and still applied to lab01 (a chp-users member). Cleared with `groupfolders:permissions 1 --group chp-users -- / clear`; then all PASS. **Observation O8:** enable removes a stray group mapping on a controlled folder but leaves that group's ACL rules, which still restrict (never widen) members who reach the folder through cui-users; enable could clear ACL rules of every group other than cui-users/doc-reviewers on CUI/FCI/Archive | 74-77 |
+| **Item 9 in the window** | `chp-documents-check.timer` ran at **03:10 MST on 11-15 and 11-16**: "OK NextCloud check … share canary refused", then "canary-off: canary account disabled, its app tokens deleted". Wazuh: **100618 level 3** ("User enabled: chp-canary" by occ inside 03:05-03:45) and 100608 level 3 x2 on both nights (11-15 from the rotated archive). Check 81 OK "last run 2026-11-16T10:10:00Z". (The timer ran only because of W2, see D13) | 88, 90 |
+| **Item 13 daily review** | built 00:20 MST 11-15 (`2026-11-14`) and 11-16 (`2026-11-15`), **Needs attention: 0** both. 2026-11-14 intrusions table: the NextCloud level-12 events from the tests (canary enabled outside the window, the round-3 `chp.tag.failed` false alarms, share refusals, contain refusals, DavGuard refusals). 2026-11-15 status rows on iso5-srv: nextcloud services OK, certificate OK (17 h of 24), backup OK (22 h), nightly check OK, **share canary OK**, **database MD5 ATTENTION "known limitation, see POA&M" and not counted**, refusals row "0 contain refusals, 0 share attempts today; canary: 0 refused as expected" (see D14) | 89, 90 |
+| Nightly backup | 01:40 MST runs on 11-15 and 11-16 (`20261115T084000Z`, `20261116T084001Z`), status OK | 88 |
+| AIDE accept (r4) | 30,576 paths explained by the 4 packages; not explained: lab adapter + fixture keys + /root (lab), the check timer link (W2), canary rules, rules/config.php/trust entry/httpd conf/selinux contexts, **`/etc/pki/nextcloud/chain.pem` (D15)**; pinned | 91, 92 |
+| **Gate 3: CUI scan (r4)** | **108/2 on every host, no rule changed vs round 3**, deviations **MET**. (The lab adapter is present since round 3; it changed no rule) | 93, 94 |
+| Golden (fresh, r4) | ALL PASS (reset + 0 findings on both) | 95 |
+
+### New product defects (round 4)
+
+- **D13 (important)** — `documents.py` line 69 `UNITS = ("php-fpm", "httpd", "nextcloud-cron.timer",
+  "chp-nextcloud-backup.timer", "chp-nextcloud-cert-renew.timer")` lacks **`chp-documents-check.timer`**, so enable
+  never enables the nightly tag check and share canary (`systemctl is-enabled`: disabled; not in `list-timers`). On a
+  real site check 81 would alert "no result" (or stale after 26 h) but the canary and tag check would never run.
+  Fix: add the timer to `UNITS` (and to the step text). **Lab workaround W2:** `systemctl enable --now
+  chp-documents-check.timer` by hand (log 86), so items 9 and 13 could run.
+- **D14 (minor, wrong numbers in the review)** — `review_host.py` `docs_counts` (lines 160-167) matches
+  `msg.startswith("ShareAction from user ")`, but NextCloud's line is `Interaction OCP\Interaction\Actions\ShareAction
+  from user <u> on <id> to <x> is restricted: Node is not shareable.`, so **share attempts and canary refusals are
+  always counted 0** (the 11-15 report says "canary: 0 refused as expected" although 100608 fired twice that night;
+  11-14 had 7+ share attempts). Fix: search `"ShareAction from user "` anywhere in the message (as rule 100601 does)
+  and the canary as `f"ShareAction from user {CANARY_USER} "`; add a test with the real line (logs/48, 53).
+- **D15 (minor, daily noise)** — `/etc/pki/nextcloud` is not excluded from AIDE, unlike `/etc/pki/kanidm`
+  (`/etc/aide.conf` line 390-391). The certificate is re-issued every 24 h, so every daily AIDE check reports
+  `/etc/pki/nextcloud/chain.pem` changed (checks of 11-15 and 11-16), monitor 60 repeats it every 15 min until
+  accepted, and the review's AIDE row stays ATTENTION. Fix: the same exclusion for `/etc/pki/nextcloud(/|$)` (covered by
+  check 78 + the renew timer), shipped where the Kanidm one is.
+
+### Not provable on demand
+- D6's failure branch (fapolicyd dying twice in a row): intermittent; only the success line was shown.
