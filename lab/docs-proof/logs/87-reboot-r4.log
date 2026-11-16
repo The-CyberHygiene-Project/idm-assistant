@@ -1,0 +1,12 @@
+PASS after reboot the TPM unlocked the disk
+PASS unixd online after reboot
+stage reboot: ALL PASS
+2026-11-14 13:50:14
+active active active active active active active active active 
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-14T20:47:40Z
+OK NextCloud certificate: 19 h left of 24 h
+OK NextCloud egress table present, matches the shipped rules, address file valid
+OK fapolicyd active and enforcing
+OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accepted; see the daily review)
+OK NextCloud check OK (tags, policy, share canary; last run 2026-11-14T20:48:38Z)
+Denied accesses: 0

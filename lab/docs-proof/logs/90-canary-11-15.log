@@ -1,0 +1,14 @@
+/var/ossec/logs/alerts/2026:
+Nov
+
+/var/ossec/logs/alerts/2026/Nov:
+ossec-alerts-13.json.gz
+ossec-alerts-13.json.sum
+ossec-alerts-13.log.gz
+ossec-alerts-13.log.sum
+ossec-alerts-14.json.gz
+ossec-alerts-14.json.sum
+/var/ossec/logs/alerts/2026/Nov/ossec-alerts-15.json.sum
+2026-11-15T03:10:04.830-0700 100618 3
+2026-11-15T03:10:04.830-0700 100608 3
+2026-11-15T03:10:04.830-0700 100608 3

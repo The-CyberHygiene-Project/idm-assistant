@@ -1,0 +1,44 @@
+ 07:54:03 up 1 day, 18:03,  1 user,  load average: 0.00, 0.01, 0.00
+OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-16T14:50:34Z
+OK NextCloud certificate: 9 h left of 24 h
+OK NextCloud egress table present, matches the shipped rules, address file valid
+OK fapolicyd active and enforcing
+OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accepted; see the daily review)
+OK NextCloud check OK (tags, policy, share canary; last run 2026-11-16T10:10:00Z)
+Denied accesses: 0
+== check runs
+Nov 15 03:10:00 iso5-srv.iso5.lab.test systemd[1]: Starting CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81)...
+Nov 15 03:10:06 iso5-srv.iso5.lab.test chp-site[39574]: OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; share canary refused (public link
+Nov 15 03:10:07 iso5-srv.iso5.lab.test chp-site[39656]: OK canary-off: canary account disabled, its app tokens deleted
+Nov 15 03:10:07 iso5-srv.iso5.lab.test systemd[1]: Finished CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81).
+Nov 16 03:10:00 iso5-srv.iso5.lab.test systemd[1]: Starting CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81)...
+Nov 16 03:10:05 iso5-srv.iso5.lab.test chp-site[103163]: OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; share canary refused (public lin
+Nov 16 03:10:07 iso5-srv.iso5.lab.test chp-site[103244]: OK canary-off: canary account disabled, its app tokens deleted
+Nov 16 03:10:07 iso5-srv.iso5.lab.test systemd[1]: Finished CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81).
+== canary audit lines
+== canary alerts
+2026-11-16T03:10:02.998-0700 100618 3 User enabled: "chp-canary"
+2026-11-16T03:10:04.999-0700 100608 3 Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to O
+2026-11-16T03:10:04.999-0700 100608 3 Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to n
+2026
+alerts.json
+alerts.log
+== reviews
+2026-11-13
+2026-11-14
+2026-11-15
+Nov 15 00:20:07 iso5-srv.iso5.lab.test chp-site[31221]: built 2026-11-14
+Nov 15 00:20:07 iso5-srv.iso5.lab.test systemd[1]: Finished CHP daily review: build yesterday's review (and any missed day) on the server (review spec §4).
+Nov 16 00:20:01 iso5-srv.iso5.lab.test chp-site[94896]: built 2026-11-15
+Nov 16 00:20:01 iso5-srv.iso5.lab.test systemd[1]: Finished CHP daily review: build yesterday's review (and any missed day) on the server (review spec §4).
+== cron
+1794840634
+1794840846
+== backups
+20261114T174459Z
+20261114T174542Z
+20261114T204829Z
+20261115T084000Z
+20261116T084001Z
+OK 1794818403 backup 20261116T084001Z
+EXIT=0
