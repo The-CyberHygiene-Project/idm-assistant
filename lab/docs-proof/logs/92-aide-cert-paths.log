@@ -1,0 +1,11 @@
+/etc/aide.conf:390:# EXCLUDE /etc/pki/kanidm(/|$): Kanidm TLS certificate re-issued every 24 h (ACME); covered by 30-kanidm-cert + 31-renew-timer (row 24)
+/etc/aide.conf:391:!/etc/pki/kanidm(/|$)
+last report: /var/log/aide/accepted/accept-20261116T145634Z.log
+f = ...   ..H.... : /etc/pki/nextcloud/chain.pem
+File: /etc/pki/nextcloud/chain.pem
+OK AIDE: no changes
+== check-20261115T112021Z.log: 30639 entries
+: /etc/pki/nextcloud/chain.pem
+== check-20261116T103942Z.log: 30639 entries
+: /etc/pki/nextcloud/chain.pem
+108

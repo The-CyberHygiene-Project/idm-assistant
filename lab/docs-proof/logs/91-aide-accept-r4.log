@@ -1,0 +1,79 @@
+AIDE changes since the baseline: 32 added, 0 removed, 30610 changed
+
+Explained by signed package updates: 30576 paths in 4 packages
+  chp-base: 14 paths
+  chp-documents: 24 paths
+  chp-site: 6 paths
+  nextcloud-chp: 30532 paths
+
+NOT explained: 66 paths (review every one)
+  added    /etc/sudoers.d/99-lab-adapter
+  added    /etc/systemd/system/timers.target.wants/chp-documents-check.timer
+  added    /root/backup.sh
+  added    /root/break-check.sh
+  added    /root/chp-scan
+  added    /root/chp-scan/iso5-srv.xml
+  added    /root/chp-scan/tailoring.xml
+  added    /root/docs-enable-5.log
+  added    /root/docs-enable-6.log
+  added    /root/docs-enable-7.log
+  added    /root/docs-enable-8.log
+  added    /root/egress-addr.bak
+  added    /root/egress.sh
+  added    /root/lab-aide-accept-r4.log
+  added    /root/lab-backup.log
+  added    /root/lab-backup2.log
+  added    /root/lab-break-check.log
+  added    /root/lab-check-1.log
+  added    /root/lab-check-2.log
+  added    /root/lab-cron.log
+  added    /root/lab-d10.log
+  added    /root/lab-d11-break.log
+  added    /root/lab-d11.log
+  added    /root/lab-egress.log
+  added    /root/lab-overnight.log
+  added    /root/lab-pre-enable5.log
+  added    /root/lab-review-now.log
+  added    /root/lab-review.log
+  added    /var/lib/ssh-ca/keys/lab01.pub
+  added    /var/lib/ssh-ca/keys/lab02.pub
+  added    /var/lib/ssh-ca/keys/lab06.pub
+  added    /var/ossec/etc/rules/chp_nextcloud_rules_canary.xml
+  changed  /etc/fapolicyd/rules.d
+  changed  /etc/fapolicyd/rules.d/65-chp-nextcloud.rules
+  changed  /etc/fapolicyd/rules.d/66-chp-fsmark.rules
+  changed  /etc/fapolicyd/trust.d/nextcloud
+  changed  /etc/httpd/conf/httpd.conf
+  changed  /etc/httpd/conf.d/autoindex.conf
+  changed  /etc/httpd/conf.d/ssl.conf
+  changed  /etc/httpd/conf.d/userdir.conf
+  changed  /etc/httpd/conf.d/welcome.conf
+  changed  /etc/ld.so.cache
+  changed  /etc/nextcloud/config.php
+  changed  /etc/pki/nextcloud/chain.pem
+  changed  /etc/selinux/targeted
+  changed  /etc/selinux/targeted/contexts/files
+  changed  /etc/selinux/targeted/contexts/files/file_contexts
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.local
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.local.bin
+  changed  /etc/selinux/targeted/policy
+  changed  /etc/selinux/targeted/policy/policy.33
+  changed  /etc/selinux/targeted/seusers
+  changed  /etc/sudoers.d
+  changed  /etc/systemd/system/httpd.service.d
+  changed  /etc/systemd/system/php-fpm.service.d
+  changed  /etc/systemd/system/timers.target.wants
+  changed  /root
+  changed  /root/.cache/kanidm_tokens
+  changed  /root/lab-aide-accept.log
+  changed  /root/lab-repo-upgrade.log
+  changed  /var/lib/ssh-ca/keys
+  changed  /var/ossec/etc/rules
+  changed  /var/ossec/etc/rules/chp_nextcloud_rules.xml
+accepted by D. Shannon: new baseline f2d2f17be764a6a7… (recorded in the audit log)
+Pinning the new baseline: plug in the site stick.
+pinned: aide/iso5-srv.txt on the site stick (SHA-512 f2d2f17be764a6a7…)
+EXIT=0
