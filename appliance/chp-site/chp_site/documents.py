@@ -74,11 +74,15 @@ AREA_GROUPS = {"CUI": ("cui-users", "doc-reviewers"), "Archive": ("cui-users", "
                "Internal": ("chp-users",)}
 GF_DATA = "/data/nextcloud/data/__groupfolders"     # groupfolders' storages on the disk: <id>/files/... (spike logs/50)
 DOC_CONF_KEYS = ("DOC_OIDC_CLIENT", "KANIDM_USERINFO_URL") + tuple(a[0] for a in AREAS)
+# chp_ledger's app config: {key: the documents.conf ids it lists}
+LEDGER_AREAS = {"compliance": ("CUI_COMPLIANCE_ID", "INTERNAL_COMPLIANCE_ID"),
+                "superseded": ("CUI_SUPERSEDED_ID", "INTERNAL_SUPERSEDED_ID")}
 
 PACKAGES = ("nextcloud-chp", "chp-documents")
 MTAS = ("postfix", "sendmail", "exim", "opensmtpd")
-APPS_ON = ("admin_audit", "groupfolders", "files_accesscontrol", "user_oidc", "chp_foldertag", "systemtags",
-           "password_policy", "bruteforcesettings", "files_downloadlimit", "workflowengine", "viewer", "files_pdfviewer")
+APPS_ON = ("admin_audit", "groupfolders", "files_accesscontrol", "user_oidc", "chp_foldertag", "chp_ledger",
+           "systemtags", "password_policy", "bruteforcesettings", "files_downloadlimit", "workflowengine", "viewer",
+           "files_pdfviewer")
 # editors (design §3: view and download only), outbound features, federation, extras
 APPS_OFF = ("text", "richdocuments", "richdocumentscode", "onlyoffice", "whiteboard", "files_texteditor",
             "firstrunwizard", "recommendations", "survey_client", "nextcloud_announcements", "updatenotification",
@@ -770,6 +774,10 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
                    f"provisioning); /login still goes straight to Kanidm (provider {LOGIN_PROVIDER_ID})")
     doc.update(_compliance_areas(run, occ, sql, root, ids))
     _put(cp, conf_text(fqdn, sip, days, ids, enabled_now, doc), 0o644)
+    # chp_ledger (Plan 3 Task 3) takes requests for file ids inside a Compliance area and outside a Superseded one
+    for key, names in LEDGER_AREAS.items():
+        val = [int(doc[n]) for n in names]
+        occ("config:app:set", "chp_ledger", key, f"--value={json.dumps(val, separators=(',', ':'))}")
     step("compliance", "compliance areas: " + ", ".join(f"{t}/{rel}={doc[key]}" for key, t, rel in AREAS)
          + "; read-only to every group there (" + "; ".join(f"{t}: {', '.join(g)}" for t, g in AREA_GROUPS.items())
          + "); only the root appender writes them")

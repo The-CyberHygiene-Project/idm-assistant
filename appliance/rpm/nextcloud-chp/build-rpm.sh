@@ -19,11 +19,13 @@ while read -r f s; do
 done < "$T/sums"
 COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root --gname root -czf "$T/chp_foldertag.tar.gz" \
   -C "$here" --exclude .DS_Store chp_foldertag
+COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root --gname root -czf "$T/chp_ledger.tar.gz" \
+  -C "$here" --exclude .DS_Store chp_ledger
 B "rm -rf $W/SPECS $W/BUILD $W/BUILDROOT $W/RPMS $W/SRPMS && mkdir -p $W/SOURCES $W/SPECS"
 while read -r f s; do   # the large tarballs are copied only when the VM does not already hold the verified file
   B "cd nc-chp/SOURCES && echo '$s  $f' | sha256sum -c --status" 2>/dev/null || scp -q -F "$F" "$I/$f" "chp-build:nc-chp/SOURCES/$f"
 done < "$T/sums"
-scp -q -F "$F" "$T/chp_foldertag.tar.gz" "$here/occ" "$top/LICENSE" chp-build:nc-chp/SOURCES/
+scp -q -F "$F" "$T/chp_foldertag.tar.gz" "$T/chp_ledger.tar.gz" "$here/occ" "$top/LICENSE" chp-build:nc-chp/SOURCES/
 scp -q -F "$F" "$here/nextcloud-chp.spec" chp-build:nc-chp/SPECS/
 awk '{print $2"  "$1}' "$T/sums" | B 'cd nc-chp/SOURCES && sha256sum -c --quiet' || { echo "MANIFEST mismatch on chp-build"; exit 1; }
 B "rpmbuild -bb --define \"_topdir \$HOME/nc-chp\" --define 'dist .el9' $W/SPECS/nextcloud-chp.spec > $W/build.log 2>&1 \

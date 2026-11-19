@@ -1,4 +1,5 @@
-# nextcloud-chp: NextCloud server for the CHP document store, with the bundled apps it needs and our chp_foldertag.
+# nextcloud-chp: NextCloud server for the CHP document store, with the bundled apps it needs and our chp_foldertag and
+# chp_ledger.
 # Inputs are verified on the Mac (fetch-inputs.sh -> MANIFEST.txt); built on the build VM chp-build (build-rpm.sh).
 # Layout (read-only code tree that fapolicyd trusts through the rpm database):
 #   /usr/lib/nextcloud     code, root:root, never written by NextCloud (app store off). NOT /usr/share: fapolicyd's
@@ -7,12 +8,15 @@
 #   /etc/nextcloud         config (apache, httpd_sys_rw_content_t); /usr/lib/nextcloud/config is a symlink to it
 #   /var/log/nextcloud     nextcloud.log + audit.log (apache, httpd_log_t)
 #   /data/nextcloud/data   user files: NOT in this package (made by chp-site documents enable on the /data mount)
+#   /var/lib/chp-docs      chp_ledger's spool (apache creates requests, cannot list) and out (the root appender's
+#                          results, read-only to apache); the ledger itself is root's (chp-documents, Plan 3 Task 4)
 # Web server, PHP-FPM pool, cron, egress, backup and monitor files are in chp-documents, not here.
 %global ncver 35.0.3
 %global groupfolders_ver 23.0.1
 %global files_accesscontrol_ver 6.0.1
 %global user_oidc_ver 8.13.0
 %global foldertag_ver 1.0.0
+%global ledger_ver 1.0.0
 %global debug_package %{nil}
 %global __brp_mangle_shebangs %{nil}
 %global __os_install_post %{nil}
@@ -20,10 +24,10 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
-# chp_foldertag: Apache-2.0 (this repository's licence)
+# chp_foldertag, chp_ledger: Apache-2.0 (this repository's licence)
 License:        AGPL-3.0-or-later AND Apache-2.0
 Vendor:         The CyberHygiene Project
 URL:            https://github.com/The-CyberHygiene-Project/idm-assistant
@@ -36,6 +40,7 @@ Source3:        user_oidc-%{user_oidc_ver}.tar.gz
 Source4:        chp_foldertag.tar.gz
 Source5:        occ
 Source6:        LICENSE
+Source7:        chp_ledger.tar.gz
 Requires:       php-cli >= 8.3, php-common >= 8.3
 Requires:       php-gd, php-mbstring, php-intl, php-xml, php-pgsql, php-process, php-bcmath, php-gmp, php-opcache
 Requires:       php-pecl-zip, php-pecl-apcu, php-pdo
@@ -48,14 +53,15 @@ Requires(posttrans): util-linux
 NextCloud %{ncver} for the CyberHygiene appliance's document store (DOCUMENTS=yes on the server). Bundled apps:
 groupfolders %{groupfolders_ver} (team folders), files_accesscontrol %{files_accesscontrol_ver}, user_oidc
 %{user_oidc_ver} (Kanidm sign-in), and chp_foldertag %{foldertag_ver} (tag by folder, copy/move out of CUI, FCI and
-Archive refused except CUI <-> Archive, audit events). The app store and update checks are switched off by chp-site;
+Archive refused except CUI <-> Archive, audit events), and chp_ledger %{ledger_ver} (the doc commands' requests,
+stamped with the signed-in user and spooled for the root ledger appender). The app store and update checks are switched off by chp-site;
 nothing here reaches the internet. chp-site documents enable installs and configures it.
 
 %prep
 %setup -q -n nextcloud
-for s in %{SOURCE1} %{SOURCE2} %{SOURCE3} %{SOURCE4}; do tar -xzf "$s" -C apps; done
+for s in %{SOURCE1} %{SOURCE2} %{SOURCE3} %{SOURCE4} %{SOURCE7}; do tar -xzf "$s" -C apps; done
 # the bundled app versions must be the pinned ones (MANIFEST.txt; fetch-inputs.sh verified their signatures)
-for p in groupfolders:%{groupfolders_ver} files_accesscontrol:%{files_accesscontrol_ver} user_oidc:%{user_oidc_ver} chp_foldertag:%{foldertag_ver}; do
+for p in groupfolders:%{groupfolders_ver} files_accesscontrol:%{files_accesscontrol_ver} user_oidc:%{user_oidc_ver} chp_foldertag:%{foldertag_ver} chp_ledger:%{ledger_ver}; do
   a=${p%%:*}; v=${p#*:}
   got=$(sed -n 's|.*<version>\(.*\)</version>.*|\1|p' "apps/$a/appinfo/info.xml" | head -1)
   [ "$got" = "$v" ] || { echo "app $a is version '$got', expected $v"; exit 1; }
@@ -78,13 +84,19 @@ ln -s %{_sysconfdir}/nextcloud %{buildroot}%{_prefix}/lib/nextcloud/config
 install -d %{buildroot}%{_bindir}
 install -m 0755 %{SOURCE5} %{buildroot}%{_bindir}/occ
 install -d -m 0750 %{buildroot}%{_localstatedir}/log/nextcloud
+install -d -m 0750 %{buildroot}%{_localstatedir}/lib/chp-docs %{buildroot}%{_localstatedir}/lib/chp-docs/out
+install -d -m 1730 %{buildroot}%{_localstatedir}/lib/chp-docs/spool
 
 %post
 semanage fcontext -a -t httpd_sys_rw_content_t '%{_sysconfdir}/nextcloud(/.*)?' 2>/dev/null || :
 semanage fcontext -a -t httpd_sys_rw_content_t '/data/nextcloud(/.*)?' 2>/dev/null || :
 semanage fcontext -a -t httpd_log_t '%{_localstatedir}/log/nextcloud(/.*)?' 2>/dev/null || :
 semanage fcontext -a -t httpd_sys_content_t '%{_prefix}/lib/nextcloud(/.*)?' 2>/dev/null || :
-restorecon -R %{_prefix}/lib/nextcloud %{_sysconfdir}/nextcloud %{_localstatedir}/log/nextcloud >/dev/null 2>&1 || :
+# chp_ledger: apache creates requests in spool; out holds the root appender's results, read-only to apache
+semanage fcontext -a -t httpd_sys_rw_content_t '%{_localstatedir}/lib/chp-docs/spool(/.*)?' 2>/dev/null || :
+semanage fcontext -a -t httpd_sys_content_t '%{_localstatedir}/lib/chp-docs/out(/.*)?' 2>/dev/null || :
+restorecon -R %{_prefix}/lib/nextcloud %{_sysconfdir}/nextcloud %{_localstatedir}/log/nextcloud \
+  %{_localstatedir}/lib/chp-docs >/dev/null 2>&1 || :
 
 %posttrans
 # A changed NextCloud or app version leaves NextCloud answering 503 ("upgrade required") until occ upgrade runs.
@@ -117,8 +129,20 @@ fi
 %config(noreplace) %attr(0640,apache,apache) %{_sysconfdir}/nextcloud/.htaccess
 %{_bindir}/occ
 %dir %attr(0750,apache,apache) %{_localstatedir}/log/nextcloud
+%dir %attr(0750,root,apache) %{_localstatedir}/lib/chp-docs
+%dir %attr(1730,root,apache) %{_localstatedir}/lib/chp-docs/spool
+%dir %attr(0750,root,apache) %{_localstatedir}/lib/chp-docs/out
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 35.0.3-6.chp
+- chp_ledger 1.0.0 (ISO 0.7.0 Plan 3 Task 3): route L1's intake. OCS POST /api/v1/request and GET
+  /api/v1/result/{request_id}; the user from NextCloud's session (never the body), the auth kind (bearer,
+  app-password, session) and the raw Bearer for the appender's Kanidm check (never logged); file ids inside a
+  Compliance area and outside a Superseded one (app config compliance/superseded, set by chp-site; ancestry from the
+  filecache); 10 requests a minute per user (429); publish content + reader PDF at most 64 MiB together; one generic
+  refusal text; any error refused. Spool /var/lib/chp-docs/spool (root:apache 1730, httpd_sys_rw_content_t), results
+  from /var/lib/chp-docs/out (root:apache 0750, httpd_sys_content_t)
+
 * Sat Nov 14 2026 The CyberHygiene Project - 35.0.3-5.chp
 - chp_foldertag 1.0.0 (lab round 3, D7): FolderGuardListener's decision is refusal(), also asked by DavGuardListener
   in Sabre's beforeMove, so a refused rename/move is WebDAV 403 with nothing moved (a rename in the same parent was a
