@@ -7,12 +7,23 @@
 # canary. Reads /var/lib/chp/documents/check.json; each failure in it alerts once (state file) and again after 24 h;
 # no result, an unreadable one or one older than 26 h alerts. DEGRADED (database MD5, design §12) is shown, not
 # alerted. Silent OK when documents are not enabled (or enable has not finished).
+# No result file at all while documents.conf is younger than 26 h is OK "pending first run": enable writes the conf,
+# and the first nightly run comes at 03:10 within 24 h (final review M1; enable must NOT run the check itself: outside
+# 03:05-03:45 the canary would page 100609 at level 12). An unreadable result is never pending.
 C=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
 [ -f "$C" ] || { echo "OK documents not enabled on this host"; exit 0; }
 grep -qx 'ENABLED=yes' "$C" 2>/dev/null || { echo "OK documents enable has not finished on this host"; exit 0; }
 . "${CHP_DOCS_LIB:-/usr/lib/chp/chp-documents-lib.sh}"
 docs_begin 81-tags
 R=${CHP_DOCS_CHECK:-$docs_sd/check.json}
+if [ ! -e "$R" ]; then
+  ct=$(stat -c %Y "$C" 2>/dev/null || stat -f %m "$C" 2>/dev/null)
+  case $ct in ''|*[!0-9]*) ct=0 ;; esac
+  if [ $((docs_now - ct)) -lt $((26 * 3600)) ]; then
+    docs_end "NextCloud check: pending first run (no result yet; documents enabled $(docs_when "$ct"); chp-documents-check.timer runs at 03:10)"
+    exit 0
+  fi
+fi
 # one line per item: "A<TAB>key<TAB>text", "D<TAB>text" (degraded), "S<TAB>hours" (stale), "W<TAB>time" (when);
 # every field has control characters replaced (the result's text came from NextCloud names)
 lines=$(python3 -c '

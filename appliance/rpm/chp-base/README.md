@@ -24,6 +24,7 @@ Safety net: after every restart the helper performs it checks that fapolicyd is 
 (`journalctl -t chp-fapolicyd-fsmark`), writes `/var/lib/chp/fapolicyd-fsmark-failed` (check 80 alerts) and exits
 non-zero. While that record exists FSMARK=1 is refused. A restart done later for a pending marker (chp-site documents
 enable, or the operator) must be followed by `/usr/libexec/chp/fapolicyd-fsmark --verify` (same check, same rollback).
-To clear the record: set FSMARK=0 and run the helper. With no change of ours to revert (FSMARK=0), a dead fapolicyd is
+To clear the record: set FSMARK=0 and run the helper by hand (chp-base's own %posttrans run never clears it, so a package
+update cannot silently end check 80's alert). With no change of ours to revert (FSMARK=0), a dead fapolicyd is
 restarted once more: back up = a warning in the journal; still down = the record, exit 1 (check 80 alerts).
 `chp-site documents enable` does the same after its own fapolicyd restart and then runs `--verify`.

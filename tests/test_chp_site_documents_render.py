@@ -65,3 +65,13 @@ def test_template_documents_keys_commented_and_additive():
         t = re.sub(rf"^{k}=$", f"{k}={v}", t, flags=re.M)
     s = parse_site(t)
     assert s["DOCUMENTS"] == "no" and s["DOCUMENTS_BACKUP_DAYS"] == 14
+
+
+def test_template_documents_text_says_how_it_is_turned_on():
+    # final review M6: the text promised a first-boot set-up that 0.7.0 does not do (enable is a manual step with a
+    # Kanidm admin session and the site stick). Other tools read this template: the words matter.
+    t = KIT.read_text()
+    i = t.index("\nDOCUMENTS=no\n")
+    block = " ".join(l.lstrip("# ").strip() for l in t[t.rindex("\n\n", 0, i):i].splitlines())
+    assert "installer sets it up" not in block and "not set up at first boot" in block
+    assert "chp-site documents enable" in block and "site stick" in block and "SECURITY_ADDONS=yes" in block

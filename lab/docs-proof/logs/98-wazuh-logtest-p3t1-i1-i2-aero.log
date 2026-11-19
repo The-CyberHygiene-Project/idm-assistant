@@ -1,0 +1,137 @@
+# Plan 3 Task 1 (I1 uploads, I2 break-glass sign-in and account/group changes): wazuh-logtest-legacy on aero
+# (wazuh-manager 4.14.7, live install UNTOUCHED, still active after): a throwaway copy of /var/ossec bind-mounted over
+# /var/ossec inside 'sudo unshare -m --propagation private', the five generated chp rule files in its etc/rules
+# (script below; the same method as logs/66). MODE=real = the files exactly as chp-site writes them (analysisd -t).
+# MODE=stdin = the same, but chp_nextcloud_rules.xml's <location> set to "stdin", the location logtest-legacy gives
+# every line (the only change; the live proof with the real location is Task 11's). Lines: admin_audit JSON lines in
+# NextCloud's envelope (as lab/docs-spike/wazuh/sample-audit-lines.json) carrying the REAL message texts of the lab
+# (logs/42 created/written to, logs/72 lab06's first sign-in, logs/53 the canary); the round-4 logs keep only the
+# message, not the whole JSON. 1-3 upload/create/write (I1, 100621 level 3); 4 break-glass sign-in (100622 level 12);
+# 5-6 the Kanidm sign-in's provisioning via the user_oidc callback url (100624 level 3); 7 a group grant by ncadmin
+# in the web (100623 level 12); 8 the canary made by occ OUTSIDE 03:05-03:45 (logtest runs at the current time:
+# 100623 level 12; in the window 100625 lowers it to 3, simulator test only); 9 control: an ordinary sign-in (100600
+# level 0, not stored); 10 the canary's refusal (100608 level 3, unchanged). The JSON decoder fills the static `url`.
+# Copy removed after (0 /var/tmp/wz-lt.* left).
+
+3ccc204337e548cbb8cd3a6e7c770418b916fec33c0e3742369b231d5b63e2b5  chp_nextcloud_rules_canary.xml
+1c4cacf629246dfabfd2b264fbeea00cf9c5548e09259cc11ef3e54645fbb8af  chp_nextcloud_rules_stdin.xml
+bfde31653ff80593dfa588a0dcf845d3390ebf9191cb3ce695298cc855627f0a  chp_nextcloud_rules.xml
+8e0d5983c3a6c8a3f9da9bcc5cba9193b9e13220377af4dd085761c4f17bfaa2  chp_review_rules.xml
+e0781be27c5f8448963da7e0fe3c41af052aa4efca43d16db6b8b3e3d2a58a50  chp_suricata_rules.xml
+f66d7c208a81dbd92b6cb91af358be8405966d889a06515aa07a5a7541172a17  chp_yara_rules.xml
+e0b226d3055f8f98030f11e38041c7c809a330f724806d98580228db8f055bdc  lines.txt
+210a7c421e9367b2cd0f62788d2eff794b5cd0bfbba233b1ce586b6385474183  lt.sh
+MODE=real analysisd -t rc=0
+MODE=stdin analysisd -t rc=0
+== MODE=stdin line 1: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"MKCOL","url":"/remote.php/dav/files/lab01/CUI/Sub-r1","scriptName":"/remote.php","message":"File with id \"102\" created: \"/lab01/files/CUI/Sub
+          decoder: 'json'
+          url: '/remote.php/dav/files/lab01/CUI/Sub-r1'
+          Rule id: '100621'
+          Level: '3'
+          Description: 'NextCloud: file uploaded or written (owner decision 2: audited): File with id "102" created: "/lab01/files/CUI/Sub-r1"'
+   **Alert to be generated.
+== MODE=stdin line 2: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"MKCOL","url":"/remote.php/dav/files/lab01/CUI/Sub-r1","scriptName":"/remote.php","message":"File with id \"102\" written to: \"/lab01/files/CUI/
+          decoder: 'json'
+          url: '/remote.php/dav/files/lab01/CUI/Sub-r1'
+          Rule id: '100621'
+          Level: '3'
+          Description: 'NextCloud: file uploaded or written (owner decision 2: audited): File with id "102" written to: "/lab01/files/CUI/Sub-r1"'
+   **Alert to be generated.
+== MODE=stdin line 3: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"File with id \"166\" written t
+          decoder: 'json'
+          url: '/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>'
+          Rule id: '100621'
+          Level: '3'
+          Description: 'NextCloud: file uploaded or written (owner decision 2: audited): File with id "166" written to: "/lab06/files"'
+   **Alert to be generated.
+== MODE=stdin line 4: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"ncadmin","app":"admin_audit","method":"PROPFIND","url":"/remote.php/dav/files/ncadmin/","scriptName":"/remote.php","message":"Login successful: \"ncadmin\"","userAgent":"CHP plan3 t
+          decoder: 'json'
+          url: '/remote.php/dav/files/ncadmin/'
+          Rule id: '100622'
+          Level: '12'
+          Description: 'NextCloud: BREAK-GLASS sign-in as ncadmin (not through Kanidm): Login successful: "ncadmin" from 192.168.100.1'
+   **Alert to be generated.
+== MODE=stdin line 5: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"User \"lab06\" added to group 
+          decoder: 'json'
+          url: '/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>'
+          Rule id: '100624'
+          Level: '3'
+          Description: 'NextCloud: account or group set by the Kanidm sign-in (user_oidc): User "lab06" added to group "chp-users"'
+   **Alert to be generated.
+== MODE=stdin line 6: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"User created: \"lab06\"","user
+          decoder: 'json'
+          url: '/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>'
+          Rule id: '100624'
+          Level: '3'
+          Description: 'NextCloud: account or group set by the Kanidm sign-in (user_oidc): User created: "lab06"'
+   **Alert to be generated.
+== MODE=stdin line 7: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"ncadmin","app":"admin_audit","method":"POST","url":"/ocs/v2.php/cloud/users/mallory/groups","scriptName":"/ocs/v2.php","message":"User \"mallory\" added to group \"cui-users\"","use
+          decoder: 'json'
+          url: '/ocs/v2.php/cloud/users/mallory/groups'
+          Rule id: '100623'
+          Level: '12'
+          Description: 'NextCloud: account or group membership changed OUTSIDE Kanidm: User "mallory" added to group "cui-users"'
+   **Alert to be generated.
+== MODE=stdin line 8: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"--","app":"admin_audit","method":"--","url":"--","scriptName":"--","message":"User created: \"chp-canary\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":
+          decoder: 'json'
+          url: '--'
+          Rule id: '100623'
+          Level: '12'
+          Description: 'NextCloud: account or group membership changed OUTSIDE Kanidm: User created: "chp-canary"'
+   **Alert to be generated.
+== MODE=stdin line 9: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"POST","url":"/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json","scriptName":"/ocs/v2.php","message":"Login successful: \"lab01\"","userA
+          decoder: 'json'
+          url: '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json'
+          Rule id: '100600'
+          Level: '0'
+          Description: 'NextCloud audit: Login successful: "lab01"'
+== MODE=stdin line 10: {"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"chp-canary","app":"admin_audit","method":"POST","url":"/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json","scriptName":"/ocs/v2.php","message":"Interaction OCP\\Interaction\\
+          decoder: 'json'
+          url: '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json'
+          Rule id: '100608'
+          Level: '3'
+          Description: 'NextCloud: nightly share canary refused as expected (canary file 159): Interaction OCP\Interaction\Actions\ShareAction from user chp-canary on 159 to ncadmin is restricted: Node is not shareable.'
+   **Alert to be generated.
+live manager after: active; 
+0
+
+---- lt.sh ----
+#!/bin/bash
+# Plan 3 Task 1 (I1, I2): wazuh-logtest-legacy (wazuh-manager 4.14.7 on aero, live install UNTOUCHED) inside a private
+# mount namespace over a throwaway copy of /var/ossec holding the generated chp rule files. MODE=real: the files as
+# chp-site writes them (analysisd -t only). MODE=stdin: the same, but chp_nextcloud_rules.xml with its <location>
+# set to "stdin" (the location wazuh-logtest-legacy gives every line; the only change). Copy removed afterwards.
+set -u
+W=/var/tmp/wz-lt.$$; SRC=$1; MODE=$2
+mkdir -p $W
+for d in /var/ossec/*; do b=$(basename $d)
+  case $b in logs|queue|stats|backup|framework|tmp|var|api|wodles) mkdir -p $W/$b; chown --reference=$d $W/$b; chmod --reference=$d $W/$b ;;
+  *) cp -a $d $W/ ;; esac
+done
+cp -a /var/ossec/logs/. $W/logs/ 2>/dev/null; : > $W/logs/ossec.log 2>/dev/null
+for q in sockets alerts db diff fts rids; do mkdir -p $W/queue/$q; chown root:wazuh $W/queue/$q; chmod 770 $W/queue/$q; done
+mkdir -p $W/var/run; chown root:wazuh $W/var/run; chmod 770 $W/var/run
+for f in chp_yara_rules.xml chp_suricata_rules.xml chp_review_rules.xml chp_nextcloud_rules.xml chp_nextcloud_rules_canary.xml; do
+  install -m 640 -o root -g wazuh $SRC/$f $W/etc/rules/$f; done
+[ "$MODE" = stdin ] && install -m 640 -o root -g wazuh $SRC/chp_nextcloud_rules_stdin.xml $W/etc/rules/chp_nextcloud_rules.xml
+mount --bind $W /var/ossec
+/var/ossec/bin/wazuh-analysisd -t; echo "MODE=$MODE analysisd -t rc=$?"
+if [ "$MODE" = stdin ]; then
+n=0
+while IFS= read -r line; do n=$((n+1))
+  echo "== MODE=$MODE line $n: ${line:0:300}"
+  printf '%s\n' "$line" | timeout 60 /var/ossec/bin/wazuh-logtest-legacy 2>&1 | grep -E "Rule id|Level|Description|decoder|^ *(url|user|dstuser|srcuser):|^\*\*Alert" | sed 's/^/   /'
+done < $SRC/lines.txt
+fi
+umount /var/ossec; rm -rf $W
+---- lines.txt ----
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"MKCOL","url":"/remote.php/dav/files/lab01/CUI/Sub-r1","scriptName":"/remote.php","message":"File with id \"102\" created: \"/lab01/files/CUI/Sub-r1\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"MKCOL","url":"/remote.php/dav/files/lab01/CUI/Sub-r1","scriptName":"/remote.php","message":"File with id \"102\" written to: \"/lab01/files/CUI/Sub-r1\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"File with id \"166\" written to: \"/lab06/files\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"ncadmin","app":"admin_audit","method":"PROPFIND","url":"/remote.php/dav/files/ncadmin/","scriptName":"/remote.php","message":"Login successful: \"ncadmin\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"User \"lab06\" added to group \"chp-users\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab06","app":"admin_audit","method":"GET","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","scriptName":"/index.php","message":"User created: \"lab06\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"ncadmin","app":"admin_audit","method":"POST","url":"/ocs/v2.php/cloud/users/mallory/groups","scriptName":"/ocs/v2.php","message":"User \"mallory\" added to group \"cui-users\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"--","app":"admin_audit","method":"--","url":"--","scriptName":"--","message":"User created: \"chp-canary\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"lab01","app":"admin_audit","method":"POST","url":"/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json","scriptName":"/ocs/v2.php","message":"Login successful: \"lab01\"","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}
+{"reqId":"chpPlan3T1logtest000000AA","level":1,"time":"2026-11-19T17:00:00+00:00","remoteAddr":"192.168.100.1","user":"chp-canary","app":"admin_audit","method":"POST","url":"/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json","scriptName":"/ocs/v2.php","message":"Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canary on 159 to ncadmin is restricted: Node is not shareable.","userAgent":"CHP plan3 task1 logtest","version":"35.0.3.2","data":{"app":"admin_audit"}}

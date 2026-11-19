@@ -198,7 +198,7 @@ def test_values_tested_separately_and_temp_file_trapped():
 
 # ---------- Task 9b (D2): fapolicyd 1.4.3-3 exits with allow_filesystem_mark = 1; the helper must notice and roll back ----------
 def crashy(tmp_path, flag, conf=CONF, args=(), mode="crash", failed=None, state="active", rpmq="fapolicyd-1.4.3-3.el9.x86_64",
-           die_after=None):
+           die_after=None, env_extra=None):
     """A fake systemctl whose fapolicyd dies after a restart while the conf says allow_filesystem_mark = 1 (as the lab
     saw on fapolicyd 1.4.3-3.el9); mode "dead": it never comes back at all; "ok": it always comes back."""
     (tmp_path / "flag").write_text(f"FSMARK={flag}\n")
@@ -224,7 +224,7 @@ esac
         (tmp_path / "failed").write_text(failed)
     env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_FSMARK_CONF=str(tmp_path / "flag"),
                CHP_FAPOLICYD_CONF=str(cf), CHP_FSMARK_PENDING=str(tmp_path / "pending"), CHP_FSMARK_SETTLE="0",
-               CHP_FSMARK_FAILED=str(tmp_path / "failed"))
+               CHP_FSMARK_FAILED=str(tmp_path / "failed"), **(env_extra or {}))
     r = subprocess.run(["bash", str(S), *args], env=env, capture_output=True, text=True)
     rd = lambda n: (tmp_path / n).read_text() if (tmp_path / n).exists() else ""
     return r, cf.read_text(), rd("calls"), rd("journal"), rd("failed"), rd("state").strip()
@@ -321,3 +321,14 @@ def test_header_and_readme_warn_against_fsmark_on_fapolicyd_1_4_3():
     for t in (S.read_text(), (B / "README.md").read_text(), (B / "fapolicyd-fsmark.conf").read_text()):
         assert "1.4.3-3" in t and "recvmesg failed" in t and "13-fsmark-fapolicyd-failed.log" in t
     assert (ROOT / "lab" / "docs-proof" / "logs" / "13-fsmark-fapolicyd-failed.log").read_text().count("recvmesg failed") >= 1
+
+
+# ---------- ISO 0.7.0 final review M7: a chp-base update must not clear the failure record ----------
+def test_fsmark_zero_in_an_rpm_transaction_keeps_the_failure_record(tmp_path):
+    # chp-base's %posttrans runs the helper with CHP_NO_RESTART=1 at FSMARK=0: that is not the operator's
+    # acknowledgement, so check 80's "fsmark failed" alert (also "dead after a restart and a retry", 9d) stays
+    rec = "1700000000 fapolicyd is NOT active after a restart and STILL NOT ACTIVE after one more restart\n"
+    r, conf, calls, _, failed, _ = crashy(tmp_path, 0, failed=rec, env_extra={"CHP_NO_RESTART": "1"})
+    assert r.returncode == 0 and conf == CONF and calls == "" and failed == rec
+    r, _, _, _, _, _ = crashy(tmp_path, 0, failed=rec)                   # the operator's own run clears it
+    assert r.returncode == 0 and not (tmp_path / "failed").exists()

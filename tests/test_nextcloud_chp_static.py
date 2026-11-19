@@ -326,3 +326,17 @@ def test_d8_no_walk_when_nothing_can_be_tagged():
     assert pre.count("catch (\\Throwable $e)") >= 2 and "could not read the team folder of the target" in pre
     walk = t[t.index("private function files(Node $node, string $op)"):t.index("private function children(")]
     assert "mounts below the target are not walked" in walk                   # still reported inside ruled folders
+
+
+def test_upgrade_refreshes_the_config_php_trust_entry():
+    # final review M5: occ upgrade rewrites config.php (its 'version' key), so the nightly check would alert "trust"
+    # after every NextCloud or app update. After a successful upgrade the entry is refreshed (fapolicyd-cli, no restart:
+    # never a fapolicyd restart in a scriptlet) and read back by chp-site documents trust; a failure says what to run.
+    lines = [l.strip() for l in section("posttrans").splitlines() if l.strip() and not l.strip().startswith("#")]
+    up = next(i for i, l in enumerate(lines) if "occ upgrade" in l)
+    tr = next(i for i, l in enumerate(lines) if "chp-site documents trust" in l and not l.startswith("echo"))
+    els = lines.index("else", up)
+    assert up < tr < els                                                   # only after a successful upgrade
+    assert any(l.startswith("if [ -x %{_bindir}/chp-site ]") for l in lines[up:tr])
+    assert "|| echo" in lines[tr] and "run chp-site documents trust" in lines[tr]
+    assert "restart" not in " ".join(lines)

@@ -95,6 +95,12 @@ if [ -s %{_sysconfdir}/nextcloud/config.php ] && [ -x /usr/bin/php ] && \
    %{_bindir}/occ status --output=json 2>/dev/null | grep -q '"installed":true'; then
   if %{_bindir}/occ upgrade --no-interaction >/dev/null 2>&1; then
     echo "nextcloud-chp: occ upgrade done"
+    # occ upgrade rewrites config.php (its 'version' key): the fapolicyd trust entry must follow it, else the nightly
+    # check alerts "trust" (ISO 0.7.0 final review M5). chp-site refreshes it with fapolicyd-cli (no fapolicyd
+    # restart here) and reads it back.
+    if [ -x %{_bindir}/chp-site ]; then
+      %{_bindir}/chp-site documents trust || echo "nextcloud-chp: the fapolicyd trust entry for config.php was NOT refreshed: run chp-site documents trust" >&2
+    fi
   else
     echo "nextcloud-chp: occ upgrade FAILED; NextCloud answers 503 until 'occ upgrade' succeeds" >&2
   fi

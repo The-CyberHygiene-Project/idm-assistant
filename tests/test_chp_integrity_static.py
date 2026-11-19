@@ -148,3 +148,19 @@ def test_chp_exclusions_are_anchored_at_the_end():
     for e in ex:
         assert e in conf_ex, f"{e}: missing from the shipped aide.conf"
     assert "!/root/chp-escrow-pending(/|$)" in ex
+
+
+def test_aide_excludes_nextcloud_pki():
+    # ISO 0.7.0 Plan 2 round 4, D15: the NextCloud certificate is re-issued every 24 h, so every daily AIDE check
+    # reported /etc/pki/nextcloud/chain.pem. The same treatment as /etc/pki/kanidm, in both files; covered by monitor
+    # 78-nextcloud-cert (lifetime) and chp-nextcloud-cert-renew.timer.
+    add = (TOP / "appliance/rpm/chp-integrity/chp-additions.conf").read_text()
+    for text in (CONF, add):
+        assert "!/etc/pki/nextcloud(/|$)" in text.splitlines()
+        assert re.search(r"^# EXCLUDE /etc/pki/nextcloud\(/\|\$\): .*covered by 78-nextcloud-cert", text, re.M)
+        assert text.index("!/etc/pki/nextcloud(/|$)") > text.index("!/etc/pki/kanidm(/|$)")
+    # enable's AIDE note no longer names files AIDE does not watch
+    import sys
+    sys.path.insert(0, str(TOP / "appliance/chp-site"))
+    from chp_site import documents
+    assert not [f for f in documents._aide_files("x.test") if f.startswith("/etc/pki/nextcloud")]

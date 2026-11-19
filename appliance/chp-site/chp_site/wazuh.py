@@ -224,6 +224,10 @@ def rich_rules(hosts):
 NC_AUDIT = "/var/log/nextcloud/audit.log"
 NC_RULES_FILE = "chp_nextcloud_rules.xml"
 FOLDEROP_FIRST_RULE = "100616"
+UPLOAD_RULE = "100621"                                   # final review I1: uploads stored like downloads (100607)
+BREAKGLASS_RULE = "100622"                               # final review I2
+ACCOUNT_RULE, OIDC_PROVISION_RULE, CANARY_SETUP_RULE = "100623", "100624", "100625"
+BREAKGLASS_USER = "ncadmin"                              # = documents.ADMIN (not imported: documents imports this module)
 _CTRL = "(CUI|FCI|Archive)"                              # the controlled team folders (share off, contained)
 
 # Decoder: Wazuh's built-in JSON decoder reads each audit line (`log_format json`); a custom decoder would add nothing.
@@ -295,6 +299,41 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <field name="message" type="pcre2">accessed: ".*/(files/)?{_CTRL}/</field>
     <description>NextCloud: download from a controlled team folder (owner decision 2: audited): $(message)</description>
   </rule>
+  <!-- owner decision 2 accepts download-then-re-upload BECAUSE every download and upload is in Wazuh: each new file or
+       folder, upload and overwrite, anywhere (admin_audit writes "created" and "written to"; lab logs/72) -->
+  <rule id="{UPLOAD_RULE}" level="3">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^File with id "\\d+" (created|written to): "</field>
+    <description>NextCloud: file uploaded or written (owner decision 2: audited): $(message)</description>
+  </rule>
+  <!-- design §3: membership in Kanidm is the only way in. The break-glass account signing in (direct login) pages -->
+  <rule id="{BREAKGLASS_RULE}" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^Login successful: "{BREAKGLASS_USER}"$</field>
+    <description>NextCloud: BREAK-GLASS sign-in as {BREAKGLASS_USER} (not through Kanidm): $(message) from $(remoteAddr)</description>
+    <group>chp_breakglass,</group>
+  </rule>
+  <!-- an account made, or a group membership changed, inside NextCloud (web admin or occ) pages; the same lines from
+       the Kanidm sign-in (user_oidc's callback provisions the user and syncs its groups) are stored only; so are the
+       nightly check's own canary set-up lines (occ: audit user field two dashes; in its window; lab logs/53) -->
+  <rule id="{ACCOUNT_RULE}" level="12">
+    <if_sid>100600</if_sid>
+    <field name="message" type="pcre2">^(User created: "|User "[^"]+" (added to|removed from) group ")</field>
+    <description>NextCloud: account or group membership changed OUTSIDE Kanidm: $(message)</description>
+    <group>chp_access_granted,</group>
+  </rule>
+  <rule id="{OIDC_PROVISION_RULE}" level="3">
+    <if_sid>{ACCOUNT_RULE}</if_sid>
+    <url type="pcre2">^/(index\\.php/)?apps/user_oidc/code</url>
+    <description>NextCloud: account or group set by the Kanidm sign-in (user_oidc): $(message)</description>
+  </rule>
+  <rule id="{CANARY_SETUP_RULE}" level="3">
+    <if_sid>{ACCOUNT_RULE}</if_sid>
+    <user>^--$</user>
+    <field name="message" type="pcre2">^(User created: "chp-canary"|User "chp-canary" added to group "cui-users")$</field>
+    <time>3:05 am - 3:45 am</time>
+    <description>NextCloud: share-canary account set up by the nightly check (occ, 03:05-03:45): $(message)</description>
+  </rule>
   <!-- a "Login failed" line is taken first by Wazuh's generic rule 2501 ("authentication failure") (spike) -->
   <rule id="100605" level="7">
     <if_sid>2501</if_sid>
@@ -362,7 +401,9 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>NextCloud egress block tripped (the apache user tried to leave the server)</description>
     <group>chp_egress,</group>
   </rule>
-  <!-- one wrong code = three kanidmd lines ("Handler::PasswordMfa -> Result::Denied - TOTP Fail", "Credentials
+  <!-- the wording is Kanidm 1.11's: re-prove this rule with the new version's wrong-TOTP lines on every Kanidm
+       upgrade (a reworded line would turn it off silently; 9d review, minor 8).
+       One wrong code = three kanidmd lines ("Handler::PasswordMfa -> Result::Denied - TOTP Fail", "Credentials
        denied | reason: incorrect totp", "Auth result: Denied: incorrect totp"): only the last one is matched, so one
        failure is one alert (lab Plan 2 round 3) -->
   <rule id="100630" level="7">

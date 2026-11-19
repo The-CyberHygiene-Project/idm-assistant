@@ -36,6 +36,8 @@ class Run:
         # fapolicyd: the n-th restarts (1-based) in fapo_dies leave the daemon dead ~1 s later ("recvmesg failed",
         # lab round 3 D6); a dead daemon answers no --check-status counter; no_counter: alive but no counter line
         self.fapo_dies, self.fapo_restarts, self.no_counter, self.fsmark_rc = set(), 0, False, 0
+        self.fsmark_warn = ""                              # fsmark --verify restarted fapolicyd itself (exit 0 + warning)
+        self.enabled_units = set()                         # systemctl enable / is-enabled
 
     def __call__(self, argv, **kw):
         argv = list(argv)
@@ -108,10 +110,15 @@ class Run:
             if argv[-1] == "fapolicyd" and self.fapo_dead():
                 return R(3, "failed\n")
             return R(0, "active\n")
+        if argv[:2] == ["systemctl", "is-enabled"]:
+            return R(0, "enabled\n") if argv[-1] in self.enabled_units else R(1, "disabled\n")
+        if argv[:2] == ["systemctl", "enable"]:
+            self.enabled_units.update(x for x in argv[2:] if not x.startswith("-"))
         if argv == ["systemctl", "restart", "fapolicyd"]:
             self.fapo_restarts += 1
         if argv == ["/usr/libexec/chp/fapolicyd-fsmark", "--verify"]:
-            return R(self.fsmark_rc, "", "chp-fapolicyd-fsmark: fapolicyd is NOT active after a restart" if self.fsmark_rc else "")
+            return R(self.fsmark_rc, "", "chp-fapolicyd-fsmark: fapolicyd is NOT active after a restart" if self.fsmark_rc
+                     else self.fsmark_warn)
         if argv[:2] == ["systemctl", "restart"] and self.fail_restart and self.fail_restart in argv:
             if kw.get("check"):
                 import subprocess
@@ -224,6 +231,8 @@ class NC:
             f = self.folders[int(a[0])]
             if "--enable" in a:
                 f["acl"] = True
+            elif a[-1] == "clear":                                       # groupfolders: drop that mapping's rule
+                f["rules"] = [r for r in f["rules"] if r[:2] != a[1:3]]
             else:
                 f["rules"].append(a[1:])
             return 0, "", ""
@@ -1217,7 +1226,11 @@ import sqlite3
 
 TOKEN = "canary-app-token-0123456789abcdef"
 SCHEMA = """
-CREATE TABLE oc_group_folders (folder_id INTEGER, mount_point TEXT, storage_id INTEGER);
+CREATE TABLE oc_group_folders (folder_id INTEGER, mount_point TEXT, storage_id INTEGER, acl INTEGER);
+CREATE TABLE oc_group_folders_acl (acl_id INTEGER, fileid INTEGER, mapping_type TEXT, mapping_id TEXT, mask INTEGER,
+                                   permissions INTEGER);
+CREATE TABLE oc_group_user (gid TEXT, uid TEXT);
+CREATE TABLE oc_user_oidc (id INTEGER, user_id TEXT, display_name TEXT);
 CREATE TABLE oc_group_folders_groups (folder_id INTEGER, group_id TEXT, permissions INTEGER, circle_id TEXT);
 CREATE TABLE oc_storages (numeric_id INTEGER, id TEXT);
 CREATE TABLE oc_mimetypes (id INTEGER, mimetype TEXT);
@@ -1241,15 +1254,22 @@ class DB:
         self.c.executescript(SCHEMA)
         self.queries = []
         self.next_id = 100
+        self.roots = {}
         self.c.executemany("INSERT INTO oc_mimetypes VALUES (?, ?)", [(1, "httpd/unix-directory"), (2, "text/plain")])
         self.c.executemany("INSERT INTO oc_systemtag VALUES (?, ?, 1, 0)", [(CUI_TAG, "CUI"), (FCI_TAG, "FCI")])
         for n, i in IDS.items():
-            self.c.execute("INSERT INTO oc_group_folders VALUES (?, ?, ?)", (i, n, 10 + i))
+            self.c.execute("INSERT INTO oc_group_folders VALUES (?, ?, ?, 1)", (i, n, 10 + i))
             self.c.execute("INSERT INTO oc_storages VALUES (?, ?)", (10 + i, f"local::/data/nextcloud/data/__groupfolders/{i}/"))
             g, p = ("cui-users", 15) if n in D.CONTROLLED else ("chp-users", 31)
             self.c.execute("INSERT INTO oc_group_folders_groups VALUES (?, ?, ?, NULL)", (i, g, p))
-            self.file(n, "files", directory=True)
+            self.roots[n] = self.file(n, "files", directory=True)
+            if n in D.CONTROLLED:          # the reviewer rule as the lab read it back (logs/76): files|31|1
+                self.c.execute("INSERT INTO oc_group_folders_acl VALUES (?, ?, 'group', 'doc-reviewers', 31, 1)",
+                               (i, self.roots[n]))
         self.c.execute("INSERT INTO oc_storages VALUES (20, 'home::lab01')")
+        self.c.executemany("INSERT INTO oc_group_user VALUES (?, ?)", [("admin", "ncadmin"), ("cui-users", "lab01"),
+                                                                      ("cui-users", "chp-canary"), ("chp-users", "lab01")])
+        self.c.execute("INSERT INTO oc_user_oidc VALUES (1, 'lab01', 'Lab User 1')")
         for k, v in (GOOD_APP if app is None else app).items():
             self.c.execute("INSERT INTO oc_appconfig VALUES ('chp_foldertag', ?, ?)", (k, v))
         self.c.execute("INSERT INTO oc_appconfig VALUES ('core', 'rules', 'x')")
@@ -1474,9 +1494,9 @@ def test_app_config_order_and_number_types_do_not_matter(tmp_path):
 def test_team_folder_not_in_the_rules_is_flagged(tmp_path):
     db = DB()
     # a controlled folder renamed in the UI: enable made a new CUI (id 7); the renamed one keeps cui-users
-    db.c.execute("INSERT INTO oc_group_folders VALUES (7, 'CUI old', 17)")
+    db.c.execute("INSERT INTO oc_group_folders VALUES (7, 'CUI old', 17, 0)")
     db.c.execute("INSERT INTO oc_group_folders_groups VALUES (7, 'cui-users', 15, NULL)")
-    db.c.execute("INSERT INTO oc_group_folders VALUES (8, 'Scratch', 18)")
+    db.c.execute("INSERT INTO oc_group_folders VALUES (8, 'Scratch', 18, 0)")
     _, res, _ = do_check(tmp_path, db=db)
     assert {"folder:7", "folder:8"} <= keys(res)
     t = next(a["text"] for a in res["alerts"] if a["key"] == "folder:7")
@@ -1619,7 +1639,7 @@ def test_canary_account_added_back_to_cui_users(tmp_path):
 def test_names_from_nextcloud_are_cleaned(tmp_path):
     db = DB()
     db.file("CUI", "files/evil\x1b[31m\nALERT fake .docx")
-    db.c.execute("INSERT INTO oc_group_folders VALUES (9, 'x\x07`y', 19)")
+    db.c.execute("INSERT INTO oc_group_folders VALUES (9, 'x\x07`y', 19, 0)")
     lines, res, (r, *_x) = do_check(tmp_path, db=db)
     raw = (r / D.CHECK_RESULT).read_text()
     for a in res["alerts"]:
@@ -2071,3 +2091,143 @@ def test_cli_documents_trust(monkeypatch, capsys):
     from chp_site import cli
     monkeypatch.setattr(D, "trust", lambda root, run: ["OK fapolicyd trust entry for x refreshed"])
     assert cli.main(["documents", "trust"]) == 0 and "trust entry for x refreshed" in capsys.readouterr().out
+
+
+# ---------- Plan 3 Task 1: the Plan 2 carries (D13, O8, I2, final-review M3, Task 9d review minors) ----------
+
+def test_enable_turns_on_check_timer(tmp_path):
+    """D13 (round 4): enable never enabled chp-documents-check.timer, so the nightly tag check and canary never ran."""
+    e = Env(tmp_path)
+    done = e.enable()
+    assert "chp-documents-check.timer" in D.UNITS
+    on = [c for c in e.run.calls if c[:3] == ["systemctl", "enable", "--now"]]
+    assert any("chp-documents-check.timer" in c for c in on)
+    assert "chp-documents-check.timer" in e.run.enabled_units
+    assert any(d.startswith("started:") and "chp-documents-check.timer" in d for d in done)
+
+
+def test_stray_group_acl_removed(tmp_path):
+    """O8 (round 4): a stray group removed from a controlled folder must not leave its ACL rules behind."""
+    e = Env(tmp_path)
+    e.enable()
+    cui = next(i for i, f in e.nc.folders.items() if f["name"] == "CUI")
+    e.nc.folders[cui]["groups"]["chp-users"] = ["read", "write", "delete", "share"]     # hand-added in the UI
+    e.nc.folders[cui]["rules"].append(["--group", "chp-users", "--", "/", "-delete"])     # and an ACL rule for it
+    e.enable()
+    clear = ["groupfolders:permissions", str(cui), "--group", "chp-users", "--", "/", "clear"]
+    assert clear in e.nc.calls
+    assert _index(e.nc.calls, lambda c: c == clear, "clear") > \
+        _index(e.nc.calls, lambda c: c == ["groupfolders:group", str(cui), "chp-users", "--delete"], "delete")
+    assert not any("chp-users" in r for r in e.nc.folders[cui]["rules"])
+    assert any("doc-reviewers" in r for r in e.nc.folders[cui]["rules"])                 # the reviewer rule stays
+
+
+def test_unit_enabled_by_this_run_is_in_the_aide_note(tmp_path):
+    """9d minor 7: re-enabling a unit someone disabled changes /etc/systemd/system (AIDE sees it): say so."""
+    e = Env(tmp_path)
+    e.enable()
+    e.run.enabled_units.discard("chp-documents-check.timer")
+    e.records.clear()
+    done = e.enable()
+    assert any("aide-accept" in d and "unit enabled: chp-documents-check.timer" in d for d in done)
+    done = e.enable()
+    assert not any("aide-accept" in d for d in done)
+
+
+def test_fapolicyd_found_dead_is_restarted_even_when_no_restart_is_needed(tmp_path):
+    """9d minor 1: the "no restart needed" branch must not report a clean run while fapolicyd is down."""
+    e = Env(tmp_path)
+    e.enable()
+    e.run.fapo_dies = {e.run.fapo_restarts}                            # dead now (died outside enable)
+    n = len(e.run.calls)
+    done = e.enable()
+    assert ["systemctl", "restart", "fapolicyd"] in e.run.calls[n:]
+    assert any("was not running" in d and "Denied accesses: 0" in d for d in done)
+    assert not any("no restart needed" in d for d in done)
+
+
+def test_fsmark_verify_warning_is_kept_in_the_step_and_the_record(tmp_path):
+    """9d minor 2: fsmark --verify restarted a dead fapolicyd itself (exit 0 + a warning): keep that warning."""
+    e = Env(tmp_path)
+    e.run.fsmark_warn = ("chp-fapolicyd-fsmark: fapolicyd was NOT active after a restart (allow_filesystem_mark is "
+                         "not ours); restarted again: fapolicyd active")
+    done = e.enable()
+    assert any(d.startswith("fapolicyd restarted") and "restarted again: fapolicyd active" in d for d in done)
+    rec = next(a[1] for a, _ in e.records if a[1].get("step") == "fapolicyd")
+    assert "restarted again" in rec.get("verify", "")
+
+
+def test_fsmark_verify_failure_names_how_to_clear_the_record(tmp_path):
+    """9d minor 3: after recovery check 80 alerts until the helper is re-run with FSMARK=0: the error says so."""
+    e = Env(tmp_path)
+    e.run.fsmark_rc = 1
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    assert "FSMARK=0" in str(x.value) and "/usr/libexec/chp/fapolicyd-fsmark" in str(x.value)
+
+
+def test_trust_refuses_a_rendered_nextcloud_without_documents_conf(tmp_path):
+    """9d minor 6: restore must not pass silently on "not enabled" when NextCloud's config.php is there."""
+    r = make_root(tmp_path)
+    (r / "etc/nextcloud").mkdir(parents=True)
+    (r / "etc/nextcloud/config.php").write_text(D.MIN_CONFIG)
+    with pytest.raises(SiteError, match="documents.conf"):
+        D.trust(r, Run(r))
+
+
+def test_md5_psql_failure_is_not_reported_as_the_known_degraded_state(tmp_path):
+    """M3: PostgreSQL down or peer auth broken is "cannot tell", not the accepted DEGRADED state; the check alerts."""
+    def run(argv, **kw):
+        if "MD5" in " ".join(argv):
+            return R(2, "", "psql: error: connection to server on socket \"/run/postgresql/.s.PGSQL.5432\" failed")
+        return R()
+    s = D.md5_state(run)
+    assert not s.startswith("DEGRADED") and "psql failed" in s and "connection to server" in s
+    fips = D.md5_state(lambda a, **k: R(1, "", "ERROR:  could not compute MD5 hash: unsupported"))
+    assert fips.startswith("DEGRADED")                                  # the known FIPS state (lab text)
+    assert D.md5_state(lambda a, **k: R(0, "0" * 32 + "\n")).startswith("DEGRADED")      # a wrong MD5()
+    _, res, _ = do_check(tmp_path, run=lambda a, **k: run(a, **k))
+    assert res["degraded"] is False and "check:md5" in keys(res)
+
+
+def test_check_flags_local_cui_member(tmp_path):
+    """I2: cui-users may hold only Kanidm (user_oidc) users and the canary; anything else got in outside Kanidm."""
+    db = DB()
+    db.c.execute("INSERT INTO oc_group_user VALUES ('cui-users', 'mallory')")             # a local account
+    _, res, _ = do_check(tmp_path, db=db)
+    assert keys(res) == {"cui-member:mallory"}, res["alerts"]
+    t = res["alerts"][0]["text"]
+    assert "mallory" in t and "Kanidm" in t
+    _, res, _ = do_check(tmp_path / "b")                                  # lab01 (OIDC) + chp-canary: clean
+    assert res["alerts"] == []
+
+
+def test_check_flags_extra_admin(tmp_path):
+    """I2: the NextCloud admin group is exactly the break-glass account."""
+    db = DB()
+    db.c.execute("INSERT INTO oc_group_user VALUES ('admin', 'lab01')")
+    _, res, _ = do_check(tmp_path, db=db)
+    assert keys(res) == {"admin"} and "lab01" in res["alerts"][0]["text"]
+    db = DB()
+    db.c.execute("DELETE FROM oc_group_user WHERE gid = 'admin'")
+    _, res, _ = do_check(tmp_path / "b", db=db)
+    assert keys(res) == {"admin"}
+
+
+def test_check_flags_missing_reviewer_acl(tmp_path):
+    """I2 / owner decision 7: the doc-reviewers read-only rule and advanced permissions on CUI, FCI and Archive; any
+    other ACL rule there (O8's orphan, or a rule that widens a reviewer) is flagged too."""
+    db = DB()
+    db.c.execute("DELETE FROM oc_group_folders_acl WHERE fileid = ?", (db.roots["FCI"],))
+    db.c.execute("UPDATE oc_group_folders SET acl = 0 WHERE folder_id = 3")
+    db.c.execute("INSERT INTO oc_group_folders_acl VALUES (90, ?, 'group', 'chp-users', 8, 0)", (db.roots["CUI"],))
+    _, res, _ = do_check(tmp_path, db=db)
+    assert keys(res) == {"acl:2", "advperm:3", "acl-other:1"}, res["alerts"]
+    db = DB()
+    db.c.execute("UPDATE oc_group_folders_acl SET permissions = 3 WHERE fileid = ?", (db.roots["CUI"],))  # +write
+    _, res, _ = do_check(tmp_path / "b", db=db)
+    assert keys(res) == {"acl:1"}
+    db = DB()
+    db.c.execute("UPDATE oc_group_folders SET acl = 0 WHERE folder_id = 4")              # open folders: not checked
+    _, res, _ = do_check(tmp_path / "c", db=db)
+    assert res["alerts"] == []

@@ -239,6 +239,8 @@ def _matches(rule, ev, fired):
             return False
         if t == "user" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get("user", "\0")):
             return False                                     # static field: the JSON decoder fills it from "user"
+        if t == "url" and not _rx(c.text, c.get("type"), _flat(ev.get("json", {})).get("url", "\0")):
+            return False                                     # static field too (the audit line's request url)
         if t == "time" and not _in_window(c.text, ev.get("hhmm")):
             return False
     return True
@@ -268,9 +270,9 @@ def _level(xml, ev, now_ignored=()):
     return best
 
 
-def _nc(message, user="lab01", app="admin_audit", data=None):
+def _nc(message, user="lab01", app="admin_audit", data=None, url="/remote.php/dav/files/lab01/x"):
     return {"decoder": "json", "location": NC_LOG,
-            "json": {"app": app, "user": user, "message": message, "data": data or {"app": app}}}
+            "json": {"app": app, "user": user, "url": url, "message": message, "data": data or {"app": app}}}
 
 
 def _ft(event, **data):
@@ -463,3 +465,49 @@ def test_kanidm_wrong_totp_alerts_once_not_three_times():
     assert hits == [False, False, True]
     assert _level(w.NEXTCLOUD_RULES, ev("[info]: Auth result: Continue (TOTP) | event_tag_id: 10"))[0] is None
     assert _level(w.NEXTCLOUD_RULES, ev("[info]: Auth result: Denied: incorrect totp"))[1] == 7
+
+
+# ---------- Plan 3 Task 1: I1 (uploads stored, owner decision 2) and I2 (access granted inside NextCloud) ----------
+# The message texts are NextCloud's own, from the lab: logs/72 (lab06's first sign-in), logs/42 and logs/53 (the canary).
+
+def test_upload_rule_present():
+    x = w.NEXTCLOUD_RULES
+    import xml.etree.ElementTree as ET
+    r = next(r for r in ET.fromstring(x).findall("rule") if r.get("id") == w.UPLOAD_RULE)
+    assert r.get("level") == "3" and r.findtext("if_sid") == "100600"
+    for m in ('File with id "166" created: "/lab06/files"', 'File with id "166" written to: "/lab06/files"',
+              'File with id "102" written to: "/lab01/files/CUI/Sub-r1"',
+              'File with id "159" created: "/chp-canary/files/CUI/CUI_chp-canary.txt"',
+              'File with id "201" written to: "/lab01/files/Operations/copy-of-plan.docx"'):
+        assert _level(x, _nc(m)) == (w.UPLOAD_RULE, 3), m          # stored (log_alert_level 3) like 100607 downloads
+    assert _level(x, _nc('File with id "47" accessed: "/lab01/files/CUI/plan.docx"'))[0] == "100607"
+    assert _level(x, _nc('File with id "47" deleted: "/lab01/files/CUI/plan.docx"'))[1] == 7
+
+
+def test_breakglass_signin_pages():
+    from chp_site import documents as D
+    assert w.BREAKGLASS_USER == D.ADMIN
+    x = w.NEXTCLOUD_RULES
+    assert _level(x, _nc('Login successful: "ncadmin"', user="ncadmin")) == (w.BREAKGLASS_RULE, 12)
+    assert (_level(x, _nc('Login successful: "lab01"'))[1] or 0) < 3
+    assert (_level(x, _nc('Login successful: "ncadminx"', user="ncadminx"))[1] or 0) < 3
+
+
+def test_account_and_group_changes_outside_oidc_page():
+    x = w.NEXTCLOUD_RULES
+    web = "/ocs/v2.php/cloud/users/mallory/groups"
+    oidc = "/index.php/apps/user_oidc/code?state=abc&code=<REDACTED>"
+    for m in ('User "mallory" added to group "cui-users"', 'User "lab02" added to group "admin"',
+              'User created: "mallory"', 'User "lab01" removed from group "doc-reviewers"'):
+        assert _level(x, {**_nc(m, user="ncadmin", url=web), "hhmm": "14:00"})[1] == 12, m
+        assert _level(x, {**_nc(m, user="--", url="--"), "hhmm": "14:00"})[1] == 12, m        # occ on the server
+        assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "14:00"})[1] == 3, m     # Kanidm sign-in sync
+    # the real first-sign-in lines (logs/72) through the OIDC callback: stored, not paged
+    for m in ('User "lab06" added to group "chp-users"', 'User created: "lab06"'):
+        assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "20:41"}) == (w.OIDC_PROVISION_RULE, 3)
+    # the nightly check makes and re-adds the canary (logs/53, occ, user "--") in its window: 3; else 12
+    for m in ('User created: "chp-canary"', 'User "chp-canary" added to group "cui-users"'):
+        assert _level(x, {**_nc(m, user="--", url="--"), "hhmm": "03:10"})[1] == 3, m
+        assert _level(x, {**_nc(m, user="--", url="--"), "hhmm": "14:00"})[1] == 12, m
+        assert _level(x, {**_nc(m, user="ncadmin", url=web), "hhmm": "03:10"})[1] == 12, m
+    assert _level(x, {**_nc('User "chp-canary" added to group "admin"', user="--", url="--"), "hhmm": "03:10"})[1] == 12

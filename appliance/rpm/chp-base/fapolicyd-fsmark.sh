@@ -23,7 +23,8 @@
 # samples over CHP_FSMARK_SETTLE seconds (default 5). If not, it reverts OUR marked change (allow_filesystem_mark = 0,
 # marker removed), restarts fapolicyd again, logs at crit to the journal (logger -t chp-fapolicyd-fsmark), writes the
 # status file /var/lib/chp/fapolicyd-fsmark-failed (check 80 ALERTs while it exists) and exits non-zero. While that file
-# exists FSMARK=1 is refused (no crash loop on the next chp-base update). To clear it: set FSMARK=0 and run this script.
+# exists FSMARK=1 is refused (no crash loop on the next chp-base update). To clear it: set FSMARK=0 and run this script
+# by hand (the run inside an rpm transaction, CHP_NO_RESTART=1, never clears it).
 # With no change of ours to revert, a dead fapolicyd is restarted once more (warning in the journal if it comes back;
 # recorded and non-zero if it does not).
 # A restart done LATER for a pending marker (chp-site documents enable, or the operator) must be followed by
@@ -122,7 +123,9 @@ if [ "$want" = 1 ] && [ -f "$failf" ]; then
   say "FSMARK=1 refused: fapolicyd failed with allow_filesystem_mark = 1 before ($failf: $(cut -c1-200 "$failf" 2>/dev/null)). Set FSMARK=0 and run this script to clear it."
   exit 1
 fi
-[ "$want" = 0 ] && rm -f "$failf" 2>/dev/null   # FSMARK=0 + a run = the operator's acknowledgement
+# FSMARK=0 + an operator's run = the acknowledgement that clears the record. Not chp-base's %posttrans run
+# (CHP_NO_RESTART=1): an unrelated package update must not silently clear check 80's alert (ISO 0.7.0 final review M7)
+[ "$want" = 0 ] && [ -z "${CHP_NO_RESTART:-}" ] && rm -f "$failf" 2>/dev/null
 if [ "$want" = 1 ]; then
   # An admin-set "allow_filesystem_mark = 1" (no marker of ours) is the admin's: do nothing.
   if [ "$cur" = 1 ] && [ "$ours" = 0 ]; then :

@@ -16,11 +16,13 @@ site-specific pieces. Installing the package starts and enables nothing, and eve
 | `/etc/pki/nextcloud/chain.pem`, `key.pem` | the certificate (0600, root): run `/usr/libexec/chp/cert-renew-nextcloud --issue` | httpd cannot start; check 78 alerts |
 
 Then enable: `chp-nextcloud-egress.service`, `php-fpm`, `httpd`, `nextcloud-cron.timer`, `chp-nextcloud-backup.timer`,
-`chp-nextcloud-cert-renew.timer`, and restart `fapolicyd` (rule `65-chp-nextcloud.rules`; read
+`chp-nextcloud-cert-renew.timer`, `chp-documents-check.timer` (the nightly check: Plan 2 round 4, D13, it was missing),
+and restart `fapolicyd` (rule `65-chp-nextcloud.rules`; read
 `fapolicyd-cli --check-status` after the restart). enable proves that restart: fapolicyd must be active at three samples
 over about 5 s and answer a `Denied accesses` counter, then `fapolicyd-fsmark --verify` must pass; a fapolicyd found
 dead is restarted once more, and dead again fails the run (fapolicyd 1.4.3-3 can exit about one second after a
-restart, "recvmesg failed": lab round 3, D6).
+restart, "recvmesg failed": lab round 3, D6). A fapolicyd found dead when no restart is needed gets the same proven
+restart. A stray group on CUI, FCI or Archive is removed together with its ACL rule on `/` (round 4, O8).
 
 ## Behaviour
 
@@ -35,7 +37,15 @@ restart, "recvmesg failed": lab round 3, D6).
 * **Background jobs (check 77).** Besides the units and the timer, check 77 alerts when the last
   `nextcloud-cron.service` run failed, and when NextCloud's own record of its last finished cron run (`core/lastcron`,
   written by `cron.php`) is older than 30 minutes (or absent 30 minutes after enable): the robust signal that the
-  jobs really ran.
+  jobs really ran. Its psql runs with `-X` under `timeout 30`, and not while postgresql itself is down (one alert).
+* **Backup age (check 77).** The last backup status (OK or FAILED) older than 26 h alerts, so a backup timer that is
+  off or never fires is seen; no status at all alerts once documents.conf is 26 h old (final review M2).
+* **Wazuh (owner decision 2, design §3).** Every upload, new file or folder and overwrite (admin_audit "created" /
+  "written to") is stored at level 3 (100621), like downloads from CUI/FCI/Archive (100607). A break-glass sign-in as
+  `ncadmin` pages at 12 (100622), and so does an account made or a group membership changed inside NextCloud (100623);
+  the same lines from the Kanidm sign-in (user_oidc's callback) are stored at 3 (100624), and so are the nightly
+  check's own canary set-up lines (occ, 03:05-03:45, 100625). Expected: the FIRST enable pages twice (100623: occ
+  makes `ncadmin` and adds it to `admin`); tell the ISSO before enabling.
 * **httpd** listens on 8443 only. `/usr/libexec/chp/nextcloud-httpd-stock-off` (run before every httpd start) comments
   out the stock `Listen` lines and the sample sites (`ssl.conf`, `welcome.conf`, `userdir.conf`, `autoindex.conf`),
   because Kanidm owns `:443` and a mod_ssl update would bring them back.
@@ -47,10 +57,15 @@ restart, "recvmesg failed": lab round 3, D6).
   `/var/lib/chp/documents/check.json` (0600): every file in CUI, FCI and Archive carries its tag (Archive: CUI), every
   `CUI_`/`FCI_` file anywhere carries its tag, no CUI/FCI-tagged file outside those folders, no share on anything in
   them, `chp_foldertag` enabled with `rules`/`contain`/`contain_allow` equal to the site policy, no team folder outside
-  the site's six, CUI/FCI tags restricted, `/etc/nextcloud/config.php` equal to its fapolicyd trust entry, and the
+  the site's six, CUI/FCI tags restricted, `/etc/nextcloud/config.php` equal to its fapolicyd trust entry; **access
+  granted inside NextCloud** (final review I2): every `cui-users` member is a Kanidm (`user_oidc`) account or
+  `chp-canary`, the `admin` group is exactly `ncadmin`, and on CUI, FCI and Archive advanced permissions are on and the
+  only ACL rule is doc-reviewers read-only on `/` (any other rule is flagged); and the
   share canary (a public link and an internal share on `CUI/CUI_chp-canary.txt` as the local account `chp-canary`,
   disabled between runs, signed in by a per-run app token that is deleted afterwards) refused. A missing result or
-  one older than 26 h alerts; DEGRADED (database MD5, design §12) is shown, not alerted. The check reads the database
+  one older than 26 h alerts, except "pending first run" (OK) while there is no result yet and documents.conf is
+  younger than 26 h (final review M1); DEGRADED (database MD5, design §12) is shown, not alerted; a psql failure is
+  "UNKNOWN" and alerts (M3). The check reads the database
   with SQL as apache over the socket, so it runs while `chp_foldertag` is off.
   `ExecStopPost=chp-site documents canary-off` switches the canary account off after any end of the run (failure,
   timeout, kill). The timer has no `Persistent=`: Wazuh rule 100609 pages (12) when `chp-canary` is enabled other
@@ -110,6 +125,15 @@ equally inside the boundary.
   from the log; the log itself is a CUI-boundary record (above). CHP does not control that writer, so it is not
   redacted: record it in the SSP (AU-9 / AU-3) and as a POA&M item until NextCloud can omit query strings from the
   log (lab Plan 2 round 3).
+* **Events during a Wazuh manager restart can be missed** (proof record O6, final review M4). enable restarts the
+  manager when the NextCloud rules change, and the nightly check restarts it when the canary file's id changes (the
+  first run, or a re-created canary file): lines NextCloud writes while the manager restarts may not be analysed (O6
+  saw one 100609 missed). The audit log file itself keeps every line. SSP note (AU-6).
+* **Up to 24 h to see a changed app policy** (final review M8). Emptying chp_foldertag's `contain` or `rules` turns
+  containment or tagging off; the nightly check (81) reports it, up to 24 h later. No Wazuh rule: admin_audit logs
+  only the occ form (`Console command executed: config:app:set ...`, root on the server, which enable itself runs on
+  every run); the web form needs an admin sign-in, and the break-glass sign-in (100622) or a new admin (100623) pages
+  at once. SSP note (CM-3 / SI-4).
 * **fapolicyd 1.4.3-3 can exit about 1 s after a restart** ("recvmesg failed", with `allow_filesystem_mark = 0` too):
   every CHP restart is verified and retried once (above, and chp-base's `fapolicyd-fsmark`); check 80 alerts while it
   is down. POA&M item until Rocky ships a fixed fapolicyd.

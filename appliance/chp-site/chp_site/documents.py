@@ -49,6 +49,10 @@ OPEN = ("Operations", "Internal", "Public")
 FOLDER_TAG = {"CUI": "CUI", "FCI": "FCI", "Archive": "CUI"}    # Archive holds CUI (Task 3 review)
 GROUPS_NC = ("cui-users", "doc-reviewers", "chp-users")
 REVIEWER_ACL = ["+read", "-write", "-create", "-delete", "-share"]
+ACL_BITS = {"read": 1, "write": 2, "create": 4, "delete": 8, "share": 16}     # groupfolders' rule mask/permissions
+# the rule REVIEWER_ACL makes, as groupfolders stores it (lab read back, logs/76: mask 31, permissions 1)
+REVIEWER_MASK = sum(ACL_BITS[x[1:]] for x in REVIEWER_ACL)
+REVIEWER_PERMS = sum(ACL_BITS[x[1:]] for x in REVIEWER_ACL if x.startswith("+"))
 
 PACKAGES = ("nextcloud-chp", "chp-documents")
 MTAS = ("postfix", "sendmail", "exim", "opensmtpd")
@@ -66,7 +70,9 @@ APPS_OFF = ("text", "richdocuments", "richdocumentscode", "onlyoffice", "whitebo
 ALWAYS_ENABLED = ("appstore", "cloud_federation_api", "dav", "federatedfilesharing", "files", "lookup_server_connector",
                   "oauth2", "profile", "provisioning_api", "settings", "sharing", "theming", "twofactor_backupcodes",
                   "viewer", "workflowengine")
-UNITS = ("php-fpm", "httpd", "nextcloud-cron.timer", "chp-nextcloud-backup.timer", "chp-nextcloud-cert-renew.timer")
+# chp-documents-check.timer: the nightly tag check and share canary (Plan 2 round 4, D13: it was never enabled)
+UNITS = ("php-fpm", "httpd", "nextcloud-cron.timer", "chp-nextcloud-backup.timer", "chp-nextcloud-cert-renew.timer",
+         "chp-documents-check.timer")
 STATUS_UNITS = ("chp-nextcloud-egress.service", "postgresql") + UNITS
 
 
@@ -373,7 +379,7 @@ def _fapolicyd_restart(run, sleep):
     """Restart fapolicyd and PROVE it runs (lab round 3, D6): active at every sample, then a parsed denial counter,
     then chp-base's `fapolicyd-fsmark --verify` (its allow_filesystem_mark safety net). A daemon found dead is
     restarted once more; dead again (or no counter) fails the run loudly, never a quiet "Denied: unknown".
-    Returns (restarts, denied counter)."""
+    Returns (restarts, denied counter, the helper's warning or "")."""
     why = []
     for n in (1, 2):
         r = run(["systemctl", "restart", "fapolicyd"], capture_output=True, text=True)
@@ -392,9 +398,12 @@ def _fapolicyd_restart(run, sleep):
         if v.returncode != 0:
             raise SiteError(f"{FSMARK_HELPER} --verify failed after the fapolicyd restart (exit {v.returncode}): "
                             + _clean(v.stderr or v.stdout or "", 300)
-                            + "; see /var/lib/chp/fapolicyd-fsmark-failed and monitor check 80, then re-run chp-site "
+                            + "; see /var/lib/chp/fapolicyd-fsmark-failed and monitor check 80. Once fapolicyd runs "
+                            "again, clear that record (check 80 alerts until then): FSMARK=0 in "
+                            f"/etc/chp/fapolicyd-fsmark.conf, then run {FSMARK_HELPER}; then re-run chp-site "
                             "documents enable")
-        return n, denied
+        # exit 0 with a warning: the helper found fapolicyd dead and restarted it itself (9d review, minor 2)
+        return n, denied, _clean(v.stderr or "", 300)
     dead = any("not active" in w_ or "exited" in w_ for w_ in why)
     head = ("fapolicyd is NOT running after enable restarted it (twice): nothing checks file execution on this "
             "server (fail-open)" if dead else "fapolicyd did not answer after enable restarted it (twice)")
@@ -450,7 +459,7 @@ def _folder_groups(occ):
 
 def _exact_controlled(occ, ids):
     """CUI, FCI, Archive must be mapped to cui-users WITHOUT share and to nothing else (read back, never assumed).
-    A stray group is removed; what cannot be removed or still has share is refused, naming it."""
+    A stray group is removed with its ACL rule on /; what cannot be removed or still has share is refused, naming it."""
     for _ in range(2):
         cur = _folder_groups(occ)
         stray = [(n, g) for n in CONTROLLED for g in cur.get(str(ids[n]), {}) if g != "cui-users"]
@@ -458,6 +467,10 @@ def _exact_controlled(occ, ids):
             break
         for n, g in stray:
             occ("groupfolders:group", ids[n], g, "--delete")
+            # its ACL rule too (round 4, O8: the mapping went, its rule stayed and still restricted cui-users
+            # members in that group). `clear` is the form the lab used (logs/76); rules below / are the nightly
+            # check's (acl-other)
+            occ("groupfolders:permissions", ids[n], "--group", g, "--", "/", "clear")
     cur = _folder_groups(occ)
     for n in CONTROLLED:
         gs = cur.get(str(ids[n]), {})
@@ -472,11 +485,20 @@ def _exact_controlled(occ, ids):
 
 
 def _aide_files(d):
-    """The files enable writes that AIDE watches (the AIDE note names the ones a run changed)."""
+    """The files enable writes that AIDE watches (the AIDE note names the ones a run changed). Not /etc/pki/nextcloud:
+    AIDE excludes it like /etc/pki/kanidm (re-issued every 24 h; checked by monitor 78; Plan 2 round 4, D15)."""
     return ["/etc/hosts", f"/var/named/{d}.zone", "/" + LAN_INC, "/" + EGRESS_ADDR, "/" + CONF,
             f"/{PGDATA}/postgresql.conf", f"/{PGDATA}/pg_hba.conf", CONFIG_PHP, "/etc/fapolicyd/trust.d/nextcloud",
-            OIDC_SECRET, "/" + CERT, "/etc/pki/nextcloud/key.pem", "/var/ossec/etc/ossec.conf",
+            OIDC_SECRET, "/var/ossec/etc/ossec.conf",
             f"/var/ossec/etc/rules/{w.NC_RULES_FILE}"]
+
+
+def _enable_now(run, units, acts):
+    """systemctl enable --now; a unit that was not enabled before is named in the AIDE note (its link is new under
+    /etc/systemd/system, which AIDE watches: 9d review, minor 7)."""
+    new = [u for u in units if _out(run, ["systemctl", "is-enabled", u]).strip() != "enabled"]
+    run(["systemctl", "enable", "--now", *units], check=True)
+    acts.extend(f"unit enabled: {u}" for u in new)
 
 
 def _snapshot(root, files):
@@ -548,14 +570,15 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     _put(cp, conf_text(fqdn, sip, days, ids, enabled_now), 0o644)
     step("render", f"rendered: LAN-only httpd ({cidr}), egress address {sip}, /etc/chp/documents.conf")
     run(["systemctl", "daemon-reload"], check=True)
-    run(["systemctl", "enable", "--now", "chp-nextcloud-egress.service"], check=True)
+    _enable_now(run, ["chp-nextcloud-egress.service"], acts)
     _restart(run, root, ["chp-nextcloud-egress.service"])
     step("egress", "egress table inet chp_nextcloud_egress loaded (apache: this server only, no DNS)")
 
     # 4. Wazuh from day one: the audit log and the rules before NextCloud writes its first line or serves anyone
     _audit_log(root, chown)
     _wazuh(root, run, chown)
-    step("wazuh", "Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress at 12)")
+    step("wazuh", "Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress/break-glass/"
+                  "accounts at 12; uploads and downloads stored)")
 
     # 5. database: PostgreSQL 16, Unix socket, peer authentication
     pgd = _p(root, PGDATA)
@@ -568,7 +591,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         new += ("" if new.endswith("\n") or not new else "\n") + "listen_addresses = ''\n"
     _put_r(root, pc, new, 0o600, ["postgresql"], _owner(chown, "postgres", "postgres"))
     _put_r(root, pgd / "pg_hba.conf", PG_HBA, 0o600, ["postgresql"], _owner(chown, "postgres", "postgres"))
-    run(["systemctl", "enable", "--now", "postgresql"], check=True)
+    _enable_now(run, ["postgresql"], acts)
     _restart(run, root, ["postgresql"])
     psql = ["runuser", "-u", "postgres", "--", "psql", "-qtA", "-c"]
     if _out(run, psql + ["SELECT 1 FROM pg_roles WHERE rolname='apache'"]).strip() != "1":
@@ -719,7 +742,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         _mark(root, ["httpd"])
         run(["/usr/libexec/chp/cert-renew-nextcloud", "--issue"], check=True)
     step("cert", f"certificate for {fqdn} from the site CA (renewed by chp-nextcloud-cert-renew.timer)")
-    run(["systemctl", "enable", "--now", *UNITS], check=True)
+    _enable_now(run, UNITS, acts)
     _restart(run, root, ["php-fpm", "httpd"])
     step("services", f"started: {', '.join(UNITS)} (HTTPS {PORT}, LAN {cidr} only)")
 
@@ -733,15 +756,21 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     # chp-base's filesystem-mark change pending), AFTER every transaction; never in an rpm scriptlet. The restart is
     # proven (D6): the mark stays until fapolicyd runs, so a failed run restarts it again next time.
     fsmark = _p(root, FSMARK_PENDING)
-    if "fapolicyd" in _restart_marks(root) or fsmark.exists():
-        n, denied = _fapolicyd_restart(run, sleep)
+    # A fapolicyd found dead (it died outside enable, or after an earlier run's window) gets the same proven restart:
+    # "no restart needed" is never printed over a daemon that is down (9d review, minor 1).
+    needed = "fapolicyd" in _restart_marks(root) or fsmark.exists()
+    dead = not needed and _out(run, ["systemctl", "is-active", "fapolicyd"]).strip() != "active"
+    if needed or dead:
+        n, denied, note = _fapolicyd_restart(run, sleep)
         _unmark(root, ["fapolicyd"])
         fsmark.unlink(missing_ok=True)
+        why = "fapolicyd was not running: restarted" if dead else "fapolicyd restarted (rule 65 loaded)"
         again = " (it was not running after the first restart: restarted again)" if n > 1 else ""
-        step("fapolicyd", f"fapolicyd restarted (rule 65 loaded){again}; active over {sum(FAPOLICYD_SAMPLES)} s; "
-                          f"Denied accesses: {denied}", restarts=n, denied=denied)
+        extra = {"verify": note} if note else {}
+        step("fapolicyd", f"{why}{again}; active over {sum(FAPOLICYD_SAMPLES)} s; Denied accesses: {denied}"
+             + (f"; {FSMARK_HELPER} --verify: {note}" if note else ""), restarts=n, denied=denied, **extra)
     else:
-        step("fapolicyd", "fapolicyd: no restart needed")
+        step("fapolicyd", "fapolicyd: no restart needed (active)")
 
     # 16. escrow, AIDE, and last: ENABLED=yes (every step above succeeded)
     if pend.exists():
@@ -902,9 +931,12 @@ def trust(root, run):
     for an operator who has checked an out-of-band config.php change that the nightly check reported ("trust").
     `fapolicyd-cli --update` makes the running daemon reload the entry: no fapolicyd restart."""
     root = Path(root)
-    if not _kv(_p(root, CONF)):
-        return ["OK documents: not enabled on this host (no trust entry to keep)"]
     cfg, tf = _p(root, CONFIG_PHP), _p(root, "etc/fapolicyd/trust.d/nextcloud")
+    if not _kv(_p(root, CONF)):
+        if cfg.exists():            # a restore (or an update) on a NextCloud that enable rendered: never a silent pass
+            raise SiteError(f"/{CONF} is missing (or empty) although NextCloud's {CONFIG_PHP} is there: the trust entry "
+                            "was not checked; restore /etc/chp/documents.conf (or re-run chp-site documents enable)")
+        return ["OK documents: not enabled on this host (no trust entry to keep)"]
     if not cfg.exists():
         raise SiteError(f"{CONFIG_PHP} is missing: restore it (or re-run chp-site documents enable) first")
     try:
@@ -941,11 +973,15 @@ def status(root, run):
 def md5_state(run):
     """§12: the same probe as chp_foldertag's FolderGuardListener (SELECT MD5('chp') on NextCloud's database, compared
     with md5('chp')), as the apache user over the socket (peer authentication)."""
-    r = run(["runuser", "-u", "apache", "--", "psql", "-d", "nextcloud", "-qtA", "-c", "SELECT MD5('chp')"],
+    r = run(["runuser", "-u", "apache", "--", "psql", "-d", "nextcloud", "-qtAX", "-c", "SELECT MD5('chp')"],
             capture_output=True, text=True)
     if r.returncode == 0 and (r.stdout or "").strip() == MD5_CHP:
         return "database MD5: available (folder moves, renames and deletes allowed)"
-    return "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)"
+    if r.returncode == 0 or re.search(r"(?i)compute md5|md5 hash|function md5", r.stderr or ""):   # wrong, or MD5() refused
+        return "DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)"
+    # psql itself failed (PostgreSQL down, peer authentication): not the known, accepted state (final review, M3)
+    why = (r.stderr or r.stdout or f"exit {r.returncode}").strip().splitlines()
+    return f"UNKNOWN: database MD5 state cannot be read (psql failed: {_clean(why[-1] if why else '', 160)})"
 
 
 # ---------- the nightly tag check and share-link canary (design §5, §6, §12; Plan 2 Task 6) ----------
@@ -974,10 +1010,23 @@ def _has_tag(tag):
             f"{int(tag)} AND o.objectid = CAST(f.fileid AS VARCHAR(64)))")
 
 
-Q_FOLDERS = "SELECT folder_id, mount_point, storage_id FROM oc_group_folders ORDER BY folder_id"
+Q_FOLDERS = "SELECT folder_id, mount_point, storage_id, acl FROM oc_group_folders ORDER BY folder_id"
 Q_GROUPS = "SELECT folder_id, group_id, permissions FROM oc_group_folders_groups ORDER BY folder_id, group_id"
 Q_TAGS = "SELECT id, name, visibility, editable FROM oc_systemtag WHERE name IN ('CUI', 'FCI') ORDER BY id"
 Q_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_foldertag'"
+# Access granted inside NextCloud, outside Kanidm (final review I2; design §3 "membership in Kanidm is the only way in"):
+# a cui-users member that is not a user_oidc (Kanidm) account, other than the canary; the admin group's members.
+Q_CUI_LOCAL = (f"SELECT g.uid FROM oc_group_user g WHERE g.gid = 'cui-users' AND g.uid <> '{CANARY_USER}' AND NOT EXISTS "
+               f"(SELECT 1 FROM oc_user_oidc o WHERE o.user_id = g.uid) ORDER BY g.uid LIMIT {LIST_MAX + 1}")
+Q_ADMINS = "SELECT uid FROM oc_group_user WHERE gid = 'admin' ORDER BY uid"
+
+
+def q_acl(storages):
+    """Every groupfolders ACL rule on anything in the controlled folders' storages (a folder's root is path 'files')."""
+    st = ", ".join(str(int(s)) for s in storages) or "-1"
+    return ("SELECT a.fileid, a.mapping_type, a.mapping_id, a.mask, a.permissions, f.storage, f.path "
+            "FROM oc_group_folders_acl a JOIN oc_filecache f ON f.fileid = a.fileid "
+            f"WHERE f.storage IN ({st}) ORDER BY a.fileid, a.mapping_type, a.mapping_id")
 
 
 def _live_in(storage):
@@ -1417,6 +1466,62 @@ def _policy(db, ids, alert):
     return folders, tagid
 
 
+def _int(v, default=None):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _access(sql, folders, ids, storages, alert):
+    """I2: nobody reaches CUI, FCI or Archive through a grant made inside NextCloud. cui-users holds Kanidm users and
+    the canary only; admin is exactly the break-glass account; on each controlled folder advanced permissions are on and
+    the only ACL rule is doc-reviewers read-only on / (owner decision 7). Other rules (a stray group's left-over rule,
+    O8, or one that widens a reviewer) are flagged."""
+    rows = sql(Q_CUI_LOCAL)
+    for r in rows[:LIST_MAX]:
+        u = _clean(r.get("uid"), 64)
+        alert(f"cui-member:{u}", f"cui-users holds {u}, which is not a Kanidm (user_oidc) account: access to CUI, FCI and "
+                                 "Archive was granted inside NextCloud, outside Kanidm. Remove it (occ group:removeuser "
+                                 f"cui-users {u}) and find who added it in the NextCloud audit log")
+    if len(rows) > LIST_MAX:
+        alert("cui-member:more", f"more than {LIST_MAX} cui-users members are not Kanidm accounts; only the first "
+                                 f"{LIST_MAX} are listed")
+    admins = sorted(_clean(r.get("uid"), 64) for r in sql(Q_ADMINS))
+    if admins != [ADMIN]:
+        alert("admin", f"the NextCloud admin group must be exactly the break-glass account {ADMIN}; it is "
+                       f"{_clean(', '.join(admins) or 'empty', 200)}: remove every other member (occ group:removeuser "
+                       f"admin <user>), keep {ADMIN}, and find who changed it in the NextCloud audit log")
+    by_storage = {st: n for n, st in storages.items()}
+    rules = {n: [] for n in storages}
+    for r in (sql(q_acl(storages.values())) if storages else []):
+        n = by_storage.get(_int(r.get("storage")))
+        if n is not None:
+            rules[n].append(r)
+    for n in CONTROLLED:
+        i = ids.get(n)
+        f = folders.get(i) if i else None
+        if f is None:
+            continue                                   # missing folder: alerted by _policy
+        if _int(f.get("acl"), 0) != 1:
+            alert(f"advperm:{i}", f"advanced permissions are OFF on team folder {n} (id {i}): the doc-reviewers "
+                                  "read-only rule does not apply, so reviewers in cui-users can write there: "
+                                  f"occ groupfolders:permissions {i} --enable (or re-run chp-site documents enable)")
+        if n not in rules:
+            continue                                   # no storage id: alerted by _storages
+        root = [r for r in rules[n] if r.get("mapping_type") == "group" and r.get("mapping_id") == "doc-reviewers"
+                and r.get("path") == "files"]
+        if not any(_int(r.get("mask")) == REVIEWER_MASK and _int(r.get("permissions")) == REVIEWER_PERMS for r in root):
+            alert(f"acl:{i}", f"the doc-reviewers rule on team folder {n} (id {i}) is missing or changed (it must be read "
+                              f"only on /: {' '.join(REVIEWER_ACL)}); re-run chp-site documents enable")
+        other = [r for r in rules[n] if r not in root]
+        if other:
+            alert(f"acl-other:{i}", f"team folder {n} (id {i}) has ACL rules other than doc-reviewers read-only on /: "
+                  + _clean("; ".join(f"{r.get('mapping_type')} {r.get('mapping_id')} on /{str(r.get('path') or '')[6:]} "
+                                     f"(mask {r.get('mask')}, permissions {r.get('permissions')})" for r in other[:5]), 240)
+                  + f": remove them (occ groupfolders:permissions {i} --group <group> -- <path> clear)")
+
+
 def _where(row, folders_by_storage):
     path = str(row.get("path") or "")
     rel = path[6:] if path.startswith("files/") else path
@@ -1603,6 +1708,12 @@ def _check(root, c, run, sql, api, occ, t, chown):
     except (SiteError, ValueError, TypeError, AttributeError) as e:
         alert("check:sql", f"the tag check could not read NextCloud's database: {_clean(e, 200)}")
         db = None
+    if db is not None:                                # on its own: a failure here never blinds the tag check
+        try:
+            _access(sql, folders, ids, storages, alert)
+        except (SiteError, ValueError, TypeError, AttributeError) as e:
+            alert("check:access", f"the access check (cui-users, admin, reviewer rules) could not read NextCloud's "
+                                  f"database: {_clean(e, 200)}")
     try:                                              # runtime drift: NextCloud rewrote config.php after enable
         tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
         entry, have = _trust_entry(tf, CONFIG_PHP), _size_sha(_p(root, CONFIG_PHP))
@@ -1642,12 +1753,15 @@ def _check(root, c, run, sql, api, occ, t, chown):
             alert("check:sql", f"the tag check could not read NextCloud's files: {_clean(e, 200)}")
     md5 = md5_state(run)
     degraded = md5.startswith("DEGRADED")
+    if md5.startswith("UNKNOWN"):                     # psql failed: not the known, accepted DEGRADED state (M3)
+        alert("check:md5", md5)
     _write_result(root, {"version": 1, "epoch": t, "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)),
                          "ok": not alerts, "alerts": alerts, "degraded": degraded, "md5": md5, "canary": canary,
                          "counts": counts})
     lines = [f"ALERT NextCloud check: {a['text']}" for a in alerts]
     if not alerts:
         lines.append("OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy "
-                     "as required; share canary refused (public link, internal share)")
+                     "as required; cui-users and admin as Kanidm and enable made them, reviewers read-only; share canary "
+                     "refused (public link, internal share)")
     lines.append(md5)
     return lines

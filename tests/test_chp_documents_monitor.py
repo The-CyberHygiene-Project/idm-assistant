@@ -25,8 +25,11 @@ def run(tmp, name, conf=CONF, active=UNITS, live=None, expected=EXPECTED % (0, 0
     (b / "systemctl").write_text("#!/bin/bash\n" + f'if [ "$1" = show ]; then echo "{cron_result}"; exit 0; fi\n'
                                  + f'case " {active} " in *" $3 "*) exit 0;; esac\nexit 3\n')
     lc = str(now - 300) if lastcron == "default" else lastcron
-    (b / "runuser").write_text("#!/bin/bash\n" + ("echo 'psql: error' >&2; exit 2\n" if lc == "ERR" else
-                                                  f"echo '{lc}'\n" if lc is not None else "exit 0\n"))
+    (b / "runuser").write_text("#!/bin/bash\n" + f'echo "$*" >> {tmp}/runuser.calls\n'
+                               + ("echo 'psql: error' >&2; exit 2\n" if lc == "ERR" else
+                                  f"echo '{lc}'\n" if lc is not None else "exit 0\n"))
+    # coreutils timeout (absent on the Mac that runs these tests): record it, run the command
+    (b / "timeout").write_text("#!/bin/bash\n" + f'echo "$*" >> {tmp}/timeout.calls\nshift\nexec "$@"\n')
     (b / "nft").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{live}EOF\n" if live is not None else "exit 1\n"))
     # the fake unshare stands for "build the expected table from the files in a throwaway netns"
     if expected is not None and expected.startswith("ERR:"):
@@ -94,7 +97,8 @@ def test_77_suppressed_alert_never_prints_all_clear(tmp_path):
 def test_77_failed_backup_alerts(tmp_path):
     out = run(tmp_path, "77-nextcloud-services.sh", backup_status="FAILED 1 not enough space in /backup\n")
     assert "ALERT NextCloud backup failed: not enough space in /backup" in out
-    assert run(fresh(tmp_path, "ok"), "77-nextcloud-services.sh", backup_status="OK 1 backup x\n").startswith("OK")
+    assert run(fresh(tmp_path, "ok"), "77-nextcloud-services.sh",
+               backup_status=f"OK {NOW - 3600} backup x\n").startswith("OK")       # epoch: M2 checks the age
 
 
 def test_78_cert_lifetime_relative(tmp_path):
@@ -202,8 +206,9 @@ def test_81_each_failure_alerts_once_then_again_after_24h(tmp_path):
 
 
 def test_81_missing_or_broken_result_alerts(tmp_path):
-    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "a"), T81)
+    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "a"), T81, conf_age=27 * H)
     assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "b"), T81, result="{not json")
+    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "c"), T81, result="{not json", conf_age=600)
 
 
 def test_81_result_older_than_26h_alerts(tmp_path):
@@ -255,3 +260,53 @@ def test_77_unreadable_lastcron_alerts(tmp_path):
 def test_77_lastcron_not_checked_while_enable_has_not_finished(tmp_path):
     out = run(tmp_path, "77-nextcloud-services.sh", conf=CONF.replace("ENABLED=yes", "ENABLED=no"), lastcron=None)
     assert "ALERT" not in out
+
+
+# ---- Plan 3 Task 1: final review M1, M2; Task 9d review minors 4, 5 ----
+def test_81_pending_first_run_after_enable(tmp_path):
+    """M1: after enable there is no result until the first 03:10 run: OK "pending first run", not an ALERT, while
+    documents.conf is younger than 26 h (enable writes it); after that, no result alerts as before."""
+    out = run(fresh(tmp_path, "new"), T81, conf_age=600)
+    assert "ALERT" not in out and out.startswith("OK NextCloud check: pending first run")
+    out = run(fresh(tmp_path, "day"), T81, conf_age=25 * H)
+    assert "ALERT" not in out and "pending first run" in out
+    assert "ALERT NextCloud check: no result" in run(fresh(tmp_path, "late"), T81, conf_age=27 * H)
+
+
+def test_77_stale_backup_alerts(tmp_path):
+    """M2: a backup timer that is off or never fires leaves an old OK status: older than 26 h alerts; no status at all
+    alerts once documents.conf is that old (a fresh enable waits for the first 01:40 run)."""
+    out = run(fresh(tmp_path, "old"), "77-nextcloud-services.sh", backup_status=f"OK {NOW - 27 * H} backup x\n")
+    assert "ALERT NextCloud backup: the last backup ran 2027-01-14T05:00:00Z (more than 26 h ago" in out
+    assert run(fresh(tmp_path, "ok"), "77-nextcloud-services.sh",
+               backup_status=f"OK {NOW - 3 * H} backup x\n").startswith("OK NextCloud services")
+    out = run(fresh(tmp_path, "never"), "77-nextcloud-services.sh", conf_age=27 * H)
+    assert "ALERT NextCloud backup: no backup has run" in out
+    assert run(fresh(tmp_path, "fresh"), "77-nextcloud-services.sh", conf_age=600).startswith("OK NextCloud services")
+    out = run(fresh(tmp_path, "junk"), "77-nextcloud-services.sh", backup_status="OK notanumber x\n")
+    assert "ALERT NextCloud backup: cannot read" in out
+
+
+def test_77_psql_has_no_psqlrc_and_a_timeout(tmp_path):
+    """9d minor 4: psql -X (as documents.py) and a timeout: a wedged PostgreSQL must not hang the monitor run."""
+    run(tmp_path, "77-nextcloud-services.sh")
+    rc = (tmp_path / "runuser.calls").read_text()
+    assert " psql -d nextcloud -qtAXc " in rc
+    assert (tmp_path / "timeout.calls").read_text().split()[0].isdigit()
+
+
+def test_77_each_cron_state_has_its_own_key(tmp_path):
+    """9d minor 4: "never ran", "cannot read" and "stale" are different keys: a switch from one to another alerts at
+    once, not 24 h later."""
+    assert "ALERT NextCloud: background jobs have never run" in run(tmp_path, "77-nextcloud-services.sh", lastcron="0")
+    out = run(tmp_path, "77-nextcloud-services.sh", lastcron=str(NOW + 600 - 3 * H), now=NOW + 600)
+    assert "ALERT NextCloud: background jobs last ran" in out
+    out = run(tmp_path, "77-nextcloud-services.sh", lastcron="ERR", now=NOW + 1200)
+    assert "ALERT NextCloud: cannot read when background jobs last ran" in out
+
+
+def test_77_postgresql_down_is_one_alert(tmp_path):
+    """9d minor 5: PostgreSQL down: one alert naming the cause, not a second one for the lastcron query."""
+    out = run(tmp_path, "77-nextcloud-services.sh", active="httpd php-fpm nextcloud-cron.timer", lastcron="ERR")
+    assert out.count("ALERT") == 1 and "ALERT NextCloud: postgresql is not active" in out
+    assert not (tmp_path / "runuser.calls").exists()

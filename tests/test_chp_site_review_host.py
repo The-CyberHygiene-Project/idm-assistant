@@ -211,3 +211,26 @@ def test_corrupt_documents_files_do_not_break_the_record(tmp_path, which):
     p.write_bytes(b"\xff\x00garbage {")
     dc = body(rh.host_record(host="srv1", now=NOW, run=docs_run, root=r))["documents"]
     assert dc[{"check.json": "chk", "backup.status": "bk", "chain.pem": "cert"}[which]] is None
+
+
+def test_docs_counts_real_share_line(tmp_path):
+    """D14 (round 4): NextCloud writes "Interaction OCP\\Interaction\\Actions\\ShareAction from user ..." (logs/53 and
+    the level-12 rows of logs/89-90), so a startswith("ShareAction") test counted every share attempt and every canary
+    refusal as 0. The messages below are the round-4 lines, verbatim."""
+    r = docs_root(tmp_path)
+    (r / "var/log/nextcloud/audit.log").write_text("")
+    t = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(NOW - 50))
+    msgs = ["Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canary on 159 to ncadmin is restricted: "
+            "Node is not shareable.",
+            "Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canary on 159 to "
+            "OCP\\Interaction\\Receivers\\LinkReceiver is restricted: Node is not shareable.",
+            "Interaction OCP\\Interaction\\Actions\\ShareAction from user lab01 on 13 to lab02 is restricted: Node is not "
+            "shareable.",
+            "Interaction OCP\\Interaction\\Actions\\ShareAction from user chp-canaryx on 81 to lab04 is restricted: Node "
+            "is not shareable.",
+            'Login successful: "chp-canary"']
+    with open(r / "var/log/nextcloud/audit.log", "a") as f:
+        for m in msgs:
+            f.write(json.dumps({"reqId": "x", "level": 1, "time": t, "user": "chp-canary", "app": "admin_audit",
+                                "message": m, "data": {"app": "admin_audit"}}) + "\n")
+    assert rh.docs_counts(r, NOW - 600, NOW) == (0, 2, 2)

@@ -120,7 +120,7 @@ DOCS_CONF = "etc/chp/documents.conf"
 DOCS_UNITS = ("httpd", "php-fpm", "postgresql", "nextcloud-cron.timer")
 DOCS_CURSOR = "var/lib/chp/documents/review.cursor"       # when the last record was appended (counts are "since" it)
 DOCS_TAIL = 2_000_000                                     # the audit log is read from its last 2 MB at most
-SHARE_REFUSED = "is restricted"                           # admin_audit: "ShareAction from user X on N to Y is restricted"
+SHARE_REFUSED = "is restricted"                           # admin_audit: "...ShareAction from user X on N to Y is restricted"
 CANARY_USER = "chp-canary"                                # = documents.CANARY_USER (not imported: no cycle)
 
 
@@ -162,8 +162,10 @@ def docs_counts(root, since, now):
         msg = str(e.get("message", ""))
         if e.get("app") == "chp_foldertag" and str(e.get("event", e.get("message", ""))).startswith("chp.contain.refused"):
             cr += 1
-        elif e.get("app") == "admin_audit" and msg.startswith("ShareAction from user ") and SHARE_REFUSED in msg:
-            if msg.startswith(f"ShareAction from user {CANARY_USER} "):
+        # the line is "Interaction OCP\Interaction\Actions\ShareAction from user ..." (round 4, D14): anywhere in the
+        # message, as rule 100601 matches it
+        elif e.get("app") == "admin_audit" and "ShareAction from user " in msg and SHARE_REFUSED in msg:
+            if f"ShareAction from user {CANARY_USER} " in msg:
                 ca += 1                      # the nightly canary's expected refusal: not a share attempt
             else:
                 sa += 1
