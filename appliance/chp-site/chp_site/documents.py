@@ -1022,6 +1022,9 @@ def _publish_account(occ, ids):
         occ("user:add", "--password-from-env", "--display-name", "CHP document publisher (root, occ only)",
             "--group", "cui-users", "--group", "chp-users", PUBLISH_USER, env={"OC_PASS": _s.token_urlsafe(32)})
     else:
+        # an account found already there (an earlier run, or one somebody made or changed) gets a new random password
+        # nobody keeps, every run: a password set on it by hand never survives the next enable
+        occ("user:resetpassword", "--password-from-env", PUBLISH_USER, env={"OC_PASS": _s.token_urlsafe(32)})
         for g in ("cui-users", "chp-users"):
             occ("group:adduser", g, PUBLISH_USER)
     for _, team, rel in AREAS:

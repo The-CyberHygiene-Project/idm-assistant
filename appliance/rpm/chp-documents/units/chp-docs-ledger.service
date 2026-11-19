@@ -12,5 +12,5 @@ OnFailure=chp-docs-ledger-alert.service
 Type=oneshot
 UMask=0077
 ExecStart=/usr/bin/chp-site doc-ledger process
-TimeoutStartSec=15min
+TimeoutStartSec=45min
 PrivateTmp=yes

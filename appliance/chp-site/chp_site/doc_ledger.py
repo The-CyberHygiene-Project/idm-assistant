@@ -33,6 +33,7 @@ import binascii
 import errno
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -64,6 +65,10 @@ MAX_SPOOL = 128 * 1024 * 1024                             # 64 MiB of file bytes
 MAX_TEXT = 2000
 MAX_TOKEN = 16384
 TIMEOUT = 10
+OCC_TIMEOUT = 120                 # per occ call; a publish makes at most 7 writes and reads
+BUDGET = 600                      # process() starts no new request after this many seconds: the rest wait for the
+                                  # next start (the path unit triggers again while spool files remain), so a request is
+                                  # never cut off by the unit's TimeoutStartSec (45 min > BUDGET + one worst case)
 FIELDS = ("seq", "ts", "kind", "user", "auth", "kanidm_sub", "session_id", "request_id", "doc", "file_id", "path",
           "sha256", "cycle", "prev")
 OPTIONAL = ("reason", "notes", "cr", "pdf_sha256", "supersedes")
@@ -119,6 +124,27 @@ class _Refuse(Exception):
 
 class _Retry(Exception):
     pass
+
+
+class _NotAppended(Exception):
+    """The ledger line could not be written; `cut`: a partial line was cut back off (else the ledger needs the ISSO)."""
+    def __init__(self, err, cut):
+        super().__init__(str(err))
+        self.cut = cut
+
+
+def _write_line(fd, data):
+    n = os.write(fd, data)
+    if n != len(data):
+        raise OSError(errno.EIO, f"short write to the ledger ({n} of {len(data)} bytes)")
+
+
+def _safe(journal, rec):
+    """A journal line after the append: its failure never turns "done" into anything else."""
+    try:
+        journal(rec)
+    except Exception:                                     # noqa: BLE001
+        pass
 
 
 class Ctx:
@@ -249,7 +275,9 @@ def _userinfo_call(url, token, opener, timeout):
         if isinstance(e.reason, ssl.SSLCertVerificationError):
             raise KanidmRefused(f"Kanidm's certificate does not verify against the site CA ({e.reason})") from None
         raise KanidmUnavailable(str(e.reason)) from None
-    except (OSError, ValueError) as e:                     # timeouts, resets
+    except ssl.SSLCertVerificationError as e:
+        raise KanidmRefused(f"Kanidm's certificate does not verify against the site CA ({e})") from None
+    except (OSError, ValueError, http.client.HTTPException) as e:   # timeouts, resets, a broken HTTP answer
         raise KanidmUnavailable(str(e)) from None
     try:
         ui = json.loads(raw)
@@ -332,12 +360,36 @@ class _Ledger:
     def by_request(self, rid):
         return next((e for e in self.entries if e["request_id"] == rid), None)
 
-    def append(self, e):
+    def append(self, e, journal=None):
+        """Write the entry's line, then the head witness. A line that cannot be written and fsynced in full is cut
+        back off (ftruncate to the size before it) and _NotAppended is raised: nothing was appended. Once the line is
+        fsynced the entry IS appended: a failure to write the head is only journalled (the head is a witness that
+        may lag; the next append rewrites it)."""
         lines = _lines(self.path)
         e = dict(e, seq=len(lines) + 1, prev=entry_hash(lines[-1]) if lines else GENESIS)
         line = json.dumps(e, sort_keys=True, separators=(",", ":"))
-        os.write(self.fd, (line + "\n").encode())
-        os.fsync(self.fd)
+        data = (line + "\n").encode()
+        size = os.fstat(self.fd).st_size
+        try:
+            _write_line(self.fd, data)
+            os.fsync(self.fd)
+        except OSError as err:
+            try:
+                os.ftruncate(self.fd, size)
+                os.fsync(self.fd)
+                cut = True
+            except OSError:
+                cut = False
+            raise _NotAppended(err, cut) from None
+        self.entries.append(e)
+        try:
+            self._write_head(e, line)
+        except OSError as err:
+            if journal:
+                _safe(journal, {"event": "head-write-failed", "seq": e["seq"], "error": str(err)[:200]})
+        return e
+
+    def _write_head(self, e, line):
         tmp = self.head.with_name(self.head.name + ".tmp")
         hf = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         with os.fdopen(hf, "w") as f:
@@ -345,8 +397,6 @@ class _Ledger:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, self.head)
-        self.entries.append(e)
-        return e
 
 
 def verify(ledger, head, stick_heads=None, say=print):
@@ -622,8 +672,9 @@ def process_one(spool_path, ctx=None):
         _unlink(ctx, p)
 
 
-def process(ctx=None):
-    """Every request in the spool, oldest first."""
+def process(ctx=None, budget=BUDGET, clock=time.monotonic):
+    """The requests in the spool, oldest first, until `budget` seconds have passed (then the rest wait for the next
+    start of the unit)."""
     ctx = ctx or Ctx.system()
     names = []
     try:
@@ -636,7 +687,13 @@ def process(ctx=None):
                         continue
     except FileNotFoundError:
         return []
-    return [process_one(ctx.spool / n, ctx) for _, n in sorted(names)]
+    start, out = clock(), []
+    for _, n in sorted(names):
+        if out and clock() - start > budget:
+            _safe(ctx.journal, {"event": "budget-reached", "processed": len(out), "waiting": len(names) - len(out)})
+            break
+        out.append(process_one(ctx.spool / n, ctx))
+    return out
 
 
 def _answer(ctx, rid, user, state, message, entry=None):
@@ -661,20 +718,19 @@ def _handle(ctx, rid, r):
     if prior is not None:
         return _prior(ctx, rid, user, prior)
 
-    # 2. identity: approve and override need a Bearer that Kanidm verifies for this very user
-    ident = {"sub": None, "session_id": None}
-    if kind in ("approve", "override") and r["auth"] != "bearer":
-        how = {"app-password": "an app password", "session": "a browser session"}[r["auth"]]
+    # 2. identity: every request needs a Bearer that Kanidm's chp-doc userinfo verifies for this very user (design:
+    # identity comes only from Kanidm; app passwords, Login Flow v2 tokens and browser sessions are refused)
+    if r["auth"] != "bearer":
+        how = {"app-password": "an app password (or a Login Flow token)", "session": "a browser session"}[r["auth"]]
         return _refused(ctx, rid, r, f"refused: {kind} needs a Kanidm-verified Bearer sign-in (chp-site doc login); "
-                                     f"this request came with {how}, which cannot {kind}")
-    if r["auth"] == "bearer":
-        try:
-            ident = _verify_bearer(ctx, r)
-        except _Retry as e:
-            ctx.journal({"event": "retry", "request_id": rid, "user": user, "kind": kind, "why": str(e)[:200]})
-            return _answer(ctx, rid, user, "retry", str(e))
-        except _Refuse as e:
-            return _refused(ctx, rid, r, str(e))
+                                     f"this request came with {how}")
+    try:
+        ident = _verify_bearer(ctx, r)
+    except _Retry as e:
+        ctx.journal({"event": "retry", "request_id": rid, "user": user, "kind": kind, "why": str(e)[:200]})
+        return _answer(ctx, rid, user, "retry", str(e))
+    except _Refuse as e:
+        return _refused(ctx, rid, r, str(e))
 
     # 3. under the lock: decide, act, append
     try:
@@ -682,18 +738,39 @@ def _handle(ctx, rid, r):
             prior = led.by_request(rid)
             if prior is not None:
                 return _prior(ctx, rid, user, prior)
+            undo = []
             try:
-                e = _decide_and_act(ctx, led, r, ident)
+                e = _decide_and_act(ctx, led, r, ident, undo)
             except _Refuse as err:
                 return _refused(ctx, rid, r, str(err))
             except StoreError as err:
                 return _refused(ctx, rid, r, f"refused: the document server could not do it ({str(err)[:300]}); "
                                              "nothing was recorded; run the command again")
-            e = led.append(e)
+            try:
+                e = led.append(e, ctx.journal)
+            except _NotAppended as err:
+                # step 9 failed: the publish's writes are undone, so nothing is live without its entry
+                msg = (f"refused: the ledger could not be written ({str(err)[:160]}); nothing was recorded"
+                       + ("; nothing was published (undone)" if undo else ""))
+                failed = _undo(ctx.store, undo)
+                if undo:
+                    _journal_undo(ctx, r, e.get("doc"), failed)
+                if failed:
+                    msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
+                if not err.cut:
+                    ctx.journal({"event": "ledger-partial-line", "request_id": rid, "error": str(err)[:200]})
+                    msg += "; the ledger may end in a partial line: the ISSO must check it (chp-site doc-ledger verify)"
+                return _refused(ctx, rid, r, msg)
     except LedgerError as err:
         return _broken(ctx, rid, user, err)
-    ctx.journal({"event": "ledger", **e})
+    # appended: from here on, whatever fails, the answer is "done"
+    _safe(ctx.journal, {"event": "ledger", **e})
     return _answer(ctx, rid, user, "done", _done_text(e), e)
+
+
+def _journal_undo(ctx, r, doc, failed):
+    _safe(ctx.journal, {"event": "publish-undo-failed" if failed else "publish-undone", "request_id": r["request_id"],
+                        "doc": doc, **({"failed": failed} if failed else {})})
 
 
 def _done_text(e):
@@ -847,7 +924,7 @@ def _current(ctx, folder, series, exclude=None):
     return out
 
 
-def _decide_and_act(ctx, led, r, ident):
+def _decide_and_act(ctx, led, r, ident, undo):
     t = _target(ctx, r)
     kind, user = r["kind"], r["user"]
     cycle, cyc = _cycle(led.entries, t.doc)
@@ -897,16 +974,18 @@ def _decide_and_act(ctx, led, r, ident):
             raise _Refuse(f"refused: only the ISSO (DOC_ISSO_ACCOUNT, {isso}) may override")
         if not (r.get("reason") or "").strip():
             raise _Refuse("refused: an override needs a reason (--reason)")
-        others = [a for a in appr if a != isso]
+        # spec §4: only when no approver account other than the author exists (the ISSO included: an ISSO who is not
+        # an author of this change approves it normally)
+        others = [a for a in [isso] + appr if a not in authors]
         if others:
-            raise _Refuse(f"refused: not a one-person site: other approver account(s) exist ({', '.join(others)}); "
-                          "ask one of them to approve")
+            raise _Refuse(f"refused: not a one-person site: approver account(s) other than the author exist "
+                          f"({', '.join(others)}); ask one of them to approve")
         if not starts:
             raise _Refuse(f"refused: nothing to approve: {t.series} has no checkout or new in this cycle")
         e["reason"] = r["reason"]
         return e
 
-    return _publish(ctx, led, r, t, e, cyc, starts, authors)
+    return _publish(ctx, led, r, t, e, cyc, starts, authors, undo)
 
 
 # ---------- publish ----------
@@ -931,7 +1010,7 @@ def _undo(store, undo):
     return failed
 
 
-def _publish(ctx, led, r, t, e, cyc, starts, authors):
+def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
     """Server-side publish, under the ledger lock: compare-and-write of the Compliance area. Any failure before the
     append undoes the writes already made; nothing is ledgered as published."""
     s = ctx.store
@@ -1002,8 +1081,10 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors):
     # 3 was the sha256 check above. 4. the marks, checked again here, on the bytes received and the reader PDF
     _check_marks(ctx, t, name, content, pdf_name if not is_pdf else None, pdf)
 
-    # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure
-    undo = []
+    # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure (also when step 9 fails: the caller
+    # holds `undo`). The intent is journalled first, so a publish cut short (the service killed) can be found.
+    _safe(ctx.journal, {"event": "publish-started", "request_id": r["request_id"], "user": user, "doc": t.doc,
+                        "name": name, "supersedes": old.file_id if old is not None else None})
     try:
         if old is not None:
             now = s.info(old.file_id)
@@ -1042,23 +1123,22 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors):
                 raise _Refuse(f"refused: {pdf_name} did not get its {CUI_TAG} tag; nothing was published (undone)")
     except (_Refuse, StoreError) as err:
         failed = _undo(s, undo)
+        undo.clear()
+        _journal_undo(ctx, r, t.doc, failed)
         msg = str(err) if isinstance(err, _Refuse) else (f"refused: the document server could not publish "
                                                          f"({str(err)[:300]}); nothing was published")
         if failed:
-            ctx.journal({"event": "publish-undo-failed", "request_id": r["request_id"], "doc": t.doc,
-                         "failed": failed})
             msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
         raise _Refuse(msg) from None
     except Exception:
         failed = _undo(s, undo)
-        if failed:
-            ctx.journal({"event": "publish-undo-failed", "request_id": r["request_id"], "doc": t.doc,
-                         "failed": failed})
+        undo.clear()
+        _journal_undo(ctx, r, t.doc, failed)
         raise
 
     # 9. the entry (appended by the caller, still under the lock)
-    year = time.gmtime(ctx.now()).tm_year
-    n = 1 + sum(1 for x in led.entries if x["kind"] == "publish" and x["ts"][:4] == str(year))
+    year = e["ts"][:4]                                     # the entry's own year: one clock reading per entry
+    n = 1 + sum(1 for x in led.entries if x["kind"] == "publish" and x["ts"][:4] == year)
     e.update(file_id=new.file_id, path=new.path, sha256=sha, cr=f"CR-{year}-{n:04d}", pdf_sha256=_sha(pdf))
     if supersedes is not None:
         e["supersedes"] = supersedes
@@ -1111,7 +1191,10 @@ class OccStore:
         if not self.user:
             raise StoreError("server-side publish is not set up: documents.conf has no DOC_PUBLISH_USER (run chp-site "
                              "documents enable)")
-        r = self.run(self.OCC + list(argv), input=data, capture_output=True, timeout=600)
+        try:
+            r = self.run(self.OCC + list(argv), input=data, capture_output=True, timeout=OCC_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise StoreError(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s") from None
         if r.returncode != 0:
             text = (r.stderr or b"").decode("utf-8", "replace") + (r.stdout or b"").decode("utf-8", "replace")
             last = (text.strip().splitlines() or [f"exit {r.returncode}"])[-1][:300]

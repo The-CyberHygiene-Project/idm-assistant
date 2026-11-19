@@ -650,11 +650,11 @@ def test_spool_always_deleted(env):
     ok_rid = "01" * 16
     env.spool({"request_id": ok_rid, "kind": "checkout", "file_id": env.doc, "target": "file", "name": None,
                "sha256": "", "reason": "", "notes": "", "content": None, "pdf_content": None, "user": "alice",
-               "auth": "session", "bearer_token": None, "received_at": "x"}, rid=ok_rid)
+               "auth": "bearer", "bearer_token": "tok-alice", "received_at": "x"}, rid=ok_rid)
     boom_rid = "02" * 16
     env.spool({"request_id": boom_rid, "kind": "checkout", "file_id": env.idoc, "target": "file", "name": None,
                "sha256": "", "reason": "", "notes": "", "content": None, "pdf_content": None, "user": "alice",
-               "auth": "session", "bearer_token": None, "received_at": "x"}, rid=boom_rid)
+               "auth": "bearer", "bearer_token": "tok-alice", "received_at": "x"}, rid=boom_rid)
     real = env.store.read
 
     def boom(fid):
@@ -1046,3 +1046,197 @@ def test_occ_store_undo_delete_is_forced_and_skips_the_trash():
                    run=lambda argv, **kw: calls.append(argv) or SimpleNamespace(returncode=0, stdout=b"", stderr=b""))
     s.delete(7)
     assert calls[-1][-4:] == ["files:delete", "--force", "--skip-trash", "/chp-publisher/files/CUI/Compliance/x.docx"]
+
+
+# ---------- fix round 1 ----------
+
+def test_every_kind_needs_verified_bearer(env):
+    """Identity comes only from Kanidm's chp-doc userinfo: a browser session or an app password (Login Flow v2 tokens
+    read as app passwords) is refused for every kind, plainly, never quarantined."""
+    ok(env.checkout("alice"))                                  # (with a Bearer)
+    n = len(env.ledger())
+    cases = [("checkout", env.doc, {}), ("new", 100, {"name": "CUI_X_v0.1-DRAFT.docx"}),
+             ("approve", 100, {"name": "CUI_SSP_v1.1.docx", "sha256": sha(V11)}),
+             ("override", 100, {"name": "CUI_SSP_v1.1.docx", "sha256": sha(V11), "reason": "x"}),
+             ("publish", 100, {"name": "CUI_SSP_v1.1.docx", "sha256": sha(V11), "content": V11, "pdf": b"%PDF"})]
+    for kind, fid, kw in cases:
+        for auth, words in (("session", "browser session"), ("app-password", "app password")):
+            m = refused(env.req(kind, "alice", fid, auth=auth, **kw), "Kanidm-verified Bearer", words)
+            assert kind in m
+    assert len(env.ledger()) == n and not env.quarantine()
+    assert not [c for c in env.store.calls if c[0] in ("put", "move")]
+    env.kanidm["as"] = "mallory"                               # a Bearer for someone else: refused for checkout too
+    refused(env.checkout("alice"), "belongs to")
+
+
+def _ready_to_publish(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+
+
+def test_ledger_line_failure_undoes_the_publish(env, monkeypatch):
+    _ready_to_publish(env)
+    real = L._write_line
+
+    def half(fd, data):                                        # ENOSPC after half the line reached the file
+        os.write(fd, data[:len(data) // 2])
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(L, "_write_line", half)
+    m = refused(env.publish("alice", V11), "ledger could not be written", "nothing was published")
+    assert env.store.names(100) == ["CUI_SSP_v1.0.docx", "CUI_SSP_v1.0.pdf"] and env.store.names(300) == []
+    assert not [n for n in env.store.nodes.values() if n["name"].startswith("CUI_SSP_v1.1")]
+    led, head = env.base / "ledger" / "ledger.jsonl", env.base / "ledger" / "ledger.head"
+    assert L.verify(led, head, None, say=lambda s: None) == 0  # the partial line was cut back off
+    assert len(env.ledger()) == 2 and "UNDO INCOMPLETE" not in m
+    ev = [j["event"] for j in env.journal]
+    assert ev.index("publish-started") < ev.index("publish-undone")
+    monkeypatch.setattr(L, "_write_line", real)
+    assert ok(env.publish("alice", V11))["cr"] == "CR-2026-0001"
+
+
+def test_head_failure_after_the_line_is_still_done(env, monkeypatch):
+    _ready_to_publish(env)
+
+    def nohead(self, e, line):
+        raise OSError(5, "I/O error")
+    monkeypatch.setattr(L._Ledger, "_write_head", nohead)
+    rid = "0a" * 16
+    r = env.publish("alice", V11, rid=rid)
+    assert r.state == "done" and env.out(rid)["state"] == "done" and not env.quarantine()
+    assert any(j.get("event") == "head-write-failed" for j in env.journal)
+    monkeypatch.undo()
+    led, head = env.base / "ledger" / "ledger.jsonl", env.base / "ledger" / "ledger.head"
+    assert L.verify(led, head, None, say=lambda s: None) == 0  # a lagging head is not a problem
+    ok(env.checkout("carol", r.entry["file_id"]))              # the next append rewrites it
+    assert head.read_text().split()[0] == "4"
+
+
+def test_journal_failure_after_append_is_still_done(env):
+    _ready_to_publish(env)
+    base = env.ctx.journal
+
+    def broken(rec):
+        if rec.get("event") == "ledger":
+            raise OSError("journald gone")
+        base(rec)
+    env.ctx.journal = broken
+    assert env.publish("alice", V11).state == "done"
+
+
+def test_publish_started_journalled_before_the_first_write(env):
+    _ready_to_publish(env)
+    seen = []
+    put = env.store.put
+
+    def watch(folder, name, data):
+        seen.append([j.get("event") for j in env.journal])
+        return put(folder, name, data)
+    env.store.put = watch
+    ok(env.publish("alice", V11))
+    assert "publish-started" in seen[0]
+    st = next(j for j in env.journal if j.get("event") == "publish-started")
+    assert st["name"] == "CUI_SSP_v1.1.docx" and st["supersedes"] == env.doc and "content" not in st
+
+
+def test_process_stops_starting_requests_after_its_budget(env):
+    for i in range(3):
+        env.spool({"request_id": None}, rid=f"{i + 1:032x}")
+    ticks = iter([0, 0, 700, 700, 700])
+    rs = L.process(env.ctx, budget=600, clock=lambda: next(ticks))
+    assert len(rs) == 2 and len(list((env.base / "spool").iterdir())) == 1
+    assert any(j.get("event") == "budget-reached" for j in env.journal)
+    svc = (UNITS / "chp-docs-ledger.service").read_text()
+    m = re.search(r"^TimeoutStartSec=(\d+)min$", svc, re.M)
+    assert m and int(m.group(1)) * 60 > L.BUDGET + 8 * L.OCC_TIMEOUT + 60
+
+
+def test_cr_year_is_the_entry_year(env):
+    _ready_to_publish(env)
+    calls = []
+
+    def clock():                                               # 2026-12-31T23:59:59Z, then the new year
+        calls.append(1)
+        return 1798761599.0 if len(calls) == 1 else 1798761600.0
+    env.ctx.now = clock
+    p = ok(env.publish("alice", V11))
+    assert p["ts"].startswith("2026-12-31") and p["cr"] == "CR-2026-0001"
+
+
+class _Opener:
+    def __init__(self, exc=None, body=None):
+        self.exc, self.body = exc, body
+
+    def open(self, req, timeout=None):
+        if self.exc is not None:
+            raise self.exc
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=-1):
+        if isinstance(self.body, Exception):
+            raise self.body
+        return self.body
+
+
+def test_userinfo_call_maps_real_failures():
+    import http.client
+    import socket
+    url = "https://idm.example.test/oauth2/openid/chp-doc/userinfo"
+    cases = [
+        (urllib.error.HTTPError(url, 401, "Unauthorized", {}, None), L.TokenRejected),
+        (urllib.error.HTTPError(url, 503, "Unavailable", {}, None), L.KanidmUnavailable),
+        (urllib.error.URLError(ConnectionRefusedError(111, "refused")), L.KanidmUnavailable),
+        (socket.timeout("timed out"), L.KanidmUnavailable),
+        (urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed")), L.KanidmRefused),
+        (http.client.BadStatusLine("garbage"), L.KanidmUnavailable),
+        (http.client.RemoteDisconnected("closed"), L.KanidmUnavailable),
+    ]
+    for exc, want in cases:
+        with pytest.raises(want):
+            L._userinfo_call(url, "t", _Opener(exc), 5)
+    with pytest.raises(L.KanidmUnavailable):                   # cut off while reading the body
+        L._userinfo_call(url, "t", _Opener(body=http.client.IncompleteRead(b"{")), 5)
+    with pytest.raises(L.KanidmRefused):
+        L._userinfo_call(url, "t", _Opener(body=b"not json"), 5)
+    assert L._userinfo_call(url, "t", _Opener(body=b'{"sub": "x"}'), 5) == {"sub": "x"}
+
+
+def test_broken_http_answer_is_a_retry_not_a_quarantine(env):
+    import http.client
+    ok(env.checkout("alice"))
+    env.ctx.userinfo = lambda url, tok: L._userinfo_call(url, tok, _Opener(body=http.client.IncompleteRead(b"")), 5)
+    r = env.approve("bob", V11)
+    assert r.state == "retry" and not env.quarantine()
+
+
+def test_override_only_when_no_approver_other_than_the_author(tmp_path):
+    e = Env(tmp_path / "a", isso="dana", approvers=())
+    ok(e.checkout("alice"))                                    # alice is the author; the ISSO could approve it
+    m = refused(e.req("override", "dana", 100, name="CUI_SSP_v1.1.docx", sha256=sha(V11), reason="x"),
+                "not a one-person site")
+    assert "dana" in m
+    ok(e.approve("dana", V11))                                 # ... as an ordinary approval
+    both = Env(tmp_path / "b", isso="dana", approvers=("bob",))
+    ok(both.checkout("dana"))
+    ok(both.checkout("bob"))                                   # every approver account is an author of this change
+    ok(both.req("override", "dana", 100, name="CUI_SSP_v1.1.docx", sha256=sha(V11), reason="both of us wrote it"))
+
+
+def test_publish_account_password_reset_every_run(tmp_path):
+    from chp_site import documents as D
+    from tests import test_chp_site_documents as T
+    e = T.Env(tmp_path)
+    e.enable()
+    n = len(e.nc.calls)
+    e.enable()
+    rs = [(c, env) for c, env in zip(e.nc.calls[n:], e.nc.envs[n:]) if c[0] == "user:resetpassword"]
+    assert len(rs) == 1 and rs[0][0] == ["user:resetpassword", "--password-from-env", D.PUBLISH_USER]
+    pw = rs[0][1]["OC_PASS"]
+    first = next(env for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add" and c[-1] == D.PUBLISH_USER)
+    assert len(pw) >= 24 and pw != first["OC_PASS"]
+    assert not any(pw in " ".join(c) for c in e.nc.calls + e.run.calls)
