@@ -487,11 +487,18 @@ def _review(a):
         from . import review_ledger as rl
         from . import usbstick
         if a.action == "export":
+            from . import doc_ledger as dl
             with usbstick.site_stick(a.stick if isinstance(a.stick, str) else None) as s:
                 r = rl.export(s, now=time.time())
+                # the document ledger's head rides along with the same export (Plan 3), once it exists
+                d = dl.export(s, dl.Ctx(site={}, conf={}, store=None)) if (dl.BASE / "ledger" / "ledger.jsonl").exists() \
+                    else None
             print(f"exported {len(r['days'])} review(s); ledger head {r['head'][0]} written to the stick (review/heads.txt)"
                   + ("" if not r["problems"] else f"; {len(r['problems'])} PROBLEM(S): see review/verify.txt"))
-            return 1 if r["problems"] else 0
+            if d is not None:
+                print(f"document ledger head {d['head'][0]} written to the stick (docs-ledger/heads.txt)"
+                      + ("" if not d["problems"] else "; PROBLEM: see docs-ledger/verify.txt"))
+            return 1 if r["problems"] or (d is not None and d["problems"]) else 0
         chain = rl.verify(rl._path("/"))
         problems = list(chain)
         anchor = None
@@ -524,6 +531,44 @@ def _review(a):
             print(f"stick anchor OK ({len(heads.splitlines())} head{'s' if len(heads.splitlines()) != 1 else ''})")
         return 1 if problems else 0
     raise SiteError(f"review {a.action}: not available")
+
+
+def _doc_ledger(a):
+    """chp-site doc-ledger process|verify|export|purge-quarantine (Plan 3 Task 4). verify: 0 OK, 1 a problem, 2 the
+    site stick asked for but not present (review verify's exit codes)."""
+    from . import doc_ledger as L
+    from . import usbstick
+    ctx = L.Ctx.system()
+    if a.action == "process":
+        rs = L.process(ctx)
+        n = {s: sum(r.state == s for r in rs) for s in ("done", "refused", "retry")}
+        print(f"processed {len(rs)} request(s): {n['done']} done, {n['refused']} refused, {n['retry']} to retry")
+        return 0
+    if a.action == "purge-quarantine":
+        print(f"removed {L.purge_quarantine(ctx)} quarantine record(s)")
+        return 0
+    stick = a.stick if isinstance(a.stick, str) else None
+    if a.action == "export":
+        with usbstick.site_stick(stick) as s:
+            r = L.export(s, ctx)
+        print(f"document ledger head {r['head'][0]} written to the stick (docs-ledger/heads.txt)"
+              + ("" if not r["problems"] else f"; PROBLEM: {r['problems'][0]}"))
+        return 1 if r["problems"] else 0
+    heads = None
+    if a.stick:
+        try:
+            with usbstick.site_stick(stick) as s:
+                hp = s / "docs-ledger" / "heads.txt"
+                heads = hp.read_text() if hp.exists() else ""
+        except SiteError as err:
+            L.verify(ctx.ledger, ctx.head, None)
+            print(f"site stick not present ({err}); stick anchor NOT checked")
+            return 2
+        if not heads:
+            L.verify(ctx.ledger, ctx.head, None)
+            print("PROBLEM: the stick has no docs-ledger/heads.txt yet (export once to anchor the ledger)")
+            return 1
+    return L.verify(ctx.ledger, ctx.head, heads)
 
 
 def main(argv=None):
@@ -595,6 +640,11 @@ def main(argv=None):
                                            "5 min), every local file system (--full), or one PATH; alert only")
     ys_.add_argument("path", nargs="?"); ys_.add_argument("--wazuh", action="store_true"); ys_.add_argument("--full", action="store_true")
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
+    dl = sub.add_parser("doc-ledger", help="(documents server; root) the controlled-document ledger: process the spool "
+                                           "(chp-docs-ledger.service), verify it (--stick: against the site stick's "
+                                           "heads), export it to the site stick, or purge the quarantine")
+    dl.add_argument("action", choices=("process", "verify", "export", "purge-quarantine"))
+    dl.add_argument("--stick", nargs="?", const=True, help="verify/export: the pinned site stick (or a folder, for tests)")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
     rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
@@ -614,7 +664,8 @@ def main(argv=None):
          "ga-enrol": _ga_enrol,
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
-         "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review}[a.cmd](a)
+         "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review,
+         "doc-ledger": _doc_ledger}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

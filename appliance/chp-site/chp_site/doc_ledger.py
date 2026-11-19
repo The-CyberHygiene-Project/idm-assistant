@@ -1,0 +1,1187 @@
+# CyberHygiene Project Lab Installer — based on Rocky Linux 9.
+# Not an official Rocky Linux product.
+# Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+"""chp-site doc-ledger process|verify|export|purge-quarantine (ISO 0.7.0 design §4, Plan 3 Task 4): the root appender
+of the controlled-document workflow. It is the only writer of the document ledger and of the Compliance areas.
+
+Requests arrive from the NextCloud app chp_ledger (route L1) as spool files, /var/lib/chp-docs/spool/<32 hex>.json,
+written by apache; chp-docs-ledger.path starts this program (as root) when one lands. For each request it:
+  - reads it without following a symlink, checks its shape (anything malformed is set aside in quarantine/, with no
+    Bearer token and no file bytes in the record);
+  - answers a request id it has already appended with that entry (idempotent: a re-sent request is never refused
+    after a successful append);
+  - checks a Bearer at Kanidm's chp-doc userinfo (pinned to the site CA, no redirects) and that it names the user
+    NextCloud authenticated; Kanidm unreachable or the token refused = state "retry" (the client signs in again and
+    re-sends the same request id), never a quarantine;
+  - under flock on the ledger: re-checks the area (inside a Compliance area, not under a Superseded one), applies the
+    per-cycle author/approver rules, does the server-side publish (compare-and-write, supersede, tag, reader PDF,
+    undone on any failure), appends one hash-chained entry and updates the ledger.head witness;
+  - writes out/<id>.json (owner, state, message, entry) for the app, then deletes the spool file (it holds a token);
+  - writes every entry (and every refusal, retry and quarantine) as one JSON line to the journal,
+    SYSLOG_IDENTIFIER=chp-docs-ledger (ruling F4: Wazuh alerts on approvals and overrides at once).
+
+The ledger is the same design as the review sign-off ledger (review_ledger): one JSON line per entry carrying the
+SHA-256 of the line before, a head witness, the head exported to the site stick, and the same verify exit codes
+(0 OK, 1 problems, 2 site stick not present).
+
+A document is a series of versions: <prefix><title>_vX.Y[-DRAFT].<ext> in one area folder (marking.parse_name, the
+same parser the workstation uses). Its key ("doc") is "<folder file id>/<prefix><title><ext>". A cycle runs from the
+last publish of that document (or its creation) to now; Authors(cycle) = whoever created it in the cycle + everyone
+who checked it out in the cycle (+ the publisher, who must be one of them)."""
+import base64
+import binascii
+import errno
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shutil
+import ssl
+import stat
+import subprocess
+import tempfile
+import time
+import unicodedata
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import NamedTuple, Optional
+
+from . import review_ledger as rl
+from .sitefile import SiteError
+
+BASE = Path("/var/lib/chp-docs")
+SITE_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
+IDENT = "chp-docs-ledger"
+GENESIS = "0" * 64
+REQ_NAME = re.compile(r"[0-9a-f]{32}\.json")             # fullmatch only: "$" would also accept a trailing newline
+HEX64 = re.compile(r"[0-9a-f]{64}")
+USER = re.compile(r"[A-Za-z0-9_.@-]{1,64}")
+KINDS = ("checkout", "new", "approve", "override", "publish")
+AUTHS = ("bearer", "app-password", "session")
+MAX_SPOOL = 128 * 1024 * 1024                             # 64 MiB of file bytes as base64, plus the request
+MAX_TEXT = 2000
+MAX_TOKEN = 16384
+TIMEOUT = 10
+FIELDS = ("seq", "ts", "kind", "user", "auth", "kanidm_sub", "session_id", "request_id", "doc", "file_id", "path",
+          "sha256", "cycle", "prev")
+OPTIONAL = ("reason", "notes", "cr", "pdf_sha256", "supersedes")
+CUI_TAG = "CUI"
+DEGRADED = ("the document server is in DEGRADED mode (the database cannot compute MD5, so NextCloud refuses moves of "
+            "files with old versions; design §12)")
+
+
+class Result(NamedTuple):
+    state: str                      # done | refused | retry
+    message: str
+    entry: Optional[dict]
+
+
+class Node(NamedTuple):
+    """A NextCloud file or folder as the appender sees it. path = "<team folder>/<path inside it>"; ancestors = the
+    file ids from the parent up to the team folder's root (read from the file cache by parent, never from a path)."""
+    file_id: int
+    type: str                       # file | folder
+    name: str
+    path: str
+    ancestors: tuple
+    etag: str
+
+
+class StoreError(Exception):
+    """A NextCloud operation failed."""
+
+
+class Degraded(StoreError):
+    """A move refused because the database cannot compute MD5 (design §12, FolderGuardListener)."""
+
+
+class KanidmUnavailable(Exception):
+    """Kanidm could not be reached or failed (outage): retry."""
+
+
+class TokenRejected(Exception):
+    """Kanidm refused the token (expired, revoked, or never valid): retry with a fresh sign-in."""
+
+
+class KanidmRefused(Exception):
+    """An answer that is never retried: not https, a redirect, a certificate that does not chain to the site CA."""
+
+
+class LedgerError(SiteError):
+    pass
+
+
+class _Refuse(Exception):
+    pass
+
+
+class _Retry(Exception):
+    pass
+
+
+class Ctx:
+    """Everything the appender touches, injectable for tests. site = the parsed site.conf (read at each run: approver
+    accounts are re-checked against what is configured at approve time); conf = /etc/chp/documents.conf."""
+    def __init__(self, *, base=BASE, site, conf, store, userinfo=None, marking=None, mark_values=None,
+                 journal=None, now=time.time, chown=None):
+        self.base = Path(base)
+        self.site, self.conf, self.store = site, conf, store
+        self.userinfo = userinfo or kanidm_userinfo
+        self._marking = marking
+        self._mark_values = mark_values
+        self.journal = journal or globals()["journal"]
+        self.now = now
+        self.chown = chown or _chown_apache
+
+    @classmethod
+    def system(cls):
+        from . import documents as D
+        from .sitefile import parse_site, read_file
+        conf = D._kv(Path("/") / D.CONF)
+        site = parse_site(read_file(Path("/etc/chp/site.conf"), "site.conf"))
+        return cls(site=site, conf=conf, store=OccStore(conf))
+
+    @property
+    def marking(self):
+        if self._marking is None:
+            from . import marking                         # Task 5; imported only when a publish needs it
+            self._marking = marking
+        return self._marking
+
+    def mark_values(self):
+        if self._mark_values is not None:
+            return self._mark_values()
+        return self.marking.MarkValues.from_site(self.site)
+
+    # paths
+    @property
+    def spool(self):
+        return self.base / "spool"
+
+    @property
+    def out(self):
+        return self.base / "out"
+
+    @property
+    def quarantine(self):
+        return self.base / "quarantine"
+
+    @property
+    def work(self):
+        return self.base / "work"
+
+    @property
+    def ledger(self):
+        return self.base / "ledger" / "ledger.jsonl"
+
+    @property
+    def head(self):
+        return self.base / "ledger" / "ledger.head"
+
+
+def _chown_apache(p):
+    """Results are root:apache 0640 (the app reads them; out/ is read-only to the web server)."""
+    if os.geteuid() != 0:
+        return
+    import grp
+    os.chown(p, 0, grp.getgrnam("apache").gr_gid)
+
+
+def journal(rec):
+    """One JSON line to the journal with SYSLOG_IDENTIFIER=chp-docs-ledger. Never a token or file bytes (callers
+    pass entries and short records only). logger's 1 KiB default would cut a long entry: --size."""
+    try:
+        subprocess.run(["logger", "-t", IDENT, "--size", "16384", "--",
+                        json.dumps(rec, sort_keys=True, separators=(",", ":"))], check=False, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _ts(now):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+
+
+def _sha(b):
+    return hashlib.sha256(b).hexdigest()
+
+
+def _nfc(s):
+    return unicodedata.normalize("NFC", s)
+
+
+def _dir0700(p):
+    p.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(p, 0o700)
+
+
+# ---------- Kanidm ----------
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Kanidm's userinfo never redirects; a redirect is refused, never followed (the token would go with it)."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise KanidmRefused(f"Kanidm's userinfo answered with a redirect (HTTP {code}); refused, not followed")
+
+
+def _opener(cafile):
+    ctx = ssl.create_default_context(cafile=cafile)       # the site CA only; no system store
+    ctx.check_hostname = True
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect(),
+                                       urllib.request.HTTPSHandler(context=ctx))
+
+
+def _userinfo_call(url, token, opener, timeout):
+    q = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
+    try:
+        with opener.open(q, timeout=timeout) as f:
+            raw = f.read(65536)
+    except KanidmRefused:
+        raise
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 401, 403):
+            raise TokenRejected(f"HTTP {e.code}") from None
+        if 300 <= e.code < 400:
+            raise KanidmRefused(f"Kanidm's userinfo answered with a redirect (HTTP {e.code}); refused") from None
+        raise KanidmUnavailable(f"HTTP {e.code}") from None
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, ssl.SSLCertVerificationError):
+            raise KanidmRefused(f"Kanidm's certificate does not verify against the site CA ({e.reason})") from None
+        raise KanidmUnavailable(str(e.reason)) from None
+    except (OSError, ValueError) as e:                     # timeouts, resets
+        raise KanidmUnavailable(str(e)) from None
+    try:
+        ui = json.loads(raw)
+    except ValueError:
+        raise KanidmRefused("Kanidm's userinfo did not answer JSON") from None
+    if not isinstance(ui, dict):
+        raise KanidmRefused("Kanidm's userinfo did not answer a JSON object")
+    return ui
+
+
+def kanidm_userinfo(url, token, cafile=SITE_CA, timeout=TIMEOUT):
+    """Kanidm's chp-doc userinfo for this Bearer: https only, the host from documents.conf, the site CA only, no
+    redirects, no proxy, a timeout. Raises KanidmUnavailable / TokenRejected (retry) or KanidmRefused."""
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise KanidmRefused(f"KANIDM_USERINFO_URL must be an https:// URL (it is {url!r})")
+    return _userinfo_call(url, token, _opener(cafile), timeout)
+
+
+# ---------- the ledger ----------
+
+def entry_hash(line):
+    return rl.entry_hash(line)
+
+
+def _lines(path):
+    try:
+        return rl._lines(path)
+    except SiteError as e:
+        raise LedgerError(str(e).split(":")[0] + ": the last line is incomplete (an interrupted write?)") from None
+
+
+def read(path, head):
+    """Every entry, after checking the chain and the head witness; LedgerError naming the first bad line."""
+    lines = _lines(path)
+    out, prev = [], GENESIS
+    for n, ln in enumerate(lines, 1):
+        try:
+            e = json.loads(ln)
+        except ValueError:
+            raise LedgerError(f"ledger {path}: line {n} is not a valid entry") from None
+        if not isinstance(e, dict) or not set(FIELDS) <= set(e) <= set(FIELDS + OPTIONAL):
+            raise LedgerError(f"ledger {path}: line {n} has the wrong fields")
+        if e["prev"] != prev:
+            raise LedgerError(f"ledger {path}: entry {n} does not follow entry {n - 1} (the chain is broken there)")
+        out.append(e)
+        prev = entry_hash(ln)
+    hf = Path(head)
+    if hf.exists():
+        try:
+            count, h = hf.read_text().split()[:2]
+            count = int(count)
+        except ValueError:
+            raise LedgerError(f"{hf} is unreadable") from None
+        if len(lines) < count or (count and entry_hash(lines[count - 1]) != h):
+            raise LedgerError(f"ledger {path} is missing or shorter than its recorded head ({count} entries)")
+    return out
+
+
+class _Ledger:
+    """The ledger under an exclusive flock (the whole decide + publish + append runs inside it)."""
+    def __init__(self, ctx):
+        self.path, self.head = ctx.ledger, ctx.head
+
+    def __enter__(self):
+        _dir0700(self.path.parent)
+        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
+            os.fchmod(self.fd, 0o600)
+            self.entries = read(self.path, self.head)
+        except BaseException:
+            os.close(self.fd)
+            raise
+        return self
+
+    def __exit__(self, *exc):
+        os.close(self.fd)
+        return False
+
+    def by_request(self, rid):
+        return next((e for e in self.entries if e["request_id"] == rid), None)
+
+    def append(self, e):
+        lines = _lines(self.path)
+        e = dict(e, seq=len(lines) + 1, prev=entry_hash(lines[-1]) if lines else GENESIS)
+        line = json.dumps(e, sort_keys=True, separators=(",", ":"))
+        os.write(self.fd, (line + "\n").encode())
+        os.fsync(self.fd)
+        tmp = self.head.with_name(self.head.name + ".tmp")
+        hf = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(hf, "w") as f:
+            f.write(f"{e['seq']} {entry_hash(line)}\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, self.head)
+        self.entries.append(e)
+        return e
+
+
+def verify(ledger, head, stick_heads=None, say=print):
+    """0 = the chain and head verify (and every stick head is still in the chain); 1 = a problem (review_ledger's
+    exit codes; 2, the stick not present, is the command's)."""
+    try:
+        entries = read(ledger, head)
+    except LedgerError as e:
+        say(f"PROBLEM: {e}")
+        return 1
+    problems = []
+    if stick_heads is not None:
+        try:
+            problems = rl.verify_heads(ledger, stick_heads)
+        except SiteError as e:
+            problems = [str(e)]
+    for p in problems:
+        say(f"PROBLEM: {p}")
+    if problems:
+        return 1
+    say(f"OK: chain and head match, {len(entries)} entries; "
+        + ("stick anchor OK" if stick_heads is not None else "stick anchor NOT checked (run with --stick)"))
+    return 0
+
+
+def export(stick, ctx=None, now=None):
+    """<stick>/docs-ledger/: a copy of the ledger, verify.txt, and the head appended to heads.txt."""
+    ctx = ctx or Ctx.system()
+    out = Path(stick) / "docs-ledger"
+    out.mkdir(parents=True, exist_ok=True)
+    if ctx.ledger.exists():
+        shutil.copyfile(ctx.ledger, out / "ledger.jsonl")
+    try:
+        read(ctx.ledger, ctx.head)
+        problems = []
+    except LedgerError as e:
+        problems = [str(e)]
+    (out / "verify.txt").write_text("OK: chain and head match\n" if not problems else
+                                    "PROBLEMS:\n" + "".join(f"- {p}\n" for p in problems))
+    count, h = rl.head(ctx.ledger)
+    with open(out / "heads.txt", "a") as f:
+        f.write(f"{count} {h} {_ts(now if now is not None else ctx.now())}\n")
+    return {"head": (count, h), "problems": problems}
+
+
+# ---------- spool, results, quarantine ----------
+
+def _unlink_raw(p):
+    os.unlink(p)
+
+
+def _unlink(ctx, p):
+    """Delete a spool file (it holds a Bearer token); a failure is logged, never raised."""
+    try:
+        _unlink_raw(p)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        ctx.journal({"event": "spool-unlink-failed", "file": p.name, "error": str(e)[:200]})
+
+
+def _read_spool(p):
+    """The spool file's bytes, never through a symlink, at most MAX_SPOOL; None if it is gone."""
+    try:
+        fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0))
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(errno.EINVAL, "not a regular file")
+        data = f.read(MAX_SPOOL + 1)
+    if len(data) > MAX_SPOOL:
+        raise OSError(errno.EFBIG, f"larger than {MAX_SPOOL} bytes")
+    return data
+
+
+def _write_result(ctx, rid, user, state, message, entry=None):
+    """out/<id>.json, root:apache 0640, via a temporary file and rename. Never over another user's result (the app
+    shows a result only to its owner; a request id reused by someone else must not take it over). False = not
+    written because it belongs to someone else."""
+    final = ctx.out / f"{rid}.json"
+    try:
+        fd = os.open(final, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd) as f:
+            cur = json.loads(f.read(1 << 20))
+        if isinstance(cur, dict) and cur.get("user") not in (None, user):
+            return False
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        pass                                              # unreadable or corrupt: replaced below
+    doc = {"request_id": rid, "user": user, "state": state, "message": message}
+    if entry is not None:
+        doc["entry"] = entry
+    tmp = ctx.out / f".{rid}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(doc, f, sort_keys=True)
+            f.flush()
+            os.fchmod(f.fileno(), 0o640)
+            os.fsync(f.fileno())
+        ctx.chown(tmp)
+        os.replace(tmp, final)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return True
+
+
+def _blob(v):
+    """A file's bytes in a record: only their size and sha256 (they can be CUI)."""
+    if not isinstance(v, str):
+        return v
+    try:
+        b = base64.b64decode(v, validate=True)
+    except (binascii.Error, ValueError):
+        b = v.encode("utf-8", "surrogatepass")
+    return {"bytes": len(b), "sha256": _sha(b)}
+
+
+def _sanitize(r):
+    out = {}
+    for k, v in r.items():
+        if k in ("bearer_token", "nc_app_token"):
+            continue
+        out[k] = _blob(v) if k in ("content", "pdf_content") else v
+    return out
+
+
+def _quarantine(ctx, p, raw, req, why):
+    """Set a request aside: a record WITHOUT the Bearer token or the file bytes (an unparsable file only by size and
+    sha256) in quarantine/ (root 0700, never overwritten), a journal line, and a refusal for its owner if it has one.
+    The spool file itself is deleted by the caller whatever happens."""
+    rid = p.name[:32]
+    try:
+        _dir0700(ctx.quarantine)
+        if isinstance(req, dict):
+            rec = _sanitize(req)
+        elif raw is None:
+            rec = {"unreadable": why}
+        elif req is _UNPARSED:
+            rec = {"unparsed": True, "bytes": len(raw), "sha256": _sha(raw)}
+        else:
+            rec = {"not_an_object": type(req).__name__, "bytes": len(raw), "sha256": _sha(raw)}
+        doc = {"quarantined_at": _ts(ctx.now()), "spool_file": p.name, "why": why, "request": rec}
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ctx.now()))
+        for n in range(1000):
+            q = ctx.quarantine / f"{stamp}-{rid}-{n}.json"
+            try:
+                fd = os.open(q, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                continue
+            with os.fdopen(fd, "w") as f:
+                json.dump(doc, f, sort_keys=True)
+            break
+    except Exception as err:                              # noqa: BLE001 - the spool file goes anyway
+        ctx.journal({"event": "quarantine-record-failed", "spool_file": p.name, "error": str(err)[:200]})
+    user = req.get("user") if isinstance(req, dict) else None
+    ctx.journal({"event": "quarantine", "request_id": rid, "user": user if isinstance(user, str) else None,
+                 "why": why[:300]})
+    if isinstance(user, str) and USER.fullmatch(user):
+        try:
+            _write_result(ctx, rid, user, "refused", "refused: the request could not be processed and was set aside "
+                                                     f"for the ISSO ({why[:200]})")
+        except Exception as err:                          # noqa: BLE001
+            ctx.journal({"event": "result-write-failed", "request_id": rid, "error": str(err)[:200]})
+    return Result("refused", f"quarantined: {why}", None)
+
+
+_UNPARSED = object()
+
+
+def purge_quarantine(ctx=None):
+    """Remove every quarantine record (after the ISSO has looked at them; each was logged when it was made). Root."""
+    if os.geteuid() != 0:
+        raise SiteError("doc-ledger purge-quarantine must run as root (sudo)")
+    ctx = ctx or Ctx.system()
+    n = 0
+    if ctx.quarantine.exists():
+        for q in sorted(ctx.quarantine.iterdir()):
+            if q.is_file() and not q.is_symlink():
+                q.unlink()
+                n += 1
+    ctx.journal({"event": "quarantine-purged", "count": n})
+    return n
+
+
+# ---------- one request ----------
+
+def _shape(r):
+    """None if the request has the shape chp_ledger writes, else what is wrong."""
+    k = r.get("kind")
+    if k not in KINDS:
+        return "unknown kind"
+    if r.get("auth") not in AUTHS:
+        return "unknown auth"
+    fid = r.get("file_id")
+    if not isinstance(fid, int) or isinstance(fid, bool) or fid <= 0:
+        return "file_id is not a file id"
+    t = r.get("target")
+    if t not in ("file", "folder"):
+        return "target is not file or folder"
+    name = r.get("name")
+    if t == "folder":
+        if not isinstance(name, str) or not name or len(name.encode()) > 255 or name in (".", "..") \
+                or any(c in name for c in "/\\") or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            return "name is not one valid file name"
+    elif name not in (None, ""):
+        return "a file target has no name"
+    if (k == "checkout" and t != "file") or (k == "new" and t != "folder"):
+        return f"{k} names the wrong kind of target"
+    s = r.get("sha256") or ""
+    if not isinstance(s, str) or (k in ("approve", "override", "publish")) != bool(HEX64.fullmatch(s)) \
+            or (s and not HEX64.fullmatch(s)):
+        return "sha256 is missing or not 64 hex"
+    for f in ("reason", "notes"):
+        v = r.get(f)
+        if v is not None and (not isinstance(v, str) or len(v.encode()) > MAX_TEXT or "\0" in v):
+            return f"{f} is not valid text"
+    for f in ("content", "pdf_content"):
+        v = r.get(f)
+        if (k == "publish") != isinstance(v, str) or (v is not None and not isinstance(v, str)):
+            return f"{f} is missing or not allowed"
+    if r["auth"] == "bearer":
+        tok = r.get("bearer_token")
+        if not isinstance(tok, str) or not tok or len(tok) > MAX_TOKEN or any(c.isspace() for c in tok):
+            return "the Bearer token is missing or malformed"
+    return None
+
+
+def process_one(spool_path, ctx=None):
+    """One spool file -> Result(state, message, entry|None). Writes out/<id>.json before the spool file is deleted;
+    the spool file is always deleted (only names <32 hex>.json are ever touched)."""
+    ctx = ctx or Ctx.system()
+    p = Path(spool_path)
+    if not REQ_NAME.fullmatch(p.name):
+        return Result("refused", f"{p.name!r} is not a request file name (ignored)", None)
+    raw = req = None
+    try:
+        try:
+            raw = _read_spool(p)
+        except OSError as e:
+            why = "a symbolic link (not followed)" if e.errno == errno.ELOOP else f"unreadable ({e.strerror or e})"
+            return _quarantine(ctx, p, None, None, why)
+        if raw is None:
+            return Result("refused", "the request is gone", None)
+        try:
+            req = json.loads(raw)
+        except ValueError:
+            return _quarantine(ctx, p, raw, _UNPARSED, "not valid JSON")
+        if not isinstance(req, dict):
+            return _quarantine(ctx, p, raw, req, "not a JSON object")
+        rid = p.name[:32]
+        if req.get("request_id") != rid:
+            return _quarantine(ctx, p, raw, {k: v for k, v in req.items() if k != "user"},
+                               "its request_id does not match its file name")
+        user = req.get("user")
+        if not isinstance(user, str) or not USER.fullmatch(user):
+            return _quarantine(ctx, p, raw, {k: v for k, v in req.items() if k != "user"}, "no valid user")
+        bad = _shape(req)
+        if bad:
+            return _quarantine(ctx, p, raw, req, bad)
+        try:
+            return _handle(ctx, rid, req)
+        except Exception as err:                          # noqa: BLE001 - never crash, never loop
+            return _quarantine(ctx, p, raw, req, f"internal error: {type(err).__name__}: {str(err)[:200]}")
+    finally:
+        _unlink(ctx, p)
+
+
+def process(ctx=None):
+    """Every request in the spool, oldest first."""
+    ctx = ctx or Ctx.system()
+    names = []
+    try:
+        with os.scandir(ctx.spool) as it:
+            for d in it:
+                if REQ_NAME.fullmatch(d.name):
+                    try:
+                        names.append((d.stat(follow_symlinks=False).st_mtime, d.name))
+                    except OSError:
+                        continue
+    except FileNotFoundError:
+        return []
+    return [process_one(ctx.spool / n, ctx) for _, n in sorted(names)]
+
+
+def _answer(ctx, rid, user, state, message, entry=None):
+    try:
+        if not _write_result(ctx, rid, user, state, message, entry):
+            ctx.journal({"event": "result-not-written", "request_id": rid, "user": user,
+                         "why": "the result belongs to another user"})
+    except Exception as err:                              # noqa: BLE001 - after an append: still "done"
+        ctx.journal({"event": "result-write-failed", "request_id": rid, "error": str(err)[:200]})
+    return Result(state, message, entry)
+
+
+def _handle(ctx, rid, r):
+    user, kind = r["user"], r["kind"]
+
+    # 1. a request id already appended: its entry (before Kanidm: a re-send with an expired token is still "done")
+    try:
+        with _Ledger(ctx) as led:
+            prior = led.by_request(rid)
+    except LedgerError as e:
+        return _broken(ctx, rid, user, e)
+    if prior is not None:
+        return _prior(ctx, rid, user, prior)
+
+    # 2. identity: approve and override need a Bearer that Kanidm verifies for this very user
+    ident = {"sub": None, "session_id": None}
+    if kind in ("approve", "override") and r["auth"] != "bearer":
+        how = {"app-password": "an app password", "session": "a browser session"}[r["auth"]]
+        return _refused(ctx, rid, r, f"refused: {kind} needs a Kanidm-verified Bearer sign-in (chp-site doc login); "
+                                     f"this request came with {how}, which cannot {kind}")
+    if r["auth"] == "bearer":
+        try:
+            ident = _verify_bearer(ctx, r)
+        except _Retry as e:
+            ctx.journal({"event": "retry", "request_id": rid, "user": user, "kind": kind, "why": str(e)[:200]})
+            return _answer(ctx, rid, user, "retry", str(e))
+        except _Refuse as e:
+            return _refused(ctx, rid, r, str(e))
+
+    # 3. under the lock: decide, act, append
+    try:
+        with _Ledger(ctx) as led:
+            prior = led.by_request(rid)
+            if prior is not None:
+                return _prior(ctx, rid, user, prior)
+            try:
+                e = _decide_and_act(ctx, led, r, ident)
+            except _Refuse as err:
+                return _refused(ctx, rid, r, str(err))
+            except StoreError as err:
+                return _refused(ctx, rid, r, f"refused: the document server could not do it ({str(err)[:300]}); "
+                                             "nothing was recorded; run the command again")
+            e = led.append(e)
+    except LedgerError as err:
+        return _broken(ctx, rid, user, err)
+    ctx.journal({"event": "ledger", **e})
+    return _answer(ctx, rid, user, "done", _done_text(e), e)
+
+
+def _done_text(e):
+    if e["kind"] == "publish":
+        return f"published {e['path']} as {e['cr']} (ledger entry {e['seq']})"
+    return f"{e['kind']} recorded (ledger entry {e['seq']})"
+
+
+def _prior(ctx, rid, user, prior):
+    if prior["user"] != user:
+        ctx.journal({"event": "refused", "request_id": rid, "user": user, "why": "request id already used"})
+        return Result("refused", "refused: that request id is already used", None)
+    return _answer(ctx, rid, user, "done", _done_text(prior), prior)
+
+
+def _broken(ctx, rid, user, err):
+    ctx.journal({"event": "ledger-broken", "request_id": rid, "error": str(err)[:300]})
+    return _answer(ctx, rid, user, "refused", "refused: the document ledger does not verify, so nothing can be "
+                                              "recorded; the ISSO must restore it (chp-site doc-ledger verify)")
+
+
+def _refused(ctx, rid, r, message):
+    ctx.journal({"event": "refused", "request_id": rid, "user": r["user"], "kind": r["kind"],
+                 "file_id": r["file_id"], "message": message[:500]})
+    return _answer(ctx, rid, r["user"], "refused", message)
+
+
+def _verify_bearer(ctx, r):
+    url = ctx.conf.get("KANIDM_USERINFO_URL", "")
+    client = ctx.conf.get("DOC_OIDC_CLIENT") or "chp-doc"
+    if not url:
+        raise _Refuse("refused: KANIDM_USERINFO_URL is not set in /etc/chp/documents.conf (run chp-site documents enable)")
+    try:
+        ui = ctx.userinfo(url, r["bearer_token"])
+    except KanidmUnavailable as e:
+        raise _Retry(f"pending: Kanidm could not be reached to check your sign-in ({str(e)[:100]}); nothing was "
+                     "recorded; run the command again in a minute") from None
+    except TokenRejected:
+        raise _Retry("pending: Kanidm did not accept your sign-in token (it may have expired); nothing was recorded; "
+                     "run the command again (it signs in again if needed)") from None
+    except KanidmRefused as e:
+        raise _Refuse(f"refused: {e}") from None
+    name = ui.get("preferred_username")
+    if name != r["user"]:
+        raise _Refuse(f"refused: the Bearer token belongs to {name!r}, but NextCloud signed this request in as "
+                      f"{r['user']}")
+    aud = ui.get("aud")
+    auds = [aud] if isinstance(aud, str) else (aud if isinstance(aud, list) else [])
+    if client not in auds and ui.get("azp") != client:
+        raise _Refuse(f"refused: the Bearer token was not issued to {client}")
+    sub = ui.get("sub")
+    sid = ui.get("sid")
+    return {"sub": sub if isinstance(sub, str) else None, "session_id": sid if isinstance(sid, str) else None}
+
+
+# ---------- the rules ----------
+
+class _Target(NamedTuple):
+    folder: int                     # the area folder that holds the document
+    area: int                       # the Compliance area id
+    cui: bool
+    name: str
+    node: Optional[Node]            # the named file (a file target), else None
+    path: str
+    doc: str
+    series: str
+    parts: object
+
+
+def _ids(ctx, *keys):
+    out = []
+    for k in keys:
+        v = str(ctx.conf.get(k, "")).strip()
+        if not v.isdigit():
+            raise _Refuse(f"refused: {k} is not set in /etc/chp/documents.conf (run chp-site documents enable)")
+        out.append(int(v))
+    return out
+
+
+def _series(ctx, name):
+    try:
+        parts = ctx.marking.parse_name(name)
+    except Exception as e:                                # noqa: BLE001 - the name rule's own message
+        raise _Refuse(f"refused: {name}: the name does not follow the name rule "
+                      f"(<CUI_|FCI_><title>_vX.Y[-DRAFT]): {str(e)[:200]}") from None
+    title = getattr(parts, "title", None)
+    if not title or not getattr(parts, "version", None):
+        raise _Refuse(f"refused: {name}: the name does not follow the name rule (<CUI_|FCI_><title>_vX.Y[-DRAFT])")
+    return f"{getattr(parts, 'prefix', '') or ''}{title}{os.path.splitext(name)[1].lower()}", parts
+
+
+def _target(ctx, r):
+    """Re-check the area here (the app's check is a pre-filter): the folder must be a Compliance area or inside one,
+    and not a Superseded area or inside one, by file ids from the file cache."""
+    comp = _ids(ctx, "CUI_COMPLIANCE_ID", "INTERNAL_COMPLIANCE_ID")
+    sup = _ids(ctx, "CUI_SUPERSEDED_ID", "INTERNAL_SUPERSEDED_ID")
+    generic = "refused: not a controlled document (it is not in CUI/Compliance or Internal/Compliance)"
+    node = ctx.store.info(r["file_id"])
+    if node is None:
+        raise _Refuse(generic)
+    if r["target"] == "file":
+        if node.type != "file" or not node.ancestors:
+            raise _Refuse(generic)
+        folder, chain, name, path = node.ancestors[0], node.ancestors, _nfc(node.name), node.path
+    else:
+        if node.type != "folder":
+            raise _Refuse(generic)
+        folder, chain, name = node.file_id, (node.file_id,) + tuple(node.ancestors), _nfc(r["name"])
+        path = f"{node.path}/{name}"
+    if any(i in sup for i in chain):
+        raise _Refuse(generic)
+    area = next((i for i in chain if i in comp), None)
+    if area is None:
+        raise _Refuse(generic)
+    series, parts = _series(ctx, name)
+    return _Target(folder, area, area == comp[0], name, node if r["target"] == "file" else None, path,
+                   f"{folder}/{series}", series, parts)
+
+
+def _cycle(entries, doc):
+    mine = [e for e in entries if e["doc"] == doc]
+    n = 1 + sum(e["kind"] == "publish" for e in mine)
+    return n, [e for e in mine if e["cycle"] == n]
+
+
+def _authors(cyc):
+    out = []
+    for e in cyc:
+        if e["kind"] in ("new", "checkout") and e["user"] not in out:
+            out.append(e["user"])
+    return out
+
+
+def _approvers(ctx):
+    isso = (ctx.site.get("DOC_ISSO_ACCOUNT") or "").strip()
+    appr = [a for a in (ctx.site.get("DOC_APPROVER_ACCOUNTS") or []) if a]
+    return isso, appr
+
+
+def _current(ctx, folder, series, exclude=None):
+    out = []
+    for n in ctx.store.children(folder):
+        if n.type != "file" or n.file_id == exclude:
+            continue
+        try:
+            s, _ = _series(ctx, _nfc(n.name))
+        except _Refuse:
+            continue
+        if s == series:
+            out.append(n)
+    return out
+
+
+def _decide_and_act(ctx, led, r, ident):
+    t = _target(ctx, r)
+    kind, user = r["kind"], r["user"]
+    cycle, cyc = _cycle(led.entries, t.doc)
+    starts = [i for i, e in enumerate(cyc) if e["kind"] in ("new", "checkout")]
+    authors = _authors(cyc)
+    e = {"ts": _ts(ctx.now()), "kind": kind, "user": user, "auth": r["auth"], "kanidm_sub": ident["sub"],
+         "session_id": ident["session_id"], "request_id": r["request_id"], "doc": t.doc,
+         "file_id": t.node.file_id if t.node else None, "path": t.path, "sha256": r.get("sha256") or "",
+         "cycle": cycle}
+    if r.get("notes"):
+        e["notes"] = r["notes"]
+
+    if kind == "checkout":
+        e["sha256"] = _sha(ctx.store.read(t.node.file_id))   # freshness is recorded by the server, never the client
+        return e
+
+    if kind == "new":
+        if cyc:
+            raise _Refuse(f"refused: {t.series} already has a change in progress (started by {authors[0] if authors else cyc[0]['user']}); "
+                          "use chp-site doc checkout")
+        cur = _current(ctx, t.folder, t.series)
+        if cur:
+            raise _Refuse(f"refused: {t.series} already exists in this area as {cur[0].name}; use chp-site doc "
+                          "checkout to change it")
+        return e
+
+    if kind in ("approve", "override"):
+        isso, appr = _approvers(ctx)
+        if not isso and not appr:
+            raise _Refuse("refused: approvals are not set up on this site: DOC_ISSO_ACCOUNT and DOC_APPROVER_ACCOUNTS "
+                          "are empty in site.conf (set them on the site stick and apply it)")
+        if kind == "approve":
+            if user not in [isso] + appr:
+                raise _Refuse(f"refused: {user} is not an approver (DOC_ISSO_ACCOUNT, DOC_APPROVER_ACCOUNTS)")
+            if not starts:
+                raise _Refuse(f"refused: nothing to approve: {t.series} has no checkout or new in this cycle")
+            if user in authors:
+                did = "checked it out" if any(x["user"] == user and x["kind"] == "checkout" for x in cyc) \
+                    else "created it"
+                raise _Refuse(f"refused: {user} {did} in this cycle, so {user} is an author of this change (authors: "
+                              f"{', '.join(authors)}); an approver must be someone else (a reviewer reads the "
+                              "document without checking it out)")
+            return e
+        if not isso:
+            raise _Refuse("refused: no ISSO is set (DOC_ISSO_ACCOUNT is empty), so nobody can override")
+        if user != isso:
+            raise _Refuse(f"refused: only the ISSO (DOC_ISSO_ACCOUNT, {isso}) may override")
+        if not (r.get("reason") or "").strip():
+            raise _Refuse("refused: an override needs a reason (--reason)")
+        others = [a for a in appr if a != isso]
+        if others:
+            raise _Refuse(f"refused: not a one-person site: other approver account(s) exist ({', '.join(others)}); "
+                          "ask one of them to approve")
+        if not starts:
+            raise _Refuse(f"refused: nothing to approve: {t.series} has no checkout or new in this cycle")
+        e["reason"] = r["reason"]
+        return e
+
+    return _publish(ctx, led, r, t, e, cyc, starts, authors)
+
+
+# ---------- publish ----------
+
+def _b64(v, what):
+    try:
+        return base64.b64decode(v, validate=True)
+    except (binascii.Error, ValueError):
+        raise _Refuse(f"refused: the {what} is not valid base64") from None
+
+
+def _undo(store, undo):
+    failed = []
+    for step in reversed(undo):
+        try:
+            if step[0] == "delete":
+                store.delete(step[1])
+            else:
+                store.move(step[1], step[2])
+        except Exception as e:                            # noqa: BLE001 - try every step, report what failed
+            failed.append(f"{step[0]} {step[1]}: {str(e)[:120]}")
+    return failed
+
+
+def _publish(ctx, led, r, t, e, cyc, starts, authors):
+    """Server-side publish, under the ledger lock: compare-and-write of the Compliance area. Any failure before the
+    append undoes the writes already made; nothing is ledgered as published."""
+    s = ctx.store
+    user, name = r["user"], t.name
+    if getattr(t.parts, "draft", False) or "-DRAFT" in name:
+        raise _Refuse(f"refused: {name} is still -DRAFT: rename it without -DRAFT (the approved file, unchanged), "
+                      "then publish")
+    content = _b64(r["content"], "file content")
+    pdf = _b64(r["pdf_content"], "reader PDF")
+    sha = _sha(content)
+    if sha != r["sha256"]:
+        raise _Refuse("refused: the file sent is not the one this request names (its sha256 differs)")
+    if user not in authors:
+        raise _Refuse(f"refused: {user} is not an author of this change (only {', '.join(authors) or 'nobody'} may "
+                      "publish it: they created it or checked it out in this cycle)")
+    after = cyc[starts[-1] + 1:] if starts else []
+    if not any(x["sha256"] == sha and ((x["kind"] == "approve" and x["user"] not in authors) or x["kind"] == "override")
+               for x in after):
+        raise _Refuse("refused: no valid approval of this exact file (sha256) after the cycle's last checkout, by an "
+                      "approver who is not an author")
+    is_pdf = os.path.splitext(name)[1].lower() == ".pdf"
+    if is_pdf and pdf != content:
+        raise _Refuse("refused: a PDF document is its own reader copy: the reader PDF sent must be the same file")
+    sup_folder = _ids(ctx, "CUI_SUPERSEDED_ID" if t.cui else "INTERNAL_SUPERSEDED_ID")[0]
+
+    # 1-2. the canonical copy now (read by the server) against this cycle's server-recorded checkout
+    cur = _current(ctx, t.folder, t.series)
+    if len(cur) > 1:
+        raise _Refuse(f"refused: {t.series} has {len(cur)} current versions in the area "
+                      f"({', '.join(n.name for n in cur)}); an administrator must resolve that first")
+    old = cur[0] if cur else None
+    checkouts = [x for x in cyc if x["kind"] == "checkout"]
+    last_co = checkouts[-1] if checkouts else None
+    supersedes = None
+    if old is not None:
+        if _nfc(old.name) == name:
+            raise _Refuse(f"refused: {name} is the current version's name: a published file is never changed in "
+                          "place; give the new version a new version number")
+        old_sha = _sha(s.read(old.file_id))
+        if last_co is None or last_co["file_id"] != old.file_id or last_co["sha256"] != old_sha:
+            raise _Refuse(f"refused: the current version {old.name} changed since the cycle's last checkout (it is "
+                          "not the copy that was checked out); check it out again")
+        supersedes = old.file_id
+    elif last_co is not None:
+        # the checked-out version is gone from the area: allowed only if an administrator already moved it, unchanged,
+        # to Superseded (the way out of DEGRADED mode)
+        moved = s.info(last_co["file_id"])
+        if moved is None or sup_folder not in ((moved.file_id,) + tuple(moved.ancestors)) \
+                or _sha(s.read(moved.file_id)) != last_co["sha256"]:
+            raise _Refuse(f"refused: the version checked out in this cycle ({last_co['path']}) is no longer in the "
+                          "area; check out the current version again")
+        supersedes = moved.file_id
+    names = {_nfc(n.name) for n in s.children(t.folder)}
+    sup_names = {_nfc(n.name) for n in s.children(sup_folder)}
+    pdf_name = os.path.splitext(name)[0] + ".pdf"
+    if name in names or (not is_pdf and pdf_name in names):
+        raise _Refuse(f"refused: {name if name in names else pdf_name} already exists in the area")
+    old_pdf = None
+    if old is not None:
+        if _nfc(old.name) in sup_names:
+            raise _Refuse(f"refused: {old.name} already exists in Superseded; an administrator must resolve that first")
+        if not is_pdf:
+            on = os.path.splitext(_nfc(old.name))[0] + ".pdf"
+            old_pdf = next((n for n in s.children(t.folder) if n.type == "file" and _nfc(n.name) == on), None)
+            if old_pdf is not None and on in sup_names:
+                raise _Refuse(f"refused: {on} already exists in Superseded; an administrator must resolve that first")
+
+    # 3 was the sha256 check above. 4. the marks, checked again here, on the bytes received and the reader PDF
+    _check_marks(ctx, t, name, content, pdf_name if not is_pdf else None, pdf)
+
+    # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure
+    undo = []
+    try:
+        if old is not None:
+            now = s.info(old.file_id)
+            if now is None or now.etag != old.etag or _sha(s.read(old.file_id)) != old_sha \
+                    or now.ancestors[:1] != (t.folder,):
+                raise _Refuse(f"refused: the current version {old.name} changed while publishing (a second publish or "
+                              "an administrator's edit); nothing was written; check it out again")
+        new = s.put(t.folder, name, content)
+        undo.append(("delete", new.file_id))
+        if _sha(s.read(new.file_id)) != sha:
+            raise _Refuse("refused: the copy written does not read back as the approved file")
+        if old is not None:
+            try:
+                s.move(old.file_id, sup_folder)
+            except Degraded as err:
+                raise _Refuse(f"refused: the old version {old.name} could not be moved to Superseded: {DEGRADED} "
+                              f"({str(err)[:160]}). Nothing was published (the new copy was removed). An administrator "
+                              "moves the old version by hand (see the guide), then run publish again") from None
+            undo.append(("move", old.file_id, t.folder))
+            if old_pdf is not None:
+                try:
+                    s.move(old_pdf.file_id, sup_folder)
+                except Degraded as err:
+                    raise _Refuse(f"refused: the old reader PDF {old_pdf.name} could not be moved to Superseded: "
+                                  f"{DEGRADED} ({str(err)[:160]}). Nothing was published") from None
+                undo.append(("move", old_pdf.file_id, t.folder))
+        if t.cui and CUI_TAG not in s.tags(new.file_id):
+            raise _Refuse(f"refused: {name} did not get its {CUI_TAG} tag in the CUI area (chp_foldertag); nothing was "
+                          "published (undone); check chp-site documents status")
+        if not is_pdf:
+            pn = s.put(t.folder, pdf_name, pdf)
+            undo.append(("delete", pn.file_id))
+            if _sha(s.read(pn.file_id)) != _sha(pdf):
+                raise _Refuse("refused: the reader PDF written does not read back as the one sent")
+            if t.cui and CUI_TAG not in s.tags(pn.file_id):
+                raise _Refuse(f"refused: {pdf_name} did not get its {CUI_TAG} tag; nothing was published (undone)")
+    except (_Refuse, StoreError) as err:
+        failed = _undo(s, undo)
+        msg = str(err) if isinstance(err, _Refuse) else (f"refused: the document server could not publish "
+                                                         f"({str(err)[:300]}); nothing was published")
+        if failed:
+            ctx.journal({"event": "publish-undo-failed", "request_id": r["request_id"], "doc": t.doc,
+                         "failed": failed})
+            msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
+        raise _Refuse(msg) from None
+    except Exception:
+        failed = _undo(s, undo)
+        if failed:
+            ctx.journal({"event": "publish-undo-failed", "request_id": r["request_id"], "doc": t.doc,
+                         "failed": failed})
+        raise
+
+    # 9. the entry (appended by the caller, still under the lock)
+    year = time.gmtime(ctx.now()).tm_year
+    n = 1 + sum(1 for x in led.entries if x["kind"] == "publish" and x["ts"][:4] == str(year))
+    e.update(file_id=new.file_id, path=new.path, sha256=sha, cr=f"CR-{year}-{n:04d}", pdf_sha256=_sha(pdf))
+    if supersedes is not None:
+        e["supersedes"] = supersedes
+    return e
+
+
+def _check_marks(ctx, t, name, content, pdf_name, pdf):
+    """marking.check on the bytes received (and the reader PDF), in a root-only work folder that is always emptied."""
+    _dir0700(ctx.work)
+    d = Path(tempfile.mkdtemp(dir=ctx.work))
+    try:
+        values = ctx.mark_values()
+        problems = []
+        for fname, data in ((name, content),) + (((pdf_name, pdf),) if pdf_name else ()):
+            f = d / fname
+            fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+            rep = ctx.marking.check(f, t.cui, values)
+            if not rep.ok:
+                what = "the reader PDF " + fname if fname == pdf_name else fname
+                problems += [f"{what}: {p}" for p in (rep.problems or ["marking check failed"])]
+        if problems:
+            raise _Refuse("refused: the marking check on the server failed: " + "; ".join(problems)[:1500])
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# ---------- NextCloud ----------
+
+class OccStore:
+    """NextCloud for the appender. Reads come from the file cache (SQL, as apache over the socket) and the canonical
+    bytes from the team folder's storage on the disk (as root). Writes go through `occ files:put` (bytes on stdin),
+    `files:move` and `files:delete`, as the NextCloud account DOC_PUBLISH_USER (documents.conf): a local account with
+    no usable password whose groupfolders ACL alone may write the Compliance and Superseded areas. Through occ, the
+    writes fire NextCloud's own events, so chp_foldertag tags them and the audit log records them. (Not WebDAV: that
+    needs a stored credential for an account with access to CUI.)"""
+    OCC = ["runuser", "-u", "apache", "--", "/usr/bin/php", "-d", "apc.enable_cli=1", "-d", "memory_limit=512M",
+           "/usr/lib/nextcloud/occ"]
+
+    def __init__(self, conf, run=subprocess.run, sql=None, data="/data/nextcloud/data/__groupfolders"):
+        from . import documents as D
+        self.user = (conf.get("DOC_PUBLISH_USER") or "").strip()
+        self.run = run
+        self.sql = sql or D.sql_runner(run)
+        self.data = Path(data)
+
+    def _occ(self, *argv, data=b""):
+        if not self.user:
+            raise StoreError("server-side publish is not set up: documents.conf has no DOC_PUBLISH_USER (run chp-site "
+                             "documents enable)")
+        r = self.run(self.OCC + list(argv), input=data, capture_output=True, timeout=600)
+        if r.returncode != 0:
+            text = (r.stderr or b"").decode("utf-8", "replace") + (r.stdout or b"").decode("utf-8", "replace")
+            last = (text.strip().splitlines() or [f"exit {r.returncode}"])[-1][:300]
+            raise (Degraded if "md5" in text.lower() else StoreError)(f"occ {argv[0]}: {last}")
+
+    def _row(self, fid):
+        rows = self.sql(
+            "SELECT f.fileid, f.parent, f.name, f.path, f.etag, m.mimetype, g.folder_id, g.mount_point "
+            "FROM oc_filecache f JOIN oc_mimetypes m ON m.id = f.mimetype "
+            f"JOIN oc_group_folders g ON g.storage_id = f.storage WHERE f.fileid = {int(fid)}")
+        return rows[0] if rows else None
+
+    def info(self, fid):
+        row = self._row(fid)
+        if row is None:
+            return None
+        anc = self.sql(
+            "WITH RECURSIVE a(fileid, parent, storage, d) AS (SELECT fileid, parent, storage, 0 FROM oc_filecache "
+            f"WHERE fileid = {int(fid)} UNION ALL SELECT f.fileid, f.parent, f.storage, a.d + 1 FROM oc_filecache f "
+            "JOIN a ON f.fileid = a.parent AND f.storage = a.storage WHERE a.d < 64) "
+            "SELECT fileid, d FROM a WHERE d > 0 ORDER BY d")
+        p = row["path"]
+        rel = p[len("files/"):] if p.startswith("files/") else ("" if p == "files" else p)
+        path = row["mount_point"] + ("/" + rel if rel else "")
+        typ = "folder" if row["mimetype"] == "httpd/unix-directory" else "file"
+        return Node(int(row["fileid"]), typ, row["name"], path, tuple(int(a["fileid"]) for a in anc), row["etag"])
+
+    def children(self, folder):
+        rows = self.sql(f"SELECT fileid FROM oc_filecache WHERE parent = {int(folder)} ORDER BY fileid")
+        return [n for n in (self.info(int(r["fileid"])) for r in rows) if n is not None]
+
+    def read(self, fid):
+        row = self._row(fid)
+        if row is None:
+            raise StoreError(f"file id {fid} is not in the file cache")
+        f = self.data / str(int(row["folder_id"])) / row["path"]
+        try:
+            fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+        except OSError as e:
+            raise StoreError(f"cannot read {row['path']} ({e.strerror or e})") from None
+        with os.fdopen(fd, "rb") as fh:
+            return fh.read()
+
+    def _view(self, node):
+        return f"/{self.user}/files/{node.path}"
+
+    def put(self, folder, name, data):
+        node = self.info(folder)
+        if node is None:
+            raise StoreError(f"folder id {folder} is not in the file cache")
+        self._occ("files:put", "-", f"{self._view(node)}/{name}", data=data)
+        q = name.replace("'", "''")
+        rows = self.sql(f"SELECT fileid FROM oc_filecache WHERE parent = {int(folder)} AND name = '{q}'")
+        if not rows:
+            raise StoreError(f"{name} is not in the file cache after occ files:put")
+        return self.info(int(rows[0]["fileid"]))
+
+    def move(self, fid, folder):
+        node, dest = self.info(fid), self.info(folder)
+        if node is None or dest is None:
+            raise StoreError("the file or the target folder is not in the file cache")
+        self._occ("files:move", self._view(node), f"{self._view(dest)}/{node.name}")
+        return self.info(fid)
+
+    def delete(self, fid):
+        node = self.info(fid)
+        if node is None:
+            return
+        self._occ("files:delete", "--force", self._view(node))
+
+    def tags(self, fid):
+        rows = self.sql("SELECT t.name FROM oc_systemtag_object_mapping m JOIN oc_systemtag t ON t.id = m.systemtagid "
+                        f"WHERE m.objecttype = 'files' AND m.objectid = '{int(fid)}'")
+        return {r["name"] for r in rows}

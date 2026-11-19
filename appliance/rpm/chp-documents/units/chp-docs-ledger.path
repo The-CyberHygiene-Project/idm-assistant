@@ -1,0 +1,16 @@
+[Unit]
+Description=CHP: start the document ledger appender when chp_ledger spools a request
+Documentation=file:///usr/share/doc/chp-documents/README.md
+ConditionPathExists=/etc/chp/documents.conf
+# a spool file that keeps re-triggering (one that cannot be deleted) trips the finite trigger limit: the path unit then
+# fails and the alert fires, instead of starting the appender as root forever (spike fix 5)
+OnFailure=chp-docs-ledger-alert.service
+
+[Path]
+PathExistsGlob=/var/lib/chp-docs/spool/*.json
+Unit=chp-docs-ledger.service
+TriggerLimitIntervalSec=60
+TriggerLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=CHP: document ledger appender (chp-site doc-ledger process; ISO 0.7.0 Plan 3)
+Documentation=file:///usr/share/doc/chp-documents/README.md
+ConditionPathExists=/etc/chp/documents.conf
+After=postgresql.service php-fpm.service
+# finite: a flood of requests (or one that crashes the appender) stops it and alerts; never unlimited restarts as root
+StartLimitIntervalSec=60
+StartLimitBurst=300
+OnFailure=chp-docs-ledger-alert.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/bin/chp-site doc-ledger process
+TimeoutStartSec=15min
+PrivateTmp=yes

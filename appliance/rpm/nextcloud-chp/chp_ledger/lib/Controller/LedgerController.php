@@ -104,13 +104,14 @@ class LedgerController extends OCSController {
 			if (preg_match('/^[0-9a-f]{32}\z/', $request_id) !== 1) {
 				return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 			}
-			$r = $this->spool->result($request_id);
-			if ($r === null) {
-				if (!$this->spool->queued($request_id)) {
-					return $this->refuse(self::REFUSED, Http::STATUS_NOT_FOUND);
-				}
+			// waiting first: a request re-sent after "retry" is waiting while the old retry result is still in out/
+			if ($this->spool->queued($request_id)) {
 				return new DataResponse(['request_id' => $request_id, 'state' => 'queued',
 					'message' => 'queued: waiting for the ledger']);
+			}
+			$r = $this->spool->result($request_id);
+			if ($r === null) {
+				return $this->refuse(self::REFUSED, Http::STATUS_NOT_FOUND);
 			}
 			if (($r['user'] ?? null) !== $uid) {
 				return $this->refuse(self::REFUSED, Http::STATUS_NOT_FOUND);   // someone else's reads as unknown
@@ -211,13 +212,18 @@ class LedgerController extends OCSController {
 			return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 		}
 
-		// a request id already answered: the same user is told to poll; anyone else reads the generic refusal
+		// a request id already answered: the same user is told to poll, except after "retry" (the appender asks for
+		// the request again: Kanidm was unreachable or the token had expired), which is spooled anew under the same
+		// id; anyone else reads the generic refusal
 		$prior = $this->spool->result($id);
 		if ($prior !== null) {
-			if (($prior['user'] ?? null) === $uid) {
+			$mine = ($prior['user'] ?? null) === $uid;
+			if (!$mine) {
+				return $this->refuse(self::REFUSED, Http::STATUS_CONFLICT);
+			}
+			if (($prior['state'] ?? null) !== 'retry') {
 				return new DataResponse(['request_id' => $id, 'state' => 'queued']);
 			}
-			return $this->refuse(self::REFUSED, Http::STATUS_CONFLICT);
 		}
 		$doc = [
 			'request_id' => $id,

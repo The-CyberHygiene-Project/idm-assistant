@@ -1,0 +1,8 @@
+[Unit]
+Description=CHP: alert that the document ledger appender (or its path unit) failed
+
+[Service]
+Type=oneshot
+# one JSON line, SYSLOG_IDENTIFIER=chp-docs-ledger: Wazuh raises it at level 12 (ALERT_HOOK); requests wait in the
+# spool until the ISSO looks (journalctl -u chp-docs-ledger) and runs systemctl reset-failed chp-docs-ledger.path
+ExecStart=/usr/bin/logger -p auth.crit -t chp-docs-ledger -- "{\"event\":\"appender-failed\",\"message\":\"chp-docs-ledger stopped (start or trigger limit, or a crash): document requests are not being processed\"}"

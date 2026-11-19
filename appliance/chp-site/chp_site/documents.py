@@ -95,9 +95,10 @@ APPS_OFF = ("text", "richdocuments", "richdocumentscode", "onlyoffice", "whitebo
 ALWAYS_ENABLED = ("appstore", "cloud_federation_api", "dav", "federatedfilesharing", "files", "lookup_server_connector",
                   "oauth2", "profile", "provisioning_api", "settings", "sharing", "theming", "twofactor_backupcodes",
                   "viewer", "workflowengine")
-# chp-documents-check.timer: the nightly tag check and share canary (Plan 2 round 4, D13: it was never enabled)
+# chp-documents-check.timer: the nightly tag check and share canary (Plan 2 round 4, D13: it was never enabled);
+# chp-docs-ledger.path: the controlled-document appender (Plan 3 Task 4)
 UNITS = ("php-fpm", "httpd", "nextcloud-cron.timer", "chp-nextcloud-backup.timer", "chp-nextcloud-cert-renew.timer",
-         "chp-documents-check.timer")
+         "chp-documents-check.timer", "chp-docs-ledger.path")
 STATUS_UNITS = ("chp-nextcloud-egress.service", "postgresql") + UNITS
 
 
