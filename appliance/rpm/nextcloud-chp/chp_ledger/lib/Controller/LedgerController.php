@@ -101,7 +101,7 @@ class LedgerController extends OCSController {
 				return $this->refuse(self::SIGN_IN, Http::STATUS_UNAUTHORIZED);
 			}
 			$uid = $user->getUID();
-			if (preg_match('/^[0-9a-f]{32}$/', $request_id) !== 1) {
+			if (preg_match('/^[0-9a-f]{32}\z/', $request_id) !== 1) {
 				return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 			}
 			$r = $this->spool->result($request_id);
@@ -138,18 +138,18 @@ class LedgerController extends OCSController {
 	private function accept(string $uid): DataResponse {
 		$id = $this->request->getParam('request_id');
 		$kind = $this->request->getParam('kind');
-		if (!is_string($id) || preg_match('/^[0-9a-f]{32}$/', $id) !== 1
+		if (!is_string($id) || preg_match('/^[0-9a-f]{32}\z/', $id) !== 1
 			|| !is_string($kind) || !in_array($kind, self::KINDS, true)) {
 			return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 		}
 		$fid = $this->request->getParam('file_id');
-		if (!(is_int($fid) && $fid > 0) && !(is_string($fid) && preg_match('/^[1-9][0-9]{0,17}$/', $fid) === 1)) {
+		if (!(is_int($fid) && $fid > 0) && !(is_string($fid) && preg_match('/^[1-9][0-9]{0,17}\z/', $fid) === 1)) {
 			return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 		}
 		$fileId = (int)$fid;
 		$sha = $this->request->getParam('sha256') ?? '';
 		$needSha = in_array($kind, ['approve', 'override', 'publish'], true);
-		if (!is_string($sha) || ($needSha && preg_match('/^[0-9a-f]{64}$/', $sha) !== 1) || (!$needSha && $sha !== '')) {
+		if (!is_string($sha) || ($needSha && preg_match('/^[0-9a-f]{64}\z/', $sha) !== 1) || (!$needSha && $sha !== '')) {
 			return $this->refuse(self::REFUSED, Http::STATUS_BAD_REQUEST);
 		}
 		$notes = self::text($this->request->getParam('notes'));

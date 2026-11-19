@@ -220,9 +220,10 @@ def test_spool_file_written_exclusive_0640_and_linked():
 def test_request_id_and_fields_validated():
     c = code(CTL)
     acc = method(c, "accept")
-    assert "preg_match('/^[0-9a-f]{32}$/', $id) !== 1" in acc
+    assert "preg_match('/^[0-9a-f]{32}\\z/', $id) !== 1" in acc
     assert "public const KINDS = ['checkout', 'new', 'approve', 'override', 'publish'];" in c
-    assert "preg_match('/^[0-9a-f]{64}$/', $sha) !== 1" in acc
+    assert "preg_match('/^[0-9a-f]{64}\\z/', $sha) !== 1" in acc
+    assert "preg_match('/^[1-9][0-9]{0,17}\\z/', $fid) === 1" in acc
     assert "in_array($kind, ['approve', 'override', 'publish'], true)" in acc       # sha256 required
     assert "if ($kind === 'override' && $reason === '')" in acc                       # override needs a reason
     # checkout is of a file; new is a name in an area folder; the others either
@@ -234,7 +235,7 @@ def test_request_id_and_fields_validated():
 def test_result_read_only_from_out_and_only_for_its_user():
     c = code(CTL)
     res = method(c, "result")
-    assert "preg_match('/^[0-9a-f]{32}$/', $request_id) !== 1" in res
+    assert "preg_match('/^[0-9a-f]{32}\\z/', $request_id) !== 1" in res
     assert "($r['user'] ?? null) !== $uid" in res
     assert "['done', 'refused', 'retry']" in res
     assert "'state' => 'queued'" in res
@@ -300,3 +301,15 @@ def test_spec_bundles_the_app_and_its_directories():
     assert "chp_ledger %{ledger_ver}" in section("description")
     assert re.search(r"^Release:\s+6\.chp%\{\?dist\}$", SPEC, re.M)
     assert re.search(r"^\* .* - 35\.0\.3-6\.chp\n- chp_ledger 1\.0\.0", section("changelog"))
+
+
+def test_no_validation_pattern_ends_in_a_bare_dollar():
+    # Fix round 1: PCRE's $ (without the D flag) also matches before a final newline, so "<32 hex>\n" passed as a
+    # request id and made spool/<hex>\n.json, which the appender never picks up. Anchor the end with \z.
+    pats = []
+    for p in PHP:
+        for pat in re.findall(r"preg_match\('([^']*)'", p.read_text()):
+            pats.append((p.name, pat))
+            body, _, flags = pat[1:].rpartition(pat[0])
+            assert not (body.endswith("$") and "D" not in flags), (p.name, pat)
+    assert len([x for x in pats if x[1].endswith("\\z/")]) == 4, pats
