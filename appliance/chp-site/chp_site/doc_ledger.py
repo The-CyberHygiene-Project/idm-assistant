@@ -365,11 +365,14 @@ class _Ledger:
         back off (ftruncate to the size before it) and _NotAppended is raised: nothing was appended. Once the line is
         fsynced the entry IS appended: a failure to write the head is only journalled (the head is a witness that
         may lag; the next append rewrites it)."""
-        lines = _lines(self.path)
-        e = dict(e, seq=len(lines) + 1, prev=entry_hash(lines[-1]) if lines else GENESIS)
-        line = json.dumps(e, sort_keys=True, separators=(",", ":"))
-        data = (line + "\n").encode()
-        size = os.fstat(self.fd).st_size
+        try:                                              # nothing written yet: any failure here = not appended
+            lines = _lines(self.path)
+            e = dict(e, seq=len(lines) + 1, prev=entry_hash(lines[-1]) if lines else GENESIS)
+            line = json.dumps(e, sort_keys=True, separators=(",", ":"))
+            data = (line + "\n").encode()
+            size = os.fstat(self.fd).st_size
+        except (OSError, SiteError, ValueError, TypeError) as err:
+            raise _NotAppended(err, True) from None
         try:
             _write_line(self.fd, data)
             os.fsync(self.fd)
@@ -758,7 +761,7 @@ def _handle(ctx, rid, r):
                 if failed:
                     msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
                 if not err.cut:
-                    ctx.journal({"event": "ledger-partial-line", "request_id": rid, "error": str(err)[:200]})
+                    _safe(ctx.journal, {"event": "ledger-partial-line", "request_id": rid, "error": str(err)[:200]})
                     msg += "; the ledger may end in a partial line: the ISSO must check it (chp-site doc-ledger verify)"
                 return _refused(ctx, rid, r, msg)
     except LedgerError as err:
@@ -793,7 +796,7 @@ def _broken(ctx, rid, user, err):
 
 
 def _refused(ctx, rid, r, message):
-    ctx.journal({"event": "refused", "request_id": rid, "user": r["user"], "kind": r["kind"],
+    _safe(ctx.journal, {"event": "refused", "request_id": rid, "user": r["user"], "kind": r["kind"],
                  "file_id": r["file_id"], "message": message[:500]})
     return _answer(ctx, rid, r["user"], "refused", message)
 
@@ -997,11 +1000,54 @@ def _b64(v, what):
         raise _Refuse(f"refused: the {what} is not valid base64") from None
 
 
+def _put_step(s, undo, folder, name, data):
+    """files:put, and its undo step. A put that fails may still have landed (occ killed at OCC_TIMEOUT after the
+    server wrote the file): the area is probed by name (the name was free before) and a landed file gets its undo
+    step; a probe that fails too records the outcome as unknown, so the undo reports itself INCOMPLETE."""
+    try:
+        n = s.put(folder, name, data)
+    except Exception as err:
+        try:
+            landed = next((c for c in s.children(folder) if c.type == "file" and _nfc(c.name) == name), None)
+        except Exception as perr:                         # noqa: BLE001
+            undo.append(("unknown", f"files:put {name}: failed ({str(err)[:80]}) and its outcome is unknown "
+                                    f"({str(perr)[:80]}): {name} may be in the area"))
+        else:
+            if landed is not None:
+                undo.append(("delete", landed.file_id))
+        raise
+    undo.append(("delete", n.file_id))
+    return n
+
+
+def _move_step(s, undo, node, dest, back):
+    """files:move to `dest`, and its undo step (move back to `back`). A failed move is probed by file id: a move that
+    landed gets its undo step; an unknown outcome makes the undo INCOMPLETE."""
+    try:
+        s.move(node.file_id, dest)
+    except Exception as err:
+        try:
+            now = s.info(node.file_id)
+        except Exception as perr:                         # noqa: BLE001
+            undo.append(("unknown", f"files:move {node.name}: failed ({str(err)[:80]}) and its outcome is unknown "
+                                    f"({str(perr)[:80]}): it may be in Superseded"))
+        else:
+            if now is not None and now.ancestors[:1] == (dest,):
+                undo.append(("move", node.file_id, back))
+            elif now is None:
+                undo.append(("unknown", f"files:move {node.name}: failed ({str(err)[:80]}) and file id "
+                                        f"{node.file_id} is no longer found"))
+        raise
+    undo.append(("move", node.file_id, back))
+
+
 def _undo(store, undo):
     failed = []
     for step in reversed(undo):
         try:
-            if step[0] == "delete":
+            if step[0] == "unknown":
+                failed.append(step[1])
+            elif step[0] == "delete":
                 store.delete(step[1])
             else:
                 store.move(step[1], step[2])
@@ -1092,31 +1138,27 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
                     or now.ancestors[:1] != (t.folder,):
                 raise _Refuse(f"refused: the current version {old.name} changed while publishing (a second publish or "
                               "an administrator's edit); nothing was written; check it out again")
-        new = s.put(t.folder, name, content)
-        undo.append(("delete", new.file_id))
+        new = _put_step(s, undo, t.folder, name, content)
         if _sha(s.read(new.file_id)) != sha:
             raise _Refuse("refused: the copy written does not read back as the approved file")
         if old is not None:
             try:
-                s.move(old.file_id, sup_folder)
+                _move_step(s, undo, old, sup_folder, t.folder)
             except Degraded as err:
                 raise _Refuse(f"refused: the old version {old.name} could not be moved to Superseded: {DEGRADED} "
                               f"({str(err)[:160]}). Nothing was published (the new copy was removed). An administrator "
                               "moves the old version by hand (see the guide), then run publish again") from None
-            undo.append(("move", old.file_id, t.folder))
             if old_pdf is not None:
                 try:
-                    s.move(old_pdf.file_id, sup_folder)
+                    _move_step(s, undo, old_pdf, sup_folder, t.folder)
                 except Degraded as err:
                     raise _Refuse(f"refused: the old reader PDF {old_pdf.name} could not be moved to Superseded: "
                                   f"{DEGRADED} ({str(err)[:160]}). Nothing was published") from None
-                undo.append(("move", old_pdf.file_id, t.folder))
         if t.cui and CUI_TAG not in s.tags(new.file_id):
             raise _Refuse(f"refused: {name} did not get its {CUI_TAG} tag in the CUI area (chp_foldertag); nothing was "
                           "published (undone); check chp-site documents status")
         if not is_pdf:
-            pn = s.put(t.folder, pdf_name, pdf)
-            undo.append(("delete", pn.file_id))
+            pn = _put_step(s, undo, t.folder, pdf_name, pdf)
             if _sha(s.read(pn.file_id)) != _sha(pdf):
                 raise _Refuse("refused: the reader PDF written does not read back as the one sent")
             if t.cui and CUI_TAG not in s.tags(pn.file_id):

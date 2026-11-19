@@ -1240,3 +1240,124 @@ def test_publish_account_password_reset_every_run(tmp_path):
     first = next(env for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add" and c[-1] == D.PUBLISH_USER)
     assert len(pw) >= 24 and pw != first["OC_PASS"]
     assert not any(pw in " ".join(c) for c in e.nc.calls + e.run.calls)
+
+
+# ---------- fix round 2: ambiguous writes, the append prelude, safe journal lines ----------
+
+def _timeout_put(env, target, landed):
+    real = env.store.put
+
+    def put(folder, name, data):
+        if name == target:
+            if landed:
+                real(folder, name, data)                       # the server wrote it; occ was killed afterwards
+            raise L.StoreError(f"occ files:put timed out after {L.OCC_TIMEOUT} s")
+        return real(folder, name, data)
+    env.store.put = put
+
+
+def _clean_area(env):
+    assert env.store.names(100) == ["CUI_SSP_v1.0.docx", "CUI_SSP_v1.0.pdf"] and env.store.names(300) == []
+    assert [x["kind"] for x in env.ledger()] == ["checkout", "approve"]
+
+
+@pytest.mark.parametrize("target", ["CUI_SSP_v1.1.docx", "CUI_SSP_v1.1.pdf"])
+@pytest.mark.parametrize("landed", [True, False])
+def test_put_timeout_landed_or_not_is_undone(env, target, landed):
+    _ready_to_publish(env)
+    _timeout_put(env, target, landed)
+    m = refused(env.publish("alice", V11), "timed out")
+    _clean_area(env)                                           # a put that landed is found by name and removed
+    assert "UNDO INCOMPLETE" not in m
+    assert any(j.get("event") == "publish-undone" for j in env.journal)
+
+
+def test_put_timeout_with_unknown_outcome_is_undo_incomplete(env):
+    _ready_to_publish(env)
+    _timeout_put(env, "CUI_SSP_v1.1.docx", True)
+    real_children = env.store.children
+
+    def children(folder):
+        if any(c[0] == "put" for c in env.store.calls):
+            raise L.StoreError("psql failed: connection refused")
+        return real_children(folder)
+    env.store.children = children
+    m = refused(env.publish("alice", V11), "UNDO INCOMPLETE", "files:put CUI_SSP_v1.1.docx", "outcome is unknown")
+    ev = [j for j in env.journal if j.get("event", "").startswith("publish-undo")]
+    assert ev[-1]["event"] == "publish-undo-failed" and "files:put" in ev[-1]["failed"][0]
+    assert "nothing was published" not in m.split("UNDO INCOMPLETE")[1]
+
+
+@pytest.mark.parametrize("landed", [True, False])
+def test_move_timeout_landed_or_not_is_undone(env, landed):
+    _ready_to_publish(env)
+    real = env.store.move
+
+    def move(fid, folder):
+        if folder == 300 and fid == env.doc:
+            if landed:
+                real(fid, folder)
+            raise L.StoreError(f"occ files:move timed out after {L.OCC_TIMEOUT} s")
+        return real(fid, folder)
+    env.store.move = move
+    m = refused(env.publish("alice", V11), "timed out")
+    _clean_area(env)                                           # the area keeps its current version either way
+    assert env.store.nodes[env.doc]["parent"] == 100 and "UNDO INCOMPLETE" not in m
+
+
+def test_move_timeout_with_unknown_outcome_is_undo_incomplete(env):
+    _ready_to_publish(env)
+
+    def move(fid, folder):
+        raise L.StoreError("occ files:move timed out")
+    env.store.move = move
+    real_info = env.store.info
+    env.store.info = lambda fid: (_ for _ in ()).throw(L.StoreError("psql down")) \
+        if any(c[0] == "put" for c in env.store.calls) and fid == env.doc else real_info(fid)
+    refused(env.publish("alice", V11), "UNDO INCOMPLETE", "files:move CUI_SSP_v1.0.docx", "outcome is unknown")
+
+
+@pytest.mark.parametrize("exc", [OSError(5, "I/O error"), L.LedgerError("ledger: line 3 is incomplete")])
+def test_failure_before_the_line_is_written_undoes_the_publish(env, monkeypatch, exc):
+    _ready_to_publish(env)
+    real_decide, real_lines = L._decide_and_act, L._lines
+    armed = []
+
+    def decide(*a):
+        e = real_decide(*a)
+        armed.append(1)
+        return e
+
+    def lines(path):
+        if armed:
+            raise exc
+        return real_lines(path)
+    monkeypatch.setattr(L, "_decide_and_act", decide)
+    monkeypatch.setattr(L, "_lines", lines)
+    rid = "0b" * 16
+    refused(env.publish("alice", V11, rid=rid), "ledger could not be written", "nothing was published")
+    monkeypatch.undo()
+    _clean_area(env)
+    assert not env.quarantine() and env.out(rid)["state"] == "refused"
+
+
+def test_partial_line_journal_failure_still_answers(env, monkeypatch):
+    _ready_to_publish(env)
+
+    def half(fd, data):
+        os.write(fd, data[:5])
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(L, "_write_line", half)
+    monkeypatch.setattr(L.os, "ftruncate", lambda fd, n: (_ for _ in ()).throw(OSError(30, "read-only")))
+    base = env.ctx.journal
+
+    def journal(rec):
+        if rec.get("event") in ("ledger-partial-line", "refused"):
+            raise OSError("journald gone")
+        base(rec)
+    env.ctx.journal = journal
+    rid = "0c" * 16
+    refused(env.publish("alice", V11, rid=rid), "partial line", "ISSO")
+    assert not env.quarantine() and env.out(rid)["state"] == "refused"
+    monkeypatch.undo()
+    assert env.store.names(100) == ["CUI_SSP_v1.0.docx", "CUI_SSP_v1.0.pdf"]
