@@ -16,7 +16,7 @@
 %global files_accesscontrol_ver 6.0.1
 %global user_oidc_ver 8.13.0
 %global foldertag_ver 1.0.0
-%global ledger_ver 1.0.0
+%global ledger_ver 1.0.1
 %global debug_package %{nil}
 %global __brp_mangle_shebangs %{nil}
 %global __os_install_post %{nil}
@@ -142,6 +142,9 @@ fi
   filecache); 10 requests a minute per user (429); publish content + reader PDF at most 64 MiB together; one generic
   refusal text; any error refused. Spool /var/lib/chp-docs/spool (root:apache 1730, httpd_sys_rw_content_t), results
   from /var/lib/chp-docs/out (root:apache 0750, httpd_sys_content_t)
+- chp_ledger 1.0.1 (Plan 3 Task 4): a request re-sent after the appender's "retry" (Kanidm unreachable, token
+  expired) is spooled again under the same id; GET result answers "queued" while the request waits, before any older
+  result
 
 * Sat Nov 14 2026 The CyberHygiene Project - 35.0.3-5.chp
 - chp_foldertag 1.0.0 (lab round 3, D7): FolderGuardListener's decision is refusal(), also asked by DavGuardListener

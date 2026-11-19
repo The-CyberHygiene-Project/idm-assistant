@@ -153,7 +153,7 @@ def test_compliance_areas_read_only(tmp_path):
         assert (gf / str(f) / "files" / rel).is_dir()
         assert f in e.nc.scanned
         groups = ("chp-users",) if f == inn else ("cui-users", "doc-reviewers")   # every group that reaches it
-        rules = [r for r in e.nc.folders[f]["rules"] if r[3] == "/" + rel]
+        rules = [r for r in e.nc.folders[f]["rules"] if r[3] == "/" + rel and r[0] == "--group"]
         assert sorted(rules) == sorted(["--group", g, "--", "/" + rel, *RO] for g in groups), (f, rel)
     # no rule for a group that is not mapped to the controlled folders (they hold cui-users only)
     assert not [r for f in (cui, arc) for r in e.nc.folders[f]["rules"] if "chp-users" in r]

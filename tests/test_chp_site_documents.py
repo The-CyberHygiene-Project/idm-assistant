@@ -605,8 +605,8 @@ def test_oidc_client_with_legacy_crypto_is_refused(tmp_path):
 def test_breakglass_secret_escrowed_not_printed(tmp_path, capsys):
     e = Env(tmp_path)
     done = e.enable()
-    add = [(c, env) for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add"]
-    assert len(add) == 1
+    add = [(c, env) for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add" and c[-1] == "ncadmin"]
+    assert len(add) == 1                     # (the appender's chp-publisher: test_publish_account_* in test_doc_ledger)
     argv, env = add[0]
     pw = env["OC_PASS"]
     assert len(pw) >= 24 and "--password-from-env" in argv and argv[-1] == "ncadmin" and "admin" in argv

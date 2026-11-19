@@ -1092,8 +1092,9 @@ def _check_marks(ctx, t, name, content, pdf_name, pdf):
 class OccStore:
     """NextCloud for the appender. Reads come from the file cache (SQL, as apache over the socket) and the canonical
     bytes from the team folder's storage on the disk (as root). Writes go through `occ files:put` (bytes on stdin),
-    `files:move` and `files:delete`, as the NextCloud account DOC_PUBLISH_USER (documents.conf): a local account with
-    no usable password whose groupfolders ACL alone may write the Compliance and Superseded areas. Through occ, the
+    `files:move` and `files:delete --skip-trash` (the undo only), as the NextCloud account DOC_PUBLISH_USER
+    (documents.conf; documents enable makes chp-publisher): a local account with no usable password whose
+    groupfolders user rules alone may write the Compliance and Superseded areas. Through occ, the
     writes fire NextCloud's own events, so chp_foldertag tags them and the audit log records them. (Not WebDAV: that
     needs a stored credential for an account with access to CUI.)"""
     OCC = ["runuser", "-u", "apache", "--", "/usr/bin/php", "-d", "apc.enable_cli=1", "-d", "memory_limit=512M",
@@ -1179,7 +1180,7 @@ class OccStore:
         node = self.info(fid)
         if node is None:
             return
-        self._occ("files:delete", "--force", self._view(node))
+        self._occ("files:delete", "--force", "--skip-trash", self._view(node))   # an undo: the copy never published
 
     def tags(self, fid):
         rows = self.sql("SELECT t.name FROM oc_systemtag_object_mapping m JOIN oc_systemtag t ON t.id = m.systemtagid "

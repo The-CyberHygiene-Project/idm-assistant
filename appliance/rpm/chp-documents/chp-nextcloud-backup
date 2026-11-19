@@ -16,6 +16,8 @@ CONF=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
 B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=${CHP_NC_DATA:-/data/nextcloud/data}; OCC=${CHP_OCC:-/usr/bin/occ}
 CHP_SITE=${CHP_SITE:-/usr/bin/chp-site}
 SD=${CHP_DOCS_STATE:-/var/lib/chp/documents}; MIN_KEEP=2
+# the controlled-document ledger (Plan 3): only ledger/ -- never spool/ (Bearer tokens), out/, work/ or quarantine/
+LEDGER=${CHP_DOCS_LEDGER:-/var/lib/chp-docs/ledger}
 keep_days() {
   local v; v=$(sed -n 's/^DOCUMENTS_BACKUP_DAYS=//p' "$CONF" 2>/dev/null | head -1)
   case $v in ''|*[!0-9]*|0) v=14 ;; esac
@@ -62,6 +64,9 @@ case ${1:-backup} in
     link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
     rsync -aHAX --numeric-ids ${link[@]+"${link[@]}"} "$D/" "$o/data/"
     rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
+    # rsync copies ledger.head before ledger.jsonl and the appender writes the line before the head, so the copy's
+    # head is never ahead of its ledger
+    if [ -d "$LEDGER" ]; then rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"; fi
     occ maintenance:mode --off >/dev/null
     (cd "$o" && find . -type f ! -name MANIFEST ! -name MANIFEST.tmp -print0 | sort -z | xargs -0 sha256sum > MANIFEST.tmp && mv MANIFEST.tmp MANIFEST)
     # retention: older than KEEP days go, but never below MIN_KEEP copies
@@ -81,6 +86,11 @@ case ${1:-backup} in
     install -d -m 0750 -o apache -g apache /data/nextcloud "$D"
     rsync -aHAX --numeric-ids --delete "$o/data/" "$D/"
     rsync -aHAX --numeric-ids "$o/etc-nextcloud/" /etc/nextcloud/
+    # the ledger only onto a server that has none: a live ledger is never rolled back (verify it against the stick)
+    if [ -d "$o/chp-docs-ledger" ]; then
+      if [ -s "$LEDGER/ledger.jsonl" ]; then log "restore: kept the existing document ledger $LEDGER (not overwritten)"
+      else install -d -m 0700 "$LEDGER" && rsync -aHAX --numeric-ids "$o/chp-docs-ledger/" "$LEDGER/" && restorecon -R "$LEDGER"; fi
+    fi
     restorecon -R /data/nextcloud /etc/nextcloud
     systemctl start php-fpm httpd nextcloud-cron.timer
     occ maintenance:mode --off >/dev/null; occ maintenance:data-fingerprint >/dev/null

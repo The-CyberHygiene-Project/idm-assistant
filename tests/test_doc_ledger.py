@@ -931,3 +931,118 @@ def test_occ_store_writes_as_the_publish_account_via_stdin(tmp_path):
     assert s.info(100).type == "folder" and s.info(100).path == "CUI/Compliance"
     with pytest.raises(L.Degraded):
         s.move(5001, 100)
+
+
+# ---------- the appender's NextCloud account chp-publisher (pre-review ruling 1) ----------
+
+def _dconf(e):
+    return dict(ln.split("=", 1) for ln in (e.root / "etc/chp/documents.conf").read_text().splitlines()
+                if "=" in ln and not ln.startswith("#"))
+
+
+def test_publish_account_created_idempotent(tmp_path, capsys):
+    from chp_site import documents as D
+    from tests import test_chp_site_documents as T
+    e = T.Env(tmp_path)
+    done = e.enable()
+    add = [(c, env) for c, env in zip(e.nc.calls, e.nc.envs) if c[0] == "user:add" and c[-1] == D.PUBLISH_USER]
+    assert len(add) == 1
+    argv, env = add[0]
+    assert D.PUBLISH_USER == "chp-publisher" and "--password-from-env" in argv
+    gi = [argv[i + 1] for i, x in enumerate(argv) if x == "--group"]
+    assert sorted(gi) == ["chp-users", "cui-users"]               # nothing else: never admin
+    pw = env["OC_PASS"]
+    assert len(pw) >= 24
+    assert not any(pw in " ".join(c) for c in e.nc.calls + e.run.calls)        # random, discarded, never printed
+    assert pw not in "\n".join(done) and pw not in capsys.readouterr().out
+    assert not (e.root / "etc/chp").joinpath("documents.conf").read_text().count(pw)
+    assert _dconf(e)["DOC_PUBLISH_USER"] == "chp-publisher"
+    assert ["user:disable", D.PUBLISH_USER] not in e.nc.calls      # enabled: occ acts as it (lab: disabled user?)
+    n = len(e.nc.calls)
+    e.enable()                                                     # a second run makes no second account
+    assert not [c for c in e.nc.calls[n:] if c[0] == "user:add" and c[-1] == D.PUBLISH_USER]
+    assert ["group:adduser", "cui-users", D.PUBLISH_USER] in e.nc.calls[n:]   # membership put back if removed
+    assert _dconf(e)["DOC_PUBLISH_USER"] == "chp-publisher"
+
+
+def test_publish_account_rights_limited_to_four_areas(tmp_path):
+    from chp_site import documents as D
+    from tests import test_chp_site_documents as T
+    e = T.Env(tmp_path)
+    e.enable()
+    fid = {f["name"]: i for i, f in e.nc.folders.items()}
+    want = sorted([str(fid[t]), "/" + rel] for _, t, rel in D.AREAS)
+    got = []
+    for i, f in e.nc.folders.items():
+        for r in f["rules"]:
+            if "--user" in r:
+                assert r[:3] == ["--user", D.PUBLISH_USER, "--"], r
+                assert r[4:] == ["+read", "+write", "+create", "+delete", "-share"], r     # never share
+                got.append([str(i), r[3]])
+    assert sorted(got) == want                                     # exactly the four areas, nothing else
+    assert D.PUBLISH_MASK == 31 and D.PUBLISH_PERMS == 15
+    assert not any(D.PUBLISH_USER in c for f in e.nc.folders.values() for g in f["groups"] for c in [g])
+
+
+def test_nightly_check_allows_only_the_publish_account(tmp_path):
+    from chp_site import documents as D
+    from tests import test_chp_site_documents as T
+    db = T.DB()
+    comp = db.file("CUI", "files/Compliance", directory=True)
+    sup = db.file("Archive", "files/Superseded", directory=True)
+    db.c.execute("INSERT INTO oc_group_user VALUES ('cui-users', ?)", (D.PUBLISH_USER,))
+    db.c.execute("INSERT INTO oc_group_folders_acl VALUES (300, ?, 'user', ?, 31, 15)", (comp, D.PUBLISH_USER))
+    db.c.execute("INSERT INTO oc_group_folders_acl VALUES (301, ?, 'user', ?, 31, 15)", (sup, D.PUBLISH_USER))
+    _, res, _ = T.do_check(tmp_path, db=db)
+    assert res["alerts"] == [], res["alerts"]
+    # the same rights anywhere else, wider rights (share), or the same rule for anyone else: flagged
+    for i, (sql, args, key) in enumerate((
+            ("INSERT INTO oc_group_folders_acl VALUES (302, ?, 'user', ?, 31, 15)", (db.roots["CUI"], D.PUBLISH_USER),
+             "acl-other:%d" % T.IDS["CUI"]),
+            ("UPDATE oc_group_folders_acl SET permissions = 31 WHERE acl_id = 300", (), "acl-other:%d" % T.IDS["CUI"]),
+            ("INSERT INTO oc_group_folders_acl VALUES (303, ?, 'user', 'mallory', 31, 15)", (sup,),
+             "acl-other:%d" % T.IDS["Archive"]),
+            ("INSERT INTO oc_group_user VALUES ('cui-users', 'chp-publisher2')", (), "cui-member:chp-publisher2"))):
+        db.c.execute("SAVEPOINT s")                # each case alone, on the clean state above
+        db.c.execute(sql, args)
+        _, res, _ = T.do_check(tmp_path / str(i), db=db)
+        assert keys_of(res) == {key}, res["alerts"]
+        db.c.execute("ROLLBACK TO s")
+        db.c.execute("RELEASE s")
+
+
+def keys_of(res):
+    return {a["key"] for a in res["alerts"]}
+
+
+# ---------- the ledger in the nightly backup (pre-review ruling 2) ----------
+
+def test_nightly_backup_copies_the_ledger_only(tmp_path, monkeypatch):
+    from tests import test_chp_documents_static as S
+    docs = tmp_path / "chp-docs"
+    for d in ("ledger", "spool", "out", "work", "quarantine"):
+        (docs / d).mkdir(parents=True)
+    monkeypatch.setenv("CHP_DOCS_LEDGER", str(docs / "ledger"))
+    rc, out, calls = S._backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 0, out
+    rs = [ln for ln in calls.splitlines() if ln.startswith("rsync")]
+    led = [ln for ln in rs if str(docs / "ledger") in ln]
+    assert len(led) == 1 and led[0].split()[-2] == f"{docs}/ledger/" and led[0].split()[-1].endswith("/chp-docs-ledger/")
+    for d in ("spool", "out", "work", "quarantine"):
+        assert str(docs / d) not in calls                      # never the Bearer tokens, results, work files or quarantine
+    script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
+    assert "LEDGER=${CHP_DOCS_LEDGER:-/var/lib/chp-docs/ledger}" in script
+    assert "/var/lib/chp-docs/spool" not in script and "/var/lib/chp-docs\"" not in script
+    # restore never overwrites a live ledger
+    assert 'if [ -s "$LEDGER/ledger.jsonl" ]; then log "restore: kept the existing document ledger' in script
+
+
+def test_occ_store_undo_delete_is_forced_and_skips_the_trash():
+    calls = []
+    row = {"fileid": 7, "parent": 100, "name": "x.docx", "path": "files/Compliance/x.docx", "etag": "e",
+           "mimetype": "text/plain", "folder_id": 1, "mount_point": "CUI"}
+    sql = lambda q: [] if q.startswith("WITH RECURSIVE") else [row]
+    s = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=sql,
+                   run=lambda argv, **kw: calls.append(argv) or SimpleNamespace(returncode=0, stdout=b"", stderr=b""))
+    s.delete(7)
+    assert calls[-1][-4:] == ["files:delete", "--force", "--skip-trash", "/chp-publisher/files/CUI/Compliance/x.docx"]

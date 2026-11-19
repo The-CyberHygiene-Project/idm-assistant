@@ -72,8 +72,15 @@ AREA_ACL = REVIEWER_ACL                   # +read -write -create -delete -share
 # folders hold cui-users only, _exact_controlled).
 AREA_GROUPS = {"CUI": ("cui-users", "doc-reviewers"), "Archive": ("cui-users", "doc-reviewers"),
                "Internal": ("chp-users",)}
+# The root appender's NextCloud account (Plan 3 Task 4): it alone writes the four areas, through occ only (root runs
+# `occ files:put|move|delete` as it). Local, outside Kanidm, in cui-users and chp-users so the team folders mount for
+# it, with a random password nobody keeps; groupfolders USER rules give it write/create/delete on exactly the four areas.
+PUBLISH_USER = "chp-publisher"
+PUBLISH_ACL = ["+read", "+write", "+create", "+delete", "-share"]
+PUBLISH_MASK = sum(ACL_BITS[x[1:]] for x in PUBLISH_ACL)
+PUBLISH_PERMS = sum(ACL_BITS[x[1:]] for x in PUBLISH_ACL if x.startswith("+"))
 GF_DATA = "/data/nextcloud/data/__groupfolders"     # groupfolders' storages on the disk: <id>/files/... (spike logs/50)
-DOC_CONF_KEYS = ("DOC_OIDC_CLIENT", "KANIDM_USERINFO_URL") + tuple(a[0] for a in AREAS)
+DOC_CONF_KEYS = ("DOC_OIDC_CLIENT", "KANIDM_USERINFO_URL") + tuple(a[0] for a in AREAS) + ("DOC_PUBLISH_USER",)
 # chp_ledger's app config: {key: the documents.conf ids it lists}
 LEDGER_AREAS = {"compliance": ("CUI_COMPLIANCE_ID", "INTERNAL_COMPLIANCE_ID"),
                 "superseded": ("CUI_SUPERSEDED_ID", "INTERNAL_SUPERSEDED_ID")}
@@ -774,6 +781,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     step("bearer", f"Bearer: user_oidc provider {DOC_PROVIDER} checks {DOC_CLIENT} tokens at Kanidm's userinfo (no "
                    f"provisioning); /login still goes straight to Kanidm (provider {LOGIN_PROVIDER_ID})")
     doc.update(_compliance_areas(run, occ, sql, root, ids))
+    doc["DOC_PUBLISH_USER"] = _publish_account(occ, ids)
     _put(cp, conf_text(fqdn, sip, days, ids, enabled_now, doc), 0o644)
     # chp_ledger (Plan 3 Task 3) takes requests for file ids inside a Compliance area and outside a Superseded one
     for key, names in LEDGER_AREAS.items():
@@ -781,7 +789,8 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         occ("config:app:set", "chp_ledger", key, f"--value={json.dumps(val, separators=(',', ':'))}")
     step("compliance", "compliance areas: " + ", ".join(f"{t}/{rel}={doc[key]}" for key, t, rel in AREAS)
          + "; read-only to every group there (" + "; ".join(f"{t}: {', '.join(g)}" for t, g in AREA_GROUPS.items())
-         + "); only the root appender writes them")
+         + f"); only the root appender writes them (as the local account {PUBLISH_USER}, through occ: write, "
+           "create, delete on these four areas only; no password anyone knows)")
     isso, appr = site.get("DOC_ISSO_ACCOUNT", ""), site.get("DOC_APPROVER_ACCOUNTS", [])
     if isso or appr:
         step("approvers", f"document approvers: ISSO {isso or '(not set)'}; approvers {', '.join(appr) or '(none)'} "
@@ -1001,6 +1010,25 @@ def _compliance_areas(run, occ, sql, root, ids):
     return out
 
 
+def _publish_account(occ, ids):
+    """The root appender's account (PUBLISH_USER): made once (random password, discarded: nobody can sign in with
+    it; it is not a Kanidm account, so the OIDC login cannot reach it either), in cui-users and chp-users, and a
+    groupfolders USER rule +read +write +create +delete -share on each of the four areas (upserts, like the group
+    rules). It stays enabled: root acts as it through occ only (whether occ files:put works for a disabled user is
+    not known; lab Task 11). The nightly check (I2) allows exactly this account and exactly these rules."""
+    import secrets as _s
+    rc, _ = occ("user:info", PUBLISH_USER, check=False)
+    if rc != 0:
+        occ("user:add", "--password-from-env", "--display-name", "CHP document publisher (root, occ only)",
+            "--group", "cui-users", "--group", "chp-users", PUBLISH_USER, env={"OC_PASS": _s.token_urlsafe(32)})
+    else:
+        for g in ("cui-users", "chp-users"):
+            occ("group:adduser", g, PUBLISH_USER)
+    for _, team, rel in AREAS:
+        occ("groupfolders:permissions", ids[team], "--user", PUBLISH_USER, "--", "/" + rel, *PUBLISH_ACL)
+    return PUBLISH_USER
+
+
 def _folders(occ):
     out = occ.json("groupfolders:list", "--output=json")
     items = out if isinstance(out, list) else list(out.values()) if isinstance(out, dict) else []
@@ -1184,8 +1212,10 @@ Q_GROUPS = "SELECT folder_id, group_id, permissions FROM oc_group_folders_groups
 Q_TAGS = "SELECT id, name, visibility, editable FROM oc_systemtag WHERE name IN ('CUI', 'FCI') ORDER BY id"
 Q_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_foldertag'"
 # Access granted inside NextCloud, outside Kanidm (final review I2; design §3 "membership in Kanidm is the only way in"):
-# a cui-users member that is not a user_oidc (Kanidm) account, other than the canary; the admin group's members.
-Q_CUI_LOCAL = (f"SELECT g.uid FROM oc_group_user g WHERE g.gid = 'cui-users' AND g.uid <> '{CANARY_USER}' AND NOT EXISTS "
+# a cui-users member that is not a user_oidc (Kanidm) account, other than the canary and the appender's publish
+# account (Plan 3); the admin group's members.
+Q_CUI_LOCAL = (f"SELECT g.uid FROM oc_group_user g WHERE g.gid = 'cui-users' AND g.uid NOT IN ('{CANARY_USER}', "
+               f"'{PUBLISH_USER}') AND NOT EXISTS "
                f"(SELECT 1 FROM oc_user_oidc o WHERE o.user_id = g.uid) ORDER BY g.uid LIMIT {LIST_MAX + 1}")
 Q_ADMINS = "SELECT uid FROM oc_group_user WHERE gid = 'admin' ORDER BY uid"
 
@@ -1644,9 +1674,9 @@ def _int(v, default=None):
 
 def _access(sql, folders, ids, storages, alert):
     """I2: nobody reaches CUI, FCI or Archive through a grant made inside NextCloud. cui-users holds Kanidm users and
-    the canary only; admin is exactly the break-glass account; on each controlled folder advanced permissions are on and
-    the only ACL rules are doc-reviewers read-only on / (owner decision 7) and, on the Compliance/Superseded areas
-    (Plan 3), the groups of AREA_GROUPS read-only. Other rules (a stray group's left-over rule, O8, one that widens a reviewer,
+    the canary (and the appender's PUBLISH_USER) only; admin is exactly the break-glass account; on each controlled
+    folder advanced permissions are on and the only ACL rules are doc-reviewers read-only on / (owner decision 7) and,
+    on the Compliance/Superseded areas (Plan 3), the groups of AREA_GROUPS read-only and PUBLISH_USER's write rule. Other rules (a stray group's left-over rule, O8, one that widens a reviewer,
     or one that makes an area writable) are flagged."""
     rows = sql(Q_CUI_LOCAL)
     for r in rows[:LIST_MAX]:
@@ -1688,6 +1718,9 @@ def _access(sql, folders, ids, storages, alert):
         expected = [r for r in rules[n] if r.get("path") in area and r.get("mapping_type") == "group"
                     and r.get("mapping_id") in AREA_GROUPS.get(n, ()) and _int(r.get("mask")) == REVIEWER_MASK
                     and _int(r.get("permissions")) == REVIEWER_PERMS]
+        expected += [r for r in rules[n] if r.get("path") in area and r.get("mapping_type") == "user"
+                     and r.get("mapping_id") == PUBLISH_USER and _int(r.get("mask")) == PUBLISH_MASK
+                     and _int(r.get("permissions")) == PUBLISH_PERMS]       # the appender's account, the areas only
         other = [r for r in rules[n] if r not in root and r not in expected]
         if other:
             alert(f"acl-other:{i}", f"team folder {n} (id {i}) has ACL rules other than doc-reviewers read-only on / "
