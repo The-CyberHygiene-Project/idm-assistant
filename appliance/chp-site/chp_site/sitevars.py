@@ -20,7 +20,12 @@ def values(site, hosts, client=None):
          "SECURITY_ADDONS": site.get("SECURITY_ADDONS", "no"),
          "SECURITY_ALERT_LEVEL": str(site.get("SECURITY_ALERT_LEVEL", 10)),
          "DOCUMENTS": site.get("DOCUMENTS", "no"), "DOCUMENTS_BACKUP_DAYS": str(site.get("DOCUMENTS_BACKUP_DAYS", 14)),
-         "FILES_FQDN": fqdn(site)}
+         "FILES_FQDN": fqdn(site),
+         # ISO 0.7.0 Plan 3 (optional): document approvers and the CUI marking values ("" when not set)
+         "DOC_ISSO_ACCOUNT": site.get("DOC_ISSO_ACCOUNT", ""),
+         "DOC_APPROVER_ACCOUNTS": ",".join(site.get("DOC_APPROVER_ACCOUNTS", [])),
+         "CUI_CONTROLLED_BY": site.get("CUI_CONTROLLED_BY", ""), "CUI_CATEGORY": site.get("CUI_CATEGORY", ""),
+         "CUI_POC": site.get("CUI_POC", "")}
     if client:
         v.update({k: client[k] for k in ("CA_ROOT_SHA256", "SSH_CA_PUBKEY", "SSH_CA_FPR", "CACHE_PUBKEY", "KANIDM_URL")})
     return v

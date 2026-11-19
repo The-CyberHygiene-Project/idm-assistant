@@ -69,3 +69,15 @@ SECURITY_ALERT_LEVEL=10
 DOCUMENTS=no
 # Optional: days of nightly document-server backups kept (1-365, default 14).
 DOCUMENTS_BACKUP_DAYS=14
+
+# Optional (0.7.0 on): controlled documents (SSP, POA&M, policies, procedures, ...) are published only after an
+# approval. The ISSO's Kanidm account name (used only to override when nobody else can approve), and the Kanidm account
+# names of the approvers, comma separated. Each must be an existing Kanidm account; the ISSO may not also be an
+# approver. Empty = approvals are refused until set.
+DOC_ISSO_ACCOUNT=
+DOC_APPROVER_ACCOUNTS=
+# Optional: the CUI marking values printed on controlled CUI documents (1-128 characters each), never typed per file.
+# "Controlled by" (your organisation and office), the default CUI category, and the point of contact.
+CUI_CONTROLLED_BY=
+CUI_CATEGORY=
+CUI_POC=

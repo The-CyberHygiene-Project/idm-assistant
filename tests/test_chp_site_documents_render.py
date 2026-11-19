@@ -55,7 +55,9 @@ def test_template_documents_keys_commented_and_additive():
     assert "\nDOCUMENTS=no\n" in t and "\nDOCUMENTS_BACKUP_DAYS=14\n" in t
     assert "\nSECURITY_ADDONS=no\n" in t and "\nREVIEW_DELEGATES=\n" in t
     keys = re.findall(r"^([A-Z_]+)=", t, re.M)
-    assert keys[-1] == "DOCUMENTS_BACKUP_DAYS"
+    # the document server's keys come last; Plan 3's workflow keys (optional) follow DOCUMENTS_BACKUP_DAYS
+    assert keys[-6:] == ["DOCUMENTS_BACKUP_DAYS", "DOC_ISSO_ACCOUNT", "DOC_APPROVER_ACCOUNTS", "CUI_CONTROLLED_BY",
+                         "CUI_CATEGORY", "CUI_POC"]
     i = t.index("DOCUMENTS=no")
     assert t[:i].rstrip().splitlines()[-1].startswith("#")
     # the template, with only the required keys filled in, parses and the new keys default off

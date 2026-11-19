@@ -54,6 +54,27 @@ ACL_BITS = {"read": 1, "write": 2, "create": 4, "delete": 8, "share": 16}     # 
 REVIEWER_MASK = sum(ACL_BITS[x[1:]] for x in REVIEWER_ACL)
 REVIEWER_PERMS = sum(ACL_BITS[x[1:]] for x in REVIEWER_ACL if x.startswith("+"))
 
+# The controlled-document workflow (ISO 0.7.0 Plan 3 Task 2; spike §Transport route 1, §Ledger L1).
+DOC_CLIENT = "chp-doc"                    # Kanidm PUBLIC client of the workstation doc commands (PKCE, loopback)
+DOC_PROVIDER = "kanidm-cli"               # the second user_oidc provider: it only checks chp-doc Bearer tokens
+DOC_REDIRECT = "http://127.0.0.1/"        # any port: Kanidm's localhost redirects (spike logs/49)
+DOC_SCOPES = ("openid", "profile", "groups")
+DOC_REFRESH = 28800                       # refresh token lifetime: 8 h
+# nextcloud-login-rewrite.conf (chp-documents) sends /login to this user_oidc provider id: it must be "kanidm"
+LOGIN_PROVIDER_ID = "1"
+# The Compliance areas (controlled documents) and the Superseded areas: read-only to every group by ACL (only the root
+# appender writes them). (documents.conf key, team folder, path inside it); a parent before its child.
+AREAS = (("CUI_COMPLIANCE_ID", "CUI", "Compliance"), ("INTERNAL_COMPLIANCE_ID", "Internal", "Compliance"),
+         ("CUI_SUPERSEDED_ID", "Archive", "Superseded"), ("INTERNAL_SUPERSEDED_ID", "Internal", "Compliance/Superseded"))
+AREA_ACL = REVIEWER_ACL                   # +read -write -create -delete -share
+# every group that reaches the team folder gets the read-only rule: cui-users (and doc-reviewers, its read-only
+# subset) on CUI and Archive, chp-users on Internal. No rule for a group that is not mapped there (the controlled
+# folders hold cui-users only, _exact_controlled).
+AREA_GROUPS = {"CUI": ("cui-users", "doc-reviewers"), "Archive": ("cui-users", "doc-reviewers"),
+               "Internal": ("chp-users",)}
+GF_DATA = "/data/nextcloud/data/__groupfolders"     # groupfolders' storages on the disk: <id>/files/... (spike logs/50)
+DOC_CONF_KEYS = ("DOC_OIDC_CLIENT", "KANIDM_USERINFO_URL") + tuple(a[0] for a in AREAS)
+
 PACKAGES = ("nextcloud-chp", "chp-documents")
 MTAS = ("postfix", "sendmail", "exim", "opensmtpd")
 APPS_ON = ("admin_audit", "groupfolders", "files_accesscontrol", "user_oidc", "chp_foldertag", "systemtags",
@@ -150,14 +171,16 @@ def _kv(path):
     return dict(ln.split("=", 1) for ln in path.read_text().splitlines() if "=" in ln and not ln.startswith("#"))
 
 
-def conf_text(fqdn, server_ip, days, ids, enabled="yes"):
+def conf_text(fqdn, server_ip, days, ids, enabled="yes", doc=None):
     """/etc/chp/documents.conf (0644, no secrets): read by the checks (77-79, Plan 2 Task 6), the units and Plan 3.
-    ENABLED=yes is written by the LAST step of enable (it means every step succeeded once)."""
+    ENABLED=yes is written by the LAST step of enable (it means every step succeeded once). `doc`: the workflow's
+    keys (DOC_CONF_KEYS: the doc client, Kanidm's userinfo URL, the Compliance/Superseded area ids)."""
     lines = ["# written by chp-site documents enable; no secrets here", f"ENABLED={enabled}", f"FQDN={fqdn}",
              f"SERVER_IP={server_ip}", f"DOCUMENTS_BACKUP_DAYS={days}"]
     for n in CONTROLLED + OPEN:
         if n in ids:
             lines.append(f"{n.upper()}_FOLDER_ID={ids[n]}")
+    lines += [f"{k}={doc[k]}" for k in DOC_CONF_KEYS if k in (doc or {})]
     return "\n".join(lines) + "\n"
 
 
@@ -213,19 +236,22 @@ def _refuse(host, site, hosts, root, data_is_mount):
 
 
 def enable(host, site, hosts, *, run, occ, kanidm, root=Path("/"), record=None, stick=None,
-           pending=Path("/root/chp-escrow-pending"), data_is_mount=None, chown=None, now=None, secret=None, sleep=None):
+           pending=Path("/root/chp-escrow-pending"), data_is_mount=None, chown=None, now=None, secret=None, sleep=None,
+           sql=None):
     """Returns the list of steps done. `stick`: the site stick (the break-glass secret is escrowed there at once);
-    None leaves it in the pending folder for export-client (monitor 40 warns until then)."""
+    None leaves it in the pending folder for export-client (monitor 40 warns until then). `sql`: NextCloud's
+    database (sql_runner(run) by default; the Compliance areas' file ids are read from it)."""
     from . import audit
     data_is_mount = os.path.ismount("/data") if data_is_mount is None else data_is_mount
     me = _refuse(host, site, hosts, root, data_is_mount)
     _mta_check(run)
+    _doc_accounts(site, kanidm)                       # before any change: unknown approvers are refused plainly
     record = record or audit.record
     try:
         return _enable(me, site, hosts, run=run, occ=_Occ(occ), k=kanidm, root=Path(root), record=record, stick=stick,
                        pending=Path(pending), chown=chown, now=now or (lambda: time.strftime("%Y%m%dT%H%M%SZ",
                                                                                             time.gmtime())),
-                       secret=secret, sleep=sleep or time.sleep)
+                       secret=secret, sleep=sleep or time.sleep, sql=sql or sql_runner(run))
     except subprocess.CalledProcessError as e:
         cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
         raise SiteError(f"{cmd} failed (exit {e.returncode}); see its log, fix the cause, then re-run "
@@ -511,7 +537,7 @@ def _snapshot(root, files):
     return {f: one(f) for f in files}
 
 
-def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown, now, secret, sleep):
+def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown, now, secret, sleep, sql):
     host = me.hostname
     fqdn, d = dr.fqdn(site), site["DOMAIN"]
     sip, cidr = server_of(hosts).ip, str(site["SUBNET"])
@@ -567,7 +593,9 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     ids = {n: old[f"{n.upper()}_FOLDER_ID"] for n in CONTROLLED + OPEN if f"{n.upper()}_FOLDER_ID" in old}
     enabled_now = old.get("ENABLED", "no")
     days = site.get("DOCUMENTS_BACKUP_DAYS", 14)
-    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now), 0o644)
+    doc = {k_: old[k_] for k_ in DOC_CONF_KEYS if k_ in old}
+    doc.update(DOC_OIDC_CLIENT=DOC_CLIENT, KANIDM_USERINFO_URL=f"https://idm.{d}/oauth2/openid/{DOC_CLIENT}/userinfo")
+    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now, doc), 0o644)
     step("render", f"rendered: LAN-only httpd ({cidr}), egress address {sip}, /etc/chp/documents.conf")
     run(["systemctl", "daemon-reload"], check=True)
     _enable_now(run, ["chp-nextcloud-egress.service"], acts)
@@ -664,7 +692,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     if ent is None:
         k.oauth2_create(CLIENT, "NextCloud", origin)
         ent = k.oauth2(CLIENT) or {}
-    _check_client(ent)
+    _check_client(ent, CLIENT)
     k.oauth2_add_redirect(CLIENT, f"{origin}/index.php/apps/user_oidc/code")
     k.oauth2_scope_map(CLIENT, "chp_users", ("openid", "profile", "email", "groups"))
     k.oauth2_prefer_short_username(CLIENT)
@@ -729,8 +757,29 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     allow = [[int(ids["CUI"]), int(ids["Archive"])], [int(ids["Archive"]), int(ids["CUI"])]]
     for key, val in (("rules", rules), ("contain", contain), ("contain_allow", allow)):
         occ("config:app:set", "chp_foldertag", key, f"--value={json.dumps(val, separators=(',', ':'))}")
-    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now), 0o644)
+    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now, doc), 0o644)
     step("tags", "tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive")
+
+    # 13a-d. the controlled-document workflow (Plan 3 Task 2): the doc commands' Kanidm client, the Bearer-only
+    # provider (the login rewrite keeps /login going to provider 1), the read-only Compliance areas, the approvers
+    _doc_client(k, origin)
+    step("doc-client", f"doc client: Kanidm public client {DOC_CLIENT} (PKCE S256, redirect {DOC_REDIRECT} on any "
+                       f"port, scopes {' '.join(DOC_SCOPES)}, refresh token {DOC_REFRESH // 3600} h), chp_groups claim")
+    _bearer_provider(occ, d)
+    step("bearer", f"Bearer: user_oidc provider {DOC_PROVIDER} checks {DOC_CLIENT} tokens at Kanidm's userinfo (no "
+                   f"provisioning); /login still goes straight to Kanidm (provider {LOGIN_PROVIDER_ID})")
+    doc.update(_compliance_areas(run, occ, sql, root, ids))
+    _put(cp, conf_text(fqdn, sip, days, ids, enabled_now, doc), 0o644)
+    step("compliance", "compliance areas: " + ", ".join(f"{t}/{rel}={doc[key]}" for key, t, rel in AREAS)
+         + "; read-only to every group there (" + "; ".join(f"{t}: {', '.join(g)}" for t, g in AREA_GROUPS.items())
+         + "); only the root appender writes them")
+    isso, appr = site.get("DOC_ISSO_ACCOUNT", ""), site.get("DOC_APPROVER_ACCOUNTS", [])
+    if isso or appr:
+        step("approvers", f"document approvers: ISSO {isso or '(not set)'}; approvers {', '.join(appr) or '(none)'} "
+                          "(Kanidm accounts, checked)")
+    else:
+        step("approvers", "document approvers: not set (DOC_ISSO_ACCOUNT, DOC_APPROVER_ACCOUNTS in site.conf): "
+                          "controlled documents cannot be approved until they are")
 
     # 14. web: LAN-only firewall, certificate, services
     rich = f'rule family="ipv4" source address="{cidr}" port port="{PORT}" protocol="tcp" accept'
@@ -781,7 +830,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
         else:
             step("escrow", "break-glass secret is in the pending folder: plug in the site stick and run "
                            "chp-site export-client")
-    _put(cp, conf_text(fqdn, sip, days, ids, "yes"), 0o644)
+    _put(cp, conf_text(fqdn, sip, days, ids, "yes", doc), 0o644)
     step("enabled", "documents.conf ENABLED=yes")
     after = _snapshot(root, _aide_files(d))
     changed = [f for f in after if after[f] != aide_before[f]] + acts
@@ -822,14 +871,125 @@ def _pending_secret(path, secret=None):
     return pw
 
 
-def _check_client(ent):
+def _check_client(ent, name):
     """ES256 and PKCE are Kanidm's defaults; a client switched to legacy crypto (RS256) or without PKCE is refused."""
     if (ent.get("oauth2_jwt_legacy_crypto_enable") or ["false"])[0] == "true":
-        raise SiteError("the Kanidm OAuth2 client nextcloud has legacy crypto (RS256) on; turn it off "
-                        "(kanidm system oauth2 disable-legacy-crypto nextcloud), then re-run")
+        raise SiteError(f"the Kanidm OAuth2 client {name} has legacy crypto (RS256) on; turn it off "
+                        f"(kanidm system oauth2 disable-legacy-crypto {name}), then re-run")
     if (ent.get("oauth2_allow_insecure_client_disable_pkce") or ["false"])[0] == "true":
-        raise SiteError("the Kanidm OAuth2 client nextcloud has PKCE turned off; turn it on "
-                        "(kanidm system oauth2 enable-pkce nextcloud), then re-run")
+        raise SiteError(f"the Kanidm OAuth2 client {name} has PKCE turned off; turn it on "
+                        f"(kanidm system oauth2 enable-pkce {name}), then re-run")
+
+
+def _doc_accounts(site, k):
+    """DOC_ISSO_ACCOUNT and DOC_APPROVER_ACCOUNTS must be Kanidm accounts (Kanidm is the only user list; ruling F5).
+    parse_site checked the names and that the ISSO is not also an approver. Not set: nothing to check."""
+    names = ([("DOC_ISSO_ACCOUNT", site["DOC_ISSO_ACCOUNT"])] if site.get("DOC_ISSO_ACCOUNT") else []) \
+        + [("DOC_APPROVER_ACCOUNTS", n) for n in site.get("DOC_APPROVER_ACCOUNTS", [])]
+    for key, n in names:
+        if k.person(n) is None:
+            raise SiteError(f"{key} names {n}, which is not a Kanidm account (kanidm person get {n}: no match): create "
+                            "the account or correct site.conf on the site stick, apply it, then re-run chp-site "
+                            "documents enable; nothing was changed")
+
+
+def _doc_client(k, origin):
+    """The doc commands' Kanidm PUBLIC client (spike proto/auth-setup.sh kanidm, logs/44): authorization code + PKCE,
+    a loopback redirect on any port, the nextcloud client's scopes and chp_groups claim, refresh tokens 8 h. Upserts
+    every run; then read back (a confidential client of that name, or a setting Kanidm did not keep, is refused)."""
+    ent = k.oauth2(DOC_CLIENT)
+    if ent is None:
+        k.oauth2_create_public(DOC_CLIENT, "CHP doc commands", origin)
+        ent = k.oauth2(DOC_CLIENT) or {}
+    if "oauth2_resource_server_public" not in ent.get("class", []):
+        raise SiteError(f"the Kanidm OAuth2 client {DOC_CLIENT} exists but is not a public client (the doc commands "
+                        f"keep no secret); delete it (kanidm system oauth2 delete {DOC_CLIENT}), then re-run")
+    _check_client(ent, DOC_CLIENT)
+    k.oauth2_enable_localhost_redirects(DOC_CLIENT)
+    k.oauth2_add_loopback_redirect(DOC_CLIENT, DOC_REDIRECT)
+    k.oauth2_scope_map(DOC_CLIENT, "chp_users", DOC_SCOPES)
+    k.oauth2_prefer_short_username(DOC_CLIENT)
+    for g, v in (("cui-users", "cui-users"), ("doc-reviewers", "doc-reviewers"), ("chp_users", "chp-users")):
+        k.oauth2_claim_map(DOC_CLIENT, "chp_groups", g, v)
+    k.oauth2_claim_join(DOC_CLIENT, "chp_groups", "array")
+    k.oauth2_refresh_expiry(DOC_CLIENT, DOC_REFRESH)
+    ent = k.oauth2(DOC_CLIENT) or {}
+    _check_client(ent, DOC_CLIENT)
+    got = lambda a: (ent.get(a) or [""])[0]
+    if got("oauth2_allow_localhost_redirect") != "true":
+        raise SiteError(f"Kanidm did not keep localhost redirects on for {DOC_CLIENT} (read back "
+                        f"{got('oauth2_allow_localhost_redirect')!r}); check kanidm system oauth2 get {DOC_CLIENT}")
+    if got("oauth2_refresh_token_expiry") != str(DOC_REFRESH):
+        raise SiteError(f"Kanidm did not keep the {DOC_REFRESH} s refresh token expiry for {DOC_CLIENT} (read back "
+                        f"{got('oauth2_refresh_token_expiry')!r}); check kanidm system oauth2 get {DOC_CLIENT}")
+    if DOC_REDIRECT not in ent.get("oauth2_rs_origin", []):
+        raise SiteError(f"Kanidm does not list the redirect {DOC_REDIRECT} for {DOC_CLIENT}; check kanidm system "
+                        f"oauth2 get {DOC_CLIENT}")
+
+
+def _providers(occ):
+    """{identifier: id} from the table `occ user_oidc:provider` prints ("| 1  | kanidm     | ...", spike logs/44)."""
+    _, out = occ("user_oidc:provider")
+    return {name: i for i, name in re.findall(r"^\|\s*(\d+)\s*\|\s*([^|\s]+)\s*\|", out, re.M)}
+
+
+def _bearer_provider(occ, d):
+    """The second user_oidc provider (spike proto/auth-setup.sh nextcloud): it only CHECKS chp-doc Bearer tokens, at
+    Kanidm's userinfo (Kanidm's access token has no preferred_username, logs/45), never provisions a user or changes
+    groups. An upsert applied every run. user_oidc wants a client secret; a public client has none and a Bearer-only
+    provider never uses it, so a fixed placeholder (not a secret) is given."""
+    web = _providers(occ).get("kanidm")                              # checked BEFORE the second provider is made
+    if web != LOGIN_PROVIDER_ID:
+        raise SiteError(f"user_oidc provider kanidm is id {web or '(missing)'}, but the login "
+                        f"rewrite (/etc/httpd/conf.d/chp-nextcloud-login-rewrite.inc) sends /login to provider "
+                        f"{LOGIN_PROVIDER_ID}: sign-in would fail. Check occ user_oidc:provider; remove the other "
+                        "providers so that kanidm is id 1, then re-run chp-site documents enable")
+    occ("user_oidc:provider", DOC_PROVIDER, f"--clientid={DOC_CLIENT}", "--clientsecret=unused-public-client",
+        f"--discoveryuri=https://idm.{d}/oauth2/openid/{DOC_CLIENT}/.well-known/openid-configuration",
+        f"--scope={' '.join(DOC_SCOPES)}", "--unique-uid=0", "--mapping-uid=preferred_username",
+        "--check-bearer=1", "--bearer-provisioning=0", "--group-provisioning=0")
+    occ("config:system:set", "user_oidc", "userinfo_bearer_validation", "--type=boolean", "--value=true")
+    occ("config:system:set", "user_oidc", "selfencoded_bearer_validation", "--type=boolean", "--value=false")
+    if DOC_PROVIDER not in _providers(occ):
+        raise SiteError(f"user_oidc provider {DOC_PROVIDER} is not listed after occ user_oidc:provider {DOC_PROVIDER}")
+
+
+def _area_id(sql, folder_id, rel):
+    """The file id of folder `rel` inside team folder `folder_id` (its filecache path is files/<rel> in the team
+    folder's storage), or None. A FILE of that name is not the area. Two rows are an error, never a pick."""
+    rows = sql("SELECT f.fileid FROM oc_filecache f JOIN oc_group_folders g ON g.storage_id = f.storage "
+               f"WHERE g.folder_id = {int(folder_id)} AND f.path = 'files/{rel}' AND f.mimetype IN {_DIR}")
+    if len(rows) > 1:
+        raise SiteError(f"NextCloud's file cache holds {len(rows)} entries for files/{rel} in team folder {folder_id}")
+    return str(rows[0]["fileid"]) if rows else None
+
+
+def _compliance_areas(run, occ, sql, root, ids):
+    """CUI/Compliance, Internal/Compliance, Archive/Superseded, Internal/Compliance/Superseded: made on the disk as the
+    apache user (only the missing levels), registered with groupfolders:scan, read-only by ACL to every group that
+    reaches the team folder (AREA_GROUPS).
+    Returns {documents.conf key: file id}. A second run makes and scans nothing; the ACL rules are upserts."""
+    out = {}
+    for key, team, rel in AREAS:
+        fid = ids[team]
+        fileid = _area_id(sql, fid, rel)
+        if fileid is None:
+            levels = [GF_DATA, f"{GF_DATA}/{fid}", f"{GF_DATA}/{fid}/files"]
+            parts = rel.split("/")
+            levels += [f"{GF_DATA}/{fid}/files/" + "/".join(parts[:i + 1]) for i in range(len(parts))]
+            missing = [x for x in levels if not _p(root, x).is_dir()]
+            if missing:
+                run(["install", "-d", "-m", "0750", "-o", "apache", "-g", "apache", *missing], check=True)
+                run(["restorecon", "-R", missing[0]], check=True)
+            occ("groupfolders:scan", fid)
+            fileid = _area_id(sql, fid, rel)
+            if fileid is None:
+                raise SiteError(f"{team}/{rel} is not in NextCloud's file cache after groupfolders:scan {fid} (on the "
+                                f"disk: {GF_DATA}/{fid}/files/{rel}); check occ groupfolders:list, then re-run")
+        for g in AREA_GROUPS[team]:
+            occ("groupfolders:permissions", fid, "--group", g, "--", "/" + rel, *AREA_ACL)
+        out[key] = fileid
+    return out
 
 
 def _folders(occ):
@@ -1476,8 +1636,9 @@ def _int(v, default=None):
 def _access(sql, folders, ids, storages, alert):
     """I2: nobody reaches CUI, FCI or Archive through a grant made inside NextCloud. cui-users holds Kanidm users and
     the canary only; admin is exactly the break-glass account; on each controlled folder advanced permissions are on and
-    the only ACL rule is doc-reviewers read-only on / (owner decision 7). Other rules (a stray group's left-over rule,
-    O8, or one that widens a reviewer) are flagged."""
+    the only ACL rules are doc-reviewers read-only on / (owner decision 7) and, on the Compliance/Superseded areas
+    (Plan 3), the groups of AREA_GROUPS read-only. Other rules (a stray group's left-over rule, O8, one that widens a reviewer,
+    or one that makes an area writable) are flagged."""
     rows = sql(Q_CUI_LOCAL)
     for r in rows[:LIST_MAX]:
         u = _clean(r.get("uid"), 64)
@@ -1514,9 +1675,14 @@ def _access(sql, folders, ids, storages, alert):
         if not any(_int(r.get("mask")) == REVIEWER_MASK and _int(r.get("permissions")) == REVIEWER_PERMS for r in root):
             alert(f"acl:{i}", f"the doc-reviewers rule on team folder {n} (id {i}) is missing or changed (it must be read "
                               f"only on /: {' '.join(REVIEWER_ACL)}); re-run chp-site documents enable")
-        other = [r for r in rules[n] if r not in root]
+        area = {"files/" + rel for _, t, rel in AREAS if t == n}     # Plan 3: read-only Compliance/Superseded
+        expected = [r for r in rules[n] if r.get("path") in area and r.get("mapping_type") == "group"
+                    and r.get("mapping_id") in AREA_GROUPS.get(n, ()) and _int(r.get("mask")) == REVIEWER_MASK
+                    and _int(r.get("permissions")) == REVIEWER_PERMS]
+        other = [r for r in rules[n] if r not in root and r not in expected]
         if other:
-            alert(f"acl-other:{i}", f"team folder {n} (id {i}) has ACL rules other than doc-reviewers read-only on /: "
+            alert(f"acl-other:{i}", f"team folder {n} (id {i}) has ACL rules other than doc-reviewers read-only on / "
+                                    "(and the read-only Compliance/Superseded rules): "
                   + _clean("; ".join(f"{r.get('mapping_type')} {r.get('mapping_id')} on /{str(r.get('path') or '')[6:]} "
                                      f"(mask {r.get('mask')}, permissions {r.get('permissions')})" for r in other[:5]), 240)
                   + f": remove them (occ groupfolders:permissions {i} --group <group> -- <path> clear)")

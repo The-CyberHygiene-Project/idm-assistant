@@ -2,6 +2,7 @@
 Kanidm with a fake CLI); nothing here touches a real system."""
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,8 @@ class Run:
         self.fapo_dies, self.fapo_restarts, self.no_counter, self.fsmark_rc = set(), 0, False, 0
         self.fsmark_warn = ""                              # fsmark --verify restarted fapolicyd itself (exit 0 + warning)
         self.enabled_units = set()                         # systemctl enable / is-enabled
+        self.nc = None                                     # set by Env: the area lookup reads what occ scanned
+        self.fileids = {}                                  # (folder id, path in filecache) -> fileid
 
     def __call__(self, argv, **kw):
         argv = list(argv)
@@ -61,6 +64,27 @@ class Run:
             (d / "postgresql.conf").write_text("#listen_addresses = 'localhost'\nport = 5432\n")
             (d / "pg_hba.conf").write_text("local all all trust\n")
             return R()
+        if argv[:2] == ["install", "-d"]:
+            skip = False
+            for x in argv[2:]:
+                if skip:
+                    skip = False
+                elif x in ("-m", "-o", "-g"):
+                    skip = True
+                elif not x.startswith("-"):
+                    (self.root / x.lstrip("/")).mkdir(parents=True, exist_ok=True)
+            return R()
+        if "psql" in argv and "oc_filecache" in j and "g.folder_id" in j:
+            # the Compliance-area lookup: a folder on the disk that groupfolders:scan has seen has a fileid
+            m = re.search(r"g\.folder_id = (\d+) AND f\.path = '([^']+)'", j)
+            fid, path = int(m.group(1)), m.group(2)
+            disk = self.root / f"data/nextcloud/data/__groupfolders/{fid}" / path
+            rows = []
+            if disk.is_dir() and self.nc is not None and fid in self.nc.scanned:
+                k = (fid, path)
+                self.fileids.setdefault(k, 500 + len(self.fileids))
+                rows = [{"fileid": self.fileids[k]}]
+            return R(0, json.dumps(rows) + "\n")
         if "psql" in argv:
             if "pg_roles" in j:
                 return R(0, "1\n" if self.pg_role else "")
@@ -149,6 +173,7 @@ class NC:
         self.users, self.groups, self.folders, self.tags = set(), {"admin"}, {}, {}
         self.providers, self.certs, self.calls, self.envs = set(), set(), [], []
         self.sticky_groups = False
+        self.scanned, self.provider_ids, self.provider_args = set(), {}, {}
         self.root = None                                  # set by Env: config.php is written like NextCloud does
 
     def _cfg(self):
@@ -244,7 +269,17 @@ class NC:
         if c == "user_oidc:provider":
             if a == ["--output=json"]:
                 return 0, json.dumps([{"identifier": p} for p in sorted(self.providers)]), ""
+            if not a:                                                    # the table occ prints (spike logs/44)
+                rows = "".join(f"| {i:<2} | {p:<10} | https://idm/oauth2/openid/x/.well-known/openid-configuration "
+                               f"|  | x |\n" for p, i in sorted(self.provider_ids.items(), key=lambda x: x[1]))
+                return 0, ("+----+------------+\n| ID | Identifier | Discovery endpoint | End session endpoint | "
+                           "Client ID |\n+----+------------+\n" + rows + "+----+------------+\n"), ""
             self.providers.add(a[0])
+            self.provider_ids.setdefault(a[0], len(self.provider_ids) + 1)
+            self.provider_args[a[0]] = a[1:]
+            return 0, "", ""
+        if c == "groupfolders:scan":
+            self.scanned.add(int(a[0]))
             return 0, "", ""
         if c == "security:certificates":
             return 0, "\n".join(sorted(self.certs)), ""
@@ -258,6 +293,16 @@ class KanidmCli:
     """kanidm as `Kanidm(run=...)` calls it: (argv) -> (rc, out, err)."""
     def __init__(self):
         self.groups, self.clients, self.calls = {"chp_users"}, {}, []
+        self.public, self.attrs, self.persons = set(), {}, set()
+
+    def _set(self, name, k, v, add=False):
+        a = self.attrs.setdefault(name, {})
+        if add:
+            a.setdefault(k, [])
+            if v not in a[k]:
+                a[k].append(v)
+        else:
+            a[k] = [v]
 
     def __call__(self, argv):
         argv = list(argv)
@@ -268,12 +313,31 @@ class KanidmCli:
         if a[:2] == ["group", "create"]:
             self.groups.add(a[2])
             return 0, "", ""
+        if a[:2] == ["person", "get"]:                 # Kanidm 1.11.2: absence is on STDOUT with rc 0 (Plan 2 9c)
+            return (0, f"---\nname: {a[2]}\ndisplayname: {a[2]}\n", "") if a[2] in self.persons \
+                else (0, "No matching entries\n", "")
         if a[:3] == ["system", "oauth2", "get"]:
             if a[3] not in self.clients:
                 return 0, "No matching entries\n", ""
-            return 0, f"name: {a[3]}\ndisplayname: NextCloud\n", ""
+            cls = ["oauth2_resource_server"] + (["oauth2_resource_server_public"] if a[3] in self.public
+                                                else ["oauth2_resource_server_basic"])
+            extra = "".join(f"{k}: {v}\n" for k, vs in sorted(self.attrs.get(a[3], {}).items()) for v in vs)
+            return 0, "".join(f"class: {c}\n" for c in cls) + f"name: {a[3]}\ndisplayname: NextCloud\n" + extra, ""
         if a[:3] == ["system", "oauth2", "create"]:
             self.clients[a[3]] = a[4:]
+            return 0, "", ""
+        if a[:3] == ["system", "oauth2", "create-public"]:
+            self.clients[a[3]] = a[4:]
+            self.public.add(a[3])
+            return 0, "", ""
+        if a[:3] == ["system", "oauth2", "enable-localhost-redirects"]:
+            self._set(a[3], "oauth2_allow_localhost_redirect", "true")
+            return 0, "", ""
+        if a[:3] == ["system", "oauth2", "add-redirect-url"]:
+            self._set(a[3], "oauth2_rs_origin", a[4], add=True)
+            return 0, "", ""
+        if a[:3] == ["system", "oauth2", "set-refresh-token-expiry"]:
+            self._set(a[3], "oauth2_refresh_token_expiry", a[4])
             return 0, "", ""
         if a[:3] == ["system", "oauth2", "show-basic-secret"]:
             return 0, f"{OIDC_SECRET}\n", ""
@@ -304,6 +368,7 @@ class Env:
         self.root = make_root(tmp_path, security)
         self.run, self.nc, self.kcli = Run(self.root, mta), NC(), KanidmCli()
         self.nc.root = self.root
+        self.run.nc = self.nc
         self.k = Kanidm("idm_admin", run=self.kcli)
         self.records = []
         self.stick = tmp_path / "stick"
@@ -493,11 +558,12 @@ def test_reviewers_read_only_only_on_cui_fci_archive(tmp_path):
     e = Env(tmp_path)
     e.enable()
     by = {f["name"]: f for f in e.nc.folders.values()}
+    on_root = lambda n: [r for r in by[n]["rules"] if r[3] == "/"]     # the Compliance areas' rules: Plan 3 Task 2
     for n in ("CUI", "FCI", "Archive"):
-        assert by[n]["rules"] == [["--group", "doc-reviewers", "--", "/", "+read", "-write", "-create", "-delete",
-                                   "-share"]]
+        assert on_root(n) == [["--group", "doc-reviewers", "--", "/", "+read", "-write", "-create", "-delete",
+                               "-share"]]
     for n in ("Operations", "Internal", "Public"):
-        assert by[n]["rules"] == []
+        assert on_root(n) == []
     # a reviewer reaches CUI only through cui-users: doc-reviewers is never a folder group
     assert all("doc-reviewers" not in f["groups"] for f in by.values())
 

@@ -34,6 +34,7 @@ Source24:       LICENSE
 Source25:       chp-documents-check.service
 Source26:       chp-documents-check.timer
 Source27:       81-documents-tags.sh
+Source28:       nextcloud-login-rewrite.conf
 Requires:       nextcloud-chp >= 35.0.3-5, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
 Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-4
 BuildRequires:  systemd-rpm-macros
@@ -84,6 +85,7 @@ install -Dm0644 %{SOURCE24} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -Dm0644 %{SOURCE25} %{buildroot}%{_unitdir}/chp-documents-check.service
 install -Dm0644 %{SOURCE26} %{buildroot}%{_unitdir}/chp-documents-check.timer
 install -Dm0755 %{SOURCE27} %{buildroot}%{_prefix}/lib/chp/monitor.d/81-documents-tags.sh
+install -Dm0644 %{SOURCE28} %{buildroot}%{_sysconfdir}/httpd/conf.d/chp-nextcloud-login-rewrite.inc
 install -dm0700 %{buildroot}%{_sysconfdir}/pki/nextcloud
 install -dm0700 %{buildroot}%{_sharedstatedir}/chp/documents
 
@@ -112,6 +114,7 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %doc %{_docdir}/%{name}/nextcloud-egress-addr.nft.example
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/chp-nextcloud.conf
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/chp-nextcloud-lan.inc
+%{_sysconfdir}/httpd/conf.d/chp-nextcloud-login-rewrite.inc
 %config(noreplace) %{_sysconfdir}/php-fpm.d/nextcloud.conf
 %{_sysconfdir}/nftables/chp-nextcloud-egress.nft
 %ghost %attr(0644,root,root) %{_sysconfdir}/chp/nextcloud-egress-addr.nft

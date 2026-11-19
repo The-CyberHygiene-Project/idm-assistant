@@ -119,6 +119,38 @@ _PATH = r"(?:/[A-Za-z0-9._-]+)+"
 _NAME = r"[^\x00-\x1f=,]{1,64}"
 
 
+_MARK = r"[^\x00-\x1f\x7f]{1,128}"
+
+
+def _doc_keys(raw, s):
+    """ISO 0.7.0 Plan 3 (optional, additive): who approves controlled documents (Kanidm account names; enable checks
+    that each exists in Kanidm) and the CUI marking values (Task 5 reads them through sitevars). Empty = not set."""
+    from .kanidm import NAME_RE                       # here: kanidm imports this module
+    isso = raw.get("DOC_ISSO_ACCOUNT", "").strip()
+    if isso and not re.fullmatch(NAME_RE, isso):
+        raise SiteError(f"DOC_ISSO_ACCOUNT: {isso!r} is not a Kanidm account name (lower-case letters, digits, _; "
+                        "starts with a letter; max 32)")
+    appr = []
+    for a in (x.strip() for x in raw.get("DOC_APPROVER_ACCOUNTS", "").split(",")):
+        if not a:
+            continue
+        if not re.fullmatch(NAME_RE, a):
+            raise SiteError(f"DOC_APPROVER_ACCOUNTS: {a!r} is not a Kanidm account name (lower-case letters, digits, "
+                            "_; starts with a letter; max 32)")
+        if a in appr:
+            raise SiteError(f"DOC_APPROVER_ACCOUNTS: {a} is listed twice")
+        appr.append(a)
+    if isso and isso in appr:
+        raise SiteError(f"DOC_ISSO_ACCOUNT {isso} is also in DOC_APPROVER_ACCOUNTS: the ISSO overrides, the approvers "
+                        "approve; name the ISSO in DOC_ISSO_ACCOUNT only")
+    s["DOC_ISSO_ACCOUNT"], s["DOC_APPROVER_ACCOUNTS"] = isso, appr
+    for k in ("CUI_CONTROLLED_BY", "CUI_CATEGORY", "CUI_POC"):
+        v = raw.get(k, "").strip()
+        if v and not re.fullmatch(_MARK, v):
+            raise SiteError(f"{k}: 1-128 printable characters (it is printed in the CUI marking)")
+        s[k] = v
+
+
 def parse_site(text):
     where = {}
     raw = read_kv(text, "site.conf", where)
@@ -127,7 +159,8 @@ def parse_site(text):
     known = {"DOMAIN", "SUBNET", "GATEWAY", "DNS_FORWARDERS", "NTP_UPSTREAM", "TIMEZONE", "ISSO_NAME",
              "UNEXPIRE_DELEGATES", "COLLECTOR_IP", "ACCESSIBILITY", "ALERT_HOOK", "ADMIN_SSH_PUBKEY",
              "COLLECTOR_SSH_PUBKEY", "BASELINE_DELEGATES", "SECURITY_ADDONS", "SECURITY_ALERT_LEVEL",
-             "REVIEW_DELEGATES", "DOCUMENTS", "DOCUMENTS_BACKUP_DAYS"}
+             "REVIEW_DELEGATES", "DOCUMENTS", "DOCUMENTS_BACKUP_DAYS", "DOC_ISSO_ACCOUNT", "DOC_APPROVER_ACCOUNTS",
+             "CUI_CONTROLLED_BY", "CUI_CATEGORY", "CUI_POC"}
     for k in raw:
         if k not in known:
             raise SiteError(f"site.conf: unknown key {k}")
@@ -200,6 +233,7 @@ def parse_site(text):
     if not (bd.isdigit() and 1 <= int(bd) <= 365):
         raise SiteError("DOCUMENTS_BACKUP_DAYS: a number of days from 1 to 365 (default 14)")
     s["DOCUMENTS_BACKUP_DAYS"] = int(bd)
+    _doc_keys(raw, s)
     lv = raw.get("SECURITY_ALERT_LEVEL", "10") or "10"
     if not (lv.isdigit() and 3 <= int(lv) <= 15):
         raise SiteError("SECURITY_ALERT_LEVEL: a number from 3 to 15 (Wazuh rule level; default 10)")

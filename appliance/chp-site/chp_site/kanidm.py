@@ -168,6 +168,24 @@ class Kanidm:
             raise SiteError(f"claim join must be array, csv or ssv, not {join!r}")
         self._k("system", "oauth2", "update-claim-map-join", _sa(name), _sa(claim), join)
 
+    # ---- the doc commands' PUBLIC client chp-doc (ISO 0.7.0 Plan 3 Task 2; spike proto/auth-setup.sh, logs/44) ----
+
+    def oauth2_create_public(self, name, display, origin):
+        """A public client: no secret, PKCE S256 always (Kanidm cannot turn it off for a public client)."""
+        self._k("system", "oauth2", "create-public", _sa(name), display, _url(origin))
+
+    def oauth2_enable_localhost_redirects(self, name):
+        """Any loopback port is accepted for this client, strict redirects on (RFC 8252 7.3; spike logs/49)."""
+        self._k("system", "oauth2", "enable-localhost-redirects", _sa(name))
+
+    def oauth2_add_loopback_redirect(self, name, url):
+        if not re.fullmatch(r"http://127\.0\.0\.1/[A-Za-z0-9._~/%-]*", url or ""):
+            raise SiteError(f"{url!r} is not a loopback (http://127.0.0.1/...) redirect URL")
+        self._k("system", "oauth2", "add-redirect-url", _sa(name), url)
+
+    def oauth2_refresh_expiry(self, name, seconds):
+        self._k("system", "oauth2", "set-refresh-token-expiry", _sa(name), str(int(seconds)))
+
     def oauth2_basic_secret(self, name):
         """The confidential client's secret. Returned to the caller only: never logged, never in an argv."""
         lines = [ln.strip() for ln in self._k("system", "oauth2", "show-basic-secret", _sa(name)).splitlines() if ln.strip()]
