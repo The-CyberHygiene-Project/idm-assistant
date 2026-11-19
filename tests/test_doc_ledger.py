@@ -8,6 +8,7 @@ import json
 import os
 import re
 import ssl
+import subprocess
 import threading
 import urllib.error
 from pathlib import Path
@@ -1244,14 +1245,15 @@ def test_publish_account_password_reset_every_run(tmp_path):
 
 # ---------- fix round 2: ambiguous writes, the append prelude, safe journal lines ----------
 
-def _timeout_put(env, target, landed):
+def _timeout_put(env, target, landed, exc=None, wrote=None):
     real = env.store.put
+    exc = exc or L.OccTimeout(f"occ files:put timed out after {L.OCC_TIMEOUT} s")
 
     def put(folder, name, data):
         if name == target:
             if landed:
-                real(folder, name, data)                       # the server wrote it; occ was killed afterwards
-            raise L.StoreError(f"occ files:put timed out after {L.OCC_TIMEOUT} s")
+                real(folder, name, data if wrote is None else wrote)   # the server wrote it; occ was killed after
+            raise exc
         return real(folder, name, data)
     env.store.put = put
 
@@ -1262,14 +1264,44 @@ def _clean_area(env):
 
 
 @pytest.mark.parametrize("target", ["CUI_SSP_v1.1.docx", "CUI_SSP_v1.1.pdf"])
-@pytest.mark.parametrize("landed", [True, False])
-def test_put_timeout_landed_or_not_is_undone(env, target, landed):
+@pytest.mark.parametrize("timeout", [True, False])
+def test_put_that_landed_is_undone(env, target, timeout):
     _ready_to_publish(env)
-    _timeout_put(env, target, landed)
-    m = refused(env.publish("alice", V11), "timed out")
-    _clean_area(env)                                           # a put that landed is found by name and removed
+    _timeout_put(env, target, True, None if timeout else L.StoreError("occ files:put: exit 1"))
+    m = refused(env.publish("alice", V11))
+    _clean_area(env)                                           # found by name, its bytes ours: removed
     assert "UNDO INCOMPLETE" not in m
     assert any(j.get("event") == "publish-undone" for j in env.journal)
+
+
+@pytest.mark.parametrize("target", ["CUI_SSP_v1.1.docx", "CUI_SSP_v1.1.pdf"])
+def test_put_that_failed_cleanly_and_did_not_land_is_undone(env, target):
+    _ready_to_publish(env)
+    _timeout_put(env, target, False, L.StoreError("occ files:put: exit 1"))
+    m = refused(env.publish("alice", V11))
+    _clean_area(env)
+    assert "UNDO INCOMPLETE" not in m and "nothing was published" in m
+
+
+@pytest.mark.parametrize("target", ["CUI_SSP_v1.1.docx", "CUI_SSP_v1.1.pdf"])
+def test_put_timeout_not_seen_is_unknown(env, target):
+    """occ killed at the timeout and the file not in the cache: the write may still have happened (cut off between
+    the disk and the cache row): UNDO INCOMPLETE naming the step, never "undone"."""
+    _ready_to_publish(env)
+    _timeout_put(env, target, False)
+    m = refused(env.publish("alice", V11), "publish failed", "UNDO INCOMPLETE", f"files:put {target}", "killed")
+    assert "nothing was published" not in m.lower()
+    assert [j for j in env.journal if j.get("event") == "publish-undo-failed"]
+    assert not any(j.get("event") == "publish-undone" for j in env.journal)
+
+
+def test_put_landed_with_other_bytes_is_never_deleted(env):
+    _ready_to_publish(env)
+    _timeout_put(env, "CUI_SSP_v1.1.docx", True, wrote=b"CUI//BANNER half a fi")
+    m = refused(env.publish("alice", V11), "UNDO INCOMPLETE", "other bytes")
+    assert "nothing was published" not in m.lower()
+    left = [n for n in env.store.nodes.values() if n["name"] == "CUI_SSP_v1.1.docx"]
+    assert len(left) == 1 and left[0]["data"] == b"CUI//BANNER half a fi"   # not ours to delete
 
 
 def test_put_timeout_with_unknown_outcome_is_undo_incomplete(env):
@@ -1285,24 +1317,35 @@ def test_put_timeout_with_unknown_outcome_is_undo_incomplete(env):
     m = refused(env.publish("alice", V11), "UNDO INCOMPLETE", "files:put CUI_SSP_v1.1.docx", "outcome is unknown")
     ev = [j for j in env.journal if j.get("event", "").startswith("publish-undo")]
     assert ev[-1]["event"] == "publish-undo-failed" and "files:put" in ev[-1]["failed"][0]
-    assert "nothing was published" not in m.split("UNDO INCOMPLETE")[1]
+    assert m.startswith("refused: the publish failed") and "nothing was published" not in m.lower()
 
 
-@pytest.mark.parametrize("landed", [True, False])
-def test_move_timeout_landed_or_not_is_undone(env, landed):
-    _ready_to_publish(env)
+def _failing_move(env, landed, exc):
     real = env.store.move
 
     def move(fid, folder):
         if folder == 300 and fid == env.doc:
             if landed:
                 real(fid, folder)
-            raise L.StoreError(f"occ files:move timed out after {L.OCC_TIMEOUT} s")
+            raise exc
         return real(fid, folder)
     env.store.move = move
-    m = refused(env.publish("alice", V11), "timed out")
-    _clean_area(env)                                           # the area keeps its current version either way
+
+
+@pytest.mark.parametrize("landed,timeout", [(True, True), (True, False), (False, False)])
+def test_move_failure_known_outcome_is_undone(env, landed, timeout):
+    _ready_to_publish(env)
+    _failing_move(env, landed, L.OccTimeout("occ files:move timed out") if timeout else L.StoreError("exit 1"))
+    m = refused(env.publish("alice", V11))
+    _clean_area(env)                                           # the area keeps its current version
     assert env.store.nodes[env.doc]["parent"] == 100 and "UNDO INCOMPLETE" not in m
+
+
+def test_move_timeout_still_in_place_is_unknown(env):
+    _ready_to_publish(env)
+    _failing_move(env, False, L.OccTimeout("occ files:move timed out"))
+    m = refused(env.publish("alice", V11), "UNDO INCOMPLETE", "files:move CUI_SSP_v1.0.docx", "killed")
+    assert "nothing was published" not in m.lower()
 
 
 def test_move_timeout_with_unknown_outcome_is_undo_incomplete(env):
@@ -1361,3 +1404,53 @@ def test_partial_line_journal_failure_still_answers(env, monkeypatch):
     assert not env.quarantine() and env.out(rid)["state"] == "refused"
     monkeypatch.undo()
     assert env.store.names(100) == ["CUI_SSP_v1.0.docx", "CUI_SSP_v1.0.pdf"]
+
+
+# ---------- fix round 3: the whole occ process group is killed at the timeout ----------
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    try:                                                       # a zombie is dead: check its state where we can
+        out = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        return bool(out) and not out.startswith("Z")
+    except OSError:
+        return True
+
+
+def _wait_gone(pid, secs=5):
+    import time as _t
+    end = _t.time() + secs
+    while _t.time() < end:
+        if not _alive(pid):
+            return True
+        _t.sleep(0.05)
+    return False
+
+
+def test_occ_timeout_kills_the_whole_process_group(tmp_path):
+    pidf = tmp_path / "grandchild.pid"
+    # like runuser -> php: the child we start spawns the process that does the work
+    argv = ["sh", "-c", f"sleep 60 & echo $! > {pidf}; wait"]
+    with pytest.raises(L.OccTimeout):
+        L._run_group(argv, b"", 1)
+    pid = int(pidf.read_text())
+    assert _wait_gone(pid), "the grandchild survived the timeout"
+
+
+def test_occ_store_timeout_kills_the_group_and_raises_occtimeout(tmp_path, monkeypatch):
+    pidf = tmp_path / "gc.pid"
+    s = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=lambda q: [])
+    assert s.occ_run is L._run_group                           # the production default
+    s.OCC = ["sh", "-c", f"sleep 60 & echo $! > {pidf}; wait", "occ"]
+    monkeypatch.setattr(L, "OCC_TIMEOUT", 1)
+    with pytest.raises(L.OccTimeout, match="process group was killed"):
+        s._occ("files:put", "-", "/chp-publisher/files/CUI/Compliance/x", data=b"x")
+    assert _wait_gone(int(pidf.read_text()))
+
+
+def test_run_group_returns_output_and_exit_code():
+    r = L._run_group(["sh", "-c", "cat; echo err >&2; exit 3"], b"in", 10)
+    assert (r.returncode, r.stdout, r.stderr) == (3, b"in", b"err\n")

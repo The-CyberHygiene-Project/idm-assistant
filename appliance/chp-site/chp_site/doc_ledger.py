@@ -38,6 +38,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import ssl
 import stat
 import subprocess
@@ -96,6 +97,10 @@ class Node(NamedTuple):
 
 class StoreError(Exception):
     """A NextCloud operation failed."""
+
+
+class OccTimeout(StoreError):
+    """occ was killed at OCC_TIMEOUT: the write it was doing may or may not have happened."""
 
 
 class Degraded(StoreError):
@@ -753,13 +758,14 @@ def _handle(ctx, rid, r):
                 e = led.append(e, ctx.journal)
             except _NotAppended as err:
                 # step 9 failed: the publish's writes are undone, so nothing is live without its entry
-                msg = (f"refused: the ledger could not be written ({str(err)[:160]}); nothing was recorded"
-                       + ("; nothing was published (undone)" if undo else ""))
                 failed = _undo(ctx.store, undo)
                 if undo:
                     _journal_undo(ctx, r, e.get("doc"), failed)
                 if failed:
-                    msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
+                    msg = _incomplete(f"the ledger could not be written: {str(err)[:160]}", failed)
+                else:
+                    msg = (f"refused: the ledger could not be written ({str(err)[:160]}); nothing was recorded"
+                           + ("; nothing was published (undone)" if undo else ""))
                 if not err.cut:
                     _safe(ctx.journal, {"event": "ledger-partial-line", "request_id": rid, "error": str(err)[:200]})
                     msg += "; the ledger may end in a partial line: the ISSO must check it (chp-site doc-ledger verify)"
@@ -769,6 +775,19 @@ def _handle(ctx, rid, r):
     # appended: from here on, whatever fails, the answer is "done"
     _safe(ctx.journal, {"event": "ledger", **e})
     return _answer(ctx, rid, user, "done", _done_text(e), e)
+
+
+_CLAIM = re.compile(r"[;.(]?\s*\(?[Nn]othing was (?:published|written|recorded)[^;.)]*\)?")
+
+
+def _incomplete(cause, failed):
+    """The refusal when the undo could not be completed: never a claim that nothing was published."""
+    cause = _CLAIM.sub("", cause).strip().rstrip(";.").strip()
+    if cause.startswith("refused: "):
+        cause = cause[len("refused: "):]
+    return (f"refused: the publish failed ({cause[:400]}); UNDO INCOMPLETE ({'; '.join(failed)}): parts of it may be in "
+            "the area; the ISSO must check the area (and the journal, event publish-undo-failed) before anyone "
+            "publishes this document again")
 
 
 def _journal_undo(ctx, r, doc, failed):
@@ -1000,6 +1019,26 @@ def _b64(v, what):
         raise _Refuse(f"refused: the {what} is not valid base64") from None
 
 
+def _run_group(argv, input=b"", timeout=None):
+    """Run argv in its own session; on a timeout SIGKILL the whole process group (runuser cannot pass a SIGKILL on
+    to php, which would go on writing after we probed), wait a bounded time, then raise OccTimeout."""
+    p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         start_new_session=True)
+    try:
+        out, err = p.communicate(input, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            p.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        raise OccTimeout(f"occ {argv[-1] if argv else ''}: killed after {timeout} s".strip()) from None
+    return subprocess.CompletedProcess(argv, p.returncode, out, err)
+
+
 def _put_step(s, undo, folder, name, data):
     """files:put, and its undo step. A put that fails may still have landed (occ killed at OCC_TIMEOUT after the
     server wrote the file): the area is probed by name (the name was free before) and a landed file gets its undo
@@ -1007,14 +1046,20 @@ def _put_step(s, undo, folder, name, data):
     try:
         n = s.put(folder, name, data)
     except Exception as err:
+        what = f"files:put {name}: failed ({str(err)[:80]}) and its outcome is unknown"
         try:
             landed = next((c for c in s.children(folder) if c.type == "file" and _nfc(c.name) == name), None)
+            ours = landed is not None and _sha(s.read(landed.file_id)) == _sha(data)
         except Exception as perr:                         # noqa: BLE001
-            undo.append(("unknown", f"files:put {name}: failed ({str(err)[:80]}) and its outcome is unknown "
-                                    f"({str(perr)[:80]}): {name} may be in the area"))
+            undo.append(("unknown", f"{what} ({str(perr)[:80]}): {name} may be in the area"))
         else:
-            if landed is not None:
-                undo.append(("delete", landed.file_id))
+            if ours:
+                undo.append(("delete", landed.file_id))   # provably ours: the same bytes, under a name that was free
+            elif landed is not None:                      # never delete a file we cannot prove is ours
+                undo.append(("unknown", f"{what}: {name} is in the area with other bytes (a partial write?)"))
+            elif isinstance(err, OccTimeout):             # killed: the cache may not show a write that happened
+                undo.append(("unknown", f"{what}: occ was killed at the timeout and {name} is not seen in the file "
+                                        "cache, which can miss a write cut off between the disk and the cache"))
         raise
     undo.append(("delete", n.file_id))
     return n
@@ -1037,6 +1082,10 @@ def _move_step(s, undo, node, dest, back):
             elif now is None:
                 undo.append(("unknown", f"files:move {node.name}: failed ({str(err)[:80]}) and file id "
                                         f"{node.file_id} is no longer found"))
+            elif isinstance(err, OccTimeout):
+                undo.append(("unknown", f"files:move {node.name}: failed ({str(err)[:80]}) and its outcome is "
+                                        "unknown: occ was killed at the timeout; the file cache still shows it in "
+                                        "place, which can lag a move cut off midway"))
         raise
     undo.append(("move", node.file_id, back))
 
@@ -1167,10 +1216,11 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
         failed = _undo(s, undo)
         undo.clear()
         _journal_undo(ctx, r, t.doc, failed)
-        msg = str(err) if isinstance(err, _Refuse) else (f"refused: the document server could not publish "
-                                                         f"({str(err)[:300]}); nothing was published")
         if failed:
-            msg += "; UNDO INCOMPLETE (" + "; ".join(failed) + "): an administrator must check the area"
+            msg = _incomplete(str(err), failed)
+        else:
+            msg = str(err) if isinstance(err, _Refuse) else (f"refused: the document server could not publish "
+                                                             f"({str(err)[:300]}); nothing was published")
         raise _Refuse(msg) from None
     except Exception:
         failed = _undo(s, undo)
@@ -1222,10 +1272,12 @@ class OccStore:
     OCC = ["runuser", "-u", "apache", "--", "/usr/bin/php", "-d", "apc.enable_cli=1", "-d", "memory_limit=512M",
            "/usr/lib/nextcloud/occ"]
 
-    def __init__(self, conf, run=subprocess.run, sql=None, data="/data/nextcloud/data/__groupfolders"):
+    def __init__(self, conf, run=subprocess.run, sql=None, data="/data/nextcloud/data/__groupfolders", occ_run=None):
         from . import documents as D
         self.user = (conf.get("DOC_PUBLISH_USER") or "").strip()
         self.run = run
+        # occ: in its own process group, killed whole at the timeout (a test's fake `run` stands in for both)
+        self.occ_run = occ_run or (_run_group if run is subprocess.run else run)
         self.sql = sql or D.sql_runner(run)
         self.data = Path(data)
 
@@ -1234,9 +1286,14 @@ class OccStore:
             raise StoreError("server-side publish is not set up: documents.conf has no DOC_PUBLISH_USER (run chp-site "
                              "documents enable)")
         try:
-            r = self.run(self.OCC + list(argv), input=data, capture_output=True, timeout=OCC_TIMEOUT)
+            if self.occ_run is _run_group:
+                r = _run_group(self.OCC + list(argv), input=data, timeout=OCC_TIMEOUT)
+            else:
+                r = self.occ_run(self.OCC + list(argv), input=data, capture_output=True, timeout=OCC_TIMEOUT)
+        except OccTimeout:
+            raise OccTimeout(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s (its process group was killed)") from None
         except subprocess.TimeoutExpired:
-            raise StoreError(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s") from None
+            raise OccTimeout(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s") from None
         if r.returncode != 0:
             text = (r.stderr or b"").decode("utf-8", "replace") + (r.stdout or b"").decode("utf-8", "replace")
             last = (text.strip().splitlines() or [f"exit {r.returncode}"])[-1][:300]
