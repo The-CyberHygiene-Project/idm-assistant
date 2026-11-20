@@ -61,6 +61,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   (CUI_SSP_v1.2, <title>_vX.Y, ASCII digits) is a citation, not a banner, in banner positions. Fix round 3: only the
   name token is carved out; what follows it is still a banner when it holds //, the word, the phrase or a capitals
   marking; an SP- title is no citation; Markdown and docx give the same verdict; ===+/===! tab heads are containers.
+  Fix round 4: one Latin-confusables fold (Unicode confusables data, ICU 78.3) replaces the hand-made lookalike
+  list in every wrong-banner check (never the required banner); the text after a cited name is read like a line
+  start (C U I, cul, Cu1); a further document name in it is a citation (CUI_SSP_v1.2, CUI_POAM_v1.0 passes).
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
 - ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):

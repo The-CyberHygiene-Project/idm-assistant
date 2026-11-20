@@ -1444,3 +1444,140 @@ def test_12b_r3_allowed_tails_after_a_cited_name_pass(tmp_path, line):
         f.write_text(text, encoding="utf-8")
         r = M.check(f, False, NO_VALUES)
         assert r.ok, (text, r.problems)
+
+
+# ---------- Task 12b fix round 4: one Latin-confusables fold; the tail read like a line start; further citations ----
+
+def _judged_everywhere(tmp_path, line):
+    """A wrong CUI banner in every banner position: _looks_like (wide), an FCI_ docx header, and the first and the
+    last line of a non-CUI Markdown file."""
+    assert M._looks_like(line, "cui", True), line
+    r = _fci_docx_header(tmp_path, line)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (line, r.problems)
+    for text in (f"{line}\n\nIntro.\n\nMore.\n", f"Handbook\n\nIntro.\n\n{line}\n"):
+        f = tmp_path / "Handbook_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        assert not M.check(f, False, NO_VALUES).ok, text
+
+
+def _passes_everywhere(tmp_path, line):
+    assert not M._looks_like(line, "cui", True), line
+    r = _fci_docx_header(tmp_path, line)
+    assert r.ok, (line, r.problems)
+    for text in (f"{line}\n\nIntro.\n\nMore.\n", f"Handbook\n\nIntro.\n\n{line}\n"):
+        f = tmp_path / "Handbook_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (text, r.problems)
+
+
+# item 1: letters from other scripts that look like Latin letters are read as those letters before every check
+R4_CONFUSABLE = ["CUI_SР-PROPIN_v1.0",          # Cyrillic Er: an SP- title, no citation
+                 "CUI_ЅP-PROPIN_v1.0",          # Cyrillic Dze
+                 "CUI_SSP_v1.2 SР-PROPIN",      # Cyrillic Er in the capitals marking
+                 "CUI_SSP_v1.2 NОFORN",         # Cyrillic O
+                 "CUI_SSP_v1.2 ΝΟFORN",    # Greek Nu, Omicron
+                 "CUI_SSP_v1.2 SΡ-PROPIN",      # Greek Rho
+                 "CUI_SSP_v1.2 ᏟᏚP",       # Cherokee Tli, Du: "CSP"
+                 "ᏟUI//SP-PROPIN",              # Cherokee Tli at the line start
+                 "C∪I//SP-PROPIN",              # union sign as U
+                 "ꓚꓴI SP-PROPIN",          # Lisu Ca, U
+                 "CUI_SSP_v1.2 ᏟUI"]            # the word, disguised, after a cited name
+
+
+@pytest.mark.parametrize("line", R4_CONFUSABLE)
+def test_12b_r4_confusable_letters_are_folded_everywhere(tmp_path, line):
+    _judged_everywhere(tmp_path, line)
+
+
+@pytest.mark.parametrize("inner", ["ᏟUI", "C∪I", "ᏟUI//SP-PROPIN", "ꓚꓴI"])
+def test_12b_r4_confusable_word_in_the_md_body(tmp_path, inner):
+    r = _fci_md(tmp_path, inner)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+
+
+def test_12b_r4_confusables_table():
+    """The fold table: non-ASCII sources only, one ASCII letter each; the earlier hand-made lookalikes kept; a few
+    entries from the Unicode confusables data (UTS #39) checked by hand."""
+    t = M._LATIN_FOLD
+    assert t and all(k > 127 and isinstance(v, str) and len(v) == 1 and v.isascii() and v.isalpha()
+                     for k, v in t.items())
+    for src, dst in {"С": "C", "с": "c", "Ϲ": "C", "ϲ": "c", "І": "I", "і": "i",
+                     "Ι": "I", "ι": "i", "Ӏ": "I", "Յ": "U", "Ս": "U", "ս": "u",
+                     "υ": "u", "У": "U", "ᗅ": "F", "Ƒ": "F", "Ϝ": "F",
+                     "Р": "P", "О": "O", "Ν": "N", "Ρ": "P", "Ꮯ": "C", "Ѕ": "S",
+                     "∪": "U"}.items():
+        assert t.get(ord(src)) == dst, (hex(ord(src)), t.get(ord(src)), dst)
+    assert M._wfold("SР-PROPIN NОFORN", li=False, cf=False) == "SP-PROPIN NOFORN"
+
+
+def test_12b_r4_required_banner_is_not_folded(tmp_path):
+    """The fold never touches the REQUIRED banner: lookalike letters in a CUI_ file's banner lines are no banner."""
+    for first in ("СUI", "CUI//SP-PRОPIN", "ᏟUI"):
+        f = tmp_path / "CUI_X_v1.0.md"
+        f.write_text(f"{first}\n\n{BLOCK_MD}Body\n\n{first}\n", encoding="utf-8")
+        r = M.check(f, True, VALUES)
+        assert not r.ok
+        assert any("the first line must be the CUI banner" in p for p in r.problems), (first, r.problems)
+        assert any("the last line must be the CUI banner" in p for p in r.problems), (first, r.problems)
+
+
+def test_12b_r4_confusable_prefix_is_refused():
+    for name in ("ᏟUI_SSP_v1.0.docx", "FCІ_SSP_v1.0.docx", "ꓝꓚI_SSP_v1.0.docx"):
+        with pytest.raises(M.NameRuleError, match="prefix"):
+            M.parse_name(name)
+
+
+# items 2 and 3: what follows a cited name is read like a line start (the spelled-out word; l and 1 as i)
+R4_TAIL_READING = ["CUI_SSP_v1.2: C U I", "CUI_SSP_v1.2 C.U.I.", "CUI_SSP_v1.2 — C/U/I", "CUI_SSP_v1.2 (C-U-I)",
+                   "CUI_SSP_v1.2 cul", "CUI_SSP_v1.2 Cu1", "CUI_SSP_v1.2 CUl", "CUI_SSP_v1.2 — cu1",
+                   "CUI_SSP_v1.2 C U l"]
+
+
+@pytest.mark.parametrize("line", R4_TAIL_READING)
+def test_12b_r4_tail_is_read_like_a_line_start(tmp_path, line):
+    _judged_everywhere(tmp_path, line)
+
+
+# item 4: a further citation in the tail is a citation, not the word; what follows it is judged the same way
+R4_FURTHER_BAD = ["CUI_SSP_v1.2, CUI_POAM_v1.0 SP-PROPIN", "CUI_SSP_v1.2, CUI_POAM_v1.0 // SP-PROPIN",
+                  "CUI_SSP_v1.2 CUI_POAM_v1.0 NOFORN", "CUI_SSP_v1.2, CUI_POAM_v1.0, CUI",
+                  "CUI_SSP_v1.2, CUI_POAM_v1.0: C U I", "CUI_SSP_v1.2, CUI_SP-PROPIN_v1.0",
+                  "CUI_SSP_v1.2, CUI_POAM_v1.0 cul", "CUI_SSP_v1.2, CUI_POAM_v1.0 SР-PROPIN",
+                  "CUI_SSP_v1.2, CUI_POAM_v1.0, CUI_IRP_v2.1 NOFORN", "CUI_SSP_v1.2, CUI_POAM_v1.0 FCI",
+                  "CUI_SSP_v1.2, CUI_POAM", "CUI_SSP_v1.2, CUI_POAM_v1.0 Controlled Unclassified Information"]
+R4_FURTHER_OK = ["CUI_SSP_v1.2, CUI_POAM_v1.0", "CUI_SSP_v1.2 and CUI_POAM_v1.0",
+                 "CUI_SSP_v1.2, CUI_POAM_v1.0, CUI_IRP_v2.1 review notes",
+                 "CUI_SSP_v1.2 — CUI_POAM_v1.0-DRAFT.xlsx (draft)", "CUI_SSP_v1.2 supersedes CUI_SSP_v1.1",
+                 "CUI_SSP_v1.2 — обзор документа",
+                 "CUI_SSP_v1.2 — Ελληνική μετάφραση"]
+
+
+@pytest.mark.parametrize("line", R4_FURTHER_BAD)
+def test_12b_r4_what_follows_a_further_citation_is_judged(tmp_path, line):
+    _judged_everywhere(tmp_path, line)
+
+
+@pytest.mark.parametrize("line", R4_FURTHER_OK)
+def test_12b_r4_further_citations_and_ordinary_tails_pass(tmp_path, line):
+    _passes_everywhere(tmp_path, line)
+
+
+def test_12b_r4_non_latin_prose_still_passes(tmp_path):
+    """The fold reads lookalike letters as Latin; ordinary Cyrillic and Greek text is still no banner."""
+    for line in ("Руководство по СИ",
+                 "Ελληνικά κείμενο",
+                 "СУД и СИЗ"):
+        _passes_everywhere(tmp_path, line)
+        f = tmp_path / "FCI_H_v1.0.md"
+        f.write_text(f"FCI\n\n{line}\n\nBody\n\nFCI\n", encoding="utf-8")
+        assert M.check(f, True, NO_VALUES).ok, line
+
+
+def test_12b_r4_many_citations_in_a_header_line_check_quickly():
+    import time
+    for unit in ("CUI_", "CUI_a", "CUI_SSP_v1.2 ", "CUI_SSP_v1.2, ", "CUI_x_v", "C U I "):
+        line = "CUI_SSP_v1.2 " + unit * (100000 // len(unit))
+        t = time.monotonic()
+        M._looks_like(line, "cui", True)
+        assert time.monotonic() - t < 2, (unit, time.monotonic() - t)

@@ -181,17 +181,101 @@ def parse_name(name) -> NameParts:
     return NameParts(prefix=prefix, title=title, version=m["ver"], draft=bool(m["draft"]), ext=m["ext"])
 
 
-# Latin lookalikes from other scripts for the letters of the prefixes (NFKC does not fold these)
-_LOOKALIKE = str.maketrans({"\u0421": "C", "\u0441": "c", "\u03f9": "C", "\u03f2": "c", "\u216d": "C",
-                            "\u217d": "c", "\u0406": "I", "\u0456": "i", "\u0399": "I", "\u03b9": "i",
-                            "\u04c0": "I", "\u2160": "I", "\u2170": "i", "\u0545": "U", "\u054d": "U",
-                            "\u057d": "u", "\u03c5": "u", "\u0423": "U", "\u15c5": "F", "\u0191": "F",
-                            "\u03dc": "F", "\u2131": "F", "\u2044": "/", "\u2215": "/", "\u29f8": "/"})
+# The Latin-confusables fold (Task 12b fix round 4): letters (and letter-like signs) of other scripts that look like
+# a Latin letter A-Z / a-z are read as that letter, before every WRONG-banner check (never the required banner, which
+# stays an exact ASCII match). Source: the Unicode confusables data (UTS #39 confusables.txt, the MA table) as built
+# into ICU 78.3 (Unicode 17.0): every non-ASCII code point whose skeleton (uspoof_getSkeleton) is one ASCII letter,
+# without combining marks (_wfold drops those) and without the code points NFKC already folds to ASCII (checked with
+# the Unicode data of Python 3.9 and 3.12). The skeleton has no I (I itself maps to l): an upper-case source (one with
+# a lower-case mapping) whose skeleton is l is written I here. Grouped by the Latin letter.
+_LATIN_CONFUSABLES = {
+    "A": ("\u0391\u0410\u13aa\u15c5\ua4ee\U000102a0\U00016f40\U0001ccd6\U0001d6a8\U0001d6e2\U0001d71c\U0001d756"
+          "\U0001d790"),
+    "a": ("\u0251\u03b1\u0430\u237a\U0001d6c2\U0001d6fc\U0001d736\U0001d770\U0001d7aa"),
+    "B": ("\u0392\u0412\u13f4\u15f7\u2c82\ua4d0\ua7b4\U00010282\U000102a1\U00010301\U0001ccd7\U0001d6a9\U0001d6e3"
+          "\U0001d71d\U0001d757\U0001d791"),
+    "b": ("\u0184\u042c\u13cf\u1472\u15af\U00016eb6"),
+    "C": ("\u03f9\u0421\u13df\u2ca4\ua4da\U000102a2\U00010302\U00010415\U0001051c\U000118e9\U000118f2\U0001ccd8"
+          "\U0001f74c"),
+    "c": ("\u03f2\u0441\u1004\u105a\u1d04\u2ca5\uabaf\U0001043d"),
+    "D": ("\u13a0\u15de\u15ea\ua4d3\U0001ccd9"),
+    "d": ("\u0501\u13e7\u146f\ua4d2"),
+    "E": ("\u0395\u0415\u13ac\u22ff\u2d39\ua4f0\U00010286\U000118a6\U000118ae\U0001ccda\U0001d6ac\U0001d6e6"
+          "\U0001d720\U0001d75a\U0001d794"),
+    "e": ("\u0435\u04bd\u212e\uab32"),
+    "F": ("\u03dc\u15b4\ua4dd\ua798\U00010287\U000102a5\U00010525\U000118a2\U000118c2\U0001ccdb\U0001d213\U0001d7ca"),
+    "f": ("\u0192\u0584\u1e9d\ua799\uab35"),
+    "G": ("\u050c\u13c0\u13f3\ua4d6\U0001ccdc"),
+    "g": ("\u018d\u0261\u0581\u1d83"),
+    "H": ("\u0397\u041d\u13bb\u157c\u2c8e\ua4e7\U000102cf\U0001ccdd\U0001d6ae\U0001d6e8\U0001d722\U0001d75c"
+          "\U0001d796"),
+    "h": ("\u04bb\u0570\u13c2"),
+    "I": ("\u0196\u0399\u0406\u04c0\u2c92\U00016eaa"),
+    "i": ("\u0131\u0269\u026a\u02db\u037a\u03b9\u0456\u0582\u13a5\u1fbe\u2373\u2c93\ua647\uab75\U000118c3\U0001d6a4"
+          "\U0001d6ca\U0001d704\U0001d73e\U0001d778\U0001d7b2"),
+    "J": ("\u037f\u0408\u13ab\u148d\ua4d9\ua7b2\U0001ccdf"),
+    "j": ("\u03f3\u0458"),
+    "K": ("\u039a\u041a\u13e6\u16d5\u2c94\ua4d7\U00010518\U0001cce0\U0001d6b1\U0001d6eb\U0001d725\U0001d75f"
+          "\U0001d799"),
+    "L": ("\u13de\u14aa\u2cd0\ua4e1\U0001041b\U00010526\U000118a3\U000118b2\U00016f16\U0001cce1\U0001d22a"),
+    "l": ("\u01c0\u04cf\u05c0\u05d5\u05df\u0627\u0661\u06f1\u07ca\u16c1\u2223\u23fd\u2d4f\ua4f2\ufe8d\ufe8e\uffe8"
+          "\U0001028a\U00010309\U00010320\U00011dda\U00011de1\U00016f28\U0001ccde\U0001ccf1\U0001d6b0\U0001d6ea"
+          "\U0001d724\U0001d75e\U0001d798\U0001e8c7\U0001ee00\U0001ee80"),
+    "M": ("\u039c\u03fa\u041c\u13b7\u15f0\u16d6\u2c98\ua4df\U000102b0\U00010311\U0001cce2\U0001d6b3\U0001d6ed"
+          "\U0001d727\U0001d761\U0001d79b"),
+    "N": ("\u039d\u2c9a\ua4e0\U00010513\U0001cce3\U0001d6b4\U0001d6ee\U0001d728\U0001d762\U0001d79c"),
+    "n": ("\u0578\u057c"),
+    "O": ("\u039f\u041e\u0555\u07c0\u0b20\u0ce6\u12d0\u2c9e\u2d54\u3007\ua4f3\U00010292\U000102ab\U00010404"
+          "\U000104c2\U00010516\U000118b5\U000118e0\U00011de0\U0001cce4\U0001ccf0\U0001d6b6\U0001d6f0\U0001d72a"
+          "\U0001d764\U0001d79e"),
+    "o": ("\u03bf\u03c3\u03ed\u043e\u0585\u05e1\u0647\u0665\u06be\u06c1\u06d5\u06f5\u0966\u09e6\u0a66\u0ae6\u0b66"
+          "\u0be6\u0c66\u0d20\u0d66\u0e50\u0ed0\u101d\u1040\u10ff\u17e0\u1d0f\u1d11\u2c9f\uab3d\ufba6\ufba7\ufba8"
+          "\ufba9\ufbaa\ufbab\ufbac\ufbad\ufee9\ufeea\ufeeb\ufeec\U0001042c\U000104ea\U000114d0\U000118c8\U000118d7"
+          "\U0001d6d0\U0001d6d4\U0001d70a\U0001d70e\U0001d744\U0001d748\U0001d77e\U0001d782\U0001d7b8\U0001d7bc"
+          "\U0001ee24\U0001ee64\U0001ee84"),
+    "P": ("\u03a1\u0420\u13e2\u146d\u2ca2\u2cce\ua4d1\U00010295\U0001cce5\U0001d6b8\U0001d6f2\U0001d72c\U0001d766"
+          "\U0001d7a0"),
+    "p": ("\u00fe\u01bf\u03c1\u03f1\u03f8\u0440\u2374\u2ca3\u2ccf\U0001d6d2\U0001d6e0\U0001d70c\U0001d71a\U0001d746"
+          "\U0001d754\U0001d780\U0001d78e\U0001d7ba\U0001d7c8"),
+    "Q": ("\u2d55\U0001cce6"),
+    "q": ("\u051b\u0563\u0566"),
+    "R": ("\u01a6\u13a1\u13d2\u1587\ua4e3\U000104b4\U00016f35\U0001cce7\U0001d216"),
+    "r": ("\u0433\u1d26\u2c85\uab47\uab48\uab81"),
+    "S": ("\u0405\u054f\u13d5\u13da\ua4e2\U00010296\U00010420\U00016f3a\U0001cce8"),
+    "s": ("\u01bd\u0455\u0d1f\ua731\uabaa\U00010448\U000118c1"),
+    "T": ("\u03a4\u0422\u13a2\u22a4\u27d9\u2ca6\ua4d4\U00010297\U000102b1\U00010315\U000118bc\U00016f0a\U0001cce9"
+          "\U0001d6bb\U0001d6f5\U0001d72f\U0001d769\U0001d7a3\U0001f768"),
+    "U": ("\u054d\u1200\u144c\u222a\u22c3\ua4f4\U000104ce\U000118b8\U00016f42\U0001ccea"),
+    "u": ("\u028b\u03c5\u057d\u1d1c\ua79f\uab4e\uab52\U000104f6\U000118d8\U0001d6d6\U0001d710\U0001d74a\U0001d784"
+          "\U0001d7be"),
+    "V": ("\u0474\u0667\u06f7\u13d9\u142f\u2d38\ua4e6\ua6df\U0001051d\U000118a0\U00016f08\U0001cceb\U0001d20d"),
+    "v": ("\u03bd\u0475\u05d8\u1d20\u2228\u22c1\uaba9\U00011706\U000118c0\U0001d6ce\U0001d708\U0001d742\U0001d77c"
+          "\U0001d7b6"),
+    "W": ("\u051c\u13b3\u13d4\ua4ea\U000118e6\U000118ef\U0001ccec"),
+    "w": ("\u026f\u0448\u0461\u051d\u0561\u1d21\u2cbd\uab83\U0001170a\U0001170e\U0001170f"),
+    "X": ("\u03a7\u0425\u166d\u16b7\u2573\u2cac\u2d5d\ua4eb\ua7b3\U00010290\U000102b4\U00010317\U00010322\U00010527"
+          "\U000118ec\U0001cced\U0001d6be\U0001d6f8\U0001d732\U0001d76c\U0001d7a6"),
+    "x": ("\u00d7\u0445\u1541\u157d\u166e\u292b\u292c\u2a2f"),
+    "Y": ("\u03a5\u03d2\u0423\u04ae\u13a9\u13bd\u2ca8\ua4ec\U000102b2\U000118a4\U00016f43\U0001ccee\U0001d6bc"
+          "\U0001d6f6\U0001d730\U0001d76a\U0001d7a4"),
+    "y": ("\u0263\u028f\u03b3\u0443\u04af\u10e7\u1d8c\u1eff\u213d\u2ca9\uab5a\U000118dc\U0001d6c4\U0001d6fe"
+          "\U0001d738\U0001d772\U0001d7ac"),
+    "Z": ("\u0396\u13c3\ua4dc\U000102f5\U000118a9\U000118e5\U0001ccef\U0001d6ad\U0001d6e7\U0001d721\U0001d75b"
+          "\U0001d795"),
+    "z": ("\u1d22\uab93\U000118c4"),
+}
+# CHP additions, kept from the hand-made table of earlier rounds (fail closed): not in the confusables data, or read
+# there as another letter (Cyrillic U as Y, Carrier GHO as A); these win
+_CHP_LOOKALIKES = {"\u0423": "U", "\u0545": "U", "\u15c5": "F", "\u0191": "F"}
+_LATIN_FOLD = {ord(c): t for t, cs in _LATIN_CONFUSABLES.items() for c in cs}
+_LATIN_FOLD.update({ord(c): t for c, t in _CHP_LOOKALIKES.items()})
+# the fold for both checks: the letters, and the lookalike slashes (fraction slash, division slash, big solidus)
+_LOOKALIKE = {**_LATIN_FOLD, **{ord(c): "/" for c in "\u2044\u2215\u29f8"}}
 
 
 def _fold(s):
     """For the prefix test only: compatibility forms (fullwidth etc.), cross-script lookalikes and case folded."""
-    return unicodedata.normalize("NFKC", s).translate(_LOOKALIKE).casefold()
+    return unicodedata.normalize("NFKC", s.translate(_LOOKALIKE)).translate(_LOOKALIKE).casefold()
 
 
 _WMAP = str.maketrans({"l": "i", "1": "i"})
@@ -203,12 +287,13 @@ _CAPS_L1 = re.compile(r"(?<![^\W\d_])(CU|FC)[l1](?![^\W\d_])")
 def _wfold(s, li=True, cf=True):
     """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms, NBSP,
     format characters (zero-width, soft hyphen: Unicode Cf) and combining marks (accents, underlines, enclosing
-    circles: NFKD, every category M dropped, NFKC; Task 12b) dropped, cross-script lookalikes, case. li=True: l / 1
+    circles: NFKD, every category M dropped, NFKC; Task 12b) dropped, cross-script lookalikes (the Latin-confusables
+    fold, _LOOKALIKE, before and after the normalisation: fix round 4), case. li=True: l / 1
     read as i everywhere (the wide forms); li=False: only in a capitals context (CUl, CU1, FCl, FC1: the Markdown body,
     so "Cul-de-sac" stays a word). cf=False keeps the case (the citation tail check). Runs of white space become one
     space."""
-    s = "".join(c for c in unicodedata.normalize("NFKD", s) if unicodedata.category(c)[0] != "M"
-                and unicodedata.category(c) != "Cf")
+    s = "".join(c for c in unicodedata.normalize("NFKD", s.translate(_LOOKALIKE))
+                if unicodedata.category(c)[0] != "M" and unicodedata.category(c) != "Cf")
     s = unicodedata.normalize("NFKC", s).replace("\u00a0", " ").translate(_LOOKALIKE)
     if not li:
         s = _CAPS_L1.sub(lambda m: m.group(1) + "I", s)
@@ -231,13 +316,17 @@ _KINDS = {"cui": (BANNER, _BANNER_RE, ("cui", _phrase("Controlled Unclassified I
           "fci": (FCI_BANNER, _FCI_RE, ("fci", _phrase("Federal Contract Information")))}
 # the word spelled out letter by letter at the start of a line (C-U-I, C.U.I., C/U/I, C U I), read as the word
 _SPELLED = {k: re.compile("^" + r"[\W_]{1,3}".join(v[2][0]) + r"(?![^\W_])\.?") for k, v in _KINDS.items()}
+# ... and anywhere as a whole word (the text after a cited name: fix round 4)
+_SPELLED_ANY = {k: re.compile(r"(?<![^\W_])" + r"[\W_]{1,3}".join(v[2][0]) + r"(?![^\W_])") for k, v in _KINDS.items()}
 _SLASHES = re.compile(r"/(?: ?/)+")             # "/ /" is "//"
 _CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
 # a document name after its prefix: <title>_vX.Y (ASCII digits; shared with the citation check, _CITE). In a banner
 # position, the word, _ and this is a citation of a controlled document, not a banner (review fix round 2)
 _CITE_TAIL = r"([^\W_][\w-]*?)_v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})(?![0-9]|\.[0-9])"
-# the name token of a citation in a banner position: the word, _, the title, the version, -DRAFT and the extension
-_NAME_TOKEN = {k: re.compile(v[2][0] + "_" + _CITE_TAIL + r"(?:-draft)?(?:\.[a-z0-9]{1,10})?(?![^\W_])", re.I)
+# the name token of a citation in a banner position: the word, _, the title, the version, -DRAFT and the extension,
+# as a whole word; the title is bounded (a name has 200 characters at most) so a search along a line stays linear
+_NAME_TOKEN = {k: re.compile(r"(?<![^\W_])" + v[2][0] + "_" + _CITE_TAIL.replace(r"[\w-]*?", r"[\w-]{0,199}?")
+                             + r"(?:-draft)?(?:\.[a-z0-9]{1,10})?(?![^\W_])", re.I)
                for k, v in _KINDS.items()}
 _CAPS_TOKEN = re.compile(r"[\W_]*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)(?![^\W_])")
 _MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>|[-*+]\s+|\d{1,9}[.)]\s+|\[[ xX]\])\s*")
@@ -448,14 +537,27 @@ def _cite_rest(line, kind):
     return t[m.end():]
 
 
-def _tail_banner(rest, word, phrase):
-    """What follows a cited name is a banner when it holds // (after the slash fold), the word or the phrase as a
-    whole word, or starts with a capitals token of 3 letters or more (SP-PROPIN, NOFORN) (review fix round 3)."""
-    r = _SLASHES.sub("//", _wfold(rest, li=False))
-    if "//" in r or re.search(rf"(?<![^\W_])(?:{word}|{phrase})(?![^\W_])", r):
-        return True
-    m = _CAPS_TOKEN.match(rest)
-    return bool(m) and sum(c.isalpha() for c in m.group(1)) >= 3
+def _tail_banner(rest, kind):
+    """What follows a cited name (already Latin-folded, case kept: _cite_rest) is a banner when it holds // (after
+    the slash fold), the word or the phrase as a whole word, or starts with a capitals token of 3 letters or more
+    (SP-PROPIN, NOFORN) (review fix round 3). Fix round 4: it is read like a wide line start (l and 1 as i, the word
+    spelled out letter by letter as the word), and a further citation in it (CUI_SSP_v1.2, CUI_POAM_v1.0) is a
+    citation, not the word: the text is cut at each one and every piece is judged the same way."""
+    word, phrase = _KINDS[kind][2]
+    pieces, pos = [], 0
+    for m in _NAME_TOKEN[kind].finditer(rest):
+        if not m.group(1).casefold().startswith("sp-"):    # an SP- title is no citation: it stays in the text
+            pieces.append(rest[pos:m.start()])
+            pos = m.end()
+    pieces.append(rest[pos:])
+    for piece in pieces:
+        r = _SPELLED_ANY[kind].sub(word, _SLASHES.sub("//", _wfold(piece)))
+        if "//" in r or re.search(rf"(?<![^\W_])(?:{word}|{phrase})(?![^\W_])", r):
+            return True
+        m = _CAPS_TOKEN.match(piece)
+        if m and sum(c.isalpha() for c in m.group(1)) >= 3:
+            return True
+    return False
 
 
 def _looks_like(line, kind, wide=True):
@@ -488,7 +590,7 @@ def _looks_like(line, kind, wide=True):
         # the word, then white space or any non-alphanumeric and anything (rulings), unless it is a citation (the
         # word, _ and a document name) with a tail that is no banner
         tail = _cite_rest(line, kind) if s[len(word)] == "_" else None
-        return tail is None or _tail_banner(tail, word, phrase)
+        return tail is None or _tail_banner(tail, kind)
     sep = re.match(rf"{_SEP}\s*(.*)", rest)
     if not sep:
         return False
