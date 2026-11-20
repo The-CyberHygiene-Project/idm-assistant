@@ -1,0 +1,218 @@
+== iso5-srv
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     2.2 MB/s | 425 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                 Repo       Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-13.chp.el9        chp        27 k
+ chp-identity-client       noarch       0.2.4-2.chp.el9         chp        24 k
+ chp-identity-server       noarch       0.1.2-3.chp.el9         chp        21 k
+ chp-integrity             noarch       0.1.7-2.chp.el9         chp        24 k
+ chp-site                  noarch       0.14.0-7.chp.el9        chp       189 k
+
+Transaction Summary
+================================================================================
+Upgrade  5 Packages
+
+Total size: 284 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-7.chp.el9.noarch                      1/10 
+  Upgrading        : chp-base-0.1.0-13.chp.el9.noarch                      2/10 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                      2/10 
+  Upgrading        : chp-identity-client-0.2.4-2.chp.el9.noarch            3/10 
+  Running scriptlet: chp-identity-client-0.2.4-2.chp.el9.noarch            3/10 
+  Upgrading        : chp-identity-server-0.1.2-3.chp.el9.noarch            4/10 
+  Running scriptlet: chp-identity-server-0.1.2-3.chp.el9.noarch            4/10 
+  Upgrading        : chp-integrity-0.1.7-2.chp.el9.noarch                  5/10 
+  Running scriptlet: chp-integrity-0.1.7-2.chp.el9.noarch                  5/10 
+  Running scriptlet: chp-identity-server-0.1.2-2.chp.el9.noarch            6/10 
+  Cleanup          : chp-identity-server-0.1.2-2.chp.el9.noarch            6/10 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch            7/10 
+  Cleanup          : chp-identity-client-0.2.4-1.chp.el9.noarch            7/10 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch            7/10 
+  Running scriptlet: chp-integrity-0.1.7-1.chp.el9.noarch                  8/10 
+  Cleanup          : chp-integrity-0.1.7-1.chp.el9.noarch                  8/10 
+  Running scriptlet: chp-base-0.1.0-4.chp.el9.noarch                       9/10 
+  Cleanup          : chp-base-0.1.0-4.chp.el9.noarch                       9/10 
+  Cleanup          : chp-site-0.13.0-2.chp.el9.noarch                     10/10 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                     10/10 
+  Running scriptlet: chp-site-0.13.0-2.chp.el9.noarch                     10/10 
+  Verifying        : chp-base-0.1.0-13.chp.el9.noarch                      1/10 
+  Verifying        : chp-base-0.1.0-4.chp.el9.noarch                       2/10 
+  Verifying        : chp-identity-client-0.2.4-2.chp.el9.noarch            3/10 
+  Verifying        : chp-identity-client-0.2.4-1.chp.el9.noarch            4/10 
+  Verifying        : chp-identity-server-0.1.2-3.chp.el9.noarch            5/10 
+  Verifying        : chp-identity-server-0.1.2-2.chp.el9.noarch            6/10 
+  Verifying        : chp-integrity-0.1.7-2.chp.el9.noarch                  7/10 
+  Verifying        : chp-integrity-0.1.7-1.chp.el9.noarch                  8/10 
+  Verifying        : chp-site-0.14.0-7.chp.el9.noarch                      9/10 
+  Verifying        : chp-site-0.13.0-2.chp.el9.noarch                     10/10 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-13.chp.el9.noarch                                              
+  chp-identity-client-0.2.4-2.chp.el9.noarch                                    
+  chp-identity-server-0.1.2-3.chp.el9.noarch                                    
+  chp-integrity-0.1.7-2.chp.el9.noarch                                          
+  chp-site-0.14.0-7.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 615713
+Denied accesses: 0
+EXIT=0
+== iso5-cli1
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     1.1 MB/s | 425 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                 Repo       Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-13.chp.el9        chp        27 k
+ chp-identity-client       noarch       0.2.4-2.chp.el9         chp        24 k
+ chp-integrity             noarch       0.1.7-2.chp.el9         chp        24 k
+ chp-site                  noarch       0.14.0-7.chp.el9        chp       189 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 264 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-7.chp.el9.noarch                       1/8 
+  Upgrading        : chp-base-0.1.0-13.chp.el9.noarch                       2/8 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                       2/8 
+  Upgrading        : chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Running scriptlet: chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Upgrading        : chp-integrity-0.1.7-2.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-integrity-0.1.7-2.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-integrity-0.1.7-1.chp.el9.noarch                   5/8 
+  Cleanup          : chp-integrity-0.1.7-1.chp.el9.noarch                   5/8 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Cleanup          : chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Running scriptlet: chp-base-0.1.0-4.chp.el9.noarch                        7/8 
+  Cleanup          : chp-base-0.1.0-4.chp.el9.noarch                        7/8 
+  Cleanup          : chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                       8/8 
+  Running scriptlet: chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+  Verifying        : chp-base-0.1.0-13.chp.el9.noarch                       1/8 
+  Verifying        : chp-base-0.1.0-4.chp.el9.noarch                        2/8 
+  Verifying        : chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Verifying        : chp-identity-client-0.2.4-1.chp.el9.noarch             4/8 
+  Verifying        : chp-integrity-0.1.7-2.chp.el9.noarch                   5/8 
+  Verifying        : chp-integrity-0.1.7-1.chp.el9.noarch                   6/8 
+  Verifying        : chp-site-0.14.0-7.chp.el9.noarch                       7/8 
+  Verifying        : chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-13.chp.el9.noarch                                              
+  chp-identity-client-0.2.4-2.chp.el9.noarch                                    
+  chp-integrity-0.1.7-2.chp.el9.noarch                                          
+  chp-site-0.14.0-7.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 275087
+Denied accesses: 0
+EXIT=0
+== iso5-cli2
+CyberHygiene Project Lab Installer packages      11 kB/s | 659  B     00:00    
+CyberHygiene Project Lab Installer packages     2.0 MB/s | 425 kB     00:00    
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                 Repo       Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-13.chp.el9        chp        27 k
+ chp-identity-client       noarch       0.2.4-2.chp.el9         chp        24 k
+ chp-integrity             noarch       0.1.7-2.chp.el9         chp        24 k
+ chp-site                  noarch       0.14.0-7.chp.el9        chp       189 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 264 k
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Upgrading        : chp-site-0.14.0-7.chp.el9.noarch                       1/8 
+  Upgrading        : chp-base-0.1.0-13.chp.el9.noarch                       2/8 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                       2/8 
+  Upgrading        : chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Running scriptlet: chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Upgrading        : chp-integrity-0.1.7-2.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-integrity-0.1.7-2.chp.el9.noarch                   4/8 
+  Running scriptlet: chp-integrity-0.1.7-1.chp.el9.noarch                   5/8 
+  Cleanup          : chp-integrity-0.1.7-1.chp.el9.noarch                   5/8 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Cleanup          : chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Running scriptlet: chp-identity-client-0.2.4-1.chp.el9.noarch             6/8 
+  Running scriptlet: chp-base-0.1.0-4.chp.el9.noarch                        7/8 
+  Cleanup          : chp-base-0.1.0-4.chp.el9.noarch                        7/8 
+  Cleanup          : chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+  Running scriptlet: chp-base-0.1.0-13.chp.el9.noarch                       8/8 
+  Running scriptlet: chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+  Verifying        : chp-base-0.1.0-13.chp.el9.noarch                       1/8 
+  Verifying        : chp-base-0.1.0-4.chp.el9.noarch                        2/8 
+  Verifying        : chp-identity-client-0.2.4-2.chp.el9.noarch             3/8 
+  Verifying        : chp-identity-client-0.2.4-1.chp.el9.noarch             4/8 
+  Verifying        : chp-integrity-0.1.7-2.chp.el9.noarch                   5/8 
+  Verifying        : chp-integrity-0.1.7-1.chp.el9.noarch                   6/8 
+  Verifying        : chp-site-0.14.0-7.chp.el9.noarch                       7/8 
+  Verifying        : chp-site-0.13.0-2.chp.el9.noarch                       8/8 
+Installed products updated.
+
+Upgraded:
+  chp-base-0.1.0-13.chp.el9.noarch                                              
+  chp-identity-client-0.2.4-2.chp.el9.noarch                                    
+  chp-integrity-0.1.7-2.chp.el9.noarch                                          
+  chp-site-0.14.0-7.chp.el9.noarch                                              
+
+Complete!
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+ls: cannot access '/var/lib/chp/fapolicyd-restart-pending': No such file or directory
+Allowed accesses: 272761
+Denied accesses: 0
+EXIT=0
+== iso5-srv
+chp-site-0.14.0-7.chp.el9.noarch chp-base-0.1.0-13.chp.el9.noarch chp-integrity-0.1.7-2.chp.el9.noarch chp-identity-client-0.2.4-2.chp.el9.noarch package chp-templates is not installed package chp-documents is not installed package nextcloud-chp is not installed package chp-onlyoffice is not installed 
+== iso5-cli1
+chp-site-0.14.0-7.chp.el9.noarch chp-base-0.1.0-13.chp.el9.noarch chp-integrity-0.1.7-2.chp.el9.noarch chp-identity-client-0.2.4-2.chp.el9.noarch package chp-templates is not installed package chp-documents is not installed package nextcloud-chp is not installed package chp-onlyoffice is not installed 
+== iso5-cli2
+chp-site-0.14.0-7.chp.el9.noarch chp-base-0.1.0-13.chp.el9.noarch chp-integrity-0.1.7-2.chp.el9.noarch chp-identity-client-0.2.4-2.chp.el9.noarch package chp-templates is not installed package chp-documents is not installed package nextcloud-chp is not installed package chp-onlyoffice is not installed 

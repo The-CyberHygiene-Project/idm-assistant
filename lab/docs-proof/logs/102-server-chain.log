@@ -1,0 +1,30 @@
+PASS iso5-srv: installed from the ISO (menu entry chosen, nothing typed)
+PASS iso5-srv: first boot unlocked
+stage server: ALL PASS
+PASS server first boot finished
+PASS new first-boot steps done (unixd-tokens, self-client, client enrolment)
+PASS two client tokens pending (600)
+PASS server-as-client: kanidm-unixd online
+PASS server-as-client: authselect custom/kanidm + CUI features
+PASS server-as-client: nsswitch passwd/group/initgroups start with kanidm
+PASS server-as-client: sshd methods (user / chpadmin)
+PASS server-as-client: unixd token 600 root
+PASS server-as-client: chp_kanidm loaded, socket dir labelled
+PASS server-as-client: fapolicyd no denials (--check-status counter)
+PASS server-as-client: SELinux no AVC since boot
+PASS server-as-client: boot-loader password set
+PASS server-as-client: Rocky release key imported
+PASS server allows chp_admins only
+PASS chp_admins sudo rule installed (0440)
+PASS diag account + forced command on the server
+PASS no chpcache account on the server
+PASS server: stick blocked during first boot
+PASS server: AIDE baseline built at first boot
+PASS server: baseline after server.done
+PASS server: stick hash pinned before the baseline
+PASS server: daily AIDE timer enabled
+PASS server: escrow folder not in AIDE
+PASS server: escrow-lookalike sibling still checked
+PASS iso5-srv: stick detached
+PASS monitor alerts only: secrets still on the server + AIDE baseline not pinned
+stage firstboot: ALL PASS

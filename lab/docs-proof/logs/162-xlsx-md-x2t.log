@@ -1,0 +1,34 @@
+new recorded (ledger entry 31)
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+CUI_Regxlsx_v0.1-DRAFT.xlsx: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 32)
+published CUI/Compliance/CUI_Regxlsx_v0.1.xlsx as CR-2026-0008 (ledger entry 33)
+When you are done with it: chp-site doc close CUI_Regxlsx_v0.1.xlsx
+rc=0
+new recorded (ledger entry 34)
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+CUI_Regmd_v0.1-DRAFT.md: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 35)
+chp-site: refused: ONLYOFFICE's converter made no PDF (exit 89); nothing was sent. If ONLYOFFICE was never opened on this workstation, open it once first
+rc=2
+== CUI_Regxlsx_v0.1.pdf
+== CUI_Regmd_v0.1.pdf
+== CUI_Regxlsx_v0.1.pdf
+Pages:          1
+1:                                                   CUI
+4:Controlled by: iso5 Lab Org
+5:CUI Category: CTI
+6:POC: Lab ISSO isso@iso5.lab.test
+14:                                                   CUI
+encoding param 'none': exit 89; 
+encoding param '<m_nCsvTxtEncoding>46</m_nCsvTxtEncoding>': exit 0; 
+-rw-r--r--. 1 lab01 lab01 28543 Nov 20 13:07 in.pdf
+1:CUI
+3:CUI Category: CTI
+14:CUI

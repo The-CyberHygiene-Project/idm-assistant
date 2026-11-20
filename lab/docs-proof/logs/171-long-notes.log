@@ -1,0 +1,10 @@
+EXIT=0
+HTTP 200
+refused: the request is not valid, or the document is not a controlled document you can use
+rc=1
+note bytes:     1990
+HTTP 200
+approve recorded (ledger entry 40)
+rc=0
+journal line 2681 bytes; JSON parses; notes 1990 bytes
+Wazuh 100642 at 2026-11-20T13:20:31 full_log 2744 bytes; data.notes 1990 bytes

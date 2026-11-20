@@ -1,0 +1,81 @@
+## A4/A5/A6 chp-docs dirs
+drwxr-x---. root apache system_u:object_r:var_lib_t:s0 /var/lib/chp-docs
+drwx------. root root system_u:object_r:var_lib_t:s0 /var/lib/chp-docs/ledger
+drwxr-x---. root apache system_u:object_r:httpd_sys_content_t:s0 /var/lib/chp-docs/out
+drwx------. root root system_u:object_r:var_lib_t:s0 /var/lib/chp-docs/quarantine
+drwx-wx--T. root apache system_u:object_r:httpd_sys_rw_content_t:s0 /var/lib/chp-docs/spool
+drwx------. root root system_u:object_r:var_lib_t:s0 /var/lib/chp-docs/unfinished
+drwx------. root root system_u:object_r:var_lib_t:s0 /var/lib/chp-docs/work
+## A5 sesearch httpd_t var_lib_t file read
+/root/st.sh: line 3: sesearch: command not found
+(end sesearch)
+## A5 apache list/read ledger
+ledger: apache denied
+quarantine: apache denied
+work: apache denied
+unfinished: apache denied
+## A4 apps
+chp_ledger 1.0.1 chp_foldertag 1.0.0 user_oidc 8.13.0 groupfolders 23.0.1
+## A9 chp_ledger ids vs documents.conf
+[36,37]
+[38,39]
+CUI_FOLDER_ID=1
+FCI_FOLDER_ID=2
+ARCHIVE_FOLDER_ID=3
+OPERATIONS_FOLDER_ID=4
+INTERNAL_FOLDER_ID=5
+PUBLIC_FOLDER_ID=6
+KANIDM_USERINFO_URL=https://idm.iso5.lab.test/oauth2/openid/chp-doc/userinfo
+CUI_COMPLIANCE_ID=36
+INTERNAL_COMPLIANCE_ID=37
+CUI_SUPERSEDED_ID=38
+INTERNAL_SUPERSEDED_ID=39
+DOC_PUBLISH_USER=chp-publisher
+## B5 providers
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| ID | Identifier | Discovery endpoint                                                                 | End session endpoint | Client ID |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+| 1  | kanidm     | https://idm.iso5.lab.test/oauth2/openid/nextcloud/.well-known/openid-configuration |                      | nextcloud |
+| 2  | kanidm-cli | https://idm.iso5.lab.test/oauth2/openid/chp-doc/.well-known/openid-configuration   |                      | chp-doc   |
++----+------------+------------------------------------------------------------------------------------+----------------------+-----------+
+## B4/B3 kanidm chp-doc
+class: oauth2_resource_server_public
+displayname: CHP doc commands
+name: chp-doc
+oauth2_prefer_short_username: true
+oauth2_refresh_token_expiry: 28800
+oauth2_rs_origin: http://127.0.0.1/
+oauth2_rs_origin_landing: https://files.iso5.lab.test:8443/
+oauth2_rs_scope_map: chp_users@idm.iso5.lab.test: {"groups", "openid", "profile"}
+## D1 compliance ACL rows
+1|group|doc-reviewers|files|31|1
+1|user|chp-publisher|files/Compliance|31|15
+1|group|cui-users|files/Compliance|31|1
+1|group|doc-reviewers|files/Compliance|31|1
+2|group|doc-reviewers|files|31|1
+3|group|doc-reviewers|files|31|1
+3|user|chp-publisher|files/Superseded|31|15
+3|group|cui-users|files/Superseded|31|1
+3|group|doc-reviewers|files/Superseded|31|1
+5|user|chp-publisher|files/Compliance|31|15
+5|group|chp-users|files/Compliance|31|1
+5|user|chp-publisher|files/Compliance/Superseded|31|15
+5|group|chp-users|files/Compliance/Superseded|31|1
+## A20 journal
+volatile (no /var/log/journal)
+## units
+active active active active active active 
+enabled
+## B7 apachectl -t
+Syntax OK
+## fapolicyd
+Denied accesses: 0
+0
+## A16 chp-publisher
+  - enabled: true
+  - last_seen: never
+  - backend: Database
+## templates
+package chp-templates is not installed
+poppler-utils-21.01.0-24.el9.x86_64
+ls: cannot access '/usr/share/chp-templates/doc/cui': No such file or directory

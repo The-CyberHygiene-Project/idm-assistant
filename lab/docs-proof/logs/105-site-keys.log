@@ -1,0 +1,22 @@
+stick: ALERT_HOOK=
+stick: DOCUMENTS=yes
+stick: CUI_CONTROLLED_BY=iso5 Lab Org
+stick: CUI_CATEGORY=CTI
+stick: CUI_POC=Lab ISSO isso@iso5.lab.test
+server: ALERT_HOOK=
+server: DOCUMENTS=yes
+server: CUI_CONTROLLED_BY=iso5 Lab Org
+server: CUI_CATEGORY=CTI
+server: CUI_POC=Lab ISSO isso@iso5.lab.test
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+# workstations (one key per call; a lab driver quirk: multi-key calls in a pipe printed nothing and wrote nothing)
+iso5-cli1: DOCUMENTS=yes
+iso5-cli1: CUI_CATEGORY=CTI
+iso5-cli1: CUI_POC=Lab ISSO isso@iso5.lab.test
+iso5-cli1: CUI_CONTROLLED_BY=iso5 Lab Org
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+iso5-cli2: CUI_CONTROLLED_BY=iso5 Lab Org
+iso5-cli2: CUI_CATEGORY=CTI
+iso5-cli2: CUI_POC=Lab ISSO isso@iso5.lab.test
+iso5-cli2: DOCUMENTS=yes
+OK: iso5.lab.test, 3 hosts, server iso5-srv

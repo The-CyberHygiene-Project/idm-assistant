@@ -1,0 +1,16 @@
+new recorded (ledger entry 1)
+new document: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.1-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+rc=0
+total 8
+drwx------. 3 lab01 lab01   59 Nov 20 12:07 .
+drwx------. 3 lab01 lab01   25 Nov 20 12:00 ..
+drwx------. 2 lab01 lab01   51 Nov 20 12:07 .chp-doc
+-rw-------. 1 lab01 lab01 7726 Nov 20 12:07 CUI_SecPolicy_v0.1-DRAFT.docx
+CUI_SecPolicy_v0.1-DRAFT.docx: CUI area
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_SecPolicy_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+rc=0
+CUI_SecPolicy_v0.1-DRAFT.docx: nothing to add (the marks are there)
+rc=0

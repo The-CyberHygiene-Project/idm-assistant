@@ -1,0 +1,5 @@
+ls: cannot access '/run/user/2139562178': No such file or directory
+0
+ls: cannot access '/run/user/2139562178/chp-doc/': No such file or directory
+  freshness and citations not checked: refused: not signed in; run chp-site doc login
+OK

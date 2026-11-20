@@ -1,0 +1,23 @@
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+stick: DOC_APPROVER_ACCOUNTS=lab04
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: DOC_APPROVER_ACCOUNTS=lab04
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+('100607', 3) 11
+('100617', 3) 21
+('100621', 3) 36
+('100623', 12) 5
+('100624', 3) 6
+('100629', 12) 3
+('100641', 3) 5
+('100642', 12) 6
+('100643', 12) 1
+('100644', 7) 3
+('100649', 3) 3
+('100654', 3) 8
+{'new': 1, 'approve': 8, 'override': 2, 'publish-started': 3, 'publish': 8, 'checkout': 4}
+2026-11-20T10:37:50 NextCloud: account or group membership changed OUTSIDE Kanidm: User created: "ncadmin"
+2026-11-20T10:37:52 NextCloud: account or group membership changed OUTSIDE Kanidm: User "ncadmin" added to group "admin"
+2026-11-20T10:38:23 NextCloud: account or group membership changed OUTSIDE Kanidm: User created: "chp-publisher"
+2026-11-20T10:38:23 NextCloud: account or group membership changed OUTSIDE Kanidm: User "chp-publisher" added to group "chp-users"
+2026-11-20T10:38:23 NextCloud: account or group membership changed OUTSIDE Kanidm: User "chp-publisher" added to group "cui-users"

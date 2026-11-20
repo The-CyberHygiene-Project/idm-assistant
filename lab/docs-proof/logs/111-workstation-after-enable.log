@@ -1,0 +1,106 @@
+=== iso5-cli1
+## G7 AI plugin dir
+ls: cannot access '/opt/onlyoffice/desktopeditors/editors/sdkjs-plugins/*9DC93CDB*': No such file or directory
+{07FD8DFA-DFE0-4089-AL24-0730933CC80A} {38E022EA-AD92-45FC-B22B-49DF39746DB4} {440EBF13-9B19-4BD8-8621-05200E58140B} {7327FC95-16DA-41D9-9AF2-0E7F449F6800} {AA2EA9B6-9EC2-415F-9762-634EE8D9A95E} {B509123E-6335-40BD-B965-91EB799346E3} {BE5CBF95-C0AD-4842-B157-AC40FEDD9840} {BE5CBF95-C0AD-4842-B157-AC40FEDD9841} {FFF0E1EB-13DB-4678-B67D-FF0A41DBBCEF} pluginBase.js plugins.css v1 
+## egress
+active active active 
+1
+table inet firewalld
+table inet chp_workstation_egress
+## addr file
+define CHP_WS_SERVER_IP = 192.168.100.50
+define CHP_WS_RESOLVER_IP = 192.168.100.50
+define CHP_WS_NTP4 = { 192.168.100.1 }
+define CHP_WS_NTP6 = { ::/128 }
+unconfined_u:object_r:etc_t:s0 /etc/chp/workstation-egress-addr.nft
+## check 83 + 80
+83-*: bash: /usr/libexec/chp/monitor.d/83-*: No such file or directory
+80-*: bash: /usr/libexec/chp/monitor.d/80-*: No such file or directory
+## fapolicyd
+Denied accesses: 0
+0
+## templates
+package chp-templates is not installed
+ls: cannot access '/usr/share/chp-templates/doc': No such file or directory
+## logind
+# /etc/systemd/logind.conf.d/50-chp-docs.conf (chp-onlyoffice; ISO 0.7.0 Plan 3, ruling F3).
+# Logging out ends the user's processes, so neither an ONLYOFFICE left open (the spike saw it survive
+# `loginctl terminate-session`) nor anything else keeps the user manager and $XDG_RUNTIME_DIR (where `chp-site doc`
+# keeps the sign-in tokens) alive after the last session. Linger stays off: chp-site onlyoffice enable and the hourly
+# sweep turn it off for anyone who has it, and 50-chp-no-linger.rules (polkit) refuses users turning it on.
+# Takes effect at the next boot (logind is not restarted under a running desktop).
+[Login]
+KillUserProcesses=yes
+KillExcludeUsers=root
+49-polkit-pkla-compat.rules
+50-chp-no-linger.rules
+50-default.rules
+## xdg
+; /etc/xdg/onlyoffice/DesktopEditors.conf (chp-onlyoffice; ISO 0.7.0 Plan 3 Task 8, spike gate G4): system-wide
+; defaults (Qt reads them for keys the user's ~/.config/onlyoffice/DesktopEditors.conf does not set).
+; Key names come from the 10.0.0 binary (spike §Editor and Task 8's reading of the start page); the vendor documents
+; none of them. autoUpdateMode: no update check. lockPortals: no cloud portals. pluginsDisabled: no plugins.
+; useai: the start page's "AI Chat" and AI Tools entries hidden (what "Don't show me ONLYOFFICE AI Tools" sets).
+; The controls that are PROVEN are the removed AI Tools plugin, the egress table and the /etc/hosts block.
+[General]
+autoUpdateMode=disabled
+lockPortals=true
+pluginsDisabled=true
+useai=false
+=== iso5-cli2
+## G7 AI plugin dir
+ls: cannot access '/opt/onlyoffice/desktopeditors/editors/sdkjs-plugins/*9DC93CDB*': No such file or directory
+{07FD8DFA-DFE0-4089-AL24-0730933CC80A} {38E022EA-AD92-45FC-B22B-49DF39746DB4} {440EBF13-9B19-4BD8-8621-05200E58140B} {7327FC95-16DA-41D9-9AF2-0E7F449F6800} {AA2EA9B6-9EC2-415F-9762-634EE8D9A95E} {B509123E-6335-40BD-B965-91EB799346E3} {BE5CBF95-C0AD-4842-B157-AC40FEDD9840} {BE5CBF95-C0AD-4842-B157-AC40FEDD9841} {FFF0E1EB-13DB-4678-B67D-FF0A41DBBCEF} pluginBase.js plugins.css v1 
+## egress
+active active active 
+1
+table inet firewalld
+table inet chp_workstation_egress
+## addr file
+define CHP_WS_SERVER_IP = 192.168.100.50
+define CHP_WS_RESOLVER_IP = 192.168.100.50
+define CHP_WS_NTP4 = { 192.168.100.1 }
+define CHP_WS_NTP6 = { ::/128 }
+unconfined_u:object_r:etc_t:s0 /etc/chp/workstation-egress-addr.nft
+## check 83 + 80
+83-*: bash: /usr/libexec/chp/monitor.d/83-*: No such file or directory
+80-*: bash: /usr/libexec/chp/monitor.d/80-*: No such file or directory
+## fapolicyd
+Denied accesses: 0
+0
+## templates
+package chp-templates is not installed
+ls: cannot access '/usr/share/chp-templates/doc': No such file or directory
+## logind
+# /etc/systemd/logind.conf.d/50-chp-docs.conf (chp-onlyoffice; ISO 0.7.0 Plan 3, ruling F3).
+# Logging out ends the user's processes, so neither an ONLYOFFICE left open (the spike saw it survive
+# `loginctl terminate-session`) nor anything else keeps the user manager and $XDG_RUNTIME_DIR (where `chp-site doc`
+# keeps the sign-in tokens) alive after the last session. Linger stays off: chp-site onlyoffice enable and the hourly
+# sweep turn it off for anyone who has it, and 50-chp-no-linger.rules (polkit) refuses users turning it on.
+# Takes effect at the next boot (logind is not restarted under a running desktop).
+[Login]
+KillUserProcesses=yes
+KillExcludeUsers=root
+49-polkit-pkla-compat.rules
+50-chp-no-linger.rules
+50-default.rules
+## xdg
+; /etc/xdg/onlyoffice/DesktopEditors.conf (chp-onlyoffice; ISO 0.7.0 Plan 3 Task 8, spike gate G4): system-wide
+; defaults (Qt reads them for keys the user's ~/.config/onlyoffice/DesktopEditors.conf does not set).
+; Key names come from the 10.0.0 binary (spike §Editor and Task 8's reading of the start page); the vendor documents
+; none of them. autoUpdateMode: no update check. lockPortals: no cloud portals. pluginsDisabled: no plugins.
+; useai: the start page's "AI Chat" and AI Tools entries hidden (what "Don't show me ONLYOFFICE AI Tools" sets).
+; The controls that are PROVEN are the removed AI Tools plugin, the egress table and the /etc/hosts block.
+[General]
+autoUpdateMode=disabled
+lockPortals=true
+pluginsDisabled=true
+useai=false
+== iso5-cli1
+80-fapolicyd.sh: OK fapolicyd active and enforcing
+83-workstation-editor.sh: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+0
+== iso5-cli2
+80-fapolicyd.sh: OK fapolicyd active and enforcing
+83-workstation-editor.sh: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+0

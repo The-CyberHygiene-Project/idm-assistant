@@ -1,0 +1,21 @@
+## doc check after the other author published
+CUI_SecPolicy_v0.2.docx: CUI area
+  PROBLEM: the canonical copy CUI_SecPolicy_v0.1.docx changed since your checkout (or is no longer the current version); check it out again (chp-site doc checkout)
+NOT READY
+rc=1
+## publish again (stale checkout)
+refused: the canonical copy CUI_SecPolicy_v0.1.docx changed since your checkout (or is no longer the current version); check it out again (chp-site doc checkout); nothing was sent
+rc=1
+/data/nextcloud/data/__groupfolders/1/files/Compliance/:
+total 68
+drwxr-x---. 2 apache apache    67 Nov 20 12:30 .
+drwxr-xr-x. 4 apache apache    38 Nov 20 12:23 ..
+-rw-r--r--. 1 apache apache  7783 Nov 20 12:30 CUI_SecPolicy_v0.2.docx
+-rw-r--r--. 1 apache apache 57677 Nov 20 12:30 CUI_SecPolicy_v0.2.pdf
+
+/data/nextcloud/data/__groupfolders/3/files/Superseded/:
+total 64
+drwxr-x---. 2 apache apache    67 Nov 20 12:30 .
+drwxr-xr-x. 3 apache apache    24 Nov 20 10:38 ..
+-rw-r--r--. 1 apache apache  7726 Nov 20 12:30 CUI_SecPolicy_v0.1.docx
+-rw-r--r--. 1 apache apache 57172 Nov 20 12:30 CUI_SecPolicy_v0.1.pdf

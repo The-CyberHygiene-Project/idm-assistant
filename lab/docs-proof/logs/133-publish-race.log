@@ -1,0 +1,11 @@
+== lab01
+12:30:41.631162171
+refused: lab01 is not an author of this change (only nobody may publish it: they created it or checked it out in this cycle)
+rc=1
+12:30:46.462298864
+== lab06
+12:30:41.598952240
+published CUI/Compliance/CUI_SecPolicy_v0.2.docx as CR-2026-0002 (ledger entry 8)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.2.docx
+rc=0
+12:30:46.450332572

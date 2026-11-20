@@ -1,0 +1,25 @@
+## raw publish with a -DRAFT name (server side), lab01
+POST HTTP 400: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'}
+## missing marks: strip a copy; local check; lab04 RAW approve; lab01 RAW publish (server-side marking check)
+edited CUI_SecPolicy_v0.4-DRAFT.docx
+CUI_SecPolicy_v0.4-DRAFT.docx: CUI area
+  PROBLEM: CUI_SecPolicy_v0.4-DRAFT.docx: the default header (word/header1.xml) has no CUI banner line
+  PROBLEM: CUI_SecPolicy_v0.4-DRAFT.docx: the first header (word/header2.xml) has no CUI banner line
+  PROBLEM: CUI_SecPolicy_v0.4-DRAFT.docx: the default footer (word/footer1.xml) has no CUI banner line
+  PROBLEM: CUI_SecPolicy_v0.4-DRAFT.docx: the first footer (word/footer2.xml) has no CUI banner line
+  PROBLEM: CUI_SecPolicy_v0.4-DRAFT.docx: the designation block is not on page one: missing 'Controlled by: iso5 Lab Org'; 'CUI Category: CTI'; 'POC: Lab ISSO isso@iso5.lab.test'
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_SecPolicy_v0.4.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+NOT READY
+rc=1
+f5ca20f440a3cdd645371e8c76e459ea26e2392fedbb4421369493be5d38ec89  /tmp/stripped.docx
+HTTP 200
+## raw publish, -DRAFT name, with a real PDF
+POST HTTP 200: {'request_id': '61195f59bd13a5a79ccfc340dcbbdcea', 'state': 'queued'}
+RESULT refused: refused: CUI_SecPolicy_v0.3-DRAFT.docx is still -DRAFT: rename it without -DRAFT (the approved file, unchanged), then publish
+## lab04 RAW approve of the stripped file (its local marking check bypassed)
+POST HTTP 200: {'request_id': 'ab71bc73856cf2d2f8623d76267483b1', 'state': 'queued'}
+RESULT done: approve recorded (ledger entry 11)
+## lab01 RAW publish of the stripped file renamed v0.4 (server-side marking check)
+POST HTTP 200: {'request_id': '42fb45ab99812f6873bd8d0826acc0e0', 'state': 'queued'}
+RESULT refused: refused: the marking check on the server failed: CUI_SecPolicy_v0.4.docx: CUI_SecPolicy_v0.4.docx: the default header (word/header1.xml) has no CUI banner line; CUI_SecPolicy_v0.4.docx: CUI_SecPolicy_v0.4.docx: the first header (word/header2.xml) has no CUI banner line; CUI_SecPolicy_v0.4.docx: CUI_SecPolicy_v0.4.docx: the default footer (word/footer1.xml) has no CUI banner line; CUI_SecPolicy_v0.4.docx: CUI_SecPolicy_v0.4.docx: the first footer (word/footer2.xml) has no CUI banner line; CUI_SecPolicy_v0.4.docx: CUI_SecPolicy_v0.4.docx: the designation block is not on page one: missing 'Controlled by: iso5 Lab Org'; 'CUI Category: CTI'; 'POC: Lab ISSO isso@iso5.lab.test'

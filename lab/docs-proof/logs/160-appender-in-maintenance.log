@@ -1,0 +1,29 @@
+closed CUI_SecPolicy_v0.5.docx
+checkout recorded (ledger entry 27)
+edited CUI_SecPolicy_v0.6-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 28)
+inactive
+b0a477b827e848397fa9b4067c925dff.json
+Maintenance mode enabled
+/var/lib/chp-docs/spool:
+/var/lib/chp-docs/unfinished:
+{"auth":"bearer","cycle":6,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":122,"kanidm_sub":"c6c3b14d-588a-4da0-82f0-20914d69b28c","kind":"checkout","path":"CUI/Compliance/CUI_SecPolicy_v0.5.docx","prev":"3f8371cb817c7fcd525f20766bd0429db4f7b1dfe966a3
+{"auth":"bearer","cycle":6,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":null,"kanidm_sub":"51d59692-93e7-4fe7-ae87-e130d052f7f1","kind":"approve","path":"CUI/Compliance/CUI_SecPolicy_v0.6-DRAFT.docx","prev":"6e790728e9df21a404968a03ee9afbe934b71e0e
+{"doc":"36/CUI_SecPolicy.docx","event":"publish-started","name":"CUI_SecPolicy_v0.6.docx","request_id":"b0a477b827e848397fa9b4067c925dff","supersedes":122,"user":"lab01"}
+{"doc":"36/CUI_SecPolicy.docx","event":"publish-undone","request_id":"b0a477b827e848397fa9b4067c925dff"}
+{"event":"retry","kind":"publish","request_id":"b0a477b827e848397fa9b4067c925dff","user":"lab01","why":"occ files:put: NextCloud is in maintenance mode"}
+{"message": "pending: the document server is in maintenance mode (the nightly backup); nothing was recorded; run the command again in a few minutes", "request_id": "b0a477b827e848397fa9b4067c925dff", "state": "retry", "user": "lab01"}
+CUI_SecPolicy_v0.5.docx  CUI_SecPolicy_v0.5.pdf
+Maintenance mode disabled
+13:04:35
+pending: the ledger answered HTTP 503. Nothing more happens now; run the same command again in a minute (it sends this same request again, never a second one)
+rc=3
+13:04:57
+published CUI/Compliance/CUI_SecPolicy_v0.6.docx as CR-2026-0007 (ledger entry 29)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.6.docx
+rc=0
+OK no unfinished publish
+rc=0
+OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish

@@ -1,0 +1,20 @@
+closed CUI_SecPolicy_v0.6.docx
+inactive
+20:06:18
+## lab01 checkout during the Kanidm outage (access token still valid at NextCloud? the Bearer is checked at Kanidm userinfo)
+chp-site: refused: NextCloud did not accept your sign-in; run chp-site doc login
+
+real	0m0.243s
+user	0m0.134s
+sys	0m0.039s
+rc=2
+{"event":"retry","kind":"publish","request_id":"b0a477b827e848397fa9b4067c925dff","user":"lab01","why":"occ files:put: NextCloud is in maintenance mode"}
+{"doc":"36/CUI_SecPolicy.docx","event":"publish-started","name":"CUI_SecPolicy_v0.6.docx","request_id":"b0a477b827e848397fa9b4067c925dff","supersedes":122,"user":"lab01"}
+{"auth":"bearer","cr":"CR-2026-0007","cycle":6,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":125,"kanidm_sub":"c6c3b14d-588a-4da0-82f0-20914d69b28c","kind":"publish","path":"CUI/Compliance/CUI_SecPolicy_v0.6.d
+active
+## the same command after Kanidm is back
+checkout recorded (ledger entry 30)
+working copy: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.7-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+The next version is a minor one (v0.7); rename it for a major change.
+rc=0

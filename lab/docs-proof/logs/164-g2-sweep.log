@@ -1,0 +1,29 @@
+runtime dir: /run/user/2139562178
+16
+3932 /usr/bin/sleep infinity
+3936 /usr/lib/systemd/systemd --user
+3938 (sd-pam)
+-rw-r--r--. 1 lab01 lab01 unconfined_u:object_r:data_home_t:s0 259 Nov 20 13:08 /home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml
+-rw-r--r--. 1 lab06 lab06 unconfined_u:object_r:data_home_t:s0 253 Nov 20 13:07 /home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml
+kept /home/c6c3b14d-588a-4da0-82f0-20914d69b28c: a live session (user lab01, uid 2104078988); swept after the user's last process ends
+kept /home/ee1585e4-4792-4e0b-8e7a-873dbf8720c2: a live session (user lab06, uid 2139562178); swept after the user's last process ends
+swept 2 user(s): 0 item(s) removed
+swept 2 user(s): 0 item(s) removed
+chp-onlyoffice-sweep.service: Deactivated successfully.
+Finished CHP: remove ONLYOFFICE's auto-recovery copies (CUI) of closed or abandoned editor sessions (12 h).
+lab01: DE__8AhSI0
+-rw-r--r--. 1 lab01 lab01 unconfined_u:object_r:data_home_t:s0 259 Nov 20 13:08 /home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml
+lab06: DE__yzSdaG
+-rw-r--r--. 1 lab06 lab06 unconfined_u:object_r:data_home_t:s0 253 Nov 20 13:07 /home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml
+0
+Denied accesses: 0
+lab06 processes now: 0
+kept /home/c6c3b14d-588a-4da0-82f0-20914d69b28c: a live session (user lab01, uid 2104078988); swept after the user's last process ends
+removed /home/ee1585e4-4792-4e0b-8e7a-873dbf8720c2/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG (user lab06, uid 2139562178; no live session; older than 12 h)
+swept 2 user(s): 1 item(s) removed
+lab06 recover: 
+-rw-r--r--. 1 lab06 lab06 unconfined_u:object_r:data_home_t:s0 253 Nov 20 13:07 /home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml
+﻿<?xml version="1.0" encoding="utf-8"?><recents><file path="/home/lab06@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.2.docx" type="65" date="20.11.2026 13:07" url="" parent="/home/lab06@idm.iso5.lab.test/Documents/CHP-Working" /></recents>
+0
+Denied accesses: 0
+2026-11-20T13:10:21 iso5-cli2 100626 3 a-873dbf8720c2/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG (user lab06, uid 2139562178; no live session; older than 12 h)

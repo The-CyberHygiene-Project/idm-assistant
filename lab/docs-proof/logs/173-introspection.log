@@ -1,0 +1,3 @@
+refresh_token introspect: HTTP 200 {'active': False, 'scope': ''}
+access_token introspect: HTTP 200 {'active': True, 'scope': 'groups openid profile', 'client_id': 'chp-doc', 'token_type': 'Bearer', 'exp': 1795206386, 'iat': 1795205486}
+session_expires_at stored: None access expires_at: 1795206386.7482803

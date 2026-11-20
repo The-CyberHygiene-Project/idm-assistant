@@ -1,0 +1,21 @@
+closed CUI_SecPolicy_v0.4.docx
+checkout recorded (ledger entry 24)
+edited CUI_SecPolicy_v0.5-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 25)
+## maintenance mode ON by hand (as the backup does), then publish
+Maintenance mode enabled
+chp-site: refused: NextCloud answered HTTP 503 for CUI/Compliance
+rc=2
+CUI_SecPolicy_v0.4.docx
+CUI_SecPolicy_v0.4.pdf
+{"doc":"36/CUI_SecPolicy.docx","event":"publish-started","name":"CUI_SecPolicy_v0.4.docx","request_id":"11b91fc99e262fa78dcdfd96d2116649","supersedes":88,"user":"lab01"}
+{"auth":"bearer","cr":"CR-2026-0005","cycle":4,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":119,"kanidm_sub":"c6c3b14d-588a-4da0-82f0-20914d69b28c","kind":"publish","path":"CUI/Compliance/CUI_SecPolicy_v0.4.docx","pdf_
+{"auth":"bearer","cycle":5,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":119,"kanidm_sub":"c6c3b14d-588a-4da0-82f0-20914d69b28c","kind":"checkout","path":"CUI/Compliance/CUI_SecPolicy_v0.4.docx","prev":"f05e58d9944e6bb9
+{"auth":"bearer","cycle":5,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":null,"kanidm_sub":"51d59692-93e7-4fe7-ae87-e130d052f7f1","kind":"approve","path":"CUI/Compliance/CUI_SecPolicy_v0.5-DRAFT.docx","prev":"552db6dc30
+Maintenance mode disabled
+## the same command again, maintenance off
+published CUI/Compliance/CUI_SecPolicy_v0.5.docx as CR-2026-0006 (ledger entry 26)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.5.docx
+rc=0

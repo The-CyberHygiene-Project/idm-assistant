@@ -1,0 +1,20 @@
+/etc/httpd/conf.d/chp-nextcloud.conf-21-    # leaves ~10 MiB of headroom and stops a runaway body before PHP reads it (httpd's default is 1 GiB). v1 and v2:
+/etc/httpd/conf.d/chp-nextcloud.conf-22-    # both OCS entry points route the app. Only the limit here: the LAN rule above still applies.
+/etc/httpd/conf.d/chp-nextcloud.conf-23-    <LocationMatch "^/ocs/v[12]\.php/apps/chp_ledger/">
+/etc/httpd/conf.d/chp-nextcloud.conf:24:        LimitRequestBody 100663296
+/etc/httpd/conf.d/chp-nextcloud.conf-25-    </LocationMatch>
+/etc/httpd/conf.d/chp-nextcloud.conf-26-    <Directory /usr/lib/nextcloud>
+/etc/httpd/conf.d/chp-nextcloud.conf-27-        AllowOverride All
+/etc/php-fpm.d/nextcloud.conf:18:php_value[upload_max_filesize] = 2G
+/etc/php-fpm.d/nextcloud.conf:19:php_value[post_max_size] = 2G
+access_log
+error_log
+nextcloud-access.log
+nextcloud-error.log
+/etc/httpd/conf.d/chp-nextcloud.conf:24:        LimitRequestBody 100663296
+192.168.100.52 - - [20/Nov/2026:12:34:30 -0700] "GET /ocs/v2.php/apps/chp_ledger/api/v1/result/f9047b3535240e0dbcd10f0e766dc893?format=json HTTP/1.1" 200 816 "-" "chp-site doc"
+192.168.100.52 - - [20/Nov/2026:12:36:43 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 200 138 "-" "CHP plan3 lab api"
+192.168.100.52 - - [20/Nov/2026:12:36:44 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 413 198 "-" "CHP plan3 lab api"
+192.168.100.52 - - [20/Nov/2026:12:36:45 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 400 198 "-" "CHP plan3 lab api"
+192.168.100.52 - - [20/Nov/2026:12:36:46 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 400 198 "-" "CHP plan3 lab api"
+192.168.100.52 - - [20/Nov/2026:12:36:46 -0700] "POST /ocs/v1.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 200 232 "-" "CHP plan3 lab api"

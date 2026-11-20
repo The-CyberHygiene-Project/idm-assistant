@@ -1,0 +1,57 @@
+/usr/lib/systemd/system/chp-docs-ledger.path:TriggerLimitIntervalSec=60
+/usr/lib/systemd/system/chp-docs-ledger.path:TriggerLimitBurst=300
+/usr/lib/systemd/system/chp-docs-ledger.service:StartLimitIntervalSec=60
+/usr/lib/systemd/system/chp-docs-ledger.service:StartLimitBurst=300
+after 59 s:
+active
+Result=success
+ActiveState=active
+0
+451
+450
+## hook lines since:
+2026-11-20T12:44:27 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+## check 82
+OK document ledger: 451 request(s) in quarantine (/var/lib/chp-docs/quarantine): each was set aside as malformed; look at them, then chp-site doc-ledger purge-quarantine - still failing (alerted 2026-11-20T19:43:57Z)
+## recover: reset-failed + start
+active
+0
+EXIT=0
+100645 451 ('2026-11-20T12:44:54', 12, 'Document request QUARANTINED (malformed; set aside for the ISSO): not a request file name (chp_ledger writes <32 hex>.json only)')
+100649 5 ('2026-11-20T12:43:58', 3, 'Document publish started by lab01: CUI_Fake_v1.0.docx')
+100654 9 ('2026-11-20T12:36:46', 3, 'CHP document ledger: refused')
+{"doc":"36/CUI_Fake.docx","event":"publish-started","name":"CUI_Fake_v1.0.docx","request_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","supersedes":null,"user":"lab01"}
+15
+iso5-srv.iso5.lab.test rule 100645 level 12: Document request QUARANTINED (malformed; set aside for the ISSO): not a request file name (chp_ledger writes <32 hex>.json only)
+iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+removed 451 quarantine record(s)
+330 starts in 70 s; refused starts: 0
+Result=success
+ActiveState=inactive
+active
+## hook:
+## a real request while the service is start-limited
+active
+## 60 s later (start limit interval over)
+active
+Result=success
+OK document ledger: 2 request(s) in quarantine (/var/lib/chp-docs/quarantine): each was set aside as malformed; look at them, then chp-site doc-ledger purge-quarantine - still failing (alerted 2026-11
+removed 2 quarantine record(s)
+active
+EXIT=0
+400 non-blocking starts in 30 s
+Result=success
+NRestarts=0
+ActiveState=inactive
+active inactive 
+252
+## hook:
+## a request now
+active
+OK document ledger: 1 request(s) in quarantine (/var/lib/chp-docs/quarantine): each was set aside as malformed; look at them, then chp-site doc-ledger purge-quarantine - still failing (alerted 2026-11-20T19:43:57Z)
+## after the interval
+active
+Result=success
+removed 2 quarantine record(s)
+active
+EXIT=0

@@ -1,0 +1,10 @@
+chp-site: refused: the template /usr/share/chp-templates/doc/cui/Template.docx is not installed (it comes with chp-templates 1.4.0)
+rc=2
+== iso5-cli1 (W1: dnf install chp-templates from the signed repo)
+chp-templates-1.4.0-1.chp.el9.noarch
+/usr/share/chp-templates/doc/cui: Template.docx Template.md Template.xlsx  /usr/share/chp-templates/doc/noncui: Template.docx Template.md Template.xlsx 
+Denied accesses: 0
+== iso5-cli2 (W1: dnf install chp-templates from the signed repo)
+chp-templates-1.4.0-1.chp.el9.noarch
+/usr/share/chp-templates/doc/cui: Template.docx Template.md Template.xlsx  /usr/share/chp-templates/doc/noncui: Template.docx Template.md Template.xlsx 
+Denied accesses: 0

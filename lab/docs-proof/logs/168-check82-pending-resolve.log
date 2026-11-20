@@ -1,0 +1,11 @@
+PENDING publish aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (36/CUI_Fake.docx) started at 2026-11-20 19:43:57Z and never finished (the appender was stopped?): the area may hold half of it; check the area, then: chp-site doc-ledger resolve aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --reason "..."
+pending-rc=1
+ALERT document ledger: publish aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (36/CUI_Fake.docx) started at 2026-11-20 19:43:57Z and never finished (the appender was stopped?): the area may hold half of it; check the area, then: chp-site doc-ledger resolve aaaaaaa
+29
+resolved aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (ledger entry 39)
+resolve-rc=0
+OK no unfinished publish
+pending-rc=0
+OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish
+2026-11-20T13:14:41 iso5-srv.iso5.lab.test rule 100609 level 12: NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary" (4 more in the last 15
+2026-11-20T13:14:43 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system. (588 more in the last 15 min)

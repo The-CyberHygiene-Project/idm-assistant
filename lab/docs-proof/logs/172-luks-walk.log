@@ -1,0 +1,3 @@
+chp-site: refused: the working folder /home/lab01@idm.iso5.lab.test/Documents/CHP-Working is not on a LUKS2-encrypted disk (CUI working copies may only be kept there)
+rc=2
+ls: cannot access '/home/lab01@idm.iso5.lab.test/Documents/CHP-Working': Permission denied

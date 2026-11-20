@@ -1,0 +1,9 @@
+0
+removed /home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0
+removed /home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recents.xml: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.7-DRAFT.docx
+removed CUI_SecPolicy_v0.7-DRAFT.docx
+removed the checkout record of CUI_SecPolicy_v0.7-DRAFT.docx
+closed CUI_SecPolicy_v0.7-DRAFT.docx
+rc=0
+grep for the name after close:
+(end grep)

@@ -1,0 +1,33 @@
+start 2026-11-20T20:28:55Z
+[TEST-MODE APPROVAL] 
+========================================================================
+ DECISION on srv1: repair kanidm-cred-reset-token
+========================================================================
+ PROBLEM DETECTED
+   A person can sign in to the identity web page but is refused on every
+   Linux login.
+   Why it matters: That person cannot use any workstation or server
+   until they set their Linux password.
+
+ LIKELY CAUSE  (found by the diagnostic tool: POSIX_PW_MISSING)
+   The account has a web sign-in credential but no Linux (POSIX)
+   password.
+   Found on this host: user lab08: POSIX account, primary credential
+   set, no unix (POSIX) password
+
+ PROPOSED ACTION
+   Issue a one-hour reset token for that person; they set their own
+   Linux password with it. This tool never sets passwords.
+
+ POTENTIAL DOWNSIDE
+   If it is wrong: If the token reaches the wrong person, they could set
+   the password and log in as that user within the hour.
+   Undo: Cannot be undone, but an unused token expires after one hour.
+
+ SAY NO IF
+   You cannot hand the token to that person directly and privately.
+
+ If unsure, type no: nothing on srv1 changes.
+------------------------------------------------------------------------
+ CHOICE: Type yes to apply, or no to skip, then press Enter
+l1 run 1: GREEN

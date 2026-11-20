@@ -1,0 +1,31 @@
+## baseline
+OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish
+## (a) path unit stopped
+ALERT document ledger: chp-docs-ledger.path is inactive: spooled document requests are not being processed (journalctl -u chp-docs-ledger; then systemctl reset-failed chp-docs-ledger.path; systemctl start chp-docs-ledger.path)
+active
+## J10: a stray foo.json dropped in the spool as apache
+/var/lib/chp-docs/quarantine:
+total 4
+drwx------. 2 root root    43 Nov 20 12:43 .
+drwxr-x---. 8 root apache  92 Nov 20 10:34 ..
+-rw-------. 1 root root   156 Nov 20 12:43 20261120T194347Z-stray-0.json
+
+/var/lib/chp-docs/spool:
+total 0
+drwx-wx--T. 2 root apache  6 Nov 20 12:43 .
+drwxr-x---. 8 root apache 92 Nov 20 10:34 ..
+     Active: active (waiting) since Fri 2026-11-20 12:43:47 MST; 10s ago
+   Triggers: ● chp-docs-ledger.service
+Starting CHP: document ledger appender (chp-site doc-ledger process; ISO 0.7.0 Plan 3)...
+{"event":"quarantine","request_id":null,"user":null,"why":"not a request file name (chp_ledger writes <32 hex>.json only)"}
+processed 1 request(s): 0 done, 1 refused, 0 to retry
+chp-docs-ledger.service: Deactivated successfully.
+Finished CHP: document ledger appender (chp-site doc-ledger process; ISO 0.7.0 Plan 3).
+## (b) check 82 with that quarantine
+ALERT document ledger: 1 request(s) in quarantine (/var/lib/chp-docs/quarantine): each was set aside as malformed; look at them, then chp-site doc-ledger purge-quarantine
+## E11/T11a-13: held record has no bearer token
+system_u:object_r:var_lib_t:s0 20261120T194347Z-stray-0.json
+## (c) a root journal publish-started with no end (forged by root, as a SIGKILLed appender would leave)
+2026-11-20T19:43:57Z
+OK no unfinished publish
+pending-rc=0

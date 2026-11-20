@@ -1,0 +1,37 @@
+# P3-D1 evidence: fresh-server enable run 1 fails at maintenance:install (fapolicyd trust reload race)
+## enable output (last lines)
+Fapolicyd was notified
+chp-site: occ maintenance:install failed: {"reqId":"xpXMsZqBq8Xrri46EkmM","level":3,"time":"2026-11-20T17:34:31+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/; fix the cause, then re-run chp-site documents enable (it is safe to repeat)
+enable-rc=2
+2026-11-20T17:34:31Z
+EXIT=0
+stick-detached
+Nov 20 10:34:14 iso5-srv.iso5.lab.test chp-site[46349]: chp-site documents-enable host="iso5-srv" step="render"
+Nov 20 10:34:16 iso5-srv.iso5.lab.test chp-site[46484]: chp-site documents-enable host="iso5-srv" step="egress"
+Nov 20 10:34:28 iso5-srv.iso5.lab.test chp-site[47595]: chp-site documents-enable host="iso5-srv" step="wazuh"
+Nov 20 10:34:31 iso5-srv.iso5.lab.test chp-site[47802]: chp-site documents-enable host="iso5-srv" step="database"
+Nov 20 10:34:31 iso5-srv.iso5.lab.test chp-site[47840]: USBGuard: blocked device 6 again
+ls: cannot access '/var/lib/nextcloud': No such file or directory
+/data/nextcloud:
+total 0
+drwxr-x---. 3 apache apache 18 Nov 20 10:34 .
+drwxr-xr-x. 4 root   root   36 Nov 20 10:34 ..
+drwxr-x---. 2 apache apache  6 Nov 20 10:34 data
+## fapolicyd denials (audit FANOTIFY)
+audit(1795196071.206 resp=2 obj_trust=0 audit(1795196071.206 exe="/usr/bin/php" audit(1795196071.206 name="/etc/nextcloud/config.php" 
+audit(1795196071.505 resp=2 obj_trust=0 audit(1795196071.505 exe="/usr/bin/php" audit(1795196071.505 name="/etc/nextcloud/config.php" 
+audit(1795196071.612 resp=2 obj_trust=0 audit(1795196071.612 exe="/usr/bin/php" audit(1795196071.612 name="/etc/nextcloud/config.php" 
+## trust entry now (matches; integrity = none)
+/etc/nextcloud/config.php 27 765bbce4879
+integrity = none
+## fapolicyd journal: --update at 31.08 -> DB Updated at 32.06
+Nov 20 10:34:31.076941 iso5-srv.iso5.lab.test fapolicyd[1875]: It looks like there was an update of the system... Syncing DB.
+Nov 20 10:34:31.904707 iso5-srv.iso5.lab.test fapolicyd[1875]: Updating trust database
+Nov 20 10:34:31.905684 iso5-srv.iso5.lab.test fapolicyd[1875]: Creating trust database
+Nov 20 10:34:31.905690 iso5-srv.iso5.lab.test fapolicyd[1875]: Loading trust data from rpmdb backend
+Nov 20 10:34:32.033889 iso5-srv.iso5.lab.test fapolicyd[1875]: Loading trust data from file backend
+Nov 20 10:34:32.033916 iso5-srv.iso5.lab.test fapolicyd[1875]: Trust database at 14% capacity - might consider shrinking the size to save sp
+Nov 20 10:34:32.056967 iso5-srv.iso5.lab.test fapolicyd[1875]: Updated
+## now (after the reload): php can read config.php
+Nextcloud is not installed - only a limited number of commands are available
+  - installed: false

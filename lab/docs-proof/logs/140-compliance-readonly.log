@@ -1,0 +1,30 @@
+### auth=bearer
+CUI/Compliance: PUT new HTTP 403
+CUI/Compliance/CUI_SecPolicy_v0.3.docx: PUT new HTTP 404
+Archive/Superseded: PUT new HTTP 403
+Internal/Compliance: PUT new HTTP 403
+Internal/Compliance/Superseded: PUT new HTTP 403
+PUT over the published file: HTTP 403
+MKCOL in CUI/Compliance: HTTP 403
+DELETE published: HTTP 403
+MOVE (rename) published: HTTP 403
+MOVE published out to CUI/Drafts: HTTP 403
+COPY into CUI/Compliance: HTTP 403
+DELETE superseded: HTTP 403
+MOVE area folder itself: HTTP 403
+DELETE area folder itself: HTTP 403
+### auth=basic
+CUI/Compliance: PUT new HTTP 403
+CUI/Compliance/CUI_SecPolicy_v0.3.docx: PUT new HTTP 404
+Archive/Superseded: PUT new HTTP 403
+Internal/Compliance: PUT new HTTP 403
+Internal/Compliance/Superseded: PUT new HTTP 403
+PUT over the published file: HTTP 403
+MKCOL in CUI/Compliance: HTTP 403
+DELETE published: HTTP 403
+MOVE (rename) published: HTTP 403
+MOVE published out to CUI/Drafts: HTTP 403
+COPY into CUI/Compliance: HTTP 403
+DELETE superseded: HTTP 403
+MOVE area folder itself: HTTP 403
+DELETE area folder itself: HTTP 403

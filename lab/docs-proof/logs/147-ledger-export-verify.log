@@ -1,0 +1,23 @@
+OK: chain and head match, 20 entries; stick anchor NOT checked (run with --stick)
+verify-rc=0
+document ledger head 20 written to the stick (docs-ledger/heads.txt)
+export-rc=0
+OK: chain and head match, 20 entries; stick anchor OK
+verify-stick-rc=0
+total 16
+drwx------. 2 root root     45 Nov 20 12:42 .
+drwxr-x---. 8 root apache   92 Nov 20 10:34 ..
+-rw-------. 1 root root     68 Nov 20 12:42 ledger.head
+-rw-------. 1 root root   9603 Nov 20 12:42 ledger.jsonl
+## tamper on a COPY
+ledger.head  ledger.jsonl
+## the tampered COPY, seen through a private mount namespace (the live ledger is untouched)
+PROBLEM: ledger /var/lib/chp-docs/ledger/ledger.jsonl: entry 3 does not follow entry 2 (the chain is broken there)
+verify-copy-rc=1
+## J13: ledger.head removed (copy)
+PROBLEM: /var/lib/chp-docs/ledger/ledger.head (ledger.head, the head witness) is missing although the ledger has 20 entries: deleted, or the head write after an entry failed (journal event head-write-failed); compare with the site stick (chp-site doc-ledger verify --stick); the next entry rewrites it
+verify-nohead-rc=1
+ALERT document ledger does not verify (exit 1): PROBLEM: /var/lib/chp-docs/ledger/ledger.head (ledger.head, the head witness) is missing although the ledger has 20 entries: deleted, or the head write after an entry failed (journal event head-write-failed); compare with the site stick (chp-site doc-ledger verify --stick); the next entry rewrites it (chp-site doc-ledger verify --stick; restore from the site stick's docs-ledger copy)
+## live again
+OK: chain and head match, 20 entries; stick anchor OK
+rc=0

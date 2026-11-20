@@ -1,0 +1,25 @@
+sign-in URL printed (redirect_uri http://127.0.0.1:45879/)
+browser:   GET https://idm.iso5.lab.test/ui/oauth2 -> 200
+browser:   form /ui/login/begin fields=['password', 'totp', 'username']
+browser:   POST https://idm.iso5.lab.test/ui/login/begin -> 200
+browser:   form /ui/login/totp fields=['password', 'totp']
+browser:   POST https://idm.iso5.lab.test/ui/login/totp -> 200
+browser:   form /ui/login/pw fields=['password']
+browser:   POST https://idm.iso5.lab.test/ui/login/pw -> 303
+browser:   GET https://idm.iso5.lab.test/ui/oauth2/resume -> 200
+browser:   form /ui/oauth2/consent fields=['consent_token']
+browser:   POST https://idm.iso5.lab.test/ui/oauth2/consent -> 303
+browser:   GET http://127.0.0.1:45879/ -> 200
+browser: DONE loopback answered 200: Signed in. You can close this tab and go back to the terminal.
+Sign in at Kanidm in the browser (it should open by itself; if not, open this address):
+signed in as lab04 (sign-in ends: Kanidm did not say)
+EXIT=0
+HTTP 200
+de06320e7cad3e54d5b1d8a94c3e64b5bf80271b9885f239ef9fd80b3851d9cb  CUI_SecPolicy_v0.1-DRAFT.docx
+2026-11-20T19:24:34Z
+6
+approve recorded (ledger entry 2)
+rc=0
+2026-11-20T12:11:46 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+2026-11-20T12:20:34 iso5-srv.iso5.lab.test rule 100629 level 12: NextCloud: the Kanidm sign-in added an account to a privileged group: User "lab01" added to group "cui-users" (1 more in the last 15 min)
+2026-11-20T12:24:37 iso5-srv.iso5.lab.test rule 100642 level 12: Controlled document APPROVED by lab04: CUI/Compliance/CUI_SecPolicy_v0.1-DRAFT.docx (sha256 de06320e7cad3e54d5b1d8a94c3e64b5bf80271b9885f239ef9fd80b3851d9cb)
