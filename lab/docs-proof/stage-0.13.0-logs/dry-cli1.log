@@ -1,0 +1,128 @@
+== before
+-rw-r--r-- root root 380928 2026-11-19 06:09:37.167502970 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 68038656 2026-11-14 13:36:05.366490442 -0700 /var/lib/rpm/rpmdb.sqlite
+total 0
+drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .
+drwxr-xr-x. 9 root root 185 2026-11-13 17:17:12.405475664 -0700 ..
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+chp-integrity-0.1.7-1.chp.el9.noarch
+chp-identity-client-0.2.4-1.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+package chp-onlyoffice is not installed
+== dry-run
+== whoami inside: 0 ; role workstation ; host module state:
+== installed (ours + editor):
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+chp-integrity-0.1.7-1.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-1.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+package chp-onlyoffice is not installed
+package onlyoffice-desktopeditors is not installed
+package chp-templates is not installed
+poppler-utils-21.01.0-24.el9.x86_64
+== 1. module list (repo s013 only)
+Added s013 repo from file:///var/tmp/s013/repo
+s013                                            100 MB/s | 425 kB     00:00    
+s013
+Name       Stream Profiles                   Summary                            
+php        8.3    common [d], devel, minimal PHP scripting language             
+postgresql 16     client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs the applied 0.12.0)
+Added s013 repo from file:///var/tmp/s013/repo
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                Repository  Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-13.chp.el9       s013        27 k
+ chp-identity-client       noarch       0.2.4-2.chp.el9        s013        24 k
+ chp-integrity             noarch       0.1.7-2.chp.el9        s013        24 k
+ chp-site                  noarch       0.14.0-7.chp.el9       s013       189 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 264 k
+Operation aborted.
+rc=1
+== 3. check-update
+Last metadata expiration check: 0:00:01 ago on Thu 19 Nov 2026 09:58:43 PM MST.
+
+chp-base.noarch                            0.1.0-13.chp.el9                 s013
+chp-identity-client.noarch                 0.2.4-2.chp.el9                  s013
+chp-integrity.noarch                       0.1.7-2.chp.el9                  s013
+chp-site.noarch                            0.14.0-7.chp.el9                 s013
+rc=0 (100 = updates available)
+== 4. install --assumeno chp-onlyoffice (the workstation editor; streams not needed)
+Dependencies resolved.
+================================================================================
+ Package                       Arch       Version                Repo      Size
+================================================================================
+Installing:
+ chp-onlyoffice                noarch     0.1.0-3.chp.el9        s013      25 k
+Upgrading:
+ chp-site                      noarch     0.14.0-7.chp.el9       s013     189 k
+Installing dependencies:
+ boost-filesystem              x86_64     1.75.0-13.el9_7        s013      55 k
+ boost-system                  x86_64     1.75.0-13.el9_7        s013      11 k
+ libXScrnSaver                 x86_64     1.2.3-10.el9           s013      24 k
+ liberation-narrow-fonts       noarch     2:1.07.6-9.el9         s013     205 k
+ onlyoffice-desktopeditors     x86_64     10.0.0-169.el7         s013     278 M
+ xcb-util-image                x86_64     0.4.0-19.el9.0.1       s013      18 k
+ xcb-util-keysyms              x86_64     0.4.0-17.el9           s013      14 k
+ xcb-util-renderutil           x86_64     0.3.9-20.el9.0.1       s013      16 k
+ xcb-util-wm                   x86_64     0.4.1-22.el9           s013      31 k
+
+Transaction Summary
+================================================================================
+Install  10 Packages
+Upgrade   1 Package
+
+Total size: 278 M
+Operation aborted.
+rc=0
+== 5. upgrade + install together --assumeno (apply repo, then the editor)
+Transaction Summary
+================================================================================
+Install  10 Packages
+Upgrade   4 Packages
+
+Total size: 278 M
+Operation aborted.
+rc=0
+== 6. control: chp-documents on a workstation is not pulled by the editor
+Added s013 repo from file:///var/tmp/s013/repo
+chp-base-0:0.1.0-13.chp.el9.noarch
+chp-site-0:0.14.0-7.chp.el9.noarch
+Last metadata expiration check: 0:00:03 ago on Thu 19 Nov 2026 09:58:43 PM MST.
+onlyoffice-desktopeditors-0:10.0.0-169.el7.x86_64
+poppler-utils-0:21.01.0-24.el9.x86_64
+== 7. rpm -U --test of the upgrades + the editor set against a COPY of this host's rpm database
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./.rpm.lock': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite-wal': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite-shm': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/.': Invalid argument
+rc=0 (14 packages)
+== after
+-rw-r--r-- root root 380928 2026-11-19 06:09:37.167502970 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 68038656 2026-11-14 13:36:05.366490442 -0700 /var/lib/rpm/rpmdb.sqlite
+total 0
+drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .
+drwxr-xr-x. 9 root root 185 2026-11-13 17:17:12.405475664 -0700 ..
+chp-site-0.14.0-4.chp.el9.noarch
+chp-base-0.1.0-12.chp.el9.noarch
+chp-integrity-0.1.7-1.chp.el9.noarch
+chp-identity-client-0.2.4-1.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+package chp-onlyoffice is not installed
+ls: cannot access '/var/tmp/s013': No such file or directory

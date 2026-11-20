@@ -1,0 +1,87 @@
+=== cli1: install chp-onlyoffice (closure vs cand + DVD, no weak deps)
+Added cand repo from file:///data/chp-release/tmp-c013/cand
+Added baseos repo from file:///data/lab-inputs/dvd/BaseOS
+Added appstream repo from file:///data/lab-inputs/dvd/AppStream
+cand                                             77 MB/s | 627 kB     00:00    
+baseos                                          169 MB/s | 2.2 MB     00:00    
+appstream                                       267 MB/s | 8.5 MB     00:00    
+Dependencies resolved.
+================================================================================
+ Package                      Arch      Version              Repository    Size
+================================================================================
+Installing:
+ chp-onlyoffice               noarch    0.1.0-3.chp.el9      cand          25 k
+Upgrading:
+ chp-site                     noarch    0.14.0-7.chp.el9     cand         189 k
+Installing dependencies:
+ boost-filesystem             x86_64    1.75.0-13.el9_7      appstream     55 k
+ boost-system                 x86_64    1.75.0-13.el9_7      appstream     11 k
+ libXScrnSaver                x86_64    1.2.3-10.el9         appstream     24 k
+ liberation-narrow-fonts      noarch    2:1.07.6-9.el9       appstream    205 k
+ onlyoffice-desktopeditors    x86_64    10.0.0-169.el7       cand         278 M
+ xcb-util-image               x86_64    0.4.0-19.el9.0.1     appstream     18 k
+ xcb-util-keysyms             x86_64    0.4.0-17.el9         appstream     14 k
+ xcb-util-renderutil          x86_64    0.3.9-20.el9.0.1     appstream     16 k
+ xcb-util-wm                  x86_64    0.4.1-22.el9         appstream     31 k
+Transaction Summary
+================================================================================
+Install  10 Packages
+Upgrade   1 Package
+Total size: 278 M
+Operation aborted.
+rc=1
+=== cli1: same, cand ONLY
+================================================================================
+ Package                      Arch      Version              Repository    Size
+================================================================================
+Installing:
+ chp-onlyoffice               noarch    0.1.0-3.chp.el9      cand          25 k
+Upgrading:
+ chp-site                     noarch    0.14.0-7.chp.el9     cand         189 k
+Installing dependencies:
+ boost-filesystem             x86_64    1.75.0-13.el9_7      appstream     55 k
+ boost-system                 x86_64    1.75.0-13.el9_7      appstream     11 k
+ libXScrnSaver                x86_64    1.2.3-10.el9         appstream     24 k
+ liberation-narrow-fonts      noarch    2:1.07.6-9.el9       appstream    205 k
+ onlyoffice-desktopeditors    x86_64    10.0.0-169.el7       cand         278 M
+ xcb-util-image               x86_64    0.4.0-19.el9.0.1     appstream     18 k
+ xcb-util-keysyms             x86_64    0.4.0-17.el9         appstream     14 k
+ xcb-util-renderutil          x86_64    0.3.9-20.el9.0.1     appstream     16 k
+ xcb-util-wm                  x86_64    0.4.1-22.el9         appstream     31 k
+Transaction Summary
+================================================================================
+Install  10 Packages
+Upgrade   1 Package
+Total size: 278 M
+Operation aborted.
+rc=0
+=== srv: upgrade + install nextcloud-chp chp-documents, cand + DVD
+Added cand repo from file:///data/chp-release/tmp-c013/cand
+Added baseos repo from file:///data/lab-inputs/dvd/BaseOS
+Added appstream repo from file:///data/lab-inputs/dvd/AppStream
+cand                                             97 MB/s | 627 kB     00:00    
+baseos                                          253 MB/s | 2.2 MB     00:00    
+appstream                                       393 MB/s | 8.5 MB     00:00    
+Package nextcloud-chp-35.0.3-5.chp.el9.noarch is already installed.
+Package chp-documents-0.1.0-6.chp.el9.noarch is already installed.
+Package chp-site-0.14.0-4.chp.el9.noarch is already installed.
+Package chp-base-0.1.0-12.chp.el9.noarch is already installed.
+Package chp-integrity-0.1.7-1.chp.el9.noarch is already installed.
+Package chp-identity-client-0.2.4-1.chp.el9.noarch is already installed.
+Dependencies resolved.
+================================================================================
+ Package                   Architecture Version                Repository  Size
+================================================================================
+Upgrading:
+ chp-base                  noarch       0.1.0-13.chp.el9       cand        27 k
+ chp-documents             noarch       0.1.0-8.chp.el9        cand        46 k
+ chp-identity-client       noarch       0.2.4-2.chp.el9        cand        24 k
+ chp-integrity             noarch       0.1.7-2.chp.el9        cand        24 k
+ chp-site                  noarch       0.14.0-7.chp.el9       cand       189 k
+ nextcloud-chp             noarch       35.0.3-6.chp.el9       cand       212 M
+Transaction Summary
+================================================================================
+Upgrade  6 Packages
+Total size: 212 M
+Operation aborted.
+rc=1

@@ -1,0 +1,37 @@
+4a5,6
+> 62c55ed1132235ab1df1058536545c78d85c605c85331b1dd704a75be852076d  boost-filesystem-1.75.0-13.el9_7.x86_64.rpm
+> d695b4ba9e73496b472e38ee3fe60b8114c44ec395b33eebc9d715ffd30bfcf5  boost-system-1.75.0-13.el9_7.x86_64.rpm
+6,8c8,10
+< e5893dd3f6961d0695eb193c3da74cd745bb8291242e1485adc26445787b2692  chp-base-0.1.0-12.chp.el9.noarch.rpm
+< 2f4f71d50152eec045a7cf0e8f0afcd50a31d46f32efa9371223329719a8e728  chp-documents-0.1.0-6.chp.el9.noarch.rpm
+< 07185d429d2fbb2dcf7c7fa7733a7b4c1b16d1be31fae909bf29d2c356d0316b  chp-identity-client-0.2.4-1.chp.el9.noarch.rpm
+---
+> e757657cd770cc012ed8ac1c7faa6fe35bf9521de44f1346c2e08f2ae3fd93d2  chp-base-0.1.0-13.chp.el9.noarch.rpm
+> ec2ce84bed8c229526c4f6bb0de2dae9ef51a5b39aa72e323e075625228f151e  chp-documents-0.1.0-8.chp.el9.noarch.rpm
+> bb4a532b2e454eae6ff81408c72fab5e1088a151083e4c08c94eedf7afe27264  chp-identity-client-0.2.4-2.chp.el9.noarch.rpm
+10c12,13
+< e200f7c60632b717a8247062effce80e02beee622cc3ea9d0062b3e48504704e  chp-integrity-0.1.7-1.chp.el9.noarch.rpm
+---
+> 453c1cdc7ce321c15b8a694e964ea6a81f6f04d028e2738a3c700e1cb30025ff  chp-integrity-0.1.7-2.chp.el9.noarch.rpm
+> 2dad97f1b52aa9d82c47e4628ae64961ff9170ea7c7d40cd4f844a23c880a9a6  chp-onlyoffice-0.1.0-3.chp.el9.noarch.rpm
+12c15
+< 2f8da723bb53762bd8388eec688dade61890a96790c19f48aa9b11211950f581  chp-site-0.14.0-4.chp.el9.noarch.rpm
+---
+> d99796a5e43a30be786f5be7ea43f5b03fa05a3c907aad04d1e8f98b48670325  chp-site-0.14.0-7.chp.el9.noarch.rpm
+26a30
+> d390ff7a104b1b49d73a71c18c67bcd5ad10813a0cf260ac83772d9413ba3366  liberation-narrow-fonts-1.07.6-9.el9.noarch.rpm
+28a33
+> 9f8ba1b5e19febf274a8d1de46db7c64fc223a42f1144b975321815813ac4b82  libXScrnSaver-1.2.3-10.el9.x86_64.rpm
+33c38
+< bcdf999780b8369920f72b5fa87eeba946c47c595ce7cf3c2fe40763455dbe3c  nextcloud-chp-35.0.3-5.chp.el9.noarch.rpm
+---
+> 25da563b84697820ffb4fb84b72649c66533f19bcfe12b30f97a28c4d0dd6705  nextcloud-chp-35.0.3-6.chp.el9.noarch.rpm
+34a40
+> 872e4aef467490cf6d21e8020941650e0e543c3158b80a094f0a14f7ce0cdb05  onlyoffice-desktopeditors-10.0.0-169.el7.x86_64.rpm
+51a58
+> 6cc9daf277c42f5eb940c35e563db87c425ab72417bb25fa193184ede55504ab  poppler-utils-21.01.0-24.el9.x86_64.rpm
+61a69,72
+> e0fcc014b96786a8368c5f1b27d92bb795858ff0630d382e8bbf47ef7dd225d5  xcb-util-image-0.4.0-19.el9.0.1.x86_64.rpm
+> 9a4e1d6c677d70eb0200d444c410ee0599208cfa506a32f7ddb8c7d22190c7e3  xcb-util-keysyms-0.4.0-17.el9.x86_64.rpm
+> 36f68d5d3019d4b6e89ebd7861170b9a74a2c60ef690a04919413cce4b67d3d0  xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64.rpm
+> 2614e58579e0cb4d14d41cefeba7f30a67174040780e72dea051b4ee42109e17  xcb-util-wm-0.4.1-22.el9.x86_64.rpm
