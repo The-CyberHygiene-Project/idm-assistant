@@ -1581,3 +1581,16 @@ def test_12b_r4_many_citations_in_a_header_line_check_quickly():
         t = time.monotonic()
         M._looks_like(line, "cui", True)
         assert time.monotonic() - t < 2, (unit, time.monotonic() - t)
+
+
+# ---------- Task 13a (12b minor): a lower-case or split SP- category marking after a cited name ----------
+
+@pytest.mark.parametrize("line", ["CUI_SSP_v1.2 sp-propin", "CUI_SSP_v1.2 Sp-Propin", "CUI_SSP_v1.2 sp - propin",
+                                  "CUI_SSP_v1.2 see sp-noforn", "CUI_SSP_v1.2 (sp-propin)"])
+def test_13a_lower_case_or_split_sp_category_after_a_citation_is_judged(tmp_path, line):
+    _judged_everywhere(tmp_path, line)
+
+
+@pytest.mark.parametrize("line", ["CUI_SSP_v1.2 crisp-looking tables", "CUI_SSP_v1.2 wasp-nest notes"])
+def test_13a_sp_inside_a_word_after_a_citation_passes(tmp_path, line):
+    _passes_everywhere(tmp_path, line)

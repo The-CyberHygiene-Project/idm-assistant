@@ -618,22 +618,64 @@ def _stuck_marker(ctx, name):
     return ctx.work / f"stuck-{_sha(name.encode('utf-8', 'surrogateescape'))[:32]}"
 
 
+def _identity(p):
+    """The spool file as it is (device, inode, size, mtime, ctime): a new file of the same name differs."""
+    st = os.lstat(p)
+    return f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
+
+
+def _marker_lines(m):
+    fd = os.open(m, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd) as f:
+        return f.read(4096).split("\n")
+
+
+def _already_stuck(ctx, p):
+    """True when THIS file (same name and identity) was set aside before and could be neither deleted nor moved: it
+    is left alone, silently (P3-D11, logs/167: it was re-quarantined and re-alerted on every run). The marker holds
+    the name and the identity; one of an older format (the name only) does not match, so the file is judged once
+    more and the marker rewritten."""
+    try:
+        lines = _marker_lines(_stuck_marker(ctx, p.name))
+        return len(lines) >= 2 and lines[0] == p.name and lines[1] == _identity(p)
+    except (OSError, ValueError):
+        return False
+
+
 def _stuck(ctx, p, err, err2):
     m = _stuck_marker(ctx, p.name)
-    if os.path.lexists(m):
-        return                                            # alerted already: the path unit re-triggers on it
     try:
-        _dir0700(ctx.work)
-        fd = os.open(m, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(p.name)
+        ident = _identity(p)
     except OSError:
+        ident = ""
+    try:
+        old = _marker_lines(m)
+    except (OSError, ValueError):
+        old = None
+    if old is not None and old[0] == p.name and (len(old) < 2 or old[1] == ident):
+        if len(old) < 2 and ident:                        # an older marker (name only): add the identity
+            _write_marker(ctx, m, p.name, ident, replace=True)
+        return                                            # alerted already: the path unit re-triggers on it
+    if not _write_marker(ctx, m, p.name, ident, replace=old is not None):
         pass                                              # no marker: alerted again next time (never silent)
     _safe(ctx.journal, {"event": "appender-failed", "file": _clean(p.name, 80),
                         "message": f"the spool file {_clean(p.name, 80)} cannot be deleted or moved aside "
                                    f"({str(err)[:100]}; {str(err2)[:100]}): the path unit re-triggers on it until its "
                                    "limit stops the appender; remove it as root, then systemctl reset-failed "
                                    "chp-docs-ledger.path"})
+
+
+def _write_marker(ctx, m, name, ident, replace=False):
+    try:
+        _dir0700(ctx.work)
+        if replace:
+            os.unlink(m)
+        fd = os.open(m, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(f"{name}\n{ident}")
+        return True
+    except OSError:
+        return False
 
 
 def _clear_stuck(ctx):
@@ -644,9 +686,7 @@ def _clear_stuck(ctx):
         return
     for m in ms:
         try:
-            fd = os.open(m, os.O_RDONLY | os.O_NOFOLLOW)
-            with os.fdopen(fd) as f:
-                name = f.read(4096)
+            name = _marker_lines(m)[0]
             if name and "/" not in name and os.path.lexists(ctx.spool / name):
                 continue
             os.unlink(m)
@@ -1041,6 +1081,8 @@ def process_one(spool_path, ctx=None):
     p = Path(spool_path)
     if not REQ_NAME.fullmatch(p.name):
         return Result("refused", f"{p.name!r} is not a request file name (ignored)", None)
+    if _already_stuck(ctx, p):
+        return Result("refused", STUCK_AGAIN, None)
     raw = req = None
     try:
         try:
@@ -1120,9 +1162,14 @@ def _triggers(name):
     return name.endswith(".json") and not name.startswith(".")
 
 
+STUCK_AGAIN = "set aside before and still undeletable (alerted once: appender-failed); left alone"
+
+
 def _set_aside(ctx, p, why, *, event="quarantine", answer=True):
     """Quarantine one spool file as it is (read without following a symlink; recorded without the token) and remove it
     from the spool (or move it aside)."""
+    if _already_stuck(ctx, p):
+        return Result("refused", STUCK_AGAIN, None)
     raw = req = None
     try:
         try:
@@ -1458,6 +1505,16 @@ def _cycle(entries, doc):
     return n, [e for e in mine if e["cycle"] == n]
 
 
+def _won_race(entries, doc, cycle, user):
+    """The publish that ended the previous cycle of `doc` when `user` was one of ITS authors (a lost publish race:
+    P3-D4); else None."""
+    if cycle < 2:
+        return None
+    prev = [x for x in entries if x["doc"] == doc and x["cycle"] == cycle - 1]
+    pubs = [x for x in prev if x["kind"] == "publish"]
+    return pubs[-1] if pubs and user in _authors(prev) else None
+
+
 def _authors(cyc):
     out = []
     for e in cyc:
@@ -1668,6 +1725,12 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo, warn):
     if sha != r["sha256"]:
         raise _Refuse("refused: the file sent is not the one this request names (its sha256 differs)")
     if user not in authors:
+        won = _won_race(led.entries, t.doc, e["cycle"], user)
+        if won is not None:                               # P3-D4: another author's publish ended this user's cycle
+            raise _Refuse(f"refused: the current version changed since your checkout: {won.get('user')} published "
+                          f"{won.get('path')} as {won.get('cr')} (ledger entry {won.get('seq')}), which ended the "
+                          "change you checked out; check out the current version again (chp-site doc checkout) and "
+                          "make your change on it")
         raise _Refuse(f"refused: {user} is not an author of this change (only {', '.join(authors) or 'nobody'} may "
                       "publish it: they created it or checked it out in this cycle)")
     after = cyc[starts[-1] + 1:] if starts else []

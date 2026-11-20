@@ -554,6 +554,8 @@ def _tail_banner(rest, kind):
         r = _SPELLED_ANY[kind].sub(word, _SLASHES.sub("//", _wfold(piece)))
         if "//" in r or re.search(rf"(?<![^\W_])(?:{word}|{phrase})(?![^\W_])", r):
             return True
+        if re.search(r"(?<![^\W_])sp\s*-\s*[a-z]", r):     # a CUI category marking in any case, split or not
+            return True                                    # (Task 13a, 12b minor: sp-propin, Sp - Propin)
         m = _CAPS_TOKEN.match(piece)
         if m and sum(c.isalpha() for c in m.group(1)) >= 3:
             return True

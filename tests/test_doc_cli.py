@@ -782,3 +782,98 @@ def test_a_lasting_4xx_whose_result_lookup_fails_stays_pending(tmp_path, monkeyp
         if "/result/" in url else stub(method, url, headers, body)
     rc, out = run(env, monkeypatch, capsys, "approve", str(f))
     assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out
+
+
+# ---------- Task 13a: the 11c lab defects on the workstation side ----------
+
+def test_13a_d10_markdown_reader_pdf_gets_the_utf8_text_encoding(tmp_path):
+    """P3-D10 (logs/162): x2t exits 89 on the .txt copy of a .md without m_nCsvTxtEncoding; 46 (UTF-8) makes the PDF."""
+    env = setup(tmp_path, sign_in=False)
+    md = tmp_path / "CUI_Notes_v0.1.md"
+    md.write_text("CUI\n\nText\n\nCUI\n", encoding="utf-8")
+    out_dir = tmp_path / "pdf"
+    out_dir.mkdir(mode=0o700)
+    pdf = DOC.reader_pdf(env, md, out_dir)
+    assert pdf.read_bytes().startswith(b"%PDF-")
+    log = (tmp_path / "x2t.log").read_text()
+    assert "<m_nCsvTxtEncoding>46</m_nCsvTxtEncoding>" in log and "CUI_Notes_v0.1.txt" in log
+    # a docx is not text: no text encoding
+    assert "m_nCsvTxtEncoding" not in DOC._x2t_params(Path("/t/a.docx"), Path("/t/a.pdf"), Path("/f/AllFonts.js"))
+
+
+@pytest.mark.parametrize("st", [503, 502, 504])
+def test_13a_d8_nextcloud_unavailable_before_sending_is_pending(tmp_path, monkeypatch, capsys, st):
+    """P3-D8 (logs/159): maintenance mode (the backup window) answers 503 to the client's own PROPFIND: pending
+    (exit 3, run it again), not a refusal (exit 2); nothing is sent."""
+    env = setup(tmp_path)
+    stub = env.stub
+    env.transport = lambda method, url, headers=None, body=None: (st, {}, b"<html>maintenance</html>") \
+        if method == "PROPFIND" else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "pending" in out and "nothing was sent" in out and "refused" not in out, out
+    assert not posts(env)
+    env.transport = stub                                     # maintenance over: the same command works
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 0, out
+
+
+def test_13a_d9_a_401_while_kanidm_is_down_is_pending(tmp_path, monkeypatch, capsys):
+    """P3-D9 (logs/161): NextCloud checks the Bearer at Kanidm's userinfo; with Kanidm down it answers 401. The client
+    asks Kanidm itself: unreachable (or not answering 200) -> pending (exit 3), never "run chp-site doc login"."""
+    env = setup(tmp_path)
+    stub = env.stub
+
+    def kanidm_down(method, url, headers=None, body=None):
+        if "idm." in url:
+            raise OSError("connection refused")
+        if "files." in url:
+            return 401, {}, b""
+        return stub(method, url, headers, body)
+    env.transport = kanidm_down
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "pending" in out and "Kanidm" in out and "doc login" not in out, out
+    assert not posts(env)
+
+    def kanidm_500(method, url, headers=None, body=None):
+        if url.endswith("/status"):
+            return 503, {}, b""
+        return (401, {}, b"") if "files." in url else stub(method, url, headers, body)
+    env.transport = kanidm_500
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "pending" in out, out
+    # Kanidm answers: NextCloud really refused the sign-in -> the plain sign-in refusal as before
+    env.transport = lambda method, url, headers=None, body=None: (200, {}, b"true") if url.endswith("/status") \
+        else (401, {}, b"") if "files." in url else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 2 and "doc login" in out, out
+
+
+def test_13a_d9_kanidm_unreachable_on_a_refresh_before_sending_is_pending(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    stub = env.stub
+    env.clock.t += 3600                                      # the access token has expired: a refresh is needed
+
+    def kanidm_down(method, url, headers=None, body=None):
+        if "idm." in url:
+            raise OSError("connection refused")
+        return stub(method, url, headers, body)
+    env.transport = kanidm_down
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "pending" in out and "nothing was sent" in out, out
+    assert not posts(env)
+
+
+@pytest.mark.parametrize("opt", ["--notes", "--reason"])
+def test_13a_d13_notes_and_reason_over_the_ledger_limit_are_refused_here(tmp_path, monkeypatch, capsys, opt):
+    """P3-D13 (logs/171): chp_ledger takes at most 2000 BYTES of notes/reason; over that the client says so in plain
+    words and sends nothing (2000 bytes go through)."""
+    env = setup(tmp_path, user="bob")
+    f = tmp_path / "from-alice" / "CUI_SSP_v1.3-DRAFT.docx"
+    f.parent.mkdir()
+    f.write_bytes(MARKED)
+    cmd = "approve" if opt == "--notes" else "override"
+    rc, out = run(env, monkeypatch, capsys, cmd, str(f), opt, "é" * 1001)      # 2002 bytes, 1001 characters
+    assert rc == 2 and "2000 bytes" in out and opt in out and not posts(env), out
+    rc, out = run(env, monkeypatch, capsys, cmd, str(f), opt, "x" * 2000)
+    assert rc in (0, 1) and posts(env), out
+    assert len(posts(env)[-1]["notes" if opt == "--notes" else "reason"].encode()) == 2000

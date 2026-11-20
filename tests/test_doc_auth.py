@@ -47,6 +47,8 @@ class Stub:
         self.access_ttl = 900
         self.session_exp = clock() + 28800          # what Kanidm's introspection says (None: no exp in the answer)
         self.introspect_status = 200
+        self.introspect_active = True                # Kanidm 1.x answers a refresh token's introspection active: false
+        self.nc_groups = ["chp-users", "cui-users"]  # NextCloud's groups of the account (None: not in the answer)
         self.refresh_ok = True
         self.valid = set()
         self.exp = {}                                # access token -> when NextCloud stops taking it
@@ -103,7 +105,10 @@ class Stub:
         if not tok.startswith("Bearer ") or tok[7:] not in self.valid or self.clock() > self.exp.get(tok[7:], 0):
             return 401, {}, b'{"ocs":{"data":{"state":"refused","message":"refused: not signed in"}}}'
         if u.path == "/ocs/v2.php/cloud/user":
-            return 200, {}, json.dumps({"ocs": {"data": {"id": self.nc_user}}}).encode()
+            data = {"id": self.nc_user}
+            if self.nc_groups is not None:
+                data["groups"] = list(self.nc_groups)
+            return 200, {}, json.dumps({"ocs": {"data": data}}).encode()
         if u.path.startswith(f"/remote.php/dav/files/{self.nc_user}"):
             rel = urllib.parse.unquote(u.path[len(f"/remote.php/dav/files/{self.nc_user}"):]).strip("/")
             return self._dav(method, rel, headers)
@@ -143,6 +148,8 @@ class Stub:
         if path == "/oauth2/token/introspect":
             if self.introspect_status != 200:
                 return self.introspect_status, {}, b""
+            if not self.introspect_active:
+                return 200, {}, b'{"active": false}'
             out = {"active": True}
             if self.session_exp is not None:
                 out["exp"] = int(self.session_exp)
@@ -484,3 +491,47 @@ def test_refresh_is_locked_between_commands(tmp_path):
     t1.join(5)
     t2.join(5)
     assert not errs and out == ["at2", "at2"] and env.stub.refreshes == 1
+
+
+# ---------- Task 13a ----------
+
+def test_13a_d12_inactive_introspection_shows_an_estimate_never_used_to_refuse(tmp_path):
+    """P3-D12 (logs/119, 173): Kanidm 1.x answers the refresh token's introspection "active: false". The sign-in end is
+    then shown as an ESTIMATE (sign-in time + the chp-doc client's 8 h refresh lifetime), labelled so; it is never
+    used to refuse (only Kanidm's own answer is)."""
+    from chp_site import documents
+    assert A.REFRESH_LIFETIME == documents.DOC_REFRESH
+    clock = Clock()
+    env = make_env(tmp_path, clock=clock)
+    env.stub.introspect_active = False
+    said = []
+    env.browser = browser_for(env.stub)
+    t0 = clock()
+    s = A.login(env, say=said.append)
+    assert s["session_expires_at"] is None and s["session_estimate"] == int(t0 + 28800)
+    line = said[-1]
+    assert "estimate" in line and "Kanidm did not say" not in line and "8 h" in line, line
+    clock.t += 28800 + 600                               # past the estimate: still a refresh, never a local refusal
+    s2 = A.fresh(env)
+    assert s2["access_token"] != s["access_token"] and s2["session_estimate"] == int(t0 + 28800)
+    # Kanidm's own answer, when it gives one, is shown as it is (no estimate)
+    (tmp_path / "b").mkdir()
+    env2 = make_env(tmp_path / "b", clock=Clock())
+    said2 = []
+    env2.browser = browser_for(env2.stub)
+    s3 = A.login(env2, say=said2.append)
+    assert s3["session_expires_at"] and "estimate" not in said2[-1]
+
+
+def test_13a_d3_login_refuses_a_nextcloud_account_without_groups(tmp_path):
+    """P3-D3 (logs/119-122): the chp-doc Bearer made a NextCloud account with no groups for a person who never signed
+    in on the web. The sign-in says what to do (sign in once in the browser), and keeps no session."""
+    env = make_env(tmp_path)
+    env.stub.nc_groups = []
+    with pytest.raises(A.AuthError) as e:
+        login(env)
+    m = str(e.value)
+    assert "no groups" in m and "browser" in m and f"{FILES}/" in m and "doc login" in m
+    assert A.load(env) is None
+    env.stub.nc_groups = None                            # a NextCloud that does not list groups: not judged here
+    assert login(env)["user"] == "alice"

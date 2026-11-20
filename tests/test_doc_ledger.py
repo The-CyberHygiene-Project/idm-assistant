@@ -2069,3 +2069,42 @@ def test_cli_pending_verify_resolve_turn_os_errors_into_exit_2(env, monkeypatch,
     assert cli.main(["doc-ledger", "verify"]) == 2
     out = capsys.readouterr().out
     assert "PROBLEM" in out and "symbolic links" in out
+
+
+# ---------- Task 13a ----------
+
+def test_13a_d4_the_loser_of_a_publish_race_is_told_the_version_changed(env):
+    """P3-D4 (logs/133): two authors publish at once; the winner's publish ends the cycle, so the loser is in no
+    cycle. The refusal says the current version changed (who published what), never "only nobody may publish it"."""
+    ok(env.checkout("alice"))
+    ok(env.checkout("dave"))
+    ok(env.approve("bob", V11))
+    won = ok(env.publish("dave", V11))
+    m = refused(env.publish("alice", V11), "changed since", "check out the current version again")
+    assert "nobody" not in m and "dave" in m and won["cr"] in m and "CUI_SSP_v1.1.docx" in m, m
+    # someone who was never an author still gets the author refusal
+    ok(env.checkout("erin", won["file_id"]))
+    refused(env.publish("carol", V11, name="CUI_SSP_v1.2.docx"), "not an author", "erin")
+
+
+def test_13a_d11_an_undeletable_spool_file_is_set_aside_once(env, monkeypatch):
+    """P3-D11 (logs/167): a spool file that can be neither deleted nor moved (chattr +i) was copied into quarantine
+    and alerted again on every run (299 times in 75 s). Once set aside, the same file is remembered: no new
+    quarantine copy, no new quarantine/unlink line; one appender-failed alert. A NEW file of that name is judged."""
+    def nope(*a):
+        raise PermissionError("Operation not permitted")
+    monkeypatch.setattr(L, "_unlink_raw", nope)
+    monkeypatch.setattr(L, "_hold_raw", nope)
+    rid = "0123456789abcdef0123456789abcdef"
+    p = env.base / "spool" / f"{rid}.json"
+    p.write_text(json.dumps({"request_id": "not-this-one", "user": "alice"}))     # mismatched id (the lab's file)
+    for _ in range(6):
+        L.process(env.ctx)
+    ev = [j.get("event") for j in env.journal]
+    assert ev.count("quarantine") == 1 and ev.count("spool-unlink-failed") == 1 and ev.count("appender-failed") == 1, ev
+    assert len(env.quarantine()) == 1
+    # the file is replaced (root removed the old one and something wrote a new one): judged again
+    os.unlink(p)
+    p.write_text(json.dumps({"request_id": "another", "user": "alice", "x": 1}))
+    L.process(env.ctx)
+    assert [j.get("event") for j in env.journal].count("quarantine") == 2

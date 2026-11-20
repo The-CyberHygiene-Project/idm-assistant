@@ -44,6 +44,7 @@ SITE_CA = "/etc/pki/ca-trust/source/anchors/chp-root.crt"
 FILES_PORT = 8443
 TIMEOUT = 30
 REFRESH_MARGIN = 60
+REFRESH_LIFETIME = 28800          # the chp-doc client's refresh token lifetime (documents.DOC_REFRESH): the ESTIMATE only
 LOGIN_TIMEOUT = 300
 HANDLER_TIMEOUT = 5               # one callback connection may take this long (a silent one cannot hold the listener)
 MAX_BODY = 160 << 20              # the largest answer read (a 64 MiB document fetched by WebDAV fits)
@@ -355,14 +356,23 @@ def _token_response(env, data, nonce=None):
 
 
 def nc_user(env, access_token):
+    """NextCloud's name for this sign-in. An account with NO groups is refused (P3-D3): user_oidc made it from the
+    chp-doc Bearer for a person who never signed in on the web (no groups, so no area is visible); one web sign-in
+    maps the person's Kanidm groups. A NextCloud that does not list groups is not judged here."""
     st, _, data = _call(env, "GET", f"{env.files}/ocs/v2.php/cloud/user?format=json",
                         {"Authorization": "Bearer " + access_token, "OCS-APIRequest": "true",
                          "Accept": "application/json"})
     d = _json(data) if st == 200 else None
     try:
-        return d["ocs"]["data"]["id"]
-    except (TypeError, KeyError):
+        who = d["ocs"]["data"]["id"]
+        groups = d["ocs"]["data"].get("groups")
+    except (TypeError, KeyError, AttributeError):
         raise AuthError(f"refused: NextCloud did not accept the sign-in (HTTP {st})") from None
+    if isinstance(groups, list) and not groups:
+        raise AuthError(f"refused: your NextCloud account {who} has no groups yet (it was made by this sign-in, before "
+                        f"you ever signed in on the web): sign in once in the browser at {env.files}/ (NextCloud then "
+                        "takes your groups from Kanidm), then run chp-site doc login again")
+    return who
 
 
 def login(env, say=print):
@@ -398,9 +408,16 @@ def login(env, say=print):
                         "refuse every request (ask the administrator)")
     s.update(user=s.get("user") or who, nc_user=who, stored_at=env.clock())
     s["session_expires_at"] = _introspect(env, s)
+    # Kanidm 1.x answers the refresh token's introspection "active: false" (P3-D12, ruling): then the end is shown as
+    # an ESTIMATE (now + the chp-doc refresh lifetime), labelled so, and never used to refuse anything
+    s["session_estimate"] = None if s["session_expires_at"] else int(env.clock() + REFRESH_LIFETIME)
     _store(env, s)
-    until = (time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(s["session_expires_at"]))
-             if s["session_expires_at"] else "Kanidm did not say")
+    if s["session_expires_at"]:
+        until = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(s["session_expires_at"]))
+    else:
+        until = (time.strftime("about %Y-%m-%d %H:%M %Z", time.localtime(s["session_estimate"]))
+                 + f" (an estimate: sign-in time + the {REFRESH_LIFETIME // 3600} h refresh lifetime; Kanidm did not "
+                   "give the end)")
     say(f"signed in as {s['user']} (sign-in ends: {until})")
     return s
 

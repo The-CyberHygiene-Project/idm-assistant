@@ -65,6 +65,7 @@ RECENTS = (OO / "data" / "recents.xml", OO / "recents.xml")
 ALLFONTS = OO / "data" / "fonts" / "AllFonts.js"
 EDITOR_PROCESSES = ("DesktopEditors", "editors_helper")
 PDF_FORMAT = 513                  # x2t: AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_PDF
+TXT_UTF8 = 46                     # x2t: m_nCsvTxtEncoding for UTF-8 (the lab's passing value, logs/162)
 X2T_TIMEOUT = 180
 MAX_CONTENT = 64 << 20            # chp_ledger: content and pdf_content together, decoded
 TEMPLATES_PKG = "chp-templates 1.4.0"
@@ -76,6 +77,15 @@ PROPFIND = ('<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://ow
 
 class DocError(SiteError):
     """A plain refusal before anything was sent (chp-site prints it; exit 2)."""
+
+
+class DocPending(DocError):
+    """Nothing was sent and nothing is wrong with the request: NextCloud or Kanidm cannot serve it right now (the
+    backup window's maintenance mode, a Kanidm outage). Exit 3: run the same command again (Task 13a, P3-D8/D9)."""
+
+
+MAX_TEXT = 2000                   # chp_ledger: --notes and --reason, in UTF-8 bytes (LedgerController MAX_TEXT)
+UNAVAILABLE = (502, 503, 504)     # NextCloud (or its proxy) not serving now: 503 is maintenance mode (the backup)
 
 
 # ---------- the environment ----------
@@ -314,14 +324,35 @@ def _dav_url(env, s, path):
             + urllib.parse.quote(path.strip("/")))
 
 
+def _nextcloud_said(env, st, what):
+    """A 401 or an unavailable answer from NextCloud BEFORE anything was sent. 401: NextCloud checks the Bearer at
+    Kanidm (user_oidc userinfo), so a Kanidm outage reads as 401 too: Kanidm is asked itself (GET /status); not
+    reachable or not answering 200 -> pending (P3-D9); Kanidm up -> the sign-in really was refused. 502/503/504 ->
+    pending (P3-D8: maintenance mode during the nightly backup)."""
+    if st == 401:
+        try:
+            kst, _, _ = auth._call(env, "GET", f"{env.idm}/status", {"Accept": "application/json"})
+        except auth.Unreachable as e:
+            raise DocPending(f"pending: NextCloud could not check your sign-in because Kanidm cannot be reached ({e}); "
+                             "nothing was sent. Run the same command again when Kanidm is back (no new sign-in is "
+                             "needed)") from None
+        if kst != 200:
+            raise DocPending(f"pending: NextCloud could not check your sign-in: Kanidm answered HTTP {kst}; nothing was "
+                             "sent. Run the same command again when Kanidm is back (no new sign-in is needed)")
+        raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
+    if st in UNAVAILABLE:
+        why = "maintenance mode, e.g. the nightly backup" if st == 503 else "a proxy in front of it"
+        raise DocPending(f"pending: NextCloud is not available right now (HTTP {st}: {why}) for {what}; nothing was "
+                         "sent. Run the same command again in a few minutes")
+
+
 def propfind(env, s, path, depth="0"):
     """[{path, name, fileid, etag, size, folder}] (the first is path itself); None when it does not exist."""
     st, _, data = auth._call(env, "PROPFIND", _dav_url(env, s, path),
                              dict(_bearer(s), Depth=depth, **{"Content-Type": "application/xml"}), PROPFIND)
     if st == 404:
         return None
-    if st == 401:
-        raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
+    _nextcloud_said(env, st, path)
     if st != 207:
         raise DocError(f"refused: NextCloud answered HTTP {st} for {path}")
     try:
@@ -351,6 +382,7 @@ def _multistatus(env, s, data):
 def fetch(env, s, path):
     st, _, data = auth._call(env, "GET", _dav_url(env, s, path), _bearer(s))
     if st != 200:
+        _nextcloud_said(env, st, path)
         raise DocError(f"refused: NextCloud answered HTTP {st} when reading {path}")
     return data
 
@@ -383,7 +415,8 @@ def area(env, s, cui):
     items = propfind(env, s, AREAS[cui])
     if not items or items[0]["fileid"] is None:
         raise DocError(f"refused: the area {AREAS[cui]} is not visible to you in NextCloud (are the documents "
-                       "enabled on the server, and are you in the right groups?)")
+                       "enabled on the server, and are you in the right groups? If you have never signed in to "
+                       f"NextCloud in the browser, do that once at {env.files}/ first: it maps your groups)")
     return items[0]
 
 
@@ -845,13 +878,23 @@ def _sign(env, a, say, kind):
     s = auth.fresh(env)
     fields = {"file_id": _folder_of(env, s, f, rec, r[0]), "path": f.name, "sha256": sha}
     if kind == "approve" and a.notes:
-        fields["notes"] = a.notes
+        fields["notes"] = _text("--notes", a.notes)
     if kind == "override":
         if not (a.reason or "").strip():
             raise DocError("refused: an override needs a reason (--reason)")
-        fields["reason"] = a.reason
+        fields["reason"] = _text("--reason", a.reason)
     state, d = send(env, kind, fields, say)
     return _answer(state, d, say)
+
+
+def _text(opt, v):
+    """--notes / --reason as the ledger takes them: at most MAX_TEXT bytes of UTF-8 (P3-D13: refused here in plain
+    words, before anything is sent, instead of the server's generic refusal)."""
+    n = len(v.encode("utf-8", "surrogateescape"))
+    if n > MAX_TEXT:
+        raise DocError(f"refused: {opt} is {n} bytes; the ledger takes at most {MAX_TEXT} bytes (UTF-8: an accented "
+                       "letter is 2 bytes); shorten it and run the command again (nothing was sent)")
+    return v
 
 
 def cmd_approve(env, a, say):
@@ -863,9 +906,11 @@ def cmd_override(env, a, say):
 
 
 def _x2t_params(src, dst, fonts):
+    # a plain-text source (the .txt copy of a .md) needs its encoding: without it x2t exits 89 (P3-D10, logs/162)
+    text = f"<m_nCsvTxtEncoding>{TXT_UTF8}</m_nCsvTxtEncoding>\n" if Path(src).suffix.lower() == ".txt" else ""
     return ('<?xml version="1.0" encoding="utf-8"?>\n<TaskQueueDataConvert>\n'
             f"<m_sFileFrom>{escape(str(src))}</m_sFileFrom>\n<m_sFileTo>{escape(str(dst))}</m_sFileTo>\n"
-            f"<m_nFormatTo>{PDF_FORMAT}</m_nFormatTo>\n<m_sAllFontsPath>{escape(str(fonts))}</m_sAllFontsPath>\n"
+            f"<m_nFormatTo>{PDF_FORMAT}</m_nFormatTo>\n{text}<m_sAllFontsPath>{escape(str(fonts))}</m_sAllFontsPath>\n"
             f"<m_sFontDir>{escape(str(fonts.parent))}</m_sFontDir>\n<m_bIsNoBase64>false</m_bIsNoBase64>\n"
             "</TaskQueueDataConvert>\n")
 
@@ -1128,6 +1173,12 @@ def run(a, env=None, say=print):
     env = env or system_env()
     try:
         return COMMANDS[a.doc_cmd](env, a, say)
+    except DocPending as e:                               # nothing sent; NextCloud or Kanidm not serving now
+        say(str(e))
+        return 3
+    except auth.Unreachable as e:                         # before send(): nothing was sent (send() keeps its own)
+        say(f"pending: {_plain(e)}; nothing was sent. Run the same command again in a few minutes")
+        return 3
     except OSError as e:                                  # a file of yours, a folder: a plain message, no traceback
         where = f": {e.filename}" if getattr(e, "filename", None) else ""
         raise DocError(f"refused: {e.strerror or e}{where}") from None
