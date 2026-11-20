@@ -299,8 +299,9 @@ def test_spec_bundles_the_app_and_its_directories():
     # fapolicyd trusts the app through the rpm database, like chp_foldertag: nothing added by hand
     assert "--trust-file" not in SPEC and "fapolicyd-cli --file add" not in SPEC
     assert "chp_ledger %{ledger_ver}" in section("description")
-    assert re.search(r"^Release:\s+6\.chp%\{\?dist\}$", SPEC, re.M)
-    assert re.search(r"^\* .* - 35\.0\.3-6\.chp\n- chp_ledger 1\.0\.0", section("changelog"))
+    assert re.search(r"^Release:\s+7\.chp%\{\?dist\}$", SPEC, re.M)
+    assert re.search(r"^\* .* - 35\.0\.3-7\.chp\n- chp_ledger 1\.0\.2", section("changelog"))     # Task 13a on top
+    assert re.search(r"^\* .* - 35\.0\.3-6\.chp\n- chp_ledger 1\.0\.0", section("changelog"), re.M)
 
 
 def test_no_validation_pattern_ends_in_a_bare_dollar():

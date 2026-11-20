@@ -24,7 +24,7 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        6.chp%{?dist}
+Release:        7.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
 # chp_foldertag, chp_ledger: Apache-2.0 (this repository's licence)
@@ -134,6 +134,12 @@ fi
 %dir %attr(0750,root,apache) %{_localstatedir}/lib/chp-docs/out
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 35.0.3-7.chp
+- chp_ledger 1.0.2 (ISO 0.7.0 Plan 3 Task 13a, P3-D3): a request from a NextCloud account with no groups (user_oidc
+  made it from a chp-doc Bearer before the person ever signed in on the web) is refused 403 with a plain "sign in once
+  in the browser" text, after the rate limit and before anything is read or spooled, and writes one audit line
+  (app chp_ledger, event chp.ledger.nogroups: Wazuh 100634, level 12).
+
 * Thu Nov 19 2026 The CyberHygiene Project - 35.0.3-6.chp
 - chp_ledger 1.0.0 (ISO 0.7.0 Plan 3 Task 3): route L1's intake. OCS POST /api/v1/request and GET
   /api/v1/result/{request_id}; the user from NextCloud's session (never the body), the auth kind (bearer,

@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        9.chp%{?dist}
+Release:        10.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,24 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-10.chp
+- ISO 0.7.0 Plan 3 Task 13a (the 11c lab defects). doc commands: NextCloud's 502/503/504 before anything is sent
+  (maintenance mode, the backup window) and a 401 while Kanidm is unreachable (probed at /status) are pending, exit 3
+  (P3-D8, D9), as is Kanidm unreachable before a send; x2t gets m_nCsvTxtEncoding 46 for a Markdown document's text
+  copy (D10); --notes/--reason over 2000 UTF-8 bytes are refused in plain words before sending (D13); doc login
+  shows the sign-in end as a labelled estimate (login + 8 h) when Kanidm's introspection says inactive (D12) and
+  refuses a NextCloud account with no groups (sign in once on the web: D3).
+- appender: the loser of a publish race is told the current version changed, by whom and as which CR (D4); a spool
+  file set aside once and still undeletable is remembered by identity, so it is not re-quarantined (D11).
+- documents enable: after each fapolicyd trust update, php's read of config.php is polled (bounded) before the next
+  occ call (D1); the nightly check alerts every Kanidm (user_oidc) account with no groups (D3); Wazuh rules 100633/
+  100634 (chp_ledger's no-groups audit line, level 12) and 100635/100636 (a workstation's egress lock-down / render
+  failure has ended, levels 12/7).
+- onlyoffice: enable installs chp-templates where missing (D2); egress-lockdown and egress-recovered: one recovery
+  line after a lock-down or render failure once the Wazuh agent is connected (D7); the address file is relabelled on
+  every render (O5).
+- marking: a lower-case or split sp-<category> after a cited document name is a banner in wide positions (12b minor).
+
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-9.chp
 - ISO 0.7.0 Plan 3 Task 12b (marking check hardening, round-3 re-review): the wrong-banner search drops combining
   marks (accents, underlines, enclosing circles) in every format; in every format it also trims quotes, brackets and
