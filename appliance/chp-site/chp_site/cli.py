@@ -3,7 +3,8 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
 aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | documents | alerts | wazuh-forward |
-doc-ledger | doc (the workstation's controlled-document commands) | onlyoffice (the workstation's editor and gates)."""
+doc-ledger | doc (the workstation's controlled-document commands) | onlyoffice (the workstation's editor and gates) |
+time-sync (chrony for the host's role)."""
 import argparse
 import os
 import sys
@@ -649,6 +650,23 @@ def _onlyoffice(a):
     return 0
 
 
+def _time_sync(a):
+    """chp-site time-sync --role server|client (Task 12; root): chrony for the role, and on the server the 123/udp rule
+    for the site subnet. The role must be this host's role in the hosts table."""
+    import subprocess
+    from . import timesync
+    if os.geteuid() != 0:
+        raise SiteError("time-sync: run as root")
+    site, hosts = _load(a.site)
+    me = next((h for h in hosts if h.hostname == _host()), None)
+    if me is None:
+        raise SiteError(f"this host ({_host()}) is not in the hosts table")
+    if me.role != a.role:
+        raise SiteError(f"time-sync: this host ({me.hostname}) is a {me.role} in the hosts table, not a {a.role}")
+    print("\n".join(f"- {x}" for x in timesync.apply(Path("/"), a.role, site, hosts, run=subprocess.run)))
+    return 0
+
+
 def _doc(a):
     """chp-site doc ... (Plan 3 Task 6): the workstation's controlled-document commands (exit 0 done, 1 refused or
     problems found, 2 a plain refusal before anything was sent, 3 pending: run the same command again)."""
@@ -739,6 +757,9 @@ def main(argv=None):
                                             "chp-onlyoffice, egress table, sweep timer, linger off), sweep (the "
                                             "hourly autosave sweep), egress-render (the egress table's addresses)")
     oo_.add_argument("action", choices=("enable", "sweep", "egress-render")); oo_.add_argument("--site", default="/etc/chp")
+    ts = sub.add_parser("time-sync", help="(root) chrony for this host's role: the server serves the site subnet "
+                                          "only (123/udp); a workstation takes time from the server only")
+    ts.add_argument("--role", required=True, choices=("server", "client")); ts.add_argument("--site", default="/etc/chp")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
     rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
@@ -759,7 +780,7 @@ def main(argv=None):
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
          "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review,
-         "doc-ledger": _doc_ledger, "doc": _doc, "onlyoffice": _onlyoffice}[a.cmd](a)
+         "doc-ledger": _doc_ledger, "doc": _doc, "onlyoffice": _onlyoffice, "time-sync": _time_sync}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

@@ -20,7 +20,8 @@ GATEWAY=
 # Upstream DNS servers the server forwards to (IPv4, comma separated). May be left empty. Example: 1.1.1.1, 9.9.9.9
 DNS_FORWARDERS=
 
-# Time source(s): IPv4 addresses or host names, comma separated. Example: 192.168.10.1
+# Time source(s) for the CHP server: IPv4 addresses or host names, comma separated. Example: 192.168.10.1
+# The server serves time to SUBNET; workstations take time from the server only.
 NTP_UPSTREAM=
 
 # Time zone name. Example: America/Chicago  (or UTC)

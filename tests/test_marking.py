@@ -540,3 +540,205 @@ def test_citation_warns_on_superseded():
 def test_chp_documents_requires_poppler():
     spec = (TOP / "appliance/rpm/chp-documents/chp-documents.spec").read_text()
     assert re.search(r"^Requires:\s+poppler-utils\s*$", spec, re.M)
+
+
+# ---------- FCI (owner decision 2026-11-20: "FCI should be marked as FCI") ----------
+# In the CUI area an FCI_ document carries the banner "FCI" (top and bottom, the same places and the same false-pass
+# defences as the CUI banner) and no CUI designation block; a CUI banner on it is a problem, and an FCI banner on a
+# CUI_ document is a problem. check() learns the document is FCI from its name (parse_name: the FCI_ prefix).
+
+NO_VALUES = M.MarkValues()
+
+
+@pytest.mark.parametrize("name", ["FCI_Notice_v1.0.docx", "FCI_Quote_v1.0.xlsx", "FCI_Notes_v1.0.md"])
+def test_fci_marked_ok_without_the_cui_site_keys(name):
+    for values in (VALUES, NO_VALUES):                # the CUI marking keys are not needed for FCI
+        r = M.check(FX / name, True, values)
+        assert r.ok, (name, r.problems)
+        assert r.name.prefix == "FCI_"
+
+
+@pytest.mark.skipif(not HAVE_PDFTOTEXT, reason="pdftotext/pdfinfo (poppler-utils) not installed here")
+def test_fci_pdf_fixture():
+    assert M.check(FX / "FCI_Report_v1.0.pdf", True, NO_VALUES).ok
+
+
+def test_fci_pdf_through_seam(monkeypatch, tmp_path):
+    f = tmp_path / "FCI_Report_v1.0.pdf"
+    f.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(M, "_tool", lambda name: "/bin/true")
+    monkeypatch.setattr(M, "_poppler", _fake_poppler([["FCI", "x", "FCI"], ["FCI", "y", "FCI"]]))
+    assert M.check(f, True, NO_VALUES).ok
+    monkeypatch.setattr(M, "_poppler", _fake_poppler([["FCI", "x", "FCI"], ["y", "z", "FCI"]]))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "last page" in r.problems[0] and "FCI banner" in r.problems[0]
+    # the CUI banner on an FCI document is a problem, and so is the CUI designation block
+    monkeypatch.setattr(M, "_poppler", _fake_poppler([["CUI", "CUI Category: PROPIN (made-up)", "x", "CUI"],
+                                                      ["CUI", "y", "CUI"]]))
+    r = M.check(f, True, VALUES)
+    text = " ".join(r.problems)
+    assert not r.ok and "FCI banner" in text and "a CUI banner" in text and "designation block" in text
+    # an FCI banner on a CUI_ document is a problem
+    g = tmp_path / "CUI_Report_v1.0.pdf"
+    g.write_bytes(b"%PDF-1.4\n")
+    block = ["Controlled by: Example Office (made-up)", "CUI Category: PROPIN (made-up)",
+             "POC: A. Example, 555-0100 (made-up)"]
+    monkeypatch.setattr(M, "_poppler", _fake_poppler([["CUI", "FCI"] + block + ["x", "CUI"], ["CUI", "y", "CUI"]]))
+    r = M.check(g, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p and "CUI_" in p for p in r.problems), r.problems
+
+
+def test_fci_name_with_the_cui_marks_is_refused(tmp_path):
+    """A CUI-marked document renamed FCI_: no FCI banner, a CUI banner present, a CUI designation block present."""
+    f = copy(tmp_path, "CUI_Access-Policy_v1.0.docx", "FCI_Access-Policy_v1.0.docx")
+    r = M.check(f, True, VALUES)
+    assert not r.ok
+    assert any("header" in p and "no FCI banner" in p for p in r.problems), r.problems
+    assert any("footer" in p and "no FCI banner" in p for p in r.problems), r.problems
+    assert any("a CUI banner" in p and "FCI_" in p for p in r.problems), r.problems
+    assert any("designation block" in p and "FCI" in p for p in r.problems), r.problems
+    for name, as_name in (("CUI_Inventory_v1.0.xlsx", "FCI_Inventory_v1.0.xlsx"),
+                          ("CUI_Procedure_v1.0.md", "FCI_Procedure_v1.0.md")):
+        r = M.check(copy(tmp_path, name, as_name), True, VALUES)
+        text = " ".join(r.problems)
+        assert not r.ok and "FCI banner" in text and "a CUI banner" in text and "designation block" in text, \
+            (as_name, r.problems)
+
+
+def test_cui_name_with_the_fci_banner_is_refused(tmp_path):
+    f = copy(tmp_path, "FCI_Notice_v1.0.docx", "CUI_Notice_v1.0.docx")
+    r = M.check(f, True, VALUES)
+    text = " ".join(r.problems)
+    assert not r.ok and "no CUI banner" in text and "an FCI banner" in text and "designation block" in text
+    for name, as_name in (("FCI_Quote_v1.0.xlsx", "CUI_Quote_v1.0.xlsx"), ("FCI_Notes_v1.0.md", "CUI_Notes_v1.0.md")):
+        r = M.check(copy(tmp_path, name, as_name), True, VALUES)
+        text = " ".join(r.problems)
+        assert not r.ok and "CUI banner" in text and "an FCI banner" in text, (as_name, r.problems)
+    # an FCI banner added beside a complete set of CUI marks is still a problem
+    mk = _make()
+    g = tmp_path / "CUI_Both_v1.0.docx"
+    g.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.p("FCI", True)),
+                                         mk.BANNER_FTR], mk.REFS))
+    r = M.check(g, True, VALUES)
+    assert not r.ok and len(r.problems) == 1 and "an FCI banner" in r.problems[0]
+
+
+def test_fci_banner_defences(tmp_path):
+    """The CUI banner's false-pass defences hold for FCI: text box, hidden run (direct and by style), even-page and
+    title-page headers, every sheet, Excel even/first parts, lookalike letters and fullwidth forms."""
+    mk = _make()
+    ftr = mk.FCI_FTR
+
+    def docx(name, parts, refs=mk.REFS, **kw):
+        f = tmp_path / name
+        f.write_bytes(mk.docx(mk.FILLER, parts, refs, **kw))
+        return M.check(f, True, NO_VALUES)
+
+    r = docx("FCI_Box_v1.0.docx", [("hdr", "header1.xml", mk.textbox("FCI")), ftr])
+    assert not r.ok and len(r.problems) == 1 and "header" in r.problems[0] and "text box" in r.problems[0]
+    hidden = '<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>FCI</w:t></w:r></w:p>'
+    r = docx("FCI_Hidden_v1.0.docx", [("hdr", "header1.xml", hidden), ftr])
+    assert not r.ok and len(r.problems) == 1 and "header" in r.problems[0]
+    styles = '<w:style w:type="character" w:styleId="Hid"><w:rPr><w:vanish/></w:rPr></w:style>'
+    hid_r = '<w:p><w:r><w:rPr><w:rStyle w:val="Hid"/></w:rPr><w:t>FCI</w:t></w:r></w:p>'
+    r = docx("FCI_Hidden-Style_v1.0.docx", [("hdr", "header1.xml", hid_r), ftr], styles=styles)
+    assert not r.ok and len(r.problems) == 1 and "header" in r.problems[0]
+    r = docx("FCI_Even_v1.0.docx", [mk.FCI_HDR, ftr, ("hdr", "header2.xml", mk.p("Even page")),
+                                    ("ftr", "footer2.xml", mk.p("FCI", True))],
+             mk.REFS + [("hdr", "even", "header2.xml"), ("ftr", "even", "footer2.xml")], even=True)
+    assert not r.ok and len(r.problems) == 1 and "even" in r.problems[0] and "header" in r.problems[0]
+    r = docx("FCI_Title_v1.0.docx", [mk.FCI_HDR, ftr], title_pg=True)
+    assert not r.ok and len(r.problems) == 2 and all("first" in p and "FCI banner" in p for p in r.problems)
+    for label, word in (("cyrillic", "FСI"), ("greek", "FCΙ"), ("fullwidth", "ＦＣＩ"),
+                        ("lower", "fci"), ("suffix", "FCI (odd)"), ("cui-style", "FCI//SP-PROPIN")):
+        r = docx(f"FCI_Look-{label}_v1.0.docx", [("hdr", "header1.xml", mk.p(word, True)), ftr])
+        assert not r.ok and any("header" in p and "no FCI banner" in p for p in r.problems), (label, r.problems)
+    # xlsx: every sheet, and the even / first parts when they are switched on
+    f = tmp_path / "FCI_One-Sheet_v1.0.xlsx"
+    f.write_bytes(mk.xlsx([("Items", mk.sheet([["A"]], mk.FCI_HF)), ("Totals", mk.sheet([["B"]]))]))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 2 and all("Totals" in p and "FCI banner" in p for p in r.problems)
+    f = tmp_path / "FCI_First_v1.0.xlsx"
+    f.write_bytes(mk.xlsx([("Items", mk.sheet([["A"]], dict(mk.FCI_HF, differentFirst="1", firstFooter="&CFCI")))]))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "first-page header" in r.problems[0]
+    f = tmp_path / "FCI_Even_v1.0.xlsx"
+    f.write_bytes(mk.xlsx([("Items", mk.sheet([["A"]], dict(mk.FCI_HF, differentOddEven="1", evenHeader="&CFCI")))]))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "even-page footer" in r.problems[0]
+    # md: the first and the last line, exactly FCI
+    f = tmp_path / "FCI_Look_v1.0.md"
+    f.write_text("FСI\n\nbody\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "first line" in r.problems[0] and "FCI" in r.problems[0]
+    f.write_text("FCI\n\nbody\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "last line" in r.problems[0]
+
+
+def test_lookalike_wrong_banner_is_still_seen(tmp_path):
+    """The wrong banner is looked for with lookalikes folded (a Cyrillic CUI on an FCI document, an FCI in the
+    non-CUI area): spelling it with other letters does not hide it."""
+    mk = _make()
+    f = tmp_path / "FCI_Mixed_v1.0.docx"
+    f.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FCI", True) + mk.p("СUI", True)),
+                                      mk.FCI_FTR], mk.REFS))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and len(r.problems) == 1 and "a CUI banner" in r.problems[0]
+    g = tmp_path / "Notes_v1.0.md"
+    g.write_text("ＦＣＩ\n\nbody\n", encoding="utf-8")
+    r = M.check(g, False, NO_VALUES)
+    assert not r.ok and any("an FCI banner" in p and "non-CUI area" in p for p in r.problems), r.problems
+
+
+def test_fci_banner_in_the_non_cui_area_is_a_problem(tmp_path, monkeypatch):
+    for name, as_name in (("FCI_Notice_v1.0.docx", "Notice_v1.0.docx"), ("FCI_Quote_v1.0.xlsx", "Quote_v1.0.xlsx"),
+                          ("FCI_Notes_v1.0.md", "Notes_v1.0.md")):
+        r = M.check(copy(tmp_path, name, as_name), False, NO_VALUES)
+        assert not r.ok and len(r.problems) == 1, (as_name, r.problems)
+        assert "an FCI banner" in r.problems[0] and "non-CUI area" in r.problems[0]
+    f = tmp_path / "Report_v1.0.pdf"
+    f.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(M, "_tool", lambda name: "/bin/true")
+    monkeypatch.setattr(M, "_poppler", _fake_poppler([["FCI", "x", "FCI"]]))
+    r = M.check(f, False, NO_VALUES)
+    assert not r.ok and "an FCI banner" in r.problems[0]
+    # unchanged: the non-CUI twin passes
+    assert M.check(FX / "Access-Policy_v1.0.docx", False, NO_VALUES).ok
+
+
+@pytest.mark.parametrize("name", ["FCI_Plan_v0.1-DRAFT.docx", "FCI_Data_v0.1-DRAFT.xlsx", "FCI_Notes_v0.1-DRAFT.md"])
+def test_fci_insert_adds_the_fci_banner_only(tmp_path, name):
+    f = copy(tmp_path, name)
+    before = f.read_bytes()
+    assert not M.check(f, True, NO_VALUES).ok
+    plan = M.insert(f, NO_VALUES)                    # no CUI site keys needed for FCI
+    assert plan and all("FCI banner" in x for x in plan), plan
+    assert not any("designation block" in x or "CUI" in x for x in plan), plan
+    assert f.read_bytes() == before
+    assert M.insert(f, NO_VALUES, dry_run=False) == plan
+    r = M.check(f, True, NO_VALUES)
+    assert r.ok, r.problems
+    if f.suffix == ".md":
+        assert f.read_text().splitlines()[0] == "FCI" and "Controlled by" not in f.read_text()
+    else:
+        with zipfile.ZipFile(f) as z:
+            text = b"".join(z.read(n) for n in z.namelist()).decode("utf-8", "replace")
+        assert "Controlled by" not in text and ">CUI<" not in text and "&amp;CCUI" not in text
+    assert M.insert(f, VALUES, dry_run=False) == []
+    (tmp_path / "x").mkdir()
+    g = copy(tmp_path / "x", name, src=FX)
+    M.insert(g, VALUES, dry_run=False)               # the values do not matter for FCI: the same bytes
+    assert g.read_bytes() == f.read_bytes()
+
+
+def test_fci_insert_refuses_a_cui_marked_draft(tmp_path):
+    """insert never removes a mark: an FCI_ draft that carries the CUI marks still fails after the FCI banner is
+    added, so it is refused and nothing changes."""
+    mk = _make()
+    f = tmp_path / "FCI_Old_v0.1-DRAFT.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [mk.BANNER_HDR, mk.BANNER_FTR], mk.REFS))
+    before = f.read_bytes()
+    with pytest.raises(M.MarkingError, match="a CUI banner"):
+        M.insert(f, NO_VALUES, dry_run=False)
+    assert f.read_bytes() == before

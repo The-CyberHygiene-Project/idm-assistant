@@ -16,7 +16,7 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
 | G4 | removes the **AI Tools** plugin (`sdkjs-plugins/{9DC93CDB-…}`, agent tools `run_script`, `file_opener`) | `/usr/libexec/chp/onlyoffice-ai-off`: `%post`, `%posttrans`, trigger on every install/upgrade of `onlyoffice-desktopeditors`; `enable` refuses while it exists |
 | G4 | system-wide defaults: no update check, portals locked, plugins off, start-page AI entries hidden | `/etc/xdg/onlyoffice/DesktopEditors.conf` |
 | G4 | the vendor names lead to `0.0.0.0` (defence in depth, as the spike proved) | `/etc/hosts`, a marked block written by `enable` |
-| G3 | the whole workstation may reach only the site server (22, 443, 8443, 1514, 9000, ping) and the site resolver (53 udp/tcp); DoT/DoQ 853 refused to anyone; DNS to anyone else refused over IPv4 and IPv6; DoH (443 elsewhere) refused by the default rule; NTP only from chronyd, to the upstream addresses; loopback-only lock-down when the table cannot load | `/etc/nftables/chp-workstation-{egress,lockdown}.nft`, `chp-workstation-egress{,-lockdown}.service` |
+| G3 | the whole workstation may reach only the site server (22, 443, 8443, 1514, 9000, ping) and the site resolver (53 udp/tcp); DoT/DoQ 853 refused to anyone; DNS to anyone else refused over IPv4 and IPv6; DoH (443 elsewhere) refused by the default rule; NTP only from chronyd, to the site server; loopback-only lock-down when the table cannot load | `/etc/nftables/chp-workstation-{egress,lockdown}.nft`, `chp-workstation-egress{,-lockdown}.service` |
 | G2 | hourly sweep of ONLYOFFICE's auto-recovery copies (`~/.local/share/onlyoffice/desktopeditors/data/recover/DE__*`) and their `recents.xml` entries | `chp-onlyoffice-sweep.timer` → `chp-site onlyoffice sweep` |
 | F3 | logout ends the user's processes; linger off (and refused) | `/etc/systemd/logind.conf.d/50-chp-docs.conf`, `/etc/polkit-1/rules.d/50-chp-no-linger.rules`; `enable` and the sweep run `loginctl disable-linger` for anyone who has it |
 
@@ -56,8 +56,8 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
   file present, the unit enabled and active, the live table equal to the one
   built from the shipped files (policy drop), no lock-down table, `chp-onlyoffice-sweep.timer` active. Stopping
   `nftables.service` runs `flush ruleset`: the table is gone and check 83 alerts.
-- NTP leaves only from chronyd, and only to the `NTP_UPSTREAM` addresses when every entry is an address; when any
-  entry is a host name, to any address.
+- NTP leaves only from chronyd, and only to the site server (owner decision 2026-11-20: workstations take time from
+  the CHP server, never from an outside source; `NTP_UPSTREAM` is the server's own source and opens nothing here).
 - Refused packets are logged with the prefix `CHP-WS-EGRESS` (DNS: `CHP-WS-EGRESS-DNS`), at most 6 a minute. Wazuh
   rule 100627 puts them in the daily summary (level 7).
 - Multicast and broadcast are dropped without a log line.

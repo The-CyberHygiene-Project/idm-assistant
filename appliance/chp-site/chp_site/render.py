@@ -10,8 +10,12 @@ from .layout import plan
 from .sitevars import ANCHOR, values
 
 
-def misc_ks(site):
-    lines = [f"timezone {site['TIMEZONE']} --utc"] + [f"timesource --ntp-server={n}" for n in site["NTP_UPSTREAM"]]
+def misc_ks(site, host, hosts):
+    """The time zone and the time source: the server takes NTP_UPSTREAM; a client takes the CHP server only (owner
+    decision 2026-11-20: workstations never sync with an outside source). client-enrol's time step (chp-site
+    time-sync) keeps chrony.conf that way after the install."""
+    src = site["NTP_UPSTREAM"] if host.role == "server" else [server_of(hosts).ip]
+    lines = [f"timezone {site['TIMEZONE']} --utc"] + [f"timesource --ntp-server={n}" for n in src]
     return "\n".join(lines) + "\n"
 
 

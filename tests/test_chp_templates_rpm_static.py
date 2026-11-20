@@ -46,7 +46,7 @@ def test_one_version_pin_drives_the_build():                                    
 
 def test_document_templates_installed_under_their_plain_names():                     # Plan 3 Task 7 (ruling F2)
     s = (D / "chp-templates.spec").read_text()
-    for area, prefix in (("cui", "CUI_"), ("noncui", "")):
+    for area, prefix in (("cui", "CUI_"), ("fci", "FCI_"), ("noncui", "")):        # fci: Task 12 (owner 2026-11-20)
         for ext in ("docx", "xlsx", "md"):
             line = (f"install -Dm0644 doc/{area}/{prefix}Template_v0.1-DRAFT.{ext} "
                     f"%{{buildroot}}%{{_datadir}}/chp-templates/doc/{area}/Template.{ext}")

@@ -1274,13 +1274,18 @@ def q_control(storage, tag):
             f"AND f.path = 'files/{CANARY_NAME}'")
 
 
-def q_named(cui, fci, limit=LIST_MAX + 1):
+def q_named(cui, fci, limit=LIST_MAX + 1, cui_storages=()):
     """Every live CUI_/FCI_ file anywhere (any case) without the CUI/FCI tag its name asks for. Trash and old
-    versions are not live files (not under files/) and are not checked."""
+    versions are not live files (not under files/) and are not checked. In `cui_storages` (the CUI and Archive team
+    folders) the CUI tag also satisfies an FCI_ name: FCI_ controlled documents publish into CUI/Compliance and are
+    superseded into Archive, and tagging is by folder (CUI is the stronger handling); anywhere else an FCI_ file
+    needs the FCI tag."""
     pre = "upper(substr(f.name, 1, 4))"
+    st = ", ".join(str(int(s)) for s in cui_storages)
+    fci_ok = f"{_has_tag(fci)}" + (f" OR (f.storage IN ({st}) AND {_has_tag(cui)})" if st else "")
     return (f"SELECT f.fileid, f.storage, f.path, s.id AS storage_name FROM oc_filecache f "
             f"JOIN oc_storages s ON s.numeric_id = f.storage WHERE {_LIVE} AND f.mimetype NOT IN {_DIR} "
-            f"AND (({pre} = 'CUI_' AND NOT {_has_tag(cui)}) OR ({pre} = 'FCI_' AND NOT {_has_tag(fci)}))") + _lim(limit)
+            f"AND (({pre} = 'CUI_' AND NOT {_has_tag(cui)}) OR ({pre} = 'FCI_' AND NOT ({fci_ok})))") + _lim(limit)
 
 
 def q_outside(storages, cui, fci, limit=LIST_MAX + 1):
@@ -1891,7 +1896,8 @@ def _files(sql, folders, ids, tagid, storages, alert):
         untagged_ids.update(r.get("fileid") for r in rows)
     if tagid.get("CUI") and tagid.get("FCI"):
         cui, fci = tagid["CUI"], tagid["FCI"]
-        report("name", None, lambda lim: q_named(cui, fci, lim),
+        cui_st = [storages[n] for n in ("CUI", "Archive") if storages.get(n) is not None]
+        report("name", None, lambda lim: q_named(cui, fci, lim, cui_st),
                lambda r: f"file {_clean(_where(r, by_storage), 200)} (id {r.get('fileid')}) is named CUI_/FCI_ but has "
                          "no matching tag" + (" (also in its folder's list)" if r.get("fileid") in untagged_ids else ""))
         report("outside", None, lambda lim: q_outside(storages.values(), cui, fci, lim),

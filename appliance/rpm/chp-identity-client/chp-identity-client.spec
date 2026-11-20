@@ -1,6 +1,6 @@
 Name:           chp-identity-client
 Version:        0.2.4
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -21,7 +21,7 @@ Source12:       52-kanidm-tls.sh
 Source13:       LICENSE
 Source14:       49-client-enrolled.sh
 Source15:       53-ga.sh
-Requires:       chp-base, chp-site >= 0.14.0-5, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
+Requires:       chp-base >= 0.1.0-14, chp-site >= 0.14.0-8, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
 Requires:       authselect, policycoreutils, policycoreutils-python-utils, openssh-server, openssl, curl, python3, sudo, shadow-utils
 Requires(post): policycoreutils, policycoreutils-python-utils
 Requires(postun): policycoreutils, policycoreutils-python-utils
@@ -86,6 +86,11 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.2.4-3.chp
+- Client enrolment step `time` (Task 12, owner decision 2026-11-20), first: `chp-site time-sync --role client`
+  (clients only): chrony takes time from the CHP server only. Requires chp-site >= 0.14.0-8 and chp-base >= 0.1.0-14
+  (check 20 alerts on any other time source).
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.2.4-2.chp
 - Client enrolment: the docs step (ISO 0.7.0 Plan 3 Task 8; clients only; DOCUMENTS=yes) runs `chp-site onlyoffice
   enable` (the editor, the workstation egress table, the autosave sweep, linger off). Requires chp-site >= 0.14.0-5.

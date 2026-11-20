@@ -7,3 +7,13 @@ off=$(chronyc tracking 2>/dev/null | awk '/^System time/{print $4}')
 if [ -z "$off" ]; then echo "ALERT chrony gives no time offset (is chronyd running?)"
 elif awk -v o="$off" 'BEGIN{exit !(o > 30)}'; then echo "ALERT clock is ${off}s off (limit 30s): a person must decide (#30)"
 else echo "OK clock offset ${off}s"; fi
+# Task 12 (owner decision 2026-11-20): a workstation takes time from the CHP server only. Every source chronyd has
+# (whatever its state) must be the server's address; the server itself keeps its NTP_UPSTREAM sources.
+sip=$(chp-site get SERVER_IP 2>/dev/null || true); shn=$(chp-site get SERVER_HOSTNAME 2>/dev/null || true)
+if [ -n "$sip" ] && [ -n "$shn" ] && [ "$(hostname -s)" != "$shn" ]; then
+  srcs=$(chronyc -n sources 2>/dev/null | awk 'NR > 2 && $1 ~ /^[\^=#]/ {print $2}' | sort -u)
+  other=$(grep -vxF -- "$sip" <<< "$srcs" | tr '\n' ' ' | sed 's/ *$//' || true)
+  if [ -n "$other" ]; then echo "ALERT time sources other than the CHP server $sip: $other"
+  elif [ -z "$srcs" ]; then echo "ALERT no time source (a workstation takes time from the CHP server $sip only)"
+  else echo "OK time source: the CHP server $sip"; fi
+fi

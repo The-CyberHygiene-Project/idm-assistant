@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.2
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -17,7 +17,7 @@ Source7:        30-kanidm-cert.sh
 Source8:        31-renew-timer.sh
 Source9:        40-escrow-pending.sh
 Source10:       LICENSE
-Requires:       chp-base, chp-site, chp-identity-client, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
+Requires:       chp-base, chp-site >= 0.14.0-8, chp-identity-client >= 0.2.4-3, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
 
@@ -61,6 +61,11 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-4.chp
+- First boot step `time` (Task 12, owner decision 2026-11-20), after bind: `chp-site time-sync --role server` (the
+  server serves NTP to the site subnet only; firewalld 123/udp from SUBNET only, the owner-approved exception to
+  "no new network port"). Requires chp-site >= 0.14.0-8 and chp-identity-client >= 0.2.4-3.
+
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.2-3.chp
 - cert-renew-kanidm.sh takes the shared ACME lock /run/chp-acme.lock (flock, up to 300 s) around opening port 80,
   so it and chp-documents' cert-renew-nextcloud never hold :80 open at once.

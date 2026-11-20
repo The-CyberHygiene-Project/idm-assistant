@@ -59,28 +59,17 @@ def _p(root, rel):
 
 def egress_defines(site, hosts):
     """The include of the egress table: the site server, and the site resolver (clients resolve through the server:
-    render.net_ks). IPv4 only, as the hosts table is; refuses an address that cannot be the server's."""
+    render.net_ks). IPv4 only, as the hosts table is; refuses an address that cannot be the server's.
+    Time (owner decision 2026-11-20): a workstation takes time from the CHP server only, so the table lets chronyd
+    reach the server's 123/udp and nothing else; NTP_UPSTREAM is the server's own source and opens nothing here.
+    CHP_WS_NTP4/6 are still defined (the server; nothing over IPv6) so a table file from before this change loads and
+    allows the same."""
     ip = server_of(hosts).ip
     a = ipaddress.ip_address(str(ip))
     if a.version != 4 or a.is_unspecified or a.is_loopback or a.is_multicast or a.is_link_local:
         raise SiteError(f"the server address {ip} cannot be the workstation's egress destination")
-    v4, v6 = ntp_sets(site)
     return (f"define CHP_WS_SERVER_IP = {a}\ndefine CHP_WS_RESOLVER_IP = {a}\n"
-            f"define CHP_WS_NTP4 = {{ {', '.join(v4)} }}\ndefine CHP_WS_NTP6 = {{ {', '.join(v6)} }}\n")
-
-
-def ntp_sets(site):
-    """chronyd's NTP destinations for the egress table: when EVERY NTP_UPSTREAM entry is an address, exactly those
-    (an address family with none gets a set that matches nothing: 0.0.0.0/32 or ::/128); when any entry is a host
-    name (chrony resolves it at run time), any address (0.0.0.0/0, ::/0), still from chronyd only."""
-    v4, v6 = [], []
-    for x in site.get("NTP_UPSTREAM", []):
-        try:
-            a = ipaddress.ip_address(str(x))
-        except ValueError:
-            return ["0.0.0.0/0"], ["::/0"]
-        (v4 if a.version == 4 else v6).append(str(a))
-    return (v4 or ["0.0.0.0/32"]), (v6 or ["::/128"])
+            f"define CHP_WS_NTP4 = {{ {a} }}\ndefine CHP_WS_NTP6 = {{ ::/128 }}\n")
 
 
 def _write(path, text, mode):

@@ -42,7 +42,7 @@ def test_kickstart_rules(role):
 @pytest.mark.parametrize("role,host", [("server", 0), ("client", 1)])
 def test_kickstart_with_snippets_validates(tmp_path, role, host):
     site = parse_site(GOOD); hs = parse_hosts(HOSTS, site)
-    snip = {"misc": misc_ks(site), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
+    snip = {"misc": misc_ks(site, hs[host], hs), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
             "disk": disk_ks("vda", 120 * 2**30, "server", "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
             "boot": boot_ks("grub.pbkdf2.sha512.10000.AA.BB")}
     t = (KS / f"{role}.ks").read_text()
@@ -57,7 +57,7 @@ def test_kickstart_with_snippets_validates(tmp_path, role, host):
 @pytest.mark.parametrize("role,host,size", [("server", 0, 2_000_398_934_016), ("client", 1, 512 * 2**30)])
 def test_ksvalidator_accepts_the_sized_layouts(tmp_path, role, host, size):
     site = parse_site(GOOD); hs = parse_hosts(HOSTS, site)
-    snip = {"misc": misc_ks(site), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
+    snip = {"misc": misc_ks(site, hs[host], hs), "net": net_ks(site, hs[host], hs), "users": users_ks(site, "$6$x$y"),
             "disk": disk_ks("vda", size, role, "test-only"), "repo": repo_ks("file:///run/install/repo/chp"),
             "boot": boot_ks("grub.pbkdf2.sha512.10000.AA.BB")}
     t = (KS / f"{role}.ks").read_text()

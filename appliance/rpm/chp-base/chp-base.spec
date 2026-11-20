@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        13.chp%{?dist}
+Release:        14.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,10 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-14.chp
+- Check 20 (clock), Task 12 (owner decision 2026-11-20): on a workstation it also alerts when chronyd has any time
+  source other than the CHP server (SERVER_IP), or none; the server keeps its NTP_UPSTREAM sources.
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-13.chp
 - fapolicyd-fsmark (ISO 0.7.0 final review M7): the run inside an rpm transaction (CHP_NO_RESTART=1, chp-base
   %posttrans) never clears the failure record; only an operator's run with FSMARK=0 does, so a package update cannot

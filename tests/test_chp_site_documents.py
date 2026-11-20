@@ -1547,6 +1547,24 @@ def test_tag_check_finds_untagged_cui_prefixed_anywhere(tmp_path):
     assert any("home of lab01" in a["text"] and "CUI_report_v1.docx" in a["text"] for a in res["alerts"])
 
 
+def test_fci_controlled_document_in_the_cui_area_carries_the_cui_tag(tmp_path):
+    """Task 12 (FCI_ controlled documents publish into CUI/Compliance, the name rule's existing design): tagging is by
+    folder, so a published FCI_ document and its reader PDF carry CUI (stronger handling), and a superseded one moves
+    to Archive (CUI) with it. In CUI and Archive the CUI tag satisfies an FCI_ name; anywhere else an FCI_ file still
+    needs the FCI tag, and an untagged FCI_ file in CUI is still reported."""
+    db = DB()
+    ok_cui = db.file("CUI", "files/Compliance/FCI_Quote-Terms_v1.0.docx", [CUI_TAG])
+    ok_pdf = db.file("CUI", "files/Compliance/FCI_Quote-Terms_v1.0.pdf", [CUI_TAG])
+    ok_arc = db.file("Archive", "files/Superseded/FCI_Quote-Terms_v0.9.docx", [CUI_TAG])
+    bare = db.file("CUI", "files/Compliance/FCI_Bare_v1.0.docx")
+    pub = db.file("Public", "files/FCI_quote.xlsx", [CUI_TAG])
+    ops = db.file("Operations", "files/FCI_ops.xlsx", [CUI_TAG])
+    _, res, _ = do_check(tmp_path, db=db)
+    k = keys(res)
+    assert not {f"name:{ok_cui}", f"name:{ok_pdf}", f"name:{ok_arc}"} & k, res["alerts"]
+    assert {f"name:{bare}", f"name:{pub}", f"name:{ops}"} <= k, res["alerts"]
+
+
 def test_tagged_file_outside_the_controlled_folders_alerts(tmp_path):
     db = DB()
     out = db.file("Internal", "files/FCI_tagged.xlsx", [FCI_TAG])

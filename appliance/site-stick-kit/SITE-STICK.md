@@ -124,6 +124,23 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.7.0 on: time from the CHP server
+
+Workstations take their time from the CHP server only, never from an outside source (owner decision, 2026-11-20).
+
+- **The server** takes its time from `NTP_UPSTREAM` and serves it to the site network (`SUBNET`) only. If the
+  upstream fails, the server keeps serving its own clock (`local stratum 10`), so the site keeps one time.
+- **A workstation** uses the server's address as its only time source. The installer sets it, and client
+  enrolment's first step (`chp-site time-sync --role client`) keeps it so. Monitor check 20 alerts when a workstation
+  has any other time source, or none.
+- **A new port, approved by the owner.** The server opens 123/udp (NTP) to `SUBNET` only, as one firewalld rule:
+  `rule family="ipv4" source address="<SUBNET>" port port="123" protocol="udp" accept`. It is the one exception to
+  0.7.0's "no new network port" rule. The server's chrony leaves the CUI profile's client-only setting (`port 0`)
+  off, so an OpenSCAP scan of the server reports `chronyd_client_only` as failed. That is expected; workstations
+  keep it.
+- The server's first boot sets this up (step `time`). To set it up again, run `chp-site time-sync --role server` on
+  the server, then `chp-site time-sync --role client` on each workstation, as root.
+
 ### From 0.7.0 on: controlled documents
 
 0.7.0 adds an optional **document server** (NextCloud, on the server, at `https://files.<your domain>:8443`) and a
@@ -155,15 +172,16 @@ encrypted disk, or the commands refuse. Run `chp-site doc` as yourself, never as
 1. Sign in: `chp-site doc login`. A browser opens at Kanidm. If it does not, open the address the command prints.
    The sign-in lives in memory only and ends when your last session ends, or when Kanidm ends it (about 8 hours).
 2. Start from one of two places.
-   - A new document: `chp-site doc new MyPolicy --cui`. Use `--non-cui` for a document with no CUI marks. Add
-     `--type xlsx` or `--type md` for another format (the default is `docx`). The title has no spaces. You get
-     `CUI_MyPolicy_v0.1-DRAFT.docx` with the CUI marks already in it.
+   - A new document: `chp-site doc new MyPolicy --cui`. Use `--fci` for an FCI document (it gets the `FCI_` name
+     and the FCI banner) and `--non-cui` for a document with no marks. Add `--type xlsx` or `--type md` for another
+     format (the default is `docx`). The title has no spaces. You get `CUI_MyPolicy_v0.1-DRAFT.docx` with the CUI
+     marks already in it (or `FCI_MyPolicy_v0.1-DRAFT.docx` with the FCI banner).
    - A change to a published one: `chp-site doc checkout CUI_MyPolicy_v1.0.docx`. You get the next minor version,
      `CUI_MyPolicy_v1.1-DRAFT.docx`. Rename it by hand for a major change (for example `v2.0`).
 3. Open the file in ONLYOFFICE, edit it, save it.
 4. Ask what is missing: `chp-site doc check CUI_MyPolicy_v1.1-DRAFT.docx`. It changes nothing. It checks the name,
-   the CUI marks, `-DRAFT`, and whether the published copy changed since your checkout. It prints `OK` or
-   `NOT READY`.
+   the marks (CUI or FCI, from the name), `-DRAFT`, and whether the published copy changed since your checkout. It
+   prints `OK` or `NOT READY`.
 5. If marks are missing, see what would be added: `chp-site doc mark CUI_MyPolicy_v1.1-DRAFT.docx`. To add them,
    run the same command with `--apply`. Marks are added only to a `-DRAFT` file with a `CUI_` or `FCI_` name.
 6. Hand the draft to an approver (next part). Wait for the approval.
@@ -253,7 +271,7 @@ run `chp-site doc logout`. They are lost only when your last session ends and yo
 If the sign-in ends, the command says so. Run `chp-site doc login` and then the same command again.
 
 The 15-minute access token is refreshed 60 seconds before it ends (the sign-in itself lasts about 8 hours). That assumes the workstation clock is right. chrony keeps it
-right, and it is the only program allowed to reach the time servers (`NTP_UPSTREAM`).
+right: a workstation takes its time from the CHP server only (see "Time" below).
 
 #### The ISSO's duties
 
@@ -338,8 +356,18 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
    inside the CUI boundary, or to a channel that is authorised for CUI.
 4. **The audit log and the Wazuh index are CUI-boundary records.** Keep them on the appliance. Backups under
    `/backup/nextcloud` hold the documents and are inside the boundary too.
-5. **FCI marking.** As built, FCI documents carry the CUI banner. Whether FCI needs its own marking is under review.
-   The names still use the `FCI_` prefix.
+5. **FCI marking** (owner decision, 2026-11-20). An FCI document is marked `FCI`, not with the CUI banner.
+   - Its name starts with `FCI_`. Like a `CUI_` document it lives in `CUI/Compliance` once published.
+   - The line `FCI` is at the top and the bottom of every page, in the same places as the CUI banner: in Word the
+     header and footer, in Excel each sheet's header and footer, in Markdown the first and last lines, in a PDF the
+     top and bottom of the first and last pages.
+   - It has no CUI designation block, so it needs none of the `CUI_*` site keys.
+   - A CUI banner on an `FCI_` document is refused. So is an FCI banner on a `CUI_` document, and either banner in
+     `Internal/Compliance`. A document that holds CUI is a `CUI_` document.
+   - `chp-site doc new <title> --fci` starts one from the FCI template. `chp-site doc mark` adds only the FCI banner
+     to an `FCI_` draft.
+   - A published `FCI_` document carries the CUI tag, because tagging is by folder and `CUI/Compliance` is in the
+     CUI folder. The nightly tag check accepts that for an `FCI_` file in CUI and Archive only.
 
 #### ONLYOFFICE on the workstation
 
@@ -353,9 +381,8 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
 - **Recovery copies are CUI.** ONLYOFFICE keeps autosave copies. `chp-site doc close` removes them. An hourly sweep
   removes the rest, but only for a person who has no process running at all, and only copies older than 12 hours.
 - **The whole workstation is confined, Firefox included.** Outgoing connections go only to the site server
-  (ports 22, 443, 8443, 1514 and 9000, and ping) and to the site resolver for DNS. Time comes only from chrony, to the
-  `NTP_UPSTREAM` addresses when every entry is an address, otherwise to any address. The workstation has no
-  internet. This is by design.
+  (ports 22, 443, 8443, 1514 and 9000, and ping) and to the site resolver for DNS. Time comes only from chrony, and
+  only from the CHP server (123/udp). The workstation has no internet. This is by design.
 - **Sessions end at logout.** `KillUserProcesses=yes` (from the next boot) and an hourly `disable-linger` apply to **all** accounts, not
   only ordinary users (only root is left out of the kill). An administrator's `tmux` or `screen` session ends when
   the administrator logs out. A rule refuses `loginctl enable-linger` for everyone but root. If linger is on anyway,

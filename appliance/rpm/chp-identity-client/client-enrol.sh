@@ -18,6 +18,13 @@ g() { chp-site get "$1"; }
 CA=$(g CA_FQDN); IDM=$(g KANIDM_FQDN); SIP=$(g SERVER_IP)
 if [ "$ROLE" = server ]; then LOGIN_GROUP=chp_admins; else LOGIN_GROUP=chp_users; fi
 
+# Time (owner decision 2026-11-20): a workstation takes time from the CHP server only (the installer's timesource
+# already says so; this keeps chrony.conf that way). The server's own self-enrolment leaves its time service alone.
+do_time() {
+  [ "$ROLE" = client ] || return 0
+  chp-site time-sync --role client
+}
+
 do_trust() {
   if [ "$ROLE" = server ]; then [ -s "$ANCHOR" ]; return; fi       # the server made the root itself (first boot)
   PIN=$(g CA_ROOT_SHA256); T=$(mktemp -d); trap 'rm -rf "$T"' RETURN
@@ -123,6 +130,7 @@ do_docs() {
   chp-site onlyoffice enable
 }
 
+step time do_time
 step trust do_trust
 step unixd do_unixd
 step authselect do_authselect

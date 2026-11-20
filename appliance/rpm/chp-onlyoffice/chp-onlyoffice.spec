@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-onlyoffice
 Version:        0.1.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene workstation editor: ONLYOFFICE without AI Tools or vendor calls, the workstation egress table, the autosave sweep, linger off
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -27,7 +27,7 @@ Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
 Requires:       poppler-utils
 # chp-site onlyoffice (enable, sweep, egress-render) and the doc commands of Plan 3
-Requires:       chp-site >= 0.14.0-7
+Requires:       chp-site >= 0.14.0-8
 # monitor check 83 runs under chp-base's monitor (/usr/lib/chp/monitor.d)
 Requires:       nftables, systemd, polkit, chrony, python3, util-linux, chp-base
 BuildRequires:  systemd-rpm-macros
@@ -100,6 +100,11 @@ fi
 %{_prefix}/lib/chp/monitor.d/83-workstation-editor.sh
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-4.chp
+- Time from the CHP server only (Task 12, owner decision 2026-11-20): the egress table lets chronyd reach the site
+  server's 123/udp and nothing else (the NTP_UPSTREAM sets and the any-address path for host names are gone).
+  Requires chp-site >= 0.14.0-8 (egress-render: CHP_WS_NTP4/6 now name the server only, kept for an older table).
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-3.chp
 - Requires chp-site >= 0.14.0-7 (Plan 3 Task 11a): the doc commands' send fixes (a lasting 400/403/413 on a kept
   request id refused once the server holds nothing for it; a proxy's 502/503/504 on the first POST pending).

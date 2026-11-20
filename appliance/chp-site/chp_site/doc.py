@@ -23,7 +23,8 @@ Documents: the name rule is marking.parse_name's (<CUI_|FCI_><title>_vX.Y[-DRAFT
 CUI/Compliance (a CUI_ or FCI_ name) or Internal/Compliance (no prefix), or a folder directly inside one; the area
 ids come from the server (WebDAV), never from here. approve, override and publish name the document by its area
 folder and its file name (the appender keys a document by folder + prefix + title + extension, so the version in
-the name can change). Marks: check, approve and publish run marking.check here first (the server runs it again);
+the name can change). Marks (from the name: CUI_ the CUI banner and block, FCI_ the FCI banner only, owner decision
+2026-11-20): check, approve and publish run marking.check here first (the server runs it again);
 mark inserts them into a -DRAFT file, dry run unless --apply. publish never renames: the author renames the approved
 file away from -DRAFT (unchanged, so its sha256 still matches the approval); publish refuses a -DRAFT name.
 
@@ -681,16 +682,21 @@ def fill_template(data, ext, values):
 
 
 def cmd_new(env, a, say):
+    """--cui: CUI_<title> from doc/cui (filled from the CUI marking site keys, CUI marks); --fci: FCI_<title> from
+    doc/fci (the FCI banner only, no site keys; owner decision 2026-11-20); both go to CUI/Compliance (the name rule's
+    CUI_/FCI_ prefixes share the CUI area). --non-cui: no prefix, doc/noncui, Internal/Compliance."""
     from . import marking
-    cui = bool(a.cui)
+    fci = bool(getattr(a, "fci", False))
+    cui = bool(a.cui) or fci                              # the target area: FCI_ documents live in CUI/Compliance
     ext = a.type
-    name = f"{'CUI_' if cui else ''}{a.title}_v0.1-DRAFT.{ext}"
+    prefix = "FCI_" if fci else ("CUI_" if cui else "")
+    name = f"{prefix}{a.title}_v0.1-DRAFT.{ext}"
     _parse(name)
-    tpl = Path(env.templates) / ("cui" if cui else "noncui") / f"Template.{ext}"
+    tpl = Path(env.templates) / ("fci" if fci else "cui" if cui else "noncui") / f"Template.{ext}"
     if not tpl.is_file():
         raise DocError(f"refused: the template {tpl} is not installed (it comes with {TEMPLATES_PKG})")
-    values = _values(env) if cui else marking.MarkValues()
-    if cui:
+    values = _values(env) if cui and not fci else marking.MarkValues()
+    if cui and not fci:
         _, missing = values.block()
         if missing:
             raise DocError("refused: the site keys " + ", ".join(missing) + " are not set, so a CUI document cannot "
@@ -702,7 +708,7 @@ def cmd_new(env, a, say):
     tmp = Path(tempfile.mkdtemp(dir=_private_dir(Records(w).dir), prefix="new-"))
     try:
         f = tmp / name
-        _write_new(f, fill_template(tpl.read_bytes(), ext, values) if cui else tpl.read_bytes())
+        _write_new(f, fill_template(tpl.read_bytes(), ext, values) if cui and not fci else tpl.read_bytes())
         if cui:
             try:
                 marking.insert(f, values, dry_run=False)
@@ -768,7 +774,8 @@ def cmd_check(env, a, say):
         except (auth.AuthError, DocError) as e:
             note = f"freshness and citations not checked: {e}"
     rep = marking.check(f, cui, values, current)
-    say(f"{f.name}: {'CUI' if cui else 'non-CUI'} area")
+    marks = ("FCI banner" if f.name.startswith("FCI_") else "CUI marks") if cui else "no banner"
+    say(f"{f.name}: {'CUI' if cui else 'non-CUI'} area ({marks})")
     for p in rep.problems:
         say(f"  PROBLEM: {p}")
     for w_ in rep.warnings:
@@ -1095,6 +1102,7 @@ def add_parser(sub):
     n.add_argument("title")
     g = n.add_mutually_exclusive_group(required=True)
     g.add_argument("--cui", action="store_true", help="for CUI/Compliance (CUI_ name, CUI marks)")
+    g.add_argument("--fci", action="store_true", help="for CUI/Compliance (FCI_ name, the FCI banner; no CUI marks)")
     g.add_argument("--non-cui", action="store_true", help="for Internal/Compliance (no prefix, no CUI marks)")
     n.add_argument("--type", choices=("docx", "xlsx", "md"), default="docx")
     k = ds.add_parser("check", help="report what is missing (name rule, marks, -DRAFT, freshness); changes nothing")

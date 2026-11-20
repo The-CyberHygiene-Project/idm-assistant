@@ -76,7 +76,7 @@ def run_pre(role, stick, out, repo_url, facts, hasher=sha512_crypt, secret=secre
         raise SiteError(f"cannot write the escrow file to the site stick ({e.strerror}); is the stick read-only "
                         "or full? The install stops: it never proceeds without its recovery secrets") from None
     out.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for name, text in (("misc", misc_ks(site)), ("net", net_ks(site, host, hosts)), ("users", users_ks(site, hasher(rootpw))), ("boot", boot_ks(grub_pbkdf2(grubpw))),
+    for name, text in (("misc", misc_ks(site, host, hosts)), ("net", net_ks(site, host, hosts)), ("users", users_ks(site, hasher(rootpw))), ("boot", boot_ks(grub_pbkdf2(grubpw))),
                        ("disk", disk_ks(disk.name, disk.size, role, luks)), ("repo", repo_ks(repo_url))):
         p = out / f"{name}.ks"
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

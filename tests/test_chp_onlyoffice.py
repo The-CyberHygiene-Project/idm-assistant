@@ -312,10 +312,11 @@ def test_egress_rules_default_drop_except_server():
                              ("192.0.2.1", "tcp", 80), ("203.0.113.5", "tcp", 443), ("203.0.113.5", "tcp", 80),
                              ("2001:db8::5", "tcp", 443), ("203.0.113.5", "udp", 4500)):
         assert verdict(dst, proto, port) in ("drop", "reject"), (dst, proto, port)
-    # time: only chronyd speaks NTP (its servers may be names, resolved through the site resolver)
-    assert verdict("192.0.2.123", "udp", 123, skuid="chrony") == "accept"     # NTP_UPSTREAM=192.0.2.123
-    assert verdict("203.0.113.123", "udp", 123, skuid="chrony") == "reject"   # not an upstream (fix round 1, m1)
-    assert verdict("192.0.2.123", "udp", 123, skuid="alice") in ("drop", "reject")
+    # time: only chronyd speaks NTP, and only to the CHP server (owner decision 2026-11-20)
+    assert verdict(srv, "udp", 123, skuid="chrony") == "accept"
+    assert verdict("192.0.2.123", "udp", 123, skuid="chrony") == "reject"     # NTP_UPSTREAM: the server's source only
+    assert verdict("203.0.113.123", "udp", 123, skuid="chrony") == "reject"
+    assert verdict(srv, "udp", 123, skuid="alice") in ("drop", "reject")
     # IPv6 neighbour discovery (no payload) works; multicast goes nowhere
     assert verdict("ff02::1:ff00:5", "icmpv6", icmp="nd-neighbor-solicit") == "accept"
     assert verdict("224.0.0.251", "udp", 5353) == "drop" and verdict("ff02::fb", "udp", 5353) == "drop"
@@ -333,8 +334,9 @@ def test_dns_only_site_resolver_v4_v6():
     site, hosts = _site()
     d = _defines(OO.egress_defines(site, hosts))
     # clients resolve through the server (render.net_ks): the resolver is the server's address, from the site files
+    # CHP_WS_NTP4/6 are kept for an older table file only: the server, and nothing over IPv6
     assert d == {"CHP_WS_SERVER_IP": "192.0.2.10", "CHP_WS_RESOLVER_IP": "192.0.2.10",
-                 "CHP_WS_NTP4": "{ 192.0.2.123 }", "CHP_WS_NTP6": "{ ::/128 }"}
+                 "CHP_WS_NTP4": "{ 192.0.2.10 }", "CHP_WS_NTP6": "{ ::/128 }"}
     for proto in ("udp", "tcp"):
         assert verdict("192.0.2.10", proto, 53) == "accept"
         for other in ("192.0.2.1", "8.8.8.8", "203.0.113.53", "2001:4860:4860::8888", "2606:4700:4700::1111", "fe80::1"):
@@ -453,7 +455,7 @@ def test_enable_installs_renders_and_starts(tmp_path):
     assert ["nft", "list", "table", "inet", "chp_workstation_egress"] in run.calls
     assert (tmp_path / OO.EGRESS_ADDR).read_text() == "define CHP_WS_SERVER_IP = 192.0.2.10\n" \
                                                       "define CHP_WS_RESOLVER_IP = 192.0.2.10\n" \
-                                                      "define CHP_WS_NTP4 = { 192.0.2.123 }\n" \
+                                                      "define CHP_WS_NTP4 = { 192.0.2.10 }\n" \
                                                       "define CHP_WS_NTP6 = { ::/128 }\n"
     # m6: the files replaced by rename get their SELinux label back
     assert ["restorecon", str(tmp_path / "etc/hosts")] in run.calls
@@ -724,15 +726,22 @@ def test_egress_without_any_file_or_load_fails_closed(tmp_path):
         assert f in t("build-rpm.sh"), f
 
 
-def test_ntp_only_to_the_upstream_addresses_or_any_for_names():
-    two = {"NTP_UPSTREAM": "192.0.2.123, 192.0.2.124"}
-    assert verdict("192.0.2.124", "udp", 123, skuid="chrony", site_kw=two) == "accept"
-    assert verdict("198.51.100.7", "udp", 123, skuid="chrony", site_kw=two) == "reject"
-    assert verdict("2001:db8::123", "udp", 123, skuid="chrony", site_kw=two) == "reject"
-    names = {"NTP_UPSTREAM": "time.example.test, 192.0.2.123"}       # a name: chrony resolves it, any address
-    assert verdict("198.51.100.7", "udp", 123, skuid="chrony", site_kw=names) == "accept"
-    assert verdict("2001:db8::123", "udp", 123, skuid="chrony", site_kw=names) == "accept"
-    assert verdict("198.51.100.7", "udp", 123, skuid="alice", site_kw=names) == "reject"
+def test_ntp_only_to_the_server_whatever_ntp_upstream_says():
+    """Owner decision 2026-11-20: workstations take time from the CHP server only. NTP_UPSTREAM is the server's
+    source: neither its addresses nor a host name in it opens anything on a workstation (the any-address path is
+    gone)."""
+    for kw in ({"NTP_UPSTREAM": "192.0.2.123, 192.0.2.124"}, {"NTP_UPSTREAM": "time.example.test, 192.0.2.123"}):
+        assert verdict("192.0.2.10", "udp", 123, skuid="chrony", site_kw=kw) == "accept"
+        for dst in ("192.0.2.123", "192.0.2.124", "198.51.100.7", "2001:db8::123"):
+            assert verdict(dst, "udp", 123, skuid="chrony", site_kw=kw) == "reject", (kw, dst)
+        assert verdict("192.0.2.10", "udp", 123, skuid="alice", site_kw=kw) == "reject"
+        site, hosts = _site(**kw)
+        d = _defines(OO.egress_defines(site, hosts))
+        assert d["CHP_WS_NTP4"] == "{ 192.0.2.10 }" and d["CHP_WS_NTP6"] == "{ ::/128 }"
+    code = re.sub(r"#.*", "", t("nft/chp-workstation-egress.nft"))
+    assert re.findall(r".*dport 123.*", code) == ['        meta skuid "chrony" ip daddr $CHP_WS_SERVER_IP udp dport 123 '
+                                                  'accept']
+    assert not hasattr(OO, "ntp_sets")
 
 
 def test_sweep_reports_removals_done_before_an_error(tmp_path, monkeypatch):

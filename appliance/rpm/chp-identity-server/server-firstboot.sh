@@ -3,7 +3,7 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # server-firstboot.sh (root; chp-server-firstboot.service, once): turn an installed server into the identity server.
-# Steps: bind, step-ca, kanidm-cert, kanidmd, recover, collector, ssh-ca, cache-key, unixd-tokens (login groups + one
+# Steps: bind, time, step-ca, kanidm-cert, kanidmd, recover, collector, ssh-ca, cache-key, unixd-tokens (login groups + one
 # read-only unixd token per client, pending for export-client), self-client (client-enrol --role server).
 # Steps run in order; each is skipped when its marker /var/lib/chp/firstboot/<step>.done exists, so a failed first boot
 # resumes where it stopped (systemctl restart chp-server-firstboot). Every site value comes from `chp-site get`/`render`.
@@ -35,6 +35,10 @@ do_bind() {
   firewall-cmd -q --permanent --add-service=dns; firewall-cmd -q --reload
   [ "$(dig +short @"$SIP" "$IDM")" = "$SIP" ]
 }
+
+# Time (owner decision 2026-11-20): workstations take time from this server only, so it serves NTP to the site subnet
+# only (chrony allow <SUBNET>, firewalld 123/udp from <SUBNET>): the owner-approved exception to "no new port".
+do_time() { chp-site time-sync --role server; }
 
 do_stepca() {
   if [ ! -f /etc/step-ca/config/ca.json ]; then
@@ -172,6 +176,7 @@ do_security() {
 }
 
 step bind do_bind
+step time do_time
 step step-ca do_stepca
 step kanidm-cert do_kanidm_cert
 step kanidmd do_kanidmd

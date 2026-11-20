@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        7.chp%{?dist}
+Release:        8.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,21 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
+- ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):
+- FCI is marked "FCI": in the CUI area an FCI_ document needs the banner FCI (top and bottom, the same places and
+  false-pass defences as the CUI banner) and no CUI designation block; a CUI banner on an FCI_ document, an FCI
+  banner on a CUI_ document, and either one in the non-CUI area are problems (the wrong banner is searched with
+  lookalikes folded). marking.insert puts only the FCI banner into an FCI_ draft. `chp-site doc new <title> --fci`
+  makes FCI_<title>_v0.1-DRAFT.<ext> from /usr/share/chp-templates/doc/fci/ for CUI/Compliance (no CUI site keys
+  needed). The nightly tag check accepts the CUI tag on an FCI_ file in the CUI and Archive team folders (tagging is
+  by folder; FCI_ controlled documents publish into CUI/Compliance).
+- Time from the CHP server only: `chp-site time-sync --role server|client` (root; first boot runs it). The server
+  serves NTP to the site subnet only (chrony allow <SUBNET>, local stratum 10, the CUI profile's port 0 off;
+  firewalld 123/udp from <SUBNET> only: the owner-approved exception to "no new network port"). A workstation's
+  chrony uses the server only. The client kickstart's timesource is the server; the workstation egress addresses
+  give chronyd the server only (the any-address path for host names in NTP_UPSTREAM is gone).
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-7.chp
 - ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):
 - doc-ledger: the server's marking check gets the current versions of the document's area folder, so superseded

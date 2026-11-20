@@ -144,6 +144,10 @@ def xlsx(sheets):
 
 
 HF = {"oddHeader": "&CCUI", "oddFooter": "&CCUI&RPage &P"}
+# owner decision 2026-11-20: an FCI_ document carries the banner "FCI" (top and bottom), and no CUI designation block
+FCI_HDR = ("hdr", "header1.xml", p("FCI", True))
+FCI_FTR = ("ftr", "footer1.xml", p("FCI", True) + p("Page 1"))
+FCI_HF = {"oddHeader": "&CFCI", "oddFooter": "&CFCI&RPage &P"}
 
 
 def pdf(pages):
@@ -223,6 +227,17 @@ def build():
                                         ["CUI", "Page two text.", "CUI"],
                                         ["CUI", "Last page text, no bottom banner.", "More text.", "More text.", "More text.",
                                          "End of report"]])
+
+    f["FCI_Notice_v1.0.docx"] = docx(FILLER, [FCI_HDR, FCI_FTR], REFS)
+    f["FCI_Plan_v0.1-DRAFT.docx"] = docx(FILLER)
+    f["FCI_Quote_v1.0.xlsx"] = xlsx([("Items", sheet([["Item", "Qty"], ["A", "1"]], FCI_HF)),
+                                     ("Totals", sheet([["Total", "1"]], FCI_HF))])
+    f["FCI_Data_v0.1-DRAFT.xlsx"] = xlsx([("Items", sheet([["Item", "Qty"], ["A", "1"]],
+                                                          {"oddHeader": "&LInternal list"})),
+                                          ("Totals", sheet([["Total", "1"]]))])
+    f["FCI_Notes_v1.0.md"] = md(["FCI", "", "# Notes (made-up)", "", "Step one.", "", "FCI"])
+    f["FCI_Notes_v0.1-DRAFT.md"] = md(["# Notes (made-up)", "", "Step one."])
+    f["FCI_Report_v1.0.pdf"] = pdf([["FCI", "Report text (made-up).", "FCI"], ["FCI", "Last page text.", "FCI"]])
     return f
 
 

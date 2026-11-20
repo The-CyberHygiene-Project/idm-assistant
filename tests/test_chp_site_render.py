@@ -33,9 +33,19 @@ def test_disk_is_luks2_on_the_chosen_disk_only():
 
 
 def test_misc_time_and_repo():
-    assert "timezone America/Denver --utc" in misc_ks(SITE)
-    assert "timesource --ntp-server=192.168.100.1" in misc_ks(SITE)
+    srv, cli = HS
+    assert "timezone America/Denver --utc" in misc_ks(SITE, srv, HS)
+    assert "timesource --ntp-server=192.168.100.1" in misc_ks(SITE, srv, HS)      # the server: NTP_UPSTREAM
     assert repo_ks("file:///run/install/repo/chp") == "repo --name=chp --baseurl=file:///run/install/repo/chp\n"
+
+
+def test_misc_client_takes_time_from_the_server_only():
+    """Owner decision 2026-11-20: workstations sync with the CHP server, never with an outside source."""
+    srv, cli = HS
+    s = misc_ks(SITE, cli, HS)
+    assert "timezone America/Denver --utc" in s
+    assert [x for x in s.splitlines() if x.startswith("timesource")] == [f"timesource --ntp-server={srv.ip}"]
+    assert "192.168.100.1" not in s
 
 
 # ISSO 2026-10-10 (CUI rule grub2_password): a per-host boot-loader password, set hashed through the kickstart.

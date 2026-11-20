@@ -41,6 +41,9 @@ def setup(tmp_path, user="alice", sign_in=True, clock=None):
         (tpl / area).mkdir(parents=True)
         shutil.copyfile(FX / src, tpl / area / "Template.docx")
     shutil.copyfile(FX / "CUI_Notes_v0.1-DRAFT.md", tpl / "cui" / "Template.md")      # unmarked: doc new marks it
+    (tpl / "fci").mkdir()
+    shutil.copyfile(FX / "FCI_Notice_v1.0.docx", tpl / "fci" / "Template.docx")
+    shutil.copyfile(FX / "FCI_Notes_v0.1-DRAFT.md", tpl / "fci" / "Template.md")      # unmarked: doc new marks it
     x2t = tmp_path / "x2t"
     x2t.write_text(FAKE_X2T.format(py=sys.executable, log=str(tmp_path / "x2t.log")))
     x2t.chmod(0o755)
@@ -180,6 +183,47 @@ def test_new_refusals_are_plain(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):                          # --cui or --non-cui is required
         run(env, monkeypatch, capsys, "new", "Plan")
     assert not posts(env)
+
+
+def test_new_fci_from_the_fci_template(tmp_path, monkeypatch, capsys):
+    """Owner decision 2026-11-20: an FCI document is FCI_<title>, marked "FCI" (no CUI designation block, no CUI site
+    keys needed), and it lives in CUI/Compliance with the CUI_ documents (the name rule's FCI_ prefix)."""
+    env = setup(tmp_path)
+    env.site = {"DOMAIN": "example.test"}                    # no CUI marking keys: FCI does not need them
+    rc, out = run(env, monkeypatch, capsys, "new", "Quote-Terms", "--fci")
+    assert rc == 0, out
+    f = work(env) / "FCI_Quote-Terms_v0.1-DRAFT.docx"
+    assert f.read_bytes() == (tmp_path / "templates/fci/Template.docx").read_bytes()    # marked by construction
+    rep = M.check(f, True, M.MarkValues())
+    assert rep.ok, rep.problems
+    (b,) = posts(env)
+    assert b == {"kind": "new", "file_id": env.stub.ids["CUI/Compliance"], "path": f.name,
+                 "request_id": b["request_id"]}
+    rec = DOC.Records(work(env)).get(f.name)
+    assert rec["folder_id"] == env.stub.ids["CUI/Compliance"] and rec["cui"] is True
+    # an unmarked FCI template (md) gets the FCI banner only
+    rc, out = run(env, monkeypatch, capsys, "new", "Notes", "--fci", "--type", "md")
+    assert rc == 0, out
+    md = work(env) / "FCI_Notes_v0.1-DRAFT.md"
+    lines = md.read_text().splitlines()
+    assert lines[0] == "FCI" and lines[-1] == "FCI" and "Controlled by" not in md.read_text()
+    assert M.check(md, True, M.MarkValues()).ok
+    # doc check reports the FCI marking
+    rc, out = run(env, monkeypatch, capsys, "check", str(md))
+    assert "FCI" in out and "PROBLEM" not in out, out
+
+
+def test_new_fci_refusals(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    rc, out = run(env, monkeypatch, capsys, "new", "Plan", "--fci", "--type", "xlsx")   # template not installed
+    assert rc == 2 and "chp-templates" in out and "fci" in out and not posts(env)
+    for both in (("--fci", "--cui"), ("--fci", "--non-cui")):
+        with pytest.raises(SystemExit):                      # one of --cui, --fci, --non-cui
+            run(env, monkeypatch, capsys, "new", "Plan", *both)
+    # a template that carries the CUI marks is refused, never sent (the check runs before the request)
+    shutil.copyfile(FX / "CUI_Access-Policy_v1.0.docx", tmp_path / "templates/fci/Template.docx")
+    rc, out = run(env, monkeypatch, capsys, "new", "Plan", "--fci")
+    assert rc == 2 and "a CUI banner" in out and not posts(env)
 
 
 # ---------- check / mark ----------

@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-templates
 Version:        1.4.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2), their renderer and document templates
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -16,7 +16,7 @@ Requires:       python3
 The signed chp-templates release, the same library Automated_Compliance pins: placeholder-only SSP and POA&M
 templates, the vocabulary, the site.conf mapping and the renderer. `chp-site docs` renders a site's documents from it.
 It also carries the marked controlled-document templates that `chp-site doc new` starts from, as
-doc/{cui,noncui}/Template.{docx,xlsx,md}.
+doc/{cui,fci,noncui}/Template.{docx,xlsx,md}.
 
 %prep
 %setup -q -n chp-templates-%{version}
@@ -29,6 +29,9 @@ install -m 0644 chpfill.pyz vocabulary.md site-conf-mapping.csv README.md %{buil
 install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.docx %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.docx
 install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.xlsx %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.xlsx
 install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.md %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.md
+install -Dm0644 doc/fci/FCI_Template_v0.1-DRAFT.docx %{buildroot}%{_datadir}/chp-templates/doc/fci/Template.docx
+install -Dm0644 doc/fci/FCI_Template_v0.1-DRAFT.xlsx %{buildroot}%{_datadir}/chp-templates/doc/fci/Template.xlsx
+install -Dm0644 doc/fci/FCI_Template_v0.1-DRAFT.md %{buildroot}%{_datadir}/chp-templates/doc/fci/Template.md
 install -Dm0644 doc/noncui/Template_v0.1-DRAFT.docx %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.docx
 install -Dm0644 doc/noncui/Template_v0.1-DRAFT.xlsx %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.xlsx
 install -Dm0644 doc/noncui/Template_v0.1-DRAFT.md %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.md
@@ -47,6 +50,13 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 %{_datadir}/chp-templates/README.md
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 1.4.0-2.chp
+- The FCI templates (Task 12, owner decision 2026-11-20, "FCI should be marked as FCI"): doc/fci/ installed as
+  doc/fci/Template.{docx,xlsx,md} (the banner FCI, no designation block), for `chp-site doc new --fci`; Rev 2 content
+  1.2.6 (3.8.4 FCI marking; 3.3.7, 3.4.7, 3.13.1, 3.13.6 time from the server, 123/udp to the site subnet only).
+- NEEDS the re-tagged templates-1.4.0 (chp-templates commit with doc/fci/) and the build-rpm.sh sha256 pin redone
+  to its git archive: the current pin (0a18aca) has no doc/fci/ and this spec's %install would fail on it.
+
 * Thu Nov 19 2026 The CyberHygiene Project - 1.4.0-1.chp
 - chp-templates 1.4.0 (sha256 pinned in build-rpm.sh): the marked controlled-document templates (doc/cui and
   doc/noncui, installed as Template.{docx,xlsx,md}), five new site.conf mappings (DOC_ISSO_ACCOUNT,

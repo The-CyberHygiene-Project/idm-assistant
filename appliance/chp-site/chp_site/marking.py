@@ -1,7 +1,7 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-"""The CUI marking checker and inserter for controlled documents (ISO 0.7.0 Plan 3, spec §5). It runs on the
+"""The CUI and FCI marking checker and inserter for controlled documents (ISO 0.7.0 Plan 3, spec §5). It runs on the
 workstation (`chp-site doc check|mark`) and again on the server at publish (doc_ledger), so both ends judge a file
 with the same code, including the name rule (parse_name).
 
@@ -13,8 +13,22 @@ Name rule: <CUI_|FCI_><title>_vX.Y[-DRAFT].<ext> in the CUI area, <title>_vX.Y[-
     with a letter or digit. No spaces, no dots, no paths; 200 characters at most. The prefix is CUI_ or FCI_ in
     capitals; `-DRAFT` in capitals.
 
+Which marks (owner decision 2026-11-20, "FCI should be marked as FCI"): the target area and the name's prefix
+(parse_name) decide; nothing else is trusted.
+  - CUI area, CUI_ name (or a name that does not parse: the strictest reading): the CUI banner and the designation
+    block;
+  - CUI area, FCI_ name: the FCI banner (a line that reads exactly `FCI`), in the same places and with the same
+    defences as the CUI banner, and NO designation block (a `CUI Category:` line on page one is a problem); the CUI
+    marking site keys are not needed;
+  - non-CUI area: no banner.
+  The other banner is a problem wherever a banner is looked for: a CUI banner on an FCI_ document, an FCI banner on
+  a CUI_ document, either one in the non-CUI area. That search folds lookalikes (fullwidth and compatibility forms,
+  Cyrillic/Greek letters, case), so a wrong banner cannot hide behind other letters; the banner that is required
+  must be the exact ASCII text.
+
 Marks (when the target is the CUI area; spec §4: the CUI banner applies in the CUI and FCI folders):
-  - banner: a line that reads `CUI` (or `CUI//<category markings>`), checked on top and bottom of every page:
+  - banner: a line that reads `CUI` (or `CUI//<category markings>`; for an FCI_ document exactly `FCI`), checked on
+    top and bottom of every page:
       docx: a paragraph in the header and the footer part in effect for every section and page kind (default; first
             when the section has a title page; even when the document has even/odd headers). Text in a text box,
             shape or drawing, hidden text and deleted text do not count;
@@ -27,9 +41,11 @@ Marks (when the target is the CUI area; spec §4: the CUI banner applies in the 
       xlsx: in rows 1-20 of the first visible sheet, or in its page-one header/footer;
       md:   the lines after the first banner (blank lines between them allowed);
       pdf:  anywhere in the text of page one.
-  - In the non-CUI area a CUI banner is itself a problem (CUI does not belong there).
+  - In the non-CUI area a CUI or FCI banner is itself a problem (CUI and FCI do not belong there).
 
-Insert (only into a -DRAFT file with a CUI_/FCI_ name, before approval; dry run by default): adds what is missing,
+Insert (only into a -DRAFT file with a CUI_/FCI_ name, before approval; dry run by default): adds what is missing
+(a CUI_ file: the CUI banner and the designation block; an FCI_ file: the FCI banner only; insert never removes a
+mark, so a draft that carries the other banner is refused),
 with byte-level edits that leave every other part as it was, checks the result, and writes it atomically. The same
 input and values always give the same bytes (the approved hash covers the marked file). PDFs are never marked in
 place (a reader PDF is derived from the approved source).
@@ -56,7 +72,14 @@ from pathlib import Path
 from typing import List, Optional
 
 BANNER = "CUI"
+FCI_BANNER = "FCI"
 _BANNER_RE = re.compile(r"CUI(?://[A-Z0-9][A-Z0-9 ,/-]*)?")
+_FCI_RE = re.compile(r"FCI")
+# kind -> (the banner text, the exact pattern a required banner must match, the folded pattern a banner that must
+# not be there is found by: lookalikes, compatibility forms and case folded, with or without //<markings> after it)
+_KINDS = {"cui": (BANNER, _BANNER_RE, re.compile(r"cui(?:\s*//.*)?")),
+          "fci": (FCI_BANNER, _FCI_RE, re.compile(r"fci(?:\s*//.*)?"))}
+_ART = {"cui": "a CUI", "fci": "an FCI"}
 RULE = "<CUI_|FCI_><title>_vX.Y[-DRAFT].<ext> in the CUI area, <title>_vX.Y[-DRAFT].<ext> in the non-CUI area"
 FORMATS = {"docx": "docx", "xlsx": "xlsx", "md": "md", "pdf": "pdf"}
 LABELS = (("CUI_CONTROLLED_BY", "controlled_by", "Controlled by"), ("CUI_CATEGORY", "category", "CUI Category"),
@@ -223,12 +246,53 @@ def _norm(s):
     return " ".join(s.split())
 
 
-def _is_banner(line):
-    return bool(_BANNER_RE.fullmatch(_norm(line)))
+def _is_banner(line, kind="cui"):
+    return bool(_KINDS[kind][1].fullmatch(_norm(line)))
 
 
-def _has_banner(lines):
-    return any(_is_banner(x) for x in lines)
+def _has_banner(lines, kind="cui"):
+    return any(_is_banner(x, kind) for x in lines)
+
+
+def _looks_like(line, kind):
+    """The folded search for a banner that must NOT be there (see the module notes)."""
+    return bool(_KINDS[kind][2].fullmatch(_fold(_norm(line)).strip()))
+
+
+def _wrong(lines, mode):
+    """The banner kinds among `lines` that do not belong to a document of this mode ('cui', 'fci' or 'none')."""
+    return {k for k in _KINDS if k != mode and any(_looks_like(x, k) for x in lines)}
+
+
+def _mode(cui, parts):
+    """'none' (the non-CUI area), 'fci' (the CUI area, an FCI_ name) or 'cui' (the CUI area, any other name: the
+    strictest reading when the name does not parse)."""
+    if not cui:
+        return "none"
+    return "fci" if parts is not None and parts.prefix == "FCI_" else "cui"
+
+
+def _wrong_problems(found, mode, where, problems):
+    for k in sorted(found):
+        if mode == "none":
+            name = "a CUI_ or FCI_" if k == "cui" else "an FCI_"
+            problems.append(f"{_ART[k]} banner is {where}, but this is the non-CUI area: {_ART[k]} document goes in "
+                            f"the CUI area with {name} name")
+        elif mode == "fci":
+            problems.append(f"{_ART[k]} banner is {where}, but this is an FCI_ document: it carries the FCI banner "
+                            "only (a document that holds CUI is named CUI_)")
+        else:
+            problems.append(f"{_ART[k]} banner is {where}, but this is a CUI_ document: it carries the CUI banner")
+
+
+_CUI_BLOCK_LABEL = LABELS[1][2].casefold() + ":"         # "cui category:"
+
+
+def _fci_block_problems(lines, where, problems):
+    """An FCI_ document carries no CUI designation block: a `CUI Category:` line (lookalikes folded) is a problem."""
+    if any(_fold(_norm(x)).startswith(_CUI_BLOCK_LABEL) for x in lines):
+        problems.append(f"a CUI designation block (CUI Category) is on {where}, but this is an FCI_ document: an FCI "
+                        "document carries no CUI designation block")
 
 
 # ---------- containers ----------
@@ -526,19 +590,21 @@ class _Docx:
                 break
         return lines
 
-    def check(self, cui, block, problems):
+    def check(self, mode, block, problems):
+        want = None if mode == "none" else mode
+        word = _KINDS[want][0] if want else ""
         plan = self.plan()
         multi = len(plan) > 1
         seen = set()
-        any_banner = False
+        wrong = set()
         for i, sect in enumerate(plan, 1):
             for kind, typ, part, _ in sect:
                 where = (f"section {i}: " if multi else "") + f"the {typ} {kind}"
                 if part is None or part.startswith("?"):
-                    if cui and (kind, typ, part) not in seen:
+                    if want and (kind, typ, part) not in seen:
                         what = {"default": "", "first": " (the section has a title page)",
                                 "even": " (the document has different even and odd pages)"}[typ]
-                        problems.append(f"{where} is missing{what}: the CUI banner must be in the {kind} of every "
+                        problems.append(f"{where} is missing{what}: the {word} banner must be in the {kind} of every "
                                         "page")
                     seen.add((kind, typ, part))
                     continue
@@ -549,24 +615,25 @@ class _Docx:
                     problems.append(f"{where} part {part} is missing from the file")
                     continue
                 root = self.part(part)
-                ok = _has_banner(_part_lines(root, self.styles))
-                any_banner = any_banner or ok
-                if cui and not ok:
+                lines = _part_lines(root, self.styles)
+                wrong |= _wrong(lines, mode)
+                if want and not _has_banner(lines, want):
                     hint = ""
-                    if _has_banner(_boxed_lines(root)):
+                    if _has_banner(_boxed_lines(root), want):
                         hint = " (a banner in a text box or shape does not count: it is not in the header/footer " \
                                "itself and does not mark every page)"
-                    problems.append(f"{where} ({part}) has no CUI banner line{hint}")
-        if not cui:
-            if any_banner:
-                problems.append("a CUI banner is in the header or footer, but this is the non-CUI area: a CUI "
-                                "document goes in the CUI area with a CUI_ or FCI_ name")
+                    problems.append(f"{where} ({part}) has no {word} banner line{hint}")
+        _wrong_problems(wrong, mode, "in the header or footer", problems)
+        if mode == "none":
             return
         have = set(self.body_page_one())
         for part in self.page_one_parts():
             if self.z.has(part):
                 have.update(_part_lines(self.part(part), self.styles))
-        _block_problems(block, have, "page one", problems)
+        if mode == "fci":
+            _fci_block_problems(have, "page one", problems)
+        else:
+            _block_problems(block, have, "page one", problems)
 
     def text(self):
         out = []
@@ -706,9 +773,10 @@ class _Xlsx:
             out += v.split("\n")
         return out
 
-    def check(self, cui, block, problems):
+    def check(self, mode, block, problems):
+        want = None if mode == "none" else mode
         label = dict(_HF_PARTS)
-        any_banner = False
+        wrong = set()
         first_visible = None
         for name, state, part, typ in self.sheets:
             if typ not in ("worksheet", "chartsheet") or not part or not self.z.has(part):
@@ -717,22 +785,20 @@ class _Xlsx:
             root, hf = self.hf(part)
             if first_visible is None and state == "visible":
                 first_visible = (name, root, hf, typ)
-            for n in self.needed(hf):
-                ok = hf is not None and _has_banner(_hf_lines(hf.findtext(S + n) or ""))
-                any_banner = any_banner or ok
-                if cui and not ok:
-                    problems.append(f"sheet {name!r}: no CUI banner in the {label[n]} (every sheet needs it in its "
-                                    "header and footer)")
-            if hf is not None and not cui:
+            if want:
+                for n in self.needed(hf):
+                    if not (hf is not None and _has_banner(_hf_lines(hf.findtext(S + n) or ""), want)):
+                        problems.append(f"sheet {name!r}: no {_KINDS[want][0]} banner in the {label[n]} (every sheet "
+                                        "needs it in its header and footer)")
+            if hf is not None:                            # the wrong banner: in any of the six parts, shown or not
                 for n, _ in _HF_PARTS:
-                    any_banner = any_banner or _has_banner(_hf_lines(hf.findtext(S + n) or ""))
-        if not cui:
-            if any_banner:
-                problems.append("a CUI banner is in a sheet header or footer, but this is the non-CUI area: a CUI "
-                                "document goes in the CUI area with a CUI_ or FCI_ name")
+                    wrong |= _wrong(_hf_lines(hf.findtext(S + n) or ""), mode)
+        _wrong_problems(wrong, mode, "in a sheet header or footer", problems)
+        if mode == "none":
             return
         if first_visible is None:
-            problems.append("the designation block cannot be checked: no visible sheet")
+            if mode == "cui":
+                problems.append("the designation block cannot be checked: no visible sheet")
             return
         name, root, hf, typ = first_visible
         have = set(self.cells(root, BLOCK_ROWS)) if typ == "worksheet" else set()
@@ -740,8 +806,11 @@ class _Xlsx:
             pre = "first" if _xon(hf.get("differentFirst")) else "odd"
             for n in (pre + "Header", pre + "Footer"):
                 have.update(_hf_lines(hf.findtext(S + n) or ""))
-        _block_problems(block, have, f"page one (rows 1-{BLOCK_ROWS} or the page-one header/footer of sheet "
-                                     f"{name!r})", problems)
+        where = f"page one (rows 1-{BLOCK_ROWS} or the page-one header/footer of sheet {name!r})"
+        if mode == "fci":
+            _fci_block_problems(have, where, problems)
+        else:
+            _block_problems(block, have, where, problems)
 
     def text(self):
         out = list(self.sst or [])
@@ -780,20 +849,24 @@ class _Md:
             self.text_ = self.text_[1:]
         self.lines = self.text_.splitlines()
 
-    def check(self, cui, block, problems):
+    def check(self, mode, block, problems):
         lines = self.lines
         last = max((i for i, x in enumerate(lines) if x.strip()), default=-1)
-        first_ok = bool(lines) and _is_banner(lines[0])
-        last_ok = last > 0 and _is_banner(lines[last])
-        if not cui:
-            if first_ok or last_ok:
-                problems.append("a CUI banner line is at the top or bottom, but this is the non-CUI area: a CUI "
-                                "document goes in the CUI area with a CUI_ or FCI_ name")
+        ends = ([lines[0]] if lines else []) + ([lines[last]] if last > 0 else [])
+        _wrong_problems(_wrong(ends, mode), mode, "the first or last line", problems)
+        if mode == "none":
             return
+        word = _KINDS[mode][0]
+        first_ok = bool(lines) and _is_banner(lines[0], mode)
+        last_ok = last > 0 and _is_banner(lines[last], mode)
         if not first_ok:
-            problems.append(f"the first line must be the CUI banner ({BANNER})")
+            problems.append(f"the first line must be the {word} banner ({word})")
         if not last_ok:
-            problems.append(f"the last line must be the CUI banner ({BANNER})")
+            problems.append(f"the last line must be the {word} banner ({word})")
+        if mode == "fci":
+            head = [x for x in lines if x.strip()][:BLOCK_ROWS]
+            _fci_block_problems(head, "page one (the first lines)", problems)
+            return
         if first_ok and not _md_block_ok(lines, block[0]):
             problems.append("the designation block must follow the first banner line, one line each: "
                             + "; ".join(repr(x) for x in block[0]))
@@ -861,18 +934,23 @@ class _Pdf:
         except OSError as e:
             raise _Bad(f"cannot be read: the PDF tools failed ({e.strerror or e})") from None
 
-    def check(self, cui, block, problems):
+    def check(self, mode, block, problems):
         pages = [("the first page", self.first)] + ([("the last page", self.last)] if self.pages > 1 else [])
-        if not cui:
-            if any(_has_banner(ls[:2] + ls[-3:]) for _, ls in pages):
-                problems.append("a CUI banner is at the top or bottom of a page, but this is the non-CUI area: a CUI "
-                                "document goes in the CUI area with a CUI_ or FCI_ name")
+        wrong = set()
+        for _, ls in pages:
+            wrong |= _wrong(ls[:2] + ls[-3:], mode)
+        _wrong_problems(wrong, mode, "at the top or bottom of a page", problems)
+        if mode == "none":
             return
+        word = _KINDS[mode][0]
         for what, ls in pages:
-            if not _has_banner(ls[:2]):
-                problems.append(f"{what}: no CUI banner at the top")
-            if not _has_banner(ls[-3:]):
-                problems.append(f"{what}: no CUI banner at the bottom")
+            if not _has_banner(ls[:2], mode):
+                problems.append(f"{what}: no {word} banner at the top")
+            if not _has_banner(ls[-3:], mode):
+                problems.append(f"{what}: no {word} banner at the bottom")
+        if mode == "fci":
+            _fci_block_problems(self.first, "page one", problems)
+            return
         flat = " " + " ".join(self.first) + " "
         absent = [x for x in block[0] if f" {x} " not in flat]
         if absent:
@@ -972,8 +1050,10 @@ def _check_data(name, data, path, cui, values, current=None):
     if fmt is None:
         problems.append(f"{name}: the format .{ext} cannot be checked (docx, xlsx, md or pdf)")
         return Report(ok=False, problems=problems, name=parts, warnings=warnings)
-    block = (values.block() if values is not None else ([], [k for k, _, _ in LABELS])) if cui else ([], [])
-    if cui and block[1]:
+    mode = _mode(cui, parts)
+    block = (values.block() if values is not None else ([], [k for k, _, _ in LABELS])) if mode == "cui" \
+        else ([], [])
+    if mode == "cui" and block[1]:
         problems.append("the site keys " + ", ".join(block[1]) + " are not set, so the designation block cannot be "
                         "checked (set them on the site stick; they are never typed per file)")
     try:
@@ -981,7 +1061,7 @@ def _check_data(name, data, path, cui, values, current=None):
             data = _read(path) if fmt != "pdf" else _stat_ok(path)
         doc = _load(fmt, data, path)
         found = []
-        doc.check(cui, block, found)
+        doc.check(mode, block, found)
         problems += [f"{name}: {p}" for p in found]
         if current is not None:
             warnings += _citations(doc.text(), current, parts)
@@ -993,7 +1073,8 @@ def _check_data(name, data, path, cui, values, current=None):
 
 
 def check(path, cui, values, current=None) -> Report:
-    """Check one file's name and marks for its target area (cui: the CUI area, else the non-CUI area). current:
+    """Check one file's name and marks for its target area (cui: the CUI area, else the non-CUI area; in the CUI area
+    an FCI_ name takes the FCI banner and no designation block, any other name the CUI marks). current:
     {series (prefix+title): current version 'X.Y'} in the Compliance area, or None to skip the citation check."""
     path = Path(path)
     return _check_data(path.name, None, path, bool(cui), values, current)
@@ -1031,11 +1112,12 @@ def _starts(text, pfx, local):
     return list(re.finditer(r"<" + re.escape(q) + r"(?=[\s>/])[^>]*?(/?)>", text))
 
 
-def _banner_p(w):
-    return f'<{w}:p><{w}:pPr><{w}:jc {w}:val="center"/></{w}:pPr><{w}:r><{w}:t>{BANNER}</{w}:t></{w}:r></{w}:p>'
+def _banner_p(w, word=BANNER):
+    return f'<{w}:p><{w}:pPr><{w}:jc {w}:val="center"/></{w}:pPr><{w}:r><{w}:t>{word}</{w}:t></{w}:r></{w}:p>'
 
 
-def _ins_docx(data, values):
+def _ins_docx(data, values, mode="cui"):
+    word = _KINDS[mode][0]
     d = _Docx(data)
     z = d.z
     edits, changes, new_parts = {}, [], []
@@ -1084,12 +1166,12 @@ def _ins_docx(data, values):
                 carry_new[(kind, typ)] = pn
                 tag = "headerReference" if kind == "header" else "footerReference"
                 add_refs.append((tag, typ, rid))
-                changes.append(f"new {pn}: a {typ} {kind} with the CUI banner")
+                changes.append(f"new {pn}: a {typ} {kind} with the {word} banner")
             elif part not in done and z.has(part):
                 done.add(part)
-                if not _has_banner(_part_lines(d.part(part), d.styles)):
+                if not _has_banner(_part_lines(d.part(part), d.styles), mode):
                     edits[part] = kind
-                    changes.append(f"{part}: add the CUI banner to the {typ} {kind}")
+                    changes.append(f"{part}: add the {word} banner to the {typ} {kind}")
         if add_refs:
             if rpfx is None:
                 rpfx = "r"
@@ -1114,7 +1196,7 @@ def _ins_docx(data, values):
             raise MarkingError(f"refused: {d.main}: no body end; mark it in the editor")
         doc_ins.append((bc, f"<{w}:sectPr>{sect_refs}</{w}:sectPr>"))
 
-    lines, _ = values.block()
+    lines = values.block()[0] if mode == "cui" else []       # an FCI_ document takes no designation block
     have = set(d.body_page_one())
     for part in d.page_one_parts():
         if z.has(part):
@@ -1145,12 +1227,12 @@ def _ins_docx(data, values):
         if not pfx:
             raise MarkingError(f"refused: {part} uses a default namespace; mark this file in the editor")
         if m.group(0).endswith("/>"):
-            t = t[:m.start()] + m.group(0)[:-2] + ">" + _banner_p(pfx) + f"</{pfx}:{local}>" + t[m.end():]
+            t = t[:m.start()] + m.group(0)[:-2] + ">" + _banner_p(pfx, word) + f"</{pfx}:{local}>" + t[m.end():]
         elif kind == "header":
-            t = t[:m.end()] + _banner_p(pfx) + t[m.end():]
+            t = t[:m.end()] + _banner_p(pfx, word) + t[m.end():]
         else:
             e = t.rfind(f"</{pfx}:{local}>")
-            t = t[:e] + _banner_p(pfx) + t[e:]
+            t = t[:e] + _banner_p(pfx, word) + t[e:]
         out[z.real(part)] = t.encode("utf-8")
     if new_parts:
         rt = _xml_text(z.read(rels_part), rels_part)
@@ -1170,7 +1252,7 @@ def _ins_docx(data, values):
                        f'wordprocessingml.{kind}+xml"/>')
             local = "hdr" if kind == "header" else "ftr"
             out[pn] = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:{local} xmlns:w="{W_NS}">'
-                       f"{_banner_p('w')}</w:{local}>").encode("utf-8")
+                       f"{_banner_p('w', word)}</w:{local}>").encode("utf-8")
         out[z.real(rels_part)] = (rt[:e] + add_rel + rt[e:]).encode("utf-8")
         out[ct_name] = (ct[:ce] + add_ct + ct[ce:]).encode("utf-8")
     return _rezip(z, out, [pn for _, pn, _ in new_parts]), changes
@@ -1191,10 +1273,10 @@ def _hf_join(secs):
     return "".join(f"&{k}{secs[k]}" for k in "LCR" if secs.get(k))
 
 
-def _hf_with_banner(s):
+def _hf_with_banner(s, word=BANNER):
     secs = _hf_raw_sections(s or "")
     c = secs.get("C", "")
-    secs["C"] = BANNER + ("\n" + c if c else "")
+    secs["C"] = word + ("\n" + c if c else "")
     return _hf_join(secs)
 
 
@@ -1203,10 +1285,11 @@ _HF_FOLLOW = ("rowBreaks", "colBreaks", "customProperties", "cellWatches", "igno
               "webPublishItems", "tableParts", "extLst")
 
 
-def _ins_xlsx(data, values):
+def _ins_xlsx(data, values, mode="cui"):
+    word = _KINDS[mode][0]
     x = _Xlsx(data)
     z = x.z
-    lines, _ = values.block()
+    lines = values.block()[0] if mode == "cui" else []       # an FCI_ document takes no designation block
     out, changes = {}, []
     first_visible = next((s for s in x.sheets if s[1] == "visible"), None)
     for name, state, part, typ in x.sheets:
@@ -1220,10 +1303,10 @@ def _ins_xlsx(data, values):
         label = dict(_HF_PARTS)
         sheet_changes = []
         for n in x.needed(hf):
-            if not _has_banner(_hf_lines(kids.get(n, ""))):
-                kids[n] = _hf_with_banner(kids.get(n, ""))
-                sheet_changes.append(f"sheet {name!r}: add the CUI banner to the {label[n]}")
-        if first_visible is not None and name == first_visible[0]:
+            if not _has_banner(_hf_lines(kids.get(n, "")), mode):
+                kids[n] = _hf_with_banner(kids.get(n, ""), word)
+                sheet_changes.append(f"sheet {name!r}: add the {word} banner to the {label[n]}")
+        if lines and first_visible is not None and name == first_visible[0]:
             have = set(x.cells(root, BLOCK_ROWS)) if typ == "worksheet" else set()
             pre = "first" if _xon(attrs.get("differentFirst")) else "odd"
             have.update(_hf_lines(kids.get(pre + "Header", "")))
@@ -1293,27 +1376,30 @@ def _ins_xlsx(data, values):
     return _rezip(z, out, []), changes
 
 
-def _ins_md(data, values):
+def _ins_md(data, values, mode="cui"):
+    word = _KINDS[mode][0]
     m = _Md(data)
     bom = data.startswith(b"\xef\xbb\xbf")
     nl = "\r\n" if "\r\n" in m.text_ else "\n"
     lines = list(m.lines)
-    block, _ = values.block()
+    block = values.block()[0] if mode == "cui" else []       # an FCI_ document takes no designation block
     blk = [x for b in block for x in (b, "")]
     changes = []
-    if not (lines and _is_banner(lines[0])):
-        lines = [BANNER, ""] + blk + lines
-        changes += ["add the CUI banner as the first line", "add the designation block after the first banner line"]
-    elif not _md_block_ok(lines, block):
+    if not (lines and _is_banner(lines[0], mode)):
+        lines = [word, ""] + blk + lines
+        changes.append(f"add the {word} banner as the first line")
+        if block:
+            changes.append("add the designation block after the first banner line")
+    elif block and not _md_block_ok(lines, block):
         rest = lines[1:]
         while rest and not rest[0].strip():
             rest = rest[1:]
         lines = [lines[0], ""] + blk + rest
         changes.append("add the designation block after the first banner line")
     last = max((i for i, x in enumerate(lines) if x.strip()), default=-1)
-    if not (last > 0 and _is_banner(lines[last])):
-        lines = lines[:last + 1] + ["", BANNER]
-        changes.append("add the CUI banner as the last line")
+    if not (last > 0 and _is_banner(lines[last], mode)):
+        lines = lines[:last + 1] + ["", word]
+        changes.append(f"add the {word} banner as the last line")
     if not changes:
         return data, []
     return (b"\xef\xbb\xbf" if bom else b"") + (nl.join(lines) + nl).encode("utf-8"), changes
@@ -1338,16 +1424,18 @@ def _rezip(z, replaced, added):
 
 
 def insert(path, values, dry_run=True) -> List[str]:
-    """Insert the missing CUI marks into a -DRAFT file (CUI_/FCI_ name). Returns what it changes (or, dry run, would
-    change); [] when nothing is missing. Raises NameRuleError or MarkingError (plain message, nothing changed)."""
+    """Insert the missing marks into a -DRAFT file: the CUI banner and the designation block for a CUI_ name, the FCI
+    banner only for an FCI_ name. Returns what it changes (or, dry run, would change); [] when nothing is missing.
+    Raises NameRuleError or MarkingError (plain message, nothing changed)."""
     path = Path(path)
     parts = parse_name(path.name)
     if not parts.draft:
         raise MarkingError(f"refused: {path.name} is not a -DRAFT file; marks are inserted only into a -DRAFT file, "
                            "before approval (an approved or published file is never changed)")
     if not parts.prefix:
-        raise MarkingError(f"refused: {path.name} has a non-CUI name (no CUI_ or FCI_ prefix); CUI marks go only on "
-                           "documents for the CUI area")
+        raise MarkingError(f"refused: {path.name} has a non-CUI name (no CUI_ or FCI_ prefix); CUI and FCI marks go "
+                           "only on documents for the CUI area")
+    mode = _mode(True, parts)
     fmt, ext = _fmt(path.name, parts)
     if fmt == "pdf":
         raise MarkingError(f"refused: {path.name}: a PDF is not marked in place; mark the source document and export "
@@ -1355,12 +1443,12 @@ def insert(path, values, dry_run=True) -> List[str]:
     if fmt is None:
         raise MarkingError(f"refused: {path.name}: the format .{ext} cannot be marked (docx, xlsx or md)")
     lines, missing = values.block()
-    if missing:
+    if mode == "cui" and missing:
         raise MarkingError("refused: the site keys " + ", ".join(missing) + " are not set; set them on the site stick "
                            "(the marking values are never typed per file)")
     try:
         data = _read(path)
-        new, changes = {"docx": _ins_docx, "xlsx": _ins_xlsx, "md": _ins_md}[fmt](data, values)
+        new, changes = {"docx": _ins_docx, "xlsx": _ins_xlsx, "md": _ins_md}[fmt](data, values, mode)
     except _Bad as e:
         raise MarkingError(f"refused: {path.name} {e}") from None
     except MarkingError:
@@ -1369,6 +1457,10 @@ def insert(path, values, dry_run=True) -> List[str]:
         raise MarkingError(f"refused: {path.name}: the file could not be marked ({type(e).__name__}); mark it in "
                            "the editor") from None
     if not changes:
+        rep = _check_data(path.name, data, path, True, values)
+        if not rep.ok:                                      # e.g. the other banner: insert never removes a mark
+            raise MarkingError(f"refused: {path.name}: nothing can be added, but the check fails ("
+                               + "; ".join(rep.problems)[:800] + "); mark it in the editor")
         return []
     rep = _check_data(path.name, new, path, True, values)
     if not rep.ok:

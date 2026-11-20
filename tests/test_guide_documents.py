@@ -45,7 +45,7 @@ def test_guide_states_the_requirements_and_rules():
     for s in ("8 GiB", "doc checkout", "doc approve", "doc publish", "-DRAFT", "reader checkout", "sha256",
               "DOC_ISSO_ACCOUNT", "DOC_APPROVER_ACCOUNTS", "never uploaded outside the CUI folders",
               "DEGRADED", "AllFonts", "ALERT_HOOK", "KillUserProcesses", "chp-publisher", "chp-canary",
-              "doc-ledger resolve", "doc-ledger pending", "rpmnew", "new installs only", "under review",
+              "doc-ledger resolve", "doc-ledger pending", "rpmnew", "new installs only", "not with the CUI banner",
               "logger -t", "ncadmin", "100622", "SECURITY_ALERT_LEVEL", "not yet proven in the lab", "Not supported in 0.7.0", "100606", "escrow/",
               "100629", "100628", "check 83", "check 82", "chrony"):
         assert s.lower() in c.lower(), s
