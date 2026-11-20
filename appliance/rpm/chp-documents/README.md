@@ -80,7 +80,11 @@ restart. A stray group on CUI, FCI or Archive is removed together with its ACL r
   of the appender are Wazuh rules 100640-100654 (decoder `chp-docs-ledger`): approvals and overrides level 12 (at
   once), publications 7, checkout and new 3, quarantine and appender failures 12. Every reader (verify, pending,
   export, the daily review, the nightly backup) takes the ledger's shared lock, so it never sees a half-written
-  line; one that waits too long reports BUSY (check 82: not checked this run, no all-clear).
+  line; one that waits too long reports BUSY (check 82: not checked this run, no all-clear). The appender never
+  stops for good on one bad file (Task 11a): a stray `*.json` in the spool is set aside in quarantine; a spool file
+  it cannot delete is moved there (`<stamp>-held-<n>-<name>`; one it cannot move either is alerted once); when it
+  cannot set up at all (site.conf or documents.conf unreadable) every waiting request is refused to its owner and
+  set aside, and `appender-failed` is alerted once until a start succeeds. Quarantine entries of any type count.
   `ExecStopPost=chp-site documents canary-off` switches the canary account off after any end of the run (failure,
   timeout, kill). The timer has no `Persistent=`: Wazuh rule 100609 pages (12) when `chp-canary` is enabled other
   than by occ inside 03:05-03:45 (100618, level 3), and 100619 pages when its password is set or changed. The
@@ -98,7 +102,9 @@ restart. A stray group on CUI, FCI or Archive is removed together with its ACL r
 
 ## Backup and restore
 
-`chp-nextcloud-backup.timer` (01:40 nightly) runs `chp-nextcloud-backup backup`: maintenance mode on, `pg_dump -Fc` of
+`chp-nextcloud-backup.timer` (01:40 nightly) runs `chp-nextcloud-backup backup`: first the document ledger
+(`/var/lib/chp-docs/ledger`, under its shared lock, released before anything else, so the appender waits for one copy
+of the ledger only), then maintenance mode on, `pg_dump -Fc` of
 the `nextcloud` database, `rsync` of `/data/nextcloud/data` and `/etc/nextcloud` into `/backup/nextcloud/<UTC stamp>/`
 (mode 0700, with a sha256 `MANIFEST`), maintenance mode off. Each night is an `rsync --link-dest` incremental of the previous copy (hardlinks) plus a new
 dump. Copies older than `DOCUMENTS_BACKUP_DAYS` (default 14) days are removed, never going below 2 copies. Before

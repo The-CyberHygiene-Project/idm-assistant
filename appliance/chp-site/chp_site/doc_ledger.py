@@ -43,6 +43,7 @@ import signal
 import ssl
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import unicodedata
@@ -101,7 +102,11 @@ class StoreError(Exception):
 
 
 class OccTimeout(StoreError):
-    """occ was killed at OCC_TIMEOUT: the write it was doing may or may not have happened."""
+    """occ timed out at OCC_TIMEOUT: the write it was doing may or may not have happened (unknown outcome). killed:
+    False when its process group could not be killed (it may still be running)."""
+    def __init__(self, msg, killed=True):
+        super().__init__(msg)
+        self.killed = killed
 
 
 class Degraded(StoreError):
@@ -231,12 +236,21 @@ def _chown_apache(p):
 
 def journal(rec):
     """One JSON line to the journal with SYSLOG_IDENTIFIER=chp-docs-ledger. Never a token or file bytes (callers
-    pass entries and short records only). logger's 1 KiB default would cut a long entry: --size."""
+    pass entries and short records only). logger's 1 KiB default would cut a long entry: --size. A logger that fails
+    is never silent (Task 11a item 6b): the line goes to stderr, which systemd puts in the unit's journal
+    (journalctl -u chp-docs-ledger); a caller's flow is never changed by it."""
+    line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
     try:
-        subprocess.run(["logger", "-t", IDENT, "--size", "16384", "--",
-                        json.dumps(rec, sort_keys=True, separators=(",", ":"))], check=False, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        pass
+        r = subprocess.run(["logger", "-t", IDENT, "--size", "16384", "--", line], check=False, timeout=10)
+        why = None if r.returncode == 0 else f"exit {r.returncode}"
+    except (OSError, subprocess.SubprocessError) as e:
+        why = f"{type(e).__name__}: {e}"
+    if why is not None:
+        try:
+            print(f"{IDENT}: logger failed ({why[:200]}); the journal line was: {line[:16384]}", file=sys.stderr,
+                  flush=True)
+        except (OSError, ValueError):
+            pass
 
 
 def _ts(now):
@@ -323,8 +337,10 @@ def _lines(path):
         raise LedgerError(str(e).split(":")[0] + ": the last line is incomplete (an interrupted write?)") from None
 
 
-def read(path, head):
-    """Every entry, after checking the chain and the head witness; LedgerError naming the first bad line."""
+def read(path, head, require_head=False):
+    """Every entry, after checking the chain and the head witness; LedgerError naming the first bad line.
+    require_head (verify, export; Task 11a item 6c): a ledger with entries but no ledger.head is a problem (deleted,
+    or the head write after the first entry failed). The appender does not require it: its next entry rewrites it."""
     lines = _lines(path)
     out, prev = [], GENESIS
     for n, ln in enumerate(lines, 1):
@@ -347,6 +363,10 @@ def read(path, head):
             raise LedgerError(f"{hf} is unreadable") from None
         if len(lines) < count or (count and entry_hash(lines[count - 1]) != h):
             raise LedgerError(f"ledger {path} is missing or shorter than its recorded head ({count} entries)")
+    elif require_head and lines:
+        raise LedgerError(f"{hf} (ledger.head, the head witness) is missing although the ledger has {len(lines)} "
+                          "entries: deleted, or the head write after an entry failed (journal event head-write-failed); "
+                          "compare with the site stick (chp-site doc-ledger verify --stick); the next entry rewrites it")
     return out
 
 
@@ -385,10 +405,10 @@ class _Shared:
         return False
 
 
-def read_shared(path, head, wait=None):
+def read_shared(path, head, wait=None, require_head=False):
     """read(), under the shared lock."""
     with _Shared(path, READ_WAIT if wait is None else wait):
-        return read(path, head)
+        return read(path, head, require_head)
 
 
 class _Ledger:
@@ -461,7 +481,7 @@ def verify(ledger, head, stick_heads=None, say=print, wait=None):
     """0 = the chain and head verify (and every stick head is still in the chain); 1 = a problem (review_ledger's
     exit codes; 2, the stick not present, is the command's; 3 = busy: the appender held the lock too long)."""
     try:
-        entries = read_shared(ledger, head, wait)
+        entries = read_shared(ledger, head, wait, require_head=True)
     except LedgerBusy as e:
         say(f"BUSY: {e}")
         return 3
@@ -492,7 +512,7 @@ def export(stick, ctx=None, now=None):
         if ctx.ledger.exists():
             shutil.copyfile(ctx.ledger, out / "ledger.jsonl")
         try:
-            read(ctx.ledger, ctx.head)
+            read(ctx.ledger, ctx.head, require_head=True)
             problems = []
         except LedgerError as e:
             problems = [str(e)]
@@ -510,14 +530,85 @@ def _unlink_raw(p):
     os.unlink(p)
 
 
+def _hold_raw(src, dst):
+    os.rename(src, dst)
+
+
 def _unlink(ctx, p):
-    """Delete a spool file (it holds a Bearer token); a failure is logged, never raised."""
+    """Delete a spool file (it holds a Bearer token); a failure is logged, never raised. A file that cannot be deleted
+    is moved aside into the root-only quarantine (Task 11a item 6a): left in the spool it would re-trigger the path
+    unit until its trigger limit stops the appender for every request."""
     try:
         _unlink_raw(p)
     except FileNotFoundError:
         pass
     except OSError as e:
-        ctx.journal({"event": "spool-unlink-failed", "file": p.name, "error": str(e)[:200]})
+        _safe(ctx.journal, {"event": "spool-unlink-failed", "file": p.name, "error": str(e)[:200]})
+        _hold(ctx, p, e)
+
+
+def _hold(ctx, p, err):
+    """Move an undeletable spool file into quarantine/ (root 0700; the file 0600) under a name never reused, and say
+    so (Wazuh 100645, at once). One that cannot be moved either is alerted once (appender-failed, Wazuh 100646): the
+    path unit will re-trigger on it, and only root can clear it."""
+    try:
+        _dir0700(ctx.quarantine)
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ctx.now()))
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", p.name)[:64]
+        dest = next(q for q in (ctx.quarantine / f"{stamp}-held-{n}-{safe}" for n in range(1000))
+                    if not os.path.lexists(q))
+        _hold_raw(p, dest)
+    except (OSError, StopIteration) as e2:
+        _stuck(ctx, p, err, e2)
+        return
+    try:
+        if stat.S_ISREG(os.lstat(dest).st_mode):
+            os.chmod(dest, 0o600)
+    except OSError:
+        pass
+    _safe(ctx.journal, {"event": "quarantine", "request_id": p.name[:32] if REQ_NAME.fullmatch(p.name) else None,
+                        "user": None, "why": f"the spool file {_clean(p.name, 80)} could not be deleted "
+                                             f"({str(err)[:120]}): moved aside to quarantine as {dest.name}"})
+
+
+def _stuck_marker(ctx, name):
+    return ctx.work / f"stuck-{_sha(name.encode('utf-8', 'surrogateescape'))[:32]}"
+
+
+def _stuck(ctx, p, err, err2):
+    m = _stuck_marker(ctx, p.name)
+    if os.path.lexists(m):
+        return                                            # alerted already: the path unit re-triggers on it
+    try:
+        _dir0700(ctx.work)
+        fd = os.open(m, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(p.name)
+    except OSError:
+        pass                                              # no marker: alerted again next time (never silent)
+    _safe(ctx.journal, {"event": "appender-failed", "file": _clean(p.name, 80),
+                        "message": f"the spool file {_clean(p.name, 80)} cannot be deleted or moved aside "
+                                   f"({str(err)[:100]}; {str(err2)[:100]}): the path unit re-triggers on it until its "
+                                   "limit stops the appender; remove it as root, then systemctl reset-failed "
+                                   "chp-docs-ledger.path"})
+
+
+def _clear_stuck(ctx):
+    """The markers of stuck spool files that are gone now (so a new one of the same name alerts again)."""
+    try:
+        ms = [m for m in ctx.work.iterdir() if m.name.startswith("stuck-")]
+    except OSError:
+        return
+    for m in ms:
+        try:
+            fd = os.open(m, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd) as f:
+                name = f.read(4096)
+            if name and "/" not in name and os.path.lexists(ctx.spool / name):
+                continue
+            os.unlink(m)
+        except OSError:
+            continue
 
 
 def _read_spool(p):
@@ -593,11 +684,13 @@ def _sanitize(r):
     return out
 
 
-def _quarantine(ctx, p, raw, req, why):
+def _quarantine(ctx, p, raw, req, why, *, event="quarantine", answer=True):
     """Set a request aside: a record WITHOUT the Bearer token or the file bytes (an unparsable file only by size and
-    sha256) in quarantine/ (root 0700, never overwritten), a journal line, and a refusal for its owner if it has one.
-    The spool file itself is deleted by the caller whatever happens."""
-    rid = p.name[:32]
+    sha256) in quarantine/ (root 0700, never overwritten), a journal line, and a refusal for its owner if it has one
+    (answer False: a file whose name is not a request id gets no result). The spool file itself is deleted by the
+    caller whatever happens. event: "set-aside" when the appender could not start (one appender-failed alert for the
+    whole spool instead of one per file)."""
+    rid = p.name[:32] if REQ_NAME.fullmatch(p.name) else "stray"
     try:
         _dir0700(ctx.quarantine)
         if isinstance(req, dict):
@@ -622,9 +715,9 @@ def _quarantine(ctx, p, raw, req, why):
     except Exception as err:                              # noqa: BLE001 - the spool file goes anyway
         ctx.journal({"event": "quarantine-record-failed", "spool_file": p.name, "error": str(err)[:200]})
     user = req.get("user") if isinstance(req, dict) else None
-    ctx.journal({"event": "quarantine", "request_id": rid, "user": user if isinstance(user, str) else None,
-                 "why": why[:300]})
-    if isinstance(user, str) and USER.fullmatch(user):
+    _safe(ctx.journal, {"event": event, "request_id": rid if rid != "stray" else None,
+                        "user": user if isinstance(user, str) else None, "why": why[:300]})
+    if answer and rid != "stray" and isinstance(user, str) and USER.fullmatch(user):
         try:
             _write_result(ctx, rid, user, "refused", "refused: the request could not be processed and was set aside "
                                                      f"for the ISSO ({why[:200]})")
@@ -644,8 +737,11 @@ def purge_quarantine(ctx=None):
     n = 0
     if ctx.quarantine.exists():
         for q in sorted(ctx.quarantine.iterdir()):
-            if q.is_file() and not q.is_symlink():
+            if q.is_symlink() or q.is_file():             # a held link is removed itself, never its target
                 q.unlink()
+                n += 1
+            elif q.is_dir():                              # a held folder (an undeletable *.json directory, 11a 6a)
+                shutil.rmtree(q)                          # rmtree never follows a link inside it
                 n += 1
     ctx.journal({"event": "quarantine-purged", "count": n})
     return n
@@ -937,7 +1033,7 @@ def process(ctx=None, budget=BUDGET, clock=time.monotonic):
     """The requests in the spool, oldest first, until `budget` seconds have passed (then the rest wait for the next
     start of the unit)."""
     ctx = ctx or Ctx.system()
-    names = []
+    names, strays = [], []
     try:
         with os.scandir(ctx.spool) as it:
             for d in it:
@@ -946,15 +1042,92 @@ def process(ctx=None, budget=BUDGET, clock=time.monotonic):
                         names.append((d.stat(follow_symlinks=False).st_mtime, d.name))
                     except OSError:
                         continue
+                elif _triggers(d.name):
+                    strays.append(d.name)
     except FileNotFoundError:
         return []
+    _clear_stuck(ctx)
     start, out = clock(), []
+    # anything else the path unit's glob (*.json) sees is set aside first: left there it would re-trigger the unit until
+    # its limit stops the appender (Task 11a item 6a). chp_ledger writes only <32 hex>.json (and .<id>.tmp).
+    for n in sorted(strays):
+        out.append(_set_aside(ctx, ctx.spool / n, "not a request file name (chp_ledger writes <32 hex>.json only)",
+                              answer=False))
     for _, n in sorted(names):
         if out and clock() - start > budget:
             _safe(ctx.journal, {"event": "budget-reached", "processed": len(out), "waiting": len(names) - len(out)})
             break
         out.append(process_one(ctx.spool / n, ctx))
     return out
+
+
+def _triggers(name):
+    """A name chp-docs-ledger.path's PathExistsGlob=*.json matches (glob(3): a leading dot is never matched)."""
+    return name.endswith(".json") and not name.startswith(".")
+
+
+def _set_aside(ctx, p, why, *, event="quarantine", answer=True):
+    """Quarantine one spool file as it is (read without following a symlink; recorded without the token) and remove it
+    from the spool (or move it aside)."""
+    raw = req = None
+    try:
+        try:
+            raw = _read_spool(p)
+        except OSError as e:
+            return _quarantine(ctx, p, None, None, f"{why}; unreadable ({e.strerror or e})", event=event,
+                               answer=answer)
+        if raw is None:
+            return Result("refused", "the request is gone", None)
+        try:
+            req = json.loads(raw)
+        except ValueError:
+            req = _UNPARSED
+        if isinstance(req, dict) and req.get("request_id") != p.name[:32]:
+            answer = False                                # never a result under an id the file does not name
+        return _quarantine(ctx, p, raw, req, why, event=event, answer=answer)
+    finally:
+        _unlink(ctx, p)
+
+
+def run_process(budget=BUDGET):
+    """chp-site doc-ledger process (the path unit's service): (results, None), or, when the appender cannot even set
+    up (site.conf or documents.conf unreadable, Ctx.system() failing), (the spool set aside, the error): every request
+    is refused to its owner and recorded in quarantine without its token, and appender-failed is journalled ONCE until
+    a start succeeds again (Task 11a item 6a). Either way the spool is emptied: no restart storm, no permanent stop."""
+    try:
+        ctx = Ctx.system()
+    except Exception as err:                              # noqa: BLE001 - whatever stops the set-up
+        ctx = Ctx(base=BASE, site={}, conf={}, store=None)
+        return _cannot_start(ctx, err), f"{type(err).__name__}: {str(err)[:300]}"
+    try:
+        os.unlink(ctx.work / "start-failed")
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        _safe(ctx.journal, {"event": "start-marker-clear-failed", "error": str(e)[:200]})
+    return process(ctx, budget), None
+
+
+def _cannot_start(ctx, err):
+    why = f"the appender could not start: {type(err).__name__}: {str(err)[:200]}"
+    m = ctx.work / "start-failed"
+    if not os.path.lexists(m):
+        _safe(ctx.journal, {"event": "appender-failed",
+                            "message": f"chp-site doc-ledger could not start ({type(err).__name__}: {str(err)[:300]}): "
+                                       "document requests are refused and set aside in quarantine until it is fixed "
+                                       "(journalctl -u chp-docs-ledger; chp-site doc-ledger purge-quarantine after)"})
+        try:
+            _dir0700(ctx.work)
+            fd = os.open(m, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            os.close(fd)
+        except OSError:
+            pass                                          # no marker: alerted again next time (never silent)
+    try:
+        names = sorted(n for n in os.listdir(ctx.spool) if _triggers(n))
+    except FileNotFoundError:
+        return []
+    return [_set_aside(ctx, ctx.spool / n, why, event="set-aside", answer=bool(REQ_NAME.fullmatch(n)))
+            for n in names]
 
 
 def _answer(ctx, rid, user, state, message, entry=None):
@@ -999,9 +1172,9 @@ def _handle(ctx, rid, r):
             prior = led.by_request(rid)
             if prior is not None:
                 return _prior(ctx, rid, user, prior)
-            undo = []
+            undo, warn = [], []
             try:
-                e = _decide_and_act(ctx, led, r, ident, undo)
+                e = _decide_and_act(ctx, led, r, ident, undo, warn)
             except _Refuse as err:
                 return _refused(ctx, rid, r, str(err))
             except StoreError as err:
@@ -1029,7 +1202,7 @@ def _handle(ctx, rid, r):
         return _broken(ctx, rid, user, err)
     # appended: from here on, whatever fails, the answer is "done"
     _safe(ctx.journal, {"event": "ledger", **e})
-    return _answer(ctx, rid, user, "done", _done_text(e), e)
+    return _answer(ctx, rid, user, "done", _done_text(e) + _warn_text(warn), e)
 
 
 _CLAIM = re.compile(r"[;.(]?\s*\(?[Nn]othing was (?:published|written|recorded)[^;.)]*\)?")
@@ -1057,6 +1230,14 @@ def _journal_undo(ctx, r, doc, failed):
     except OSError as e:
         _safe(ctx.journal, {"event": "unfinished-record-failed", "request_id": rid, "stage": "undo-failed",
                             "error": str(e)[:200]})
+
+
+def _warn_text(warn):
+    """The marking check's warnings (superseded citations), in the result message only: never refused, never in the
+    ledger entry (Task 11a item 4)."""
+    if not warn:
+        return ""
+    return ("; marking warnings (not refused; fix them in the next version): " + "; ".join(map(_clean, warn)))[:2000]
 
 
 def _done_text(e):
@@ -1210,7 +1391,7 @@ def _current(ctx, folder, series, exclude=None):
     return out
 
 
-def _decide_and_act(ctx, led, r, ident, undo):
+def _decide_and_act(ctx, led, r, ident, undo, warn=None):
     t = _target(ctx, r)
     kind, user = r["kind"], r["user"]
     cycle, cyc = _cycle(led.entries, t.doc)
@@ -1271,7 +1452,7 @@ def _decide_and_act(ctx, led, r, ident, undo):
         e["reason"] = r["reason"]
         return e
 
-    return _publish(ctx, led, r, t, e, cyc, starts, authors, undo)
+    return _publish(ctx, led, r, t, e, cyc, starts, authors, undo, [] if warn is None else warn)
 
 
 # ---------- publish ----------
@@ -1291,15 +1472,24 @@ def _run_group(argv, input=b"", timeout=None):
     try:
         out, err = p.communicate(input, timeout=timeout)
     except subprocess.TimeoutExpired:
+        killed, note = True, ""
         try:
             os.killpg(p.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+        except OSError as e:                              # e.g. PermissionError: still a timeout, outcome unknown
+            killed, note = False, f"; its process group could not be killed ({e.strerror or e}) and may still run"
+            try:
+                p.kill()
+            except OSError:
+                pass
         try:
             p.communicate(timeout=10)
         except subprocess.TimeoutExpired:
             pass
-        raise OccTimeout(f"occ {argv[-1] if argv else ''}: killed after {timeout} s".strip()) from None
+        what = f"occ {argv[-1] if argv else ''}".strip()
+        raise OccTimeout(f"{what}: {'killed' if killed else 'timed out'} after {timeout} s{note}",
+                         killed) from None
     return subprocess.CompletedProcess(argv, p.returncode, out, err)
 
 
@@ -1369,7 +1559,7 @@ def _undo(store, undo):
     return failed
 
 
-def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
+def _publish(ctx, led, r, t, e, cyc, starts, authors, undo, warn):
     """Server-side publish, under the ledger lock: compare-and-write of the Compliance area. Any failure before the
     append undoes the writes already made; nothing is ledgered as published."""
     s = ctx.store
@@ -1422,7 +1612,8 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
             raise _Refuse(f"refused: the version checked out in this cycle ({last_co['path']}) is no longer in the "
                           "area; check out the current version again")
         supersedes = moved.file_id
-    names = {_nfc(n.name) for n in s.children(t.folder)}
+    listing = s.children(t.folder)
+    names = {_nfc(n.name) for n in listing}
     sup_names = {_nfc(n.name) for n in s.children(sup_folder)}
     pdf_name = os.path.splitext(name)[0] + ".pdf"
     if name in names or (not is_pdf and pdf_name in names):
@@ -1438,7 +1629,7 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
                 raise _Refuse(f"refused: {on} already exists in Superseded; an administrator must resolve that first")
 
     # 3 was the sha256 check above. 4. the marks, checked again here, on the bytes received and the reader PDF
-    _check_marks(ctx, t, name, content, pdf_name if not is_pdf else None, pdf)
+    warn += _check_marks(ctx, t, name, content, pdf_name if not is_pdf else None, pdf, _versions(ctx, listing))
 
     # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure (also when step 9 fails: the caller
     # holds `undo`). The intent is journalled first, so a publish cut short (the service killed) can be found.
@@ -1517,24 +1708,49 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
     return e
 
 
-def _check_marks(ctx, t, name, content, pdf_name, pdf):
-    """marking.check on the bytes received (and the reader PDF), in a root-only work folder that is always emptied."""
+def _versions(ctx, listing):
+    """{series (prefix+title): its highest version 'X.Y'} of the files in the document's area folder (the listing the
+    publish already read): marking's citation check (the workstation's doc._versions, on the server's own view)."""
+    out, best = {}, {}
+    for n in listing:
+        if n.type != "file":
+            continue
+        try:
+            p = ctx.marking.parse_name(_nfc(n.name))
+            key = f"{getattr(p, 'prefix', '') or ''}{p.title}"
+            v = str(p.version)
+            vt = tuple(int(x) for x in v.split("."))
+        except Exception:                                 # noqa: BLE001 - not a controlled name: not a citation target
+            continue
+        if key not in best or vt > best[key]:
+            best[key], out[key] = vt, v
+    return out
+
+
+def _check_marks(ctx, t, name, content, pdf_name, pdf, current=None):
+    """marking.check on the bytes received (and the reader PDF), in a root-only work folder that is always emptied.
+    Returns the document's warnings (superseded citations, from `current`); they never refuse."""
     _dir0700(ctx.work)
     d = Path(tempfile.mkdtemp(dir=ctx.work))
     try:
         values = ctx.mark_values()
-        problems = []
+        problems, warnings = [], []
         for fname, data in ((name, content),) + (((pdf_name, pdf),) if pdf_name else ()):
             f = d / fname
             fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
-            rep = ctx.marking.check(f, t.cui, values)
+            # citations are checked in the document only (marking never reads them in a PDF; the reader PDF is
+            # derived from it)
+            rep = ctx.marking.check(f, t.cui, values, current if fname == name else None)
             if not rep.ok:
                 what = "the reader PDF " + fname if fname == pdf_name else fname
                 problems += [f"{what}: {p}" for p in (rep.problems or ["marking check failed"])]
+            elif fname == name:
+                warnings += [str(w) for w in (getattr(rep, "warnings", None) or [])]
         if problems:
             raise _Refuse("refused: the marking check on the server failed: " + "; ".join(problems)[:1500])
+        return warnings
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
@@ -1570,8 +1786,10 @@ class OccStore:
                 r = _run_group(self.OCC + list(argv), input=data, timeout=OCC_TIMEOUT)
             else:
                 r = self.occ_run(self.OCC + list(argv), input=data, capture_output=True, timeout=OCC_TIMEOUT)
-        except OccTimeout:
-            raise OccTimeout(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s (its process group was killed)") from None
+        except OccTimeout as e:
+            how = "its process group was killed" if e.killed else \
+                "its process group could not be killed and may still run"
+            raise OccTimeout(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s ({how})", e.killed) from None
         except subprocess.TimeoutExpired:
             raise OccTimeout(f"occ {argv[0]} timed out after {OCC_TIMEOUT} s") from None
         if r.returncode != 0:

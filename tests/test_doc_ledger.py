@@ -119,6 +119,8 @@ class FakeMarking:
     """marking (Task 5) as the appender calls it: parse_name(name) and check(path, cui, values) -> Report."""
     def __init__(self):
         self.checked = []
+        self.currents = []                  # the `current` map of each check (Task 11a item 4)
+        self.warn = []                      # warnings every check reports (a citation check stand-in)
 
     @staticmethod
     def parse_name(name):
@@ -127,16 +129,18 @@ class FakeMarking:
             raise ValueError(f"{name}: not <prefix><title>_vX.Y")
         return SimpleNamespace(prefix=m["prefix"], title=m["title"], version=m["version"], draft=bool(m["draft"]))
 
-    def check(self, path, cui, values):
+    def check(self, path, cui, values, current=None):
         data = Path(path).read_bytes()
         self.checked.append((Path(path).name, cui, data, values))
+        self.currents.append(current)
         problems = []
         name = Path(path).name
         if cui and not name.startswith(("CUI_", "FCI_")):
             problems.append(f"name rule: {name} needs the CUI_ or FCI_ prefix in the CUI area")
         if cui and b"CUI//BANNER" not in data:
             problems.append("banner missing on the first or last page")
-        return SimpleNamespace(ok=not problems, problems=problems, name=None)
+        return SimpleNamespace(ok=not problems, problems=problems, name=None,
+                               warnings=list(self.warn) if current is not None else [])
 
 
 def userinfo_for(state):
@@ -501,6 +505,49 @@ def test_publish_marks_rechecked_on_server(env):
     assert not list((env.base / "work").iterdir())              # the CUI bytes never stay on the disk
 
 
+def test_publish_citation_warnings_are_checked_and_shown_never_refused(env):     # Task 11a item 4
+    """The server's marking check gets `current` (series -> the current version in the document's area folder, from
+    the listing it already reads), so marking reports superseded citations; they never refuse, and the result says
+    them."""
+    env.store.add(100, "CUI_POL_v2.0.docx", b"CUI//BANNER pol 2.0 CUI//BANNER")
+    env.store.add(100, "CUI_POL_v1.0.docx", b"CUI//BANNER pol 1.0 CUI//BANNER")        # an older one left there
+    env.store.add(100, "README.txt", b"not a controlled name")                         # skipped, never an error
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    w = "CUI_POL_v1.0 is cited, but the current version in the Compliance area is v2.0 (a superseded citation)"
+    env.marking.warn = [w]
+    r = env.publish("alice", V11)
+    e = ok(r)
+    assert env.marking.currents[0] == {"CUI_SSP": "1.0", "CUI_POL": "2.0"}
+    assert env.marking.currents[1] is None                                  # the reader PDF: no citation check
+    assert r.message.startswith(f"published {e['path']} as {e['cr']}") and w in r.message
+    assert "warning" in r.message and "not refused" in r.message
+    assert env.out(e["request_id"])["message"] == r.message
+    assert set(e) <= set(L.FIELDS + L.OPTIONAL)                            # never in the ledger entry
+    # no warnings: the plain message
+    ok(env.checkout("alice", env.idoc))
+    env.marking.warn = []
+    r = env.req("approve", "bob", 200, name="Policy_v1.1.md", sha256=sha(b"policy 1.1"))
+    ok(r)
+    r = env.publish("alice", b"policy 1.1", name="Policy_v1.1.md", folder=200, pdf=b"%PDF policy")
+    assert ok(r) and "warning" not in r.message
+    assert env.marking.currents[-2] == {"Policy": "1.0"}
+
+
+def test_publish_citation_warning_from_the_real_marking_checker(env):              # Task 11a item 4, end to end
+    from chp_site import marking
+    real = SimpleNamespace(parse_name=marking.parse_name,      # the reader PDF stays a stand-in (no pdfinfo here)
+                           check=lambda f, cui, v, cur=None: marking.check(f, cui, v, cur) if Path(f).suffix != ".pdf"
+                           else SimpleNamespace(ok=True, problems=[], warnings=[]))
+    env.ctx._marking = real
+    env.store.add(200, "Other_v2.0.md", b"other 2.0")
+    ok(env.checkout("alice", env.idoc))
+    body = b"# Policy 1.1\n\nSee Other_v1.0 for the details.\n"
+    ok(env.req("approve", "bob", 200, name="Policy_v1.1.md", sha256=sha(body)))
+    r = env.publish("alice", body, name="Policy_v1.1.md", folder=200, pdf=b"%PDF-1.4 policy")
+    assert ok(r) and "Other_v1.0 is cited, but the current version in the Compliance area is v2.0" in r.message
+
+
 def test_publish_supersedes_to_archive(env):
     ok(env.checkout("alice"))
     ok(env.approve("bob", V11))
@@ -698,8 +745,92 @@ def test_unlink_failure_does_not_crash(env, monkeypatch):
     r = env.checkout("alice", rid=rid)
     assert r.state == "done" and env.out(rid)["state"] == "done"
     assert any(j.get("event") == "spool-unlink-failed" for j in env.journal)
-    L.process(env.ctx)                          # still there: processed again, idempotent, no crash
+    # Task 11a item 6a: a spool file that cannot be deleted is moved aside (root-only quarantine), so the path unit
+    # does not re-trigger on it until its limit stops the appender
+    assert not list((env.base / "spool").iterdir())
+    held = [q for q in env.quarantine() if "-held-" in q.name]
+    assert len(held) == 1 and oct(held[0].stat().st_mode & 0o777) == "0o600"
+    assert oct((env.base / "quarantine").stat().st_mode & 0o777) == "0o700"
+    assert [j for j in env.journal if j.get("event") == "quarantine" and "moved aside" in j.get("why", "")]
+    L.process(env.ctx)                          # nothing left to re-process
     assert len(env.ledger()) == 1
+
+
+def test_a_spool_file_that_cannot_be_deleted_or_moved_alerts_once(env, monkeypatch):    # Task 11a item 6a
+    def nope(*a):
+        raise PermissionError("immutable")
+    monkeypatch.setattr(L, "_unlink_raw", nope)
+    monkeypatch.setattr(L, "_hold_raw", nope)
+    rid = "07" * 16
+    ok(env.checkout("alice", rid=rid))
+    for _ in range(5):                          # the path unit re-triggers on it: the alert is raised once only
+        L.process(env.ctx)
+    stuck = [j for j in env.journal if j.get("event") == "appender-failed"]
+    assert len(stuck) == 1 and rid in stuck[0]["message"] and "cannot be deleted or moved" in stuck[0]["message"]
+    assert len(env.ledger()) == 1
+
+
+def test_purge_quarantine_also_removes_held_links_and_folders(env, monkeypatch):     # Task 11a item 6a
+    q = env.base / "quarantine"
+    q.mkdir(mode=0o700)
+    target = env.base / "outside"
+    target.write_text("never touched")
+    (q / "20261119T100000Z-held-0-l.json").symlink_to(target)
+    (q / "20261119T100000Z-held-1-d.json").mkdir()
+    (q / "20261119T100000Z-held-1-d.json" / "f").write_text("x")
+    (q / "20261119T100000Z-stray-0.json").write_text("{}")
+    monkeypatch.setattr(L.os, "geteuid", lambda: 0)
+    assert L.purge_quarantine(env.ctx) == 3 and list(q.iterdir()) == []
+    assert target.read_text() == "never touched"
+
+
+def test_a_stray_json_in_the_spool_is_set_aside_not_left_to_retrigger(env):        # Task 11a item 6a
+    sp = env.base / "spool"
+    (sp / "notes.json").write_text('{"bearer_token": "tok-alice", "user": "alice"}')
+    (sp / ("A" * 32 + ".json")).write_text("{}")                 # upper-case hex: not a request name either
+    (sp / "dir.json").mkdir()
+    (sp / ".hidden.tmp").write_text("chp_ledger's own temporary name")   # not *.json: left for the app
+    rs = L.process(env.ctx)
+    assert sorted(x.name for x in sp.iterdir()) == [".hidden.tmp"]
+    assert all(r.state == "refused" for r in rs) and len(rs) == 3
+    text = "".join(q.read_text() for q in env.quarantine() if q.is_file())
+    assert "tok-alice" not in text                                # never the token in a record
+    assert not list((env.base / "out").iterdir())                 # no result for a name that is not a request id
+    qs = [j for j in env.journal if j.get("event") == "quarantine"]
+    assert len([j for j in qs if "not a request file name" in j["why"]]) == 3, qs
+
+
+def test_appender_that_cannot_start_sets_the_spool_aside_and_alerts_once(env, monkeypatch, capsys):   # 6a
+    from chp_site import cli
+
+    def broken(cls):
+        raise SiteError("site.conf: line 3: DOMAIN is not a domain name")
+    monkeypatch.setattr(L.Ctx, "system", classmethod(broken))
+    monkeypatch.setattr(L, "BASE", env.base)
+    monkeypatch.setattr(L, "journal", env.journal.append)
+    monkeypatch.setattr(L, "_chown_apache", lambda p: None)
+    rid = "08" * 16
+    body = {"request_id": rid, "kind": "checkout", "user": "alice", "bearer_token": "tok-alice", "auth": "bearer"}
+    (env.base / "spool" / f"{rid}.json").write_text(json.dumps(body))
+    assert cli.main(["doc-ledger", "process"]) == 0                # exit 0: no restart storm; the alert is our own
+    assert not list((env.base / "spool").iterdir())
+    assert "could not start" in capsys.readouterr().out
+    assert env.out(rid)["state"] == "refused" and "could not start" in env.out(rid)["message"]
+    q = [x for x in env.quarantine() if x.is_file()]
+    assert len(q) == 1 and "tok-alice" not in q[0].read_text()
+    rid2 = "09" * 16
+    (env.base / "spool" / f"{rid2}.json").write_text(json.dumps(dict(body, request_id=rid2)))
+    assert cli.main(["doc-ledger", "process"]) == 0
+    alerts = [j for j in env.journal if j.get("event") == "appender-failed"]
+    assert len(alerts) == 1 and "DOMAIN is not a domain name" in alerts[0]["message"]
+    assert not [j for j in env.journal if j.get("event") == "quarantine"]      # level 12 once, not once per file
+    assert len([j for j in env.journal if j.get("event") == "set-aside"]) == 2
+    # once it starts again the next failure alerts again
+    monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
+    assert cli.main(["doc-ledger", "process"]) == 0
+    monkeypatch.setattr(L.Ctx, "system", classmethod(broken))
+    assert cli.main(["doc-ledger", "process"]) == 0
+    assert len([j for j in env.journal if j.get("event") == "appender-failed"]) == 2
 
 
 def test_never_refused_after_append(env, monkeypatch):
@@ -758,9 +889,25 @@ def test_journal_line_per_entry_without_secrets(env):
     assert "tok-" not in text and base64.b64encode(V11).decode() not in text
 
 
+def test_journal_failure_goes_to_stderr(monkeypatch, capsys):                   # Task 11a item 6b
+    def gone(argv, **kw):
+        raise FileNotFoundError("logger")
+    monkeypatch.setattr(L.subprocess, "run", gone)
+    L.journal({"event": "ledger", "kind": "approve", "seq": 7})
+    err = capsys.readouterr().err
+    assert "chp-docs-ledger" in err and "logger" in err and '"kind":"approve"' in err
+    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: SimpleNamespace(returncode=1))
+    L.journal({"event": "quarantine", "why": "x"})
+    err = capsys.readouterr().err
+    assert "exit 1" in err and '"event":"quarantine"' in err
+    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: SimpleNamespace(returncode=0))
+    L.journal({"event": "ledger"})
+    assert capsys.readouterr().err == ""
+
+
 def test_journal_default_uses_the_ledger_identifier(monkeypatch):
     got = []
-    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: got.append(argv))
+    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: got.append(argv) or SimpleNamespace(returncode=0))
     L.journal({"event": "ledger", "kind": "approve"})
     argv = got[0]
     assert argv[0] == "logger" and argv[argv.index("-t") + 1] == "chp-docs-ledger"     # SYSLOG_IDENTIFIER
@@ -797,6 +944,23 @@ def test_truncation_caught_by_head(env):
     assert L.verify(led, head, None, say=out.append) == 1 and any("shorter than its recorded head" in x for x in out)
     led.unlink()                                # deleted outright: still caught
     assert L.verify(led, head, None, say=out.append) == 1
+
+
+def test_verify_reports_a_missing_head_when_a_ledger_exists(env, tmp_path):        # Task 11a item 6c
+    led, head = _three(env)
+    head.unlink()
+    out = []
+    assert L.verify(led, head, None, say=out.append) == 1
+    assert any("ledger.head" in x and "missing" in x for x in out), out
+    res = L.export(tmp_path / "stick", env.ctx)                     # the stick's verify.txt says so too
+    assert res["problems"] and "ledger.head" in res["problems"][0]
+    # no ledger yet: nothing missing
+    e2 = Env(tmp_path / "fresh")
+    assert L.verify(e2.base / "ledger" / "ledger.jsonl", e2.base / "ledger" / "ledger.head", None,
+                    say=lambda s: None) == 0
+    # the appender still appends (and its next head write puts the witness back)
+    ok(env.checkout("carol", env.idoc))
+    assert head.read_text().split()[0] == "4"
 
 
 def test_broken_ledger_refuses_new_entries(env):
@@ -1049,13 +1213,18 @@ def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkey
     monkeypatch.setenv("CHP_DOCS_LEDGER", str(led))
     rc, out, calls = S._backup(tmp_path, 10**9, ["20260101T000000Z"])
     assert rc == 0, out and any(str(led) in ln for ln in calls.splitlines() if ln.startswith("rsync"))
-    # round 2 (d): the shared lock comes BEFORE maintenance mode on, and is released only after it is off
+    # Task 11a item 2 (revises round 2 (d)): the ledger is copied FIRST, under the shared lock, and the lock is
+    # released BEFORE maintenance mode on: the appender waits for one rsync of the ledger, never for the whole backup
     seq = [ln for ln in calls.splitlines() if ln.startswith(("flock -s", "occ maintenance", "rsync"))]
     on, off = seq.index("occ maintenance:mode --on"), seq.index("occ maintenance:mode --off")
-    assert seq.index("flock -s -w 900 8") < on
-    assert on < [i for i, ln in enumerate(seq) if str(led) in ln and ln.startswith("rsync")][0] < off
+    led_rs = [i for i, ln in enumerate(seq) if str(led) in ln and ln.startswith("rsync")]
+    assert len(led_rs) == 1 and seq.index("flock -s -w 900 8") < led_rs[0] < on < off
+    assert led_rs[0] < min(i for i, ln in enumerate(seq) if ln.startswith("rsync") and str(led) not in ln)
     script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
-    assert script.index("occ maintenance:mode --off >/dev/null\n    exec 8<&-") > script.index('exec 8<"$LEDGER/ledger.jsonl"')
+    lock, rs = script.index('exec 8<"$LEDGER/ledger.jsonl"'), script.index('"$LEDGER/" "$o/chp-docs-ledger/"')
+    rel, mon = script.index("exec 8<&-"), script.index("occ maintenance:mode --on")
+    assert lock < rs < rel < mon
+    assert script.count("exec 8<&-") == 1 and script.count('"$LEDGER/" "$o/chp-docs-ledger/"') == 1
 
 
 def test_occ_store_undo_delete_is_forced_and_skips_the_trash():
@@ -1469,6 +1638,21 @@ def test_occ_store_timeout_kills_the_group_and_raises_occtimeout(tmp_path, monke
     with pytest.raises(L.OccTimeout, match="process group was killed"):
         s._occ("files:put", "-", "/chp-publisher/files/CUI/Compliance/x", data=b"x")
     assert _wait_gone(int(pidf.read_text()))
+
+
+def test_occ_timeout_when_the_group_cannot_be_killed_is_still_an_occtimeout(monkeypatch):   # Task 11a item 6d
+    def denied(pid, sig):
+        raise PermissionError(1, "Operation not permitted")
+    monkeypatch.setattr(L.os, "killpg", denied)
+    with pytest.raises(L.OccTimeout, match="could not be killed") as x:
+        L._run_group(["sleep", "30"], b"", 1)
+    assert x.value.killed is False
+    s = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=lambda q: [])
+    s.OCC = ["sh", "-c", "sleep 30", "occ"]
+    monkeypatch.setattr(L, "OCC_TIMEOUT", 1)
+    with pytest.raises(L.OccTimeout) as x:
+        s._occ("files:put", "-", "/chp-publisher/files/CUI/Compliance/x", data=b"x")
+    assert "process group was killed" not in str(x.value) and "could not be killed" in str(x.value)
 
 
 def test_run_group_returns_output_and_exit_code():

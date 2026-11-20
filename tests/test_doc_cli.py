@@ -608,3 +608,92 @@ def test_close_does_not_follow_a_symlinked_recover_folder(tmp_path, monkeypatch,
     rc, out = run(env, monkeypatch, capsys, "close", str(d))
     assert rc == 0 and "symbolic link" in out
     assert (outside / "DE__abc123" / d.name).exists() and not d.exists()
+
+
+# ---------- Task 11a item 5: lasting refusals of a kept id; a proxy's 502/503/504 on the first POST ----------
+
+def _kept_id(env, monkeypatch, capsys, f):
+    """A request id kept from a run whose POST never reached NextCloud (so the server holds nothing for it)."""
+    stub = env.stub
+    env.transport = lambda method, url, headers=None, body=None: (_ for _ in ()).throw(OSError("connection reset")) \
+        if url.endswith("/request?format=json") else stub(method, url, headers, body)
+    rc, _ = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3
+    env.transport = stub
+    (rid,) = _pending_ids(env).values()
+    return rid
+
+
+@pytest.mark.parametrize("st", [400, 403, 413])
+def test_a_lasting_4xx_on_a_kept_id_is_refused_and_the_id_dropped(tmp_path, monkeypatch, capsys, st):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    rid = _kept_id(env, monkeypatch, capsys, f)
+    env.stub.post_status[rid] = [st]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 1 and "refused" in out and "pending" not in out, out
+    assert not _pending_ids(env)                               # not pending forever
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))   # the next run is a new request
+    assert rc == 0 and env.stub.requests[-1][0]["request_id"] != rid
+
+
+def test_a_lasting_4xx_on_a_kept_id_the_server_already_answered_gives_that_answer(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    env.stub.script["*"] = ["queued"] * 100000                # spooled, not answered within this run
+    rc, _ = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3
+    (rid,) = _pending_ids(env).values()
+    env.stub.script["*"] = []                                  # ... processed since: done
+    env.stub.post_status[rid] = [403]                          # (and the re-send now refused, e.g. the file moved)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and "approve recorded" in out and not _pending_ids(env)
+
+
+@pytest.mark.parametrize("sts", [[401, 401], [429], [502], [503], [504], [501]])
+def test_other_answers_on_a_kept_id_stay_pending(tmp_path, monkeypatch, capsys, sts):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    rid = _kept_id(env, monkeypatch, capsys, f)
+    env.stub.post_status[rid] = list(sts)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out
+
+
+@pytest.mark.parametrize("st", [409, 500])
+def test_409_and_500_on_a_kept_id_poll_and_stay_pending_without_a_result(tmp_path, monkeypatch, capsys, st):
+    env = setup(tmp_path, user="bob")
+    env.poll_timeout = 30
+    f = _draft(tmp_path)
+    rid = _kept_id(env, monkeypatch, capsys, f)
+    env.stub.post_status[rid] = [st]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out
+
+
+@pytest.mark.parametrize("st", [502, 503, 504])
+def test_a_proxy_error_on_the_first_post_is_pending_not_dropped(tmp_path, monkeypatch, capsys, st):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    stub, seen = env.stub, []
+
+    def proxy(method, url, headers=None, body=None):
+        if url.endswith("/request?format=json") and not seen:
+            seen.append(json.loads(body)["request_id"])        # the request may have reached NextCloud behind it
+            return st, {}, b"<html>Bad Gateway</html>"
+        return stub(method, url, headers, body)
+    env.transport = proxy
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == seen, out
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and stub.requests[-1][0]["request_id"] == seen[0]
+
+
+def test_other_errors_on_the_first_post_are_still_refused(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    stub = env.stub
+    env.transport = lambda method, url, headers=None, body=None: (413, {}, b"") \
+        if url.endswith("/request?format=json") else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 1 and "refused" in out and not _pending_ids(env)

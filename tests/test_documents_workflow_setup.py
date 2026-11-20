@@ -175,6 +175,15 @@ def test_compliance_areas_read_only(tmp_path):
     assert not [x for x in e.run.calls[n_run:] if x[:2] == ["install", "-d"] and "__groupfolders" in " ".join(x)]
     assert not [x for x in e.nc.calls[n_occ:] if x[0] == "groupfolders:scan"]
     assert conf(e) == c
+    # ... and the rules are set again, not added (groupfolders keeps one rule per mapping and path; Task 11a item 7)
+    for f, rel in ((cui, "Compliance"), (inn, "Compliance"), (arc, "Superseded"), (inn, "Compliance/Superseded")):
+        rules = [r for r in e.nc.folders[f]["rules"] if r[3] == "/" + rel]
+        n_groups = 1 if f == inn else 2
+        assert len([r for r in rules if r[0] == "--group"]) == n_groups, (f, rel, rules)
+        assert len([r for r in rules if r[0] == "--user"]) == 1, (f, rel, rules)          # the publish account
+    for f in e.nc.folders.values():
+        keys = [(r[0], r[1], r[3]) for r in f["rules"]]
+        assert len(keys) == len(set(keys)), f
 
 
 def test_compliance_area_left_by_a_failed_run_is_scanned_again(tmp_path):
@@ -397,3 +406,26 @@ def test_nightly_check_flags_chp_ledger_off_or_its_ids_wrong(tmp_path):
 def test_nightly_check_skips_the_workflow_on_a_site_without_it(tmp_path):
     _, res, _ = do_check(tmp_path)                       # documents.conf without the area ids (before Plan 3's enable)
     assert res["alerts"] == []
+
+
+def test_enable_warns_when_the_alert_level_hides_approvals(tmp_path):                 # Task 11a item 3
+    """Approvals and ISSO overrides are Wazuh level 12: above SECURITY_ALERT_LEVEL 12 they reach only the daily
+    summary. enable says so plainly, and still enables (a warning, never a refusal)."""
+    e = Env(tmp_path)
+    done = e.enable(site=parse_site(DOCSITE + "SECURITY_ALERT_LEVEL=13\n"))
+    assert conf(e)["ENABLED"] == "yes"
+    w = [d for d in done if d.startswith("WARNING")]
+    assert len(w) == 1, done
+    assert "SECURITY_ALERT_LEVEL is 13" in w[0] and "12" in w[0] and "daily summary" in w[0]
+    assert "approvals" in w[0] and "overrides" in w[0]
+    assert any(a[1].get("step") == "alert-level" and a[1].get("level") == 13 for a, _ in e.records)
+    for lv in ("12", "10", "3"):
+        e2 = Env(tmp_path / lv)
+        done = e2.enable(site=parse_site(DOCSITE + f"SECURITY_ALERT_LEVEL={lv}\n"))
+        assert not [d for d in done if d.startswith("WARNING")], (lv, done)
+    assert not [d for d in Env(tmp_path / "dflt").enable() if d.startswith("WARNING")]
+    # the level warned about is the rules' own
+    from chp_site import wazuh
+    src = Path(wazuh.__file__).read_text()
+    for r in ("DOC_APPROVE_RULE", "DOC_OVERRIDE_RULE"):
+        assert f'<rule id="{{{r}}}" level="{D.DOC_ALERT_LEVEL}">' in src

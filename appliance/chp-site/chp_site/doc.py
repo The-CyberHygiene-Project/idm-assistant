@@ -434,6 +434,21 @@ def _poll(env, rid):
 
 
 SIGN_IN_AGAIN = "sign in again (chp-site doc login), then run the same command again"
+LASTING = (400, 403, 413)          # chp_ledger's answers to the request itself (shape, visibility, size): the same
+                                   # body always gets them again, so a kept id is not left pending forever (Task 11a)
+PROXY = (502, 503, 504)            # a proxy in front of NextCloud: the POST may have reached it
+
+
+def _result_once(env, rid):
+    """One look at the ledger's result for rid: (state, answer) when it holds a final one (done / refused), else
+    None. Raises auth.Unreachable / auth.AuthError."""
+    s = auth.fresh(env)
+    st, _, data = auth._call(env, "GET", f"{env.files}{LEDGER}/result/{rid}?format=json",
+                             dict(_bearer(s), **{"OCS-APIRequest": "true", "Accept": "application/json"}))
+    d = _ocs(data)
+    if st == 200 and d.get("state") in ("done", "refused"):
+        return d["state"], d
+    return None
 
 
 def _plain(e):
@@ -445,9 +460,12 @@ def send(env, kind, fields, say=print):
     """Send one request to the ledger and wait for its answer: (state, answer), state = done | refused | pending.
 
     Once the server may hold the request id (it was kept from an earlier run, or a POST of it has been made), nothing
-    here answers "refused" on its own: a sign-in that ends, NextCloud or Kanidm unreachable, or any HTTP answer other
-    than 200 to the POST is "pending" and the id is kept, so the next run asks about the same request. Only the
-    ledger's own result (done / refused) ends it."""
+    here answers "refused" on its own: a sign-in that ends, NextCloud or Kanidm unreachable, or an HTTP answer other
+    than 200 to the POST is "pending" and the id is kept, so the next run asks about the same request. The ledger's
+    own result (done / refused) ends it, and so does a LASTING refusal of the request itself (400, 403, 413: the same
+    body is refused every time): after one look for a result the server already holds, it is refused and the id
+    dropped (Task 11a). 401, 409, 429 and 5xx stay pending. On the FIRST POST of a new id any non-200 answer is a
+    refusal (nothing was spooled), except a proxy's 502/503/504: the request may have got through, so pending."""
     key_src = {"kind": kind, **{k: v for k, v in fields.items() if k not in ("content", "pdf_content")}}
     key = hashlib.sha256(json.dumps(key_src, sort_keys=True).encode()).hexdigest()
     pend = _Pending(env)
@@ -488,13 +506,29 @@ def send(env, kind, fields, say=print):
             unauthorised, force = True, True
             continue
         if st != 200:
-            if st in (409, 500) and (kept or attempt > 0):
-                pass                                      # a re-sent id: poll its result
-            elif not kept and attempt == 0:
+            first = not kept and attempt == 0
+            if first and st in PROXY:
+                return pending(f"the server answered HTTP {st} (a proxy in front of NextCloud); the request may have "
+                               "reached it")
+            if first:
                 pend.drop(key)                            # the first POST of a new id, answered: never spooled
                 return "refused", {"message": d.get("message") or f"refused: the ledger answered HTTP {st}"}
-            else:
+            if st in LASTING:
+                try:                                      # an earlier send of this id may have been processed
+                    final = _result_once(env, rid)
+                except auth.Unreachable as e:
+                    return pending(str(e))
+                except auth.AuthError as e:
+                    return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
+                pend.drop(key)
+                if final is not None:
+                    return final
+                return "refused", {"message": (d.get("message") or f"refused: the ledger answered HTTP {st}")
+                                   + " (this request is refused every time it is sent: it is dropped; fix the cause "
+                                     "and run the command again)"}
+            if st not in (409, 500):
                 return pending(d.get("message") or f"the server answered HTTP {st}")
+            # 409 / 500 on a re-sent id: poll its result
         try:
             state, d = _poll(env, rid)
         except auth.Unreachable as e:

@@ -229,3 +229,12 @@ def test_make_repodata_says_run_on_a_copy_and_last_sign_test_chains():
     assert "RUN IT ON A COPY" in (R / "make-repodata.sh").read_text()
     t = (R / "test_sign_repo.sh").read_text()
     assert "'$T/k9' >/dev/null 2>&1 && [[ -f $T/m4out" in t
+
+
+def test_kit_ships_the_0_7_0_poam_seeds():                                     # Plan 3 Task 11a item 8
+    k = (R / "release-kit.sh").read_text()
+    assert (R.parent / "site-stick-kit" / "poam-seeds-0.7.0.md").is_file()
+    cp = next(ln for ln in k.splitlines() if ln.startswith('cp "$kit/SITE-STICK.md"'))
+    assert '"$kit/poam-seeds-0.7.0.md"' in cp and cp.rstrip().endswith('"$P/"')
+    sums = next(ln for ln in k.splitlines() if "> SHA256SUMS)" in ln)
+    assert " poam-seeds-0.7.0.md " in sums                        # signed with the rest of the kit

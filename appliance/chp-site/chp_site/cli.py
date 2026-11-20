@@ -557,12 +557,16 @@ def _doc_ledger(a):
     site stick asked for but not present (review verify's exit codes)."""
     from . import doc_ledger as L
     from . import usbstick
-    ctx = L.Ctx.system()
-    if a.action == "process":
-        rs = L.process(ctx)
+    if a.action == "process":                    # never a restart storm: a set-up failure empties the spool (11a 6a)
+        rs, err = L.run_process()
+        if err is not None:
+            print(f"chp-site doc-ledger could not start ({err}): {len(rs)} request(s) refused and set aside in "
+                  "quarantine")
+            return 0
         n = {s: sum(r.state == s for r in rs) for s in ("done", "refused", "retry")}
         print(f"processed {len(rs)} request(s): {n['done']} done, {n['refused']} refused, {n['retry']} to retry")
         return 0
+    ctx = L.Ctx.system()
     if a.action == "purge-quarantine":
         print(f"removed {L.purge_quarantine(ctx)} quarantine record(s)")
         return 0

@@ -76,6 +76,7 @@ AREA_GROUPS = {"CUI": ("cui-users", "doc-reviewers"), "Archive": ("cui-users", "
 # `occ files:put|move|delete` as it). Local, outside Kanidm, in cui-users and chp-users so the team folders mount for
 # it, with a random password nobody keeps; groupfolders USER rules give it write/create/delete on exactly the four areas.
 PUBLISH_USER = "chp-publisher"
+DOC_ALERT_LEVEL = 12                       # Wazuh level of an approval or ISSO override (alerted at once)
 PUBLISH_ACL = ["+read", "+write", "+create", "+delete", "-share"]
 PUBLISH_MASK = sum(ACL_BITS[x[1:]] for x in PUBLISH_ACL)
 PUBLISH_PERMS = sum(ACL_BITS[x[1:]] for x in PUBLISH_ACL if x.startswith("+"))
@@ -798,6 +799,14 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     else:
         step("approvers", "document approvers: not set (DOC_ISSO_ACCOUNT, DOC_APPROVER_ACCOUNTS in site.conf): "
                           "controlled documents cannot be approved until they are")
+    # every approval and ISSO override alerts at once at Wazuh level 12 (owner decision 9): a higher alert level hides
+    # them until the daily summary. Warned, never refused (Task 11a item 3; known issues, T-13).
+    lv = int(site.get("SECURITY_ALERT_LEVEL", 10))
+    if lv > DOC_ALERT_LEVEL:
+        step("alert-level", f"WARNING: SECURITY_ALERT_LEVEL is {lv}, above {DOC_ALERT_LEVEL}: document approvals and "
+                            f"ISSO overrides (Wazuh level {DOC_ALERT_LEVEL}) will NOT alert at once, they reach only "
+                            f"the daily summary. Set SECURITY_ALERT_LEVEL={DOC_ALERT_LEVEL} or lower in site.conf and "
+                            "re-run chp-site security enable", level=lv)
 
     # 14. web: LAN-only firewall, certificate, services
     rich = f'rule family="ipv4" source address="{cidr}" port port="{PORT}" protocol="tcp" accept'

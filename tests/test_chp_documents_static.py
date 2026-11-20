@@ -269,3 +269,23 @@ def test_d10_restore_refreshes_the_config_php_trust_entry_after_its_last_occ_cal
     assert "restore FAILED" in r[tr:]                                         # loud, non-zero
     readme = t("README.md")
     assert "chp-site documents trust" in readme
+
+
+def test_ledger_route_body_limit_covers_the_publish_cap_and_nothing_else():          # Plan 3 Task 11a item 1
+    """chp_ledger's publish carries content + pdf_content as base64, together at most 64 MiB decoded (MAX_CONTENT):
+    4/3 of that is 85.33 MiB of base64 (MAX_B64), plus a few kB of JSON. 96 MiB leaves ~10 MiB of headroom and still
+    stops a runaway body long before PHP; httpd's own default (1 GiB) would not."""
+    c = t("nextcloud-httpd.conf")
+    m = re.search(r'<LocationMatch "\^/ocs/v\[12\]\\\.php/apps/chp_ledger/">\s*(.*?)\s*</LocationMatch>', c, re.S)
+    assert m, "the chp_ledger OCS route needs its own LimitRequestBody section"
+    body = [ln for ln in m.group(1).splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    assert [ln.split() for ln in body] == [["LimitRequestBody", str(96 << 20)]]       # nothing else (no Require: the LAN rule stays)
+    limit = 96 << 20
+    max_b64 = 4 * -(-(64 << 20) // 3)
+    assert max_b64 == 89478488 and max_b64 + (1 << 20) < limit                          # the cap fits with room for the JSON
+    # inside the vhost and after the LAN <Location "/"> (sections merge in order; this one adds only the limit)
+    vh = c.index("<VirtualHost *:8443>")
+    assert vh < c.index('<Location "/">') < m.start() < c.index("</VirtualHost>")
+    assert "LimitRequestBody" not in c.replace(m.group(0), "")
+    php = (D.parent / "nextcloud-chp/chp_ledger/lib/Controller/LedgerController.php").read_text()
+    assert "MAX_B64 = 89478488;" in php and "MAX_CONTENT = 67108864;" in php

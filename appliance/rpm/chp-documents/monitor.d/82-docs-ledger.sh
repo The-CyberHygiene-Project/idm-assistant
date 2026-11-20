@@ -46,7 +46,8 @@ elif [ "$rc" -ne 0 ]; then
   docs_flag verify "document ledger does not verify (exit $rc): $(printf '%s' "$why" | clean) (chp-site doc-ledger verify --stick; restore from the site stick's docs-ledger copy)"
 fi
 
-n=$(find "$Q" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+# every entry: a record, or a spool file moved aside because it could not be deleted (a link or folder too; Task 11a)
+n=$(find "$Q" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
 case $n in ''|*[!0-9]*) n=0 ;; esac
 if [ "$n" -gt 0 ]; then
   docs_flag quarantine "document ledger: $n request(s) in quarantine ($Q): each was set aside as malformed; look at them, then chp-site doc-ledger purge-quarantine"

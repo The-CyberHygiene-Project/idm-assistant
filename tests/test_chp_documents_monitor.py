@@ -332,6 +332,8 @@ def run82(tmp, path_state="active", verify=(0, "OK: chain and head match, 3 entr
         c.write_text(conf)
     q = tmp / "quarantine"; q.mkdir(exist_ok=True)
     for f in q.iterdir():
+        if f.is_dir() and not f.is_symlink():
+            continue                                    # a held folder a test put there on purpose
         f.unlink()
     for n in quarantine:
         (q / n).write_text("{}")
@@ -432,3 +434,12 @@ def test_check82_busy_runs_keep_state_and_escalate(tmp_path):
     again = run82(tmp_path, verify=bad, pending=pend, now=NOW + 5 * 900)
     assert "ALERT" not in again and again.count("still failing") == 2
     assert not (tmp_path / "state" / "82-ledger.busy").exists()
+
+
+def test_check82_counts_a_held_directory_or_link_in_quarantine(tmp_path):            # Task 11a item 6a
+    q = tmp_path / "quarantine"; q.mkdir()
+    (q / "20261119T100000Z-held-0-dir.json").mkdir()                 # an undeletable *.json folder, moved aside
+    out = run82(tmp_path, quarantine=())
+    assert "ALERT" in out and "1 request(s)" in out
+    sh = (M / "82-docs-ledger.sh").read_text()
+    assert 'find "$Q" -mindepth 1 -maxdepth 1 2>/dev/null' in sh and "-type f" not in sh   # links count too

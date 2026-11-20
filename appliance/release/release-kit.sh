@@ -3,7 +3,8 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # V=… REPO_V=… release-kit.sh (RUNS ON THE MAC, YubiKey plugged in): publish the site-stick kit for the RELEASED V to the
-# For Jeff share as site-stick-kit-V/, beside V/ (neither V/ nor any earlier kit is touched): the guide, the two templates, and chp-site.pyz taken from the RELEASED
+# For Jeff share as site-stick-kit-V/, beside V/ (neither V/ nor any earlier kit is touched): the guide, the templates, the 0.7.0
+# POA&M seed rows (poam-seeds-0.7.0.md), and chp-site.pyz taken from the RELEASED
 # repo tarball (the exact checker the 0.1.0 installer runs), with SHA256SUMS signed by the project key. Also writes the
 # share's top-level README.md (a pointer only; nothing in it needs to be trusted). Built in <target>.partial; renamed
 # only when every check passed.
@@ -27,9 +28,9 @@ RPM=$(tar tzf "$TAR" | grep -E '^(\./)?repo/chp-site-.*\.noarch\.rpm$' | head -1
 [[ -n $RPM ]] || { echo "refusing: no chp-site RPM in $TAR"; exit 1; }
 (cd "$w" && tar xzf "$TAR" "$RPM" && tar xf "$RPM")
 cp "$w/usr/share/chp-site/chp-site.pyz" "$P/"
-cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$kit/profile.ini.template" "$P/"
+cp "$kit/SITE-STICK.md" "$kit/site.conf.template" "$kit/hosts.template" "$kit/profile.ini.template" "$kit/poam-seeds-0.7.0.md" "$P/"
 mkdir -p "$P/runbooks" && cp "$top"/docs/runbooks/*.md "$P/runbooks/"      # 0.6.0: grow a volume, move /backup (the guide points here)
-(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template chp-site.pyz runbooks/*.md > SHA256SUMS)
+(cd "$P" && shasum -a 256 SITE-STICK.md site.conf.template hosts.template profile.ini.template poam-seeds-0.7.0.md chp-site.pyz runbooks/*.md > SHA256SUMS)
 echo "== signing SHA256SUMS (PIN dialog, then touch the key)"; say "Kit signing now. Watch for the PIN dialog." 2>/dev/null || true
 gpg --local-user "$FPR" --armor --detach-sign -o "$P/SHA256SUMS.asc" "$P/SHA256SUMS"
 echo "== checks"

@@ -256,10 +256,11 @@ class NC:
             f = self.folders[int(a[0])]
             if "--enable" in a:
                 f["acl"] = True
-            elif a[-1] == "clear":                                       # groupfolders: drop that mapping's rule
-                f["rules"] = [r for r in f["rules"] if r[:2] != a[1:3]]
-            else:
-                f["rules"].append(a[1:])
+            elif a[-1] == "clear":                       # groupfolders: drop that mapping's rule on that path
+                f["rules"] = [r for r in f["rules"] if (r[0], r[1], r[3]) != (a[1], a[2], a[4])]
+            else:                                        # one rule per (mapping, path): set again = replaced, as
+                key = (a[1], a[2], a[4])                 # groupfolders' RuleManager does (Task 11a item 7)
+                f["rules"] = [r for r in f["rules"] if (r[0], r[1], r[3]) != key] + [a[1:]]
             return 0, "", ""
         if c == "tag:list":
             return 0, json.dumps({str(i): {"name": t[0], "access": t[1]} for i, t in self.tags.items()}), ""
