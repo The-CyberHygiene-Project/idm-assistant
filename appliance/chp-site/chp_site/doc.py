@@ -105,6 +105,8 @@ def system_env():
         site = parse_site(read_file(Path("/etc/chp/site.conf"), "site.conf"))
     except Exception as e:                                # noqa: BLE001 - a plain message, never a traceback
         raise DocError(f"cannot read the site settings (/etc/chp/site.conf): {e}") from None
+    if not site.get("DOMAIN"):
+        raise DocError("cannot read the site settings (/etc/chp/site.conf): DOMAIN is not set")
     pw = pwd.getpwuid(os.getuid())
     return auth.Env(domain=site["DOMAIN"], uid=os.getuid(), user_name=pw.pw_name, home=pw.pw_dir,
                     runtime=os.environ.get("XDG_RUNTIME_DIR"), site=site, editor_running=_editor_running)
@@ -264,9 +266,11 @@ class Records:
 
 
 class _Pending:
-    """Requests sent and not yet answered done/refused: {key: request id}, in the runtime dir."""
+    """Requests sent and not yet answered done/refused: {key: request id}, in the runtime dir. Every
+    read-modify-write holds the runtime dir's pending lock (two commands at once never lose an id)."""
 
     def __init__(self, env):
+        self.env = env
         self.path = auth.runtime_dir(env) / "pending.json"
 
     def _all(self):
@@ -277,18 +281,21 @@ class _Pending:
         return d if isinstance(d, dict) else {}
 
     def get(self, key):
-        v = self._all().get(key)
+        with auth.locked(self.env, "pending"):
+            v = self._all().get(key)
         return v if isinstance(v, str) and re.fullmatch(r"[0-9a-f]{32}", v) else None
 
     def put(self, key, rid):
-        d = self._all()
-        d[key] = rid
-        auth.write_private(self.path, d)
+        with auth.locked(self.env, "pending"):
+            d = self._all()
+            d[key] = rid
+            auth.write_private(self.path, d)
 
     def drop(self, key):
-        d = self._all()
-        if d.pop(key, None) is not None:
-            auth.write_private(self.path, d)
+        with auth.locked(self.env, "pending"):
+            d = self._all()
+            if d.pop(key, None) is not None:
+                auth.write_private(self.path, d)
 
 
 # ---------- NextCloud ----------
@@ -312,6 +319,15 @@ def propfind(env, s, path, depth="0"):
         raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
     if st != 207:
         raise DocError(f"refused: NextCloud answered HTTP {st} for {path}")
+    try:
+        return _multistatus(env, s, data)
+    except (ET.ParseError, ValueError, TypeError):
+        raise DocError(f"refused: NextCloud's answer for {path} could not be read (not a WebDAV listing)") from None
+
+
+def _multistatus(env, s, data):
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ValueError("a DTD in a WebDAV answer")
     root = ET.fromstring(data)
     prefix = urllib.parse.unquote(urllib.parse.urlsplit(_dav_url(env, s, "")).path)
     out = []
@@ -413,42 +429,74 @@ def _poll(env, rid):
         env.sleep(env.poll_interval)
 
 
+SIGN_IN_AGAIN = "sign in again (chp-site doc login), then run the same command again"
+
+
+def _plain(e):
+    m = str(e)
+    return m[len("refused: "):] if m.startswith("refused: ") else m
+
+
 def send(env, kind, fields, say=print):
-    """Send one request to the ledger and wait for its answer: (state, answer), state = done | refused | pending."""
+    """Send one request to the ledger and wait for its answer: (state, answer), state = done | refused | pending.
+
+    Once the server may hold the request id (it was kept from an earlier run, or a POST of it has been made), nothing
+    here answers "refused" on its own: a sign-in that ends, NextCloud or Kanidm unreachable, or any HTTP answer other
+    than 200 to the POST is "pending" and the id is kept, so the next run asks about the same request. Only the
+    ledger's own result (done / refused) ends it."""
     key_src = {"kind": kind, **{k: v for k, v in fields.items() if k not in ("content", "pdf_content")}}
     key = hashlib.sha256(json.dumps(key_src, sort_keys=True).encode()).hexdigest()
     pend = _Pending(env)
     rid = pend.get(key)
-    reused = rid is not None
+    kept = rid is not None                                # from an earlier run: the server may hold it
+    known = kept                                          # the server may hold this id
     if rid is None:
         rid = secrets.token_hex(16)
         pend.put(key, rid)
     body = json.dumps({"kind": kind, **fields, "request_id": rid})
-    force, why, unauthorised = False, "the ledger has not answered yet", False
+
+    def pending(why):
+        return "pending", {"message": f"pending: {why}. Nothing more happens now; run the same command again in a "
+                                      "minute (it sends this same request again, never a second one)"}
+    force, unauthorised = False, False
+    why = "the ledger has not answered yet"
     for attempt in range(RETRIES):
         try:
             s = auth.fresh(env, force=force)
+        except auth.Unreachable as e:
+            return pending(str(e))
+        except auth.AuthError as e:
+            if not known:
+                pend.drop(key)                            # nothing was sent: a plain refusal
+                raise
+            return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
+        try:
+            known = True                                  # a POST is going out: the server may get it
             st, _, data = auth._call(env, "POST", f"{env.files}{LEDGER}/request?format=json",
                                      dict(_bearer(s), **{"OCS-APIRequest": "true", "Accept": "application/json",
                                                          "Content-Type": "application/json"}), body)
         except auth.Unreachable as e:
-            why = str(e)
-            break
+            return pending(str(e))
         d = _ocs(data)
         if st == 401:
             if unauthorised:
-                raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
+                return pending(f"NextCloud did not accept your sign-in; {SIGN_IN_AGAIN}")
             unauthorised, force = True, True
             continue
-        if st != 200 and not (st in (409, 500) and (reused or attempt > 0)):
-            pend.drop(key)
-            return "refused", {"message": d.get("message") or f"refused: the ledger answered HTTP {st}"}
-        reused = True                                     # from here on, this id is known to the server
+        if st != 200:
+            if st in (409, 500) and (kept or attempt > 0):
+                pass                                      # a re-sent id: poll its result
+            elif not kept and attempt == 0:
+                pend.drop(key)                            # the first POST of a new id, answered: never spooled
+                return "refused", {"message": d.get("message") or f"refused: the ledger answered HTTP {st}"}
+            else:
+                return pending(d.get("message") or f"the server answered HTTP {st}")
         try:
             state, d = _poll(env, rid)
         except auth.Unreachable as e:
-            why = str(e)
-            break
+            return pending(str(e))
+        except auth.AuthError as e:
+            return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
         if state in ("done", "refused"):
             pend.drop(key)
             return state, d
@@ -458,10 +506,9 @@ def send(env, kind, fields, say=print):
             force = True
             continue
         if state == "error":
-            why = d.get("message")
+            why = d.get("message") or why
         break
-    return "pending", {"message": f"pending: {why}. Nothing more happens now; run the same command again in a "
-                                  "minute (it sends this same request again, never a second one)"}
+    return pending(why)
 
 
 def _answer(state, d, say):
@@ -527,6 +574,7 @@ def cmd_checkout(env, a, say):
     if state != "done":
         return _answer(state, d, say)
     e = d.get("entry") or {}
+    s = auth.fresh(env)                                   # the poll may have taken minutes: not the token from before
     data = fetch(env, s, it["path"])
     if not e.get("sha256") or hashlib.sha256(data).hexdigest() != e["sha256"]:
         say(f"refused: {name} changed between the server's checkout record and the download (an administrator's edit "
@@ -726,6 +774,13 @@ def _x2t_params(src, dst, fonts):
             "</TaskQueueDataConvert>\n")
 
 
+def _x2t_env(env, scratch):
+    """x2t's environment: only what it needs, its temporary files in the private folder the caller removes (they are
+    CUI), never /tmp."""
+    keep = {k: os.environ[k] for k in ("PATH", "LANG", "LC_ALL", "LC_CTYPE") if k in os.environ}
+    return dict(keep, HOME=str(env.home), TMPDIR=str(scratch), TMP=str(scratch), TEMP=str(scratch))
+
+
 def reader_pdf(env, f, tmp):
     """The reader PDF of f, made by x2t in tmp (a private folder the caller removes): its path."""
     fonts = env.home / ALLFONTS
@@ -741,9 +796,11 @@ def reader_pdf(env, f, tmp):
     out.parent.mkdir(mode=0o700)
     params = tmp / "params.xml"
     params.write_text(_x2t_params(src, out, fonts))
+    scratch = tmp / "scratch"
+    scratch.mkdir(mode=0o700)
     try:
         r = subprocess.run([env.x2t, str(params)], cwd=str(tmp), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, timeout=X2T_TIMEOUT)
+                           stderr=subprocess.STDOUT, timeout=X2T_TIMEOUT, env=_x2t_env(env, scratch))
     except subprocess.TimeoutExpired:
         raise DocError(f"refused: ONLYOFFICE's converter did not finish in {X2T_TIMEOUT} s; nothing was sent") from None
     except OSError as e:
@@ -794,6 +851,7 @@ def cmd_publish(env, a, say):
         shutil.rmtree(tmp, ignore_errors=True)
     if len(data) + len(pdf) > MAX_CONTENT:
         raise DocError(f"refused: {f.name} and its reader PDF together are larger than 64 MiB (the publish limit)")
+    s = auth.fresh(env)                                   # x2t may have taken minutes: not the token from before
     fields = {"file_id": _folder_of(env, s, f, rec, cui), "path": f.name, "sha256": hashlib.sha256(data).hexdigest(),
               "content": base64.b64encode(data).decode(), "pdf_content": base64.b64encode(pdf).decode()}
     state, d = send(env, "publish", fields, say)
@@ -805,8 +863,26 @@ def cmd_publish(env, a, say):
 
 # ---------- close (G2) ----------
 
-def _recover_dirs(home):
+def _real_dirs(home, rel, say):
+    """True when every folder from home down to home/rel exists as a real folder (no symbolic link on the way); a
+    link is reported and the place skipped (rmtree would follow it out of the user's ONLYOFFICE data)."""
+    p = Path(home)
+    for part in Path(rel).parts:
+        p = p / part
+        try:
+            st = os.lstat(p)
+        except FileNotFoundError:
+            return False
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+            say(f"skipped {Path(home) / rel}: {p} is a symbolic link or not a folder (check it by hand)")
+            return False
+    return True
+
+
+def _recover_dirs(home, say=print):
     base = Path(home) / RECOVER
+    if not _real_dirs(home, RECOVER, say):
+        return []
     try:
         return [base / d for d in sorted(os.listdir(base)) if d.startswith("DE__") and (base / d).is_dir()
                 and not (base / d).is_symlink()]
@@ -828,12 +904,12 @@ def _recover_names(d):
     return names
 
 
-def remove_editor_copies(home, match, keep_dir=None):
+def remove_editor_copies(home, match, keep_dir=None, say=print):
     """Remove ONLYOFFICE's auto-recovery copies (data/recover/DE__*/) and recents.xml entries of the files for which
     match(path) is true; a recover dir is matched on the files in it (and its asc_name.info). Returns what was
     removed. The Task 8 sweep calls this with its own rule (age, no live editor)."""
     removed = []
-    for d in _recover_dirs(home):
+    for d in _recover_dirs(home, say):
         if d == keep_dir:
             continue
         if any(match(n) for n in _recover_names(d)):
@@ -841,7 +917,7 @@ def remove_editor_copies(home, match, keep_dir=None):
             removed.append(str(d))
     for rel in RECENTS:
         p = Path(home) / rel
-        if not p.is_file() or p.is_symlink():
+        if not _real_dirs(home, rel.parent, say) or not p.is_file() or p.is_symlink():
             continue
         raw = p.read_bytes()
         bom = raw.startswith(b"\xef\xbb\xbf")
@@ -879,7 +955,7 @@ def cmd_close(env, a, say):
     def match(path):
         n = Path(path).name
         return n == f.name or (key is not None and _series_key(n) == key)
-    removed = remove_editor_copies(env.home, match)
+    removed = remove_editor_copies(env.home, match, say=say)
     inside = f.exists() and Path(os.path.realpath(f)).parent == Path(os.path.realpath(w))
     if inside:
         os.unlink(f)
@@ -946,4 +1022,8 @@ def add_parser(sub):
 
 def run(a, env=None, say=print):
     env = env or system_env()
-    return COMMANDS[a.doc_cmd](env, a, say)
+    try:
+        return COMMANDS[a.doc_cmd](env, a, say)
+    except OSError as e:                                  # a file of yours, a folder: a plain message, no traceback
+        where = f": {e.filename}" if getattr(e, "filename", None) else ""
+        raise DocError(f"refused: {e.strerror or e}{where}") from None

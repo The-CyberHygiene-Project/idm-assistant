@@ -21,6 +21,8 @@ between the command and the appender's userinfo call; after a "retry" answer it 
 Transport: https only, pinned to the site CA (no system store), no redirects followed and no proxy (http.client
 does neither), a timeout on every call. Stdlib only, Python 3.9."""
 import base64
+import contextlib
+import fcntl
 import hashlib
 import http.client
 import http.server
@@ -43,6 +45,7 @@ FILES_PORT = 8443
 TIMEOUT = 30
 REFRESH_MARGIN = 60
 LOGIN_TIMEOUT = 300
+HANDLER_TIMEOUT = 5               # one callback connection may take this long (a silent one cannot hold the listener)
 MAX_BODY = 160 << 20              # the largest answer read (a 64 MiB document fetched by WebDAV fits)
 UA = "chp-site doc"
 
@@ -230,6 +233,19 @@ def write_private(path, obj):
         raise
 
 
+@contextlib.contextmanager
+def locked(env, name):
+    """An exclusive flock on $XDG_RUNTIME_DIR/chp-doc/<name>.lock for the duration (session refresh, pending ids):
+    two chp-site doc commands at once wait for each other instead of both using the rotating refresh token."""
+    p = runtime_dir(env) / f"{name}.lock"
+    fd = os.open(p, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)                                     # closing the descriptor releases the lock
+
+
 def _session_path(env):
     return runtime_dir(env) / "session.json"
 
@@ -260,6 +276,8 @@ def _listen(env, state, say):
     got = {}
 
     class H(http.server.BaseHTTPRequestHandler):
+        timeout = HANDLER_TIMEOUT                        # StreamRequestHandler: settimeout on the connection
+
         def do_GET(self):
             u = urllib.parse.urlsplit(self.path)
             q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
@@ -325,6 +343,9 @@ def _token_response(env, data, nonce=None):
     now = env.clock()
     out = {"access_token": tok["access_token"], "refresh_token": tok.get("refresh_token"),
            "expires_at": now + int(tok.get("expires_in") or 300)}
+    if nonce is not None and not tok.get("id_token"):
+        raise AuthError("refused: Kanidm's answer has no ID token, so this sign-in cannot be checked (nonce, user "
+                        "name); ask the administrator to check the chp-doc client's openid scope")
     if tok.get("id_token"):
         c = _claims(tok["id_token"])
         if nonce is not None and c.get("nonce") != nonce:
@@ -415,17 +436,26 @@ def refresh(env, s):
 
 def fresh(env, force=False):
     """The session, its access token good for at least REFRESH_MARGIN more seconds (force: refreshed whatever remains,
-    after a "retry" answer). Raises AuthError (sign in again) or Unreachable."""
-    s = load(env)
-    if s is None:
+    after a "retry" answer). Raises AuthError (sign in again) or Unreachable. The refresh holds the session lock and
+    re-reads the session inside it: when another command refreshed meanwhile, its new token is used (Kanidm rotates
+    the refresh token; using an old one twice may end the session)."""
+    s0 = load(env)
+    if s0 is None:
         raise AuthError("refused: not signed in; run chp-site doc login")
-    now = env.clock()
-    end = s.get("session_expires_at")
-    if force or s.get("expires_at", 0) - now < REFRESH_MARGIN:
+    if not force and s0.get("expires_at", 0) - env.clock() >= REFRESH_MARGIN:
+        return s0
+    with locked(env, "session"):
+        s = load(env)
+        if s is None:
+            raise AuthError("refused: not signed in; run chp-site doc login")
+        now = env.clock()
+        renewed = s.get("access_token") != s0.get("access_token")
+        if renewed and s.get("expires_at", 0) - now >= REFRESH_MARGIN:
+            return s                                     # another command refreshed while this one waited
+        end = s.get("session_expires_at")
         if end is not None and end - now < REFRESH_MARGIN:
             raise _ended(env)                            # Kanidm's own end of the session: a refresh cannot help
-        s = refresh(env, s)
-    return s
+        return refresh(env, s)
 
 
 def logout(env, say=print):

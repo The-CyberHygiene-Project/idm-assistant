@@ -422,3 +422,189 @@ def test_close_removes_autosave_and_recents(tmp_path, monkeypatch, capsys):
     # the function Task 8's sweep calls
     assert DOC.remove_editor_copies(env.home, lambda p: Path(p).name == "CUI_Other_v0.1-DRAFT.docx")
     assert not other.exists()
+
+
+# ---------- fix round 1 ----------
+
+def _draft(tmp_path):
+    f = tmp_path / "CUI_SSP_v1.3-DRAFT.docx"
+    f.write_bytes(MARKED)
+    return f
+
+
+def _pending_ids(env):
+    p = Path(env.runtime) / "chp-doc" / "pending.json"
+    return json.loads(p.read_text()) if p.exists() else {}
+
+
+def test_session_end_after_the_post_is_pending_not_refused(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    orig = env.stub._request
+
+    def then_logout(b, bearer):                             # `doc logout` in another terminal, right after the POST
+        r = orig(b, bearer)
+        os.unlink(Path(env.runtime) / "chp-doc" / "session.json")
+        return r
+    env.stub._request = then_logout
+    env.stub.script["*"] = ["queued"]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and "chp-site doc login" in out and "run the same command again" in out
+    rid = env.stub.requests[0][0]["request_id"]
+    assert list(_pending_ids(env).values()) == [rid]        # the id is kept
+    env.stub._request = orig
+    login(env)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and env.stub.requests[-1][0]["request_id"] == rid
+
+
+def test_rate_limit_on_a_reused_id_is_pending(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    env.stub.script["*"] = ["retry"] * 50
+    rc, _ = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3
+    rid = env.stub.requests[0][0]["request_id"]
+    env.stub.script["*"] = []
+    env.stub.post_status[rid] = [429]                       # the rate limit is checked before earlier results
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and env.stub.requests[-1][0]["request_id"] == rid and not _pending_ids(env)
+    # the FIRST post of a new id refused by the app (nothing spooled): a refusal, the id dropped
+    g = tmp_path / "CUI_Other_v0.1-DRAFT.docx"
+    g.write_bytes(MARKED)
+    orig = env.stub._request
+    env.stub._request = lambda b, bearer: (403, {}, b'{"ocs":{"data":{"state":"refused","message":"refused: not '
+                                                    b'a controlled document you can use"}}}')
+    rc, out = run(env, monkeypatch, capsys, "approve", str(g))
+    assert rc == 1 and "not a controlled document" in out and not _pending_ids(env)
+    env.stub._request = orig
+
+
+def test_unreachable_401_and_500_routes(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    stub = env.stub
+    # Kanidm unreachable on the forced refresh after a retry: pending, id kept
+    stub.script["*"] = ["retry"]
+
+    def kanidm_down(method, url, headers=None, body=None):
+        if "idm." in url:
+            raise OSError("no route to host")
+        return stub(method, url, headers, body)
+    env.transport = kanidm_down
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "could not be reached" in out and len(_pending_ids(env)) == 1
+    rid = stub.requests[-1][0]["request_id"]
+    # NextCloud unreachable on the POST: pending, id kept
+    env.transport = lambda method, url, headers=None, body=None: (_ for _ in ()).throw(OSError("connection reset")) \
+        if url.endswith("/request?format=json") else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and list(_pending_ids(env).values()) == [rid]
+    # 500 on the reused id: poll it, done
+    env.transport = stub
+    stub.script["*"] = []
+    stub.post_status[rid] = [500]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and "approve recorded" in out
+    # 401 on the POST (NextCloud no longer takes the token): a forced refresh, then the same request again
+    n, tried = len(stub.requests), []
+
+    def first_post_401(method, url, headers=None, body=None):
+        if url.endswith("/request?format=json") and not tried:
+            tried.append(headers["Authorization"])
+            return 401, {}, b""
+        return stub(method, url, headers, body)
+    env.transport = first_post_401
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f), "--notes", "second (made-up)")
+    assert rc == 0, out
+    assert len(stub.requests) == n + 1 and "Bearer " + stub.requests[-1][1] != tried[0]   # re-sent, new token
+    assert stub.requests[-1][0]["request_id"] != rid
+
+
+def test_fresh_token_after_a_long_wait(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    env.poll_timeout = 5000
+    env.stub.script["*"] = ["queued"] * 1000                # the checkout poll takes 1000 s: past the 900 s token
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 0, out
+    env.stub.script["*"] = []
+    banner_pdf(monkeypatch)
+    d = work(env) / "CUI_SSP_v1.3-DRAFT.docx"
+    final = d.with_name("CUI_SSP_v1.3.docx")
+    os.rename(d, final)
+    DOC.Records(work(env)).drop(final.name)                 # no record: the folder comes from the server (a fresh token)
+    slow = DOC.reader_pdf
+
+    def x2t_takes_long(env_, f, tmp):                       # x2t takes 1000 s
+        env.clock.t += 1000
+        return slow(env_, f, tmp)
+    monkeypatch.setattr(DOC, "reader_pdf", x2t_takes_long)
+    rc, out = run(env, monkeypatch, capsys, "publish", str(final))
+    assert rc == 0, out
+
+
+def test_pending_ids_are_locked(tmp_path, monkeypatch):
+    import threading
+    import time
+    env = setup(tmp_path, sign_in=False)
+    real = A.write_private
+
+    def slow(path, obj):
+        time.sleep(0.05)
+        real(path, obj)
+    monkeypatch.setattr(A, "write_private", slow)
+    ts = [threading.Thread(target=DOC._Pending(env).put, args=(f"k{i}", f"{i:032x}")) for i in range(6)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(10)
+    assert sorted(_pending_ids(env)) == sorted(f"k{i}" for i in range(6))
+
+
+def test_plain_messages_not_tracebacks(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    env.stub.dav_garbage = True
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 2 and "could not be read" in out and "Traceback" not in out
+    env.stub.dav_garbage = False
+    tpl = tmp_path / "templates/cui/Template.docx"
+    os.chmod(tpl, 0)                                        # a file you cannot read
+    try:
+        rc, out = run(env, monkeypatch, capsys, "new", "Plan", "--cui")
+    finally:
+        os.chmod(tpl, 0o644)
+    assert rc == 2 and "ermission denied" in out and "Traceback" not in out and not posts(env)
+
+
+def test_x2t_gets_a_private_tmpdir(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    banner_pdf(monkeypatch)
+    monkeypatch.setenv("CHP_SENTINEL_MADE_UP", "x")
+    x2t = Path(env.x2t)
+    x2t.write_text(x2t.read_text() + "import os\nopen({!r}, 'w').write(repr(dict(os.environ)))\n".format(
+        str(tmp_path / "x2t.env")))
+    d = _approved_draft(env, monkeypatch, capsys)
+    final = d.with_name("CUI_SSP_v1.3.docx")
+    os.rename(d, final)
+    rc, out = run(env, monkeypatch, capsys, "publish", str(final))
+    assert rc == 0, out
+    seen = eval((tmp_path / "x2t.env").read_text())
+    base = str(work(env) / ".chp-doc")
+    assert seen["TMPDIR"].startswith(base) and seen["TMP"] == seen["TEMP"] == seen["TMPDIR"]
+    assert seen["HOME"] == str(env.home) and "CHP_SENTINEL_MADE_UP" not in seen
+    assert not os.path.exists(seen["TMPDIR"])               # removed with the rest of the PDF's work files
+
+
+def test_close_does_not_follow_a_symlinked_recover_folder(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path)
+    d = _approved_draft(env, monkeypatch, capsys)
+    outside = tmp_path / "elsewhere"
+    (outside / "DE__abc123").mkdir(parents=True)
+    (outside / "DE__abc123" / d.name).write_bytes(b"not the editor's (made-up)")
+    data = env.home / ".local/share/onlyoffice/desktopeditors/data"
+    os.symlink(outside, data / "recover")
+    rc, out = run(env, monkeypatch, capsys, "close", str(d))
+    assert rc == 0 and "symbolic link" in out
+    assert (outside / "DE__abc123" / d.name).exists() and not d.exists()

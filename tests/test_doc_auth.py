@@ -49,6 +49,11 @@ class Stub:
         self.introspect_status = 200
         self.refresh_ok = True
         self.valid = set()
+        self.exp = {}                                # access token -> when NextCloud stops taking it
+        self.refresh_delay = 0.0                     # real seconds a refresh answer takes (after the rotation)
+        self.id_token = True
+        self.dav_garbage = False
+        self.refreshes = 0
         self.revoked = []
         self.code = None
         self.challenge = None
@@ -95,7 +100,7 @@ class Stub:
                                                                        else body or ""))
         assert u.netloc == f"files.{D}:8443"
         tok = headers.get("Authorization", "")
-        if not tok.startswith("Bearer ") or tok[7:] not in self.valid:
+        if not tok.startswith("Bearer ") or tok[7:] not in self.valid or self.clock() > self.exp.get(tok[7:], 0):
             return 401, {}, b'{"ocs":{"data":{"state":"refused","message":"refused: not signed in"}}}'
         if u.path == "/ocs/v2.php/cloud/user":
             return 200, {}, json.dumps({"ocs": {"data": {"id": self.nc_user}}}).encode()
@@ -112,9 +117,12 @@ class Stub:
         self.n += 1
         at, rt = f"at{self.n}", f"rt{self.n}"
         self.valid.add(at)
+        self.exp[at] = self.clock() + self.access_ttl
         self.current_rt = rt
-        return {"access_token": at, "refresh_token": rt, "token_type": "Bearer", "expires_in": self.access_ttl,
-                "id_token": _jwt({"preferred_username": self.user, "nonce": self.nonce, "aud": "chp-doc"})}
+        out = {"access_token": at, "refresh_token": rt, "token_type": "Bearer", "expires_in": self.access_ttl}
+        if self.id_token:
+            out["id_token"] = _jwt({"preferred_username": self.user, "nonce": self.nonce, "aud": "chp-doc"})
+        return out
 
     def _kanidm(self, method, path, form):
         f = {k: v[0] for k, v in form.items()}
@@ -126,7 +134,12 @@ class Stub:
         if path == "/oauth2/token" and f.get("grant_type") == "refresh_token":
             if not self.refresh_ok or f.get("refresh_token") != self.current_rt:
                 return 400, {}, b'{"error":"invalid_grant"}'
-            return 200, {}, json.dumps(self._tokens()).encode()
+            self.refreshes += 1
+            out = json.dumps(self._tokens()).encode()     # rotated now: the old refresh token is spent
+            if self.refresh_delay:
+                import time
+                time.sleep(self.refresh_delay)
+            return 200, {}, out
         if path == "/oauth2/token/introspect":
             if self.introspect_status != 200:
                 return self.introspect_status, {}, b""
@@ -146,6 +159,8 @@ class Stub:
                 return 404, {}, b""
             return 200, {"etag": self.etags[rel]}, self.files[rel]
         assert method == "PROPFIND"
+        if self.dav_garbage:
+            return 207, {}, b"<html>not a listing"
         if rel not in self.files and rel not in self.folders:
             return 404, {}, b""
         items = [rel]
@@ -417,3 +432,55 @@ def test_https_transport_is_pinned_and_never_redirects(tmp_path):
     ctx = A._ssl_context(str(ca))
     assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
     assert len(ctx.get_ca_certs()) == 1                     # the site CA only, no system store
+
+
+# ---------- fix round 1 ----------
+
+def test_login_silent_connection_does_not_hold_the_listener(tmp_path):
+    import socket
+    import time
+    env = make_env(tmp_path)
+    env.login_timeout = 1.0
+    held = []
+
+    def silent(url):
+        red = urllib.parse.urlsplit(dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))["redirect_uri"])
+        held.append(socket.create_connection((red.hostname, red.port)))   # connects, never sends a request
+    env.browser = silent
+    t0 = time.monotonic()
+    with pytest.raises(A.AuthError, match="no sign-in"):
+        A.login(env, say=lambda *a: None)
+    assert time.monotonic() - t0 < 1.0 + A.HANDLER_TIMEOUT + 2
+    held[0].close()
+
+
+def test_login_refuses_without_id_token(tmp_path):
+    env = make_env(tmp_path)
+    env.stub.id_token = False
+    with pytest.raises(A.AuthError, match="no ID token"):
+        login(env)
+    assert not (Path(env.runtime) / "chp-doc" / "session.json").exists()
+
+
+def test_refresh_is_locked_between_commands(tmp_path):
+    """Two commands refreshing at once: the second waits and uses the first one's new token instead of sending the
+    spent (rotated) refresh token, which Kanidm refuses."""
+    import time
+    env = make_env(tmp_path)
+    login(env)
+    env.stub.refresh_delay = 0.3
+    out, errs = [], []
+
+    def one():
+        try:
+            out.append(A.fresh(env, force=True)["access_token"])
+        except Exception as e:                              # noqa: BLE001
+            errs.append(e)
+    t1 = threading.Thread(target=one)
+    t1.start()
+    time.sleep(0.1)
+    t2 = threading.Thread(target=one)
+    t2.start()
+    t1.join(5)
+    t2.join(5)
+    assert not errs and out == ["at2", "at2"] and env.stub.refreshes == 1
