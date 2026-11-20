@@ -19,6 +19,8 @@ Source6:        logind-chp-docs.conf
 Source7:        50-chp-no-linger.rules
 Source8:        README.md
 Source9:        LICENSE
+Source10:       chp-workstation-lockdown.nft
+Source11:       chp-workstation-egress-lockdown.service
 # the vendor RPM, re-signed with the project key (appliance/release/VENDOR.txt pins it); x2t makes the reader PDFs
 Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
@@ -44,6 +46,8 @@ install -Dm0755 %{SOURCE0} %{buildroot}%{_libexecdir}/chp/onlyoffice-ai-off
 install -Dm0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/xdg/onlyoffice/DesktopEditors.conf
 install -Dm0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/nftables/chp-workstation-egress.nft
 install -Dm0644 %{SOURCE3} %{buildroot}%{_unitdir}/chp-workstation-egress.service
+install -Dm0644 %{SOURCE10} %{buildroot}%{_sysconfdir}/nftables/chp-workstation-lockdown.nft
+install -Dm0644 %{SOURCE11} %{buildroot}%{_unitdir}/chp-workstation-egress-lockdown.service
 install -Dm0644 %{SOURCE4} %{buildroot}%{_unitdir}/chp-onlyoffice-sweep.service
 install -Dm0644 %{SOURCE5} %{buildroot}%{_unitdir}/chp-onlyoffice-sweep.timer
 install -Dm0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/systemd/logind.conf.d/50-chp-docs.conf
@@ -70,7 +74,10 @@ install -Dm0644 %{SOURCE9} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 # on upgrade the table is reloaded from the (possibly new) shipped file; the unit has no ExecStop (fail closed), so
 # only removing the package deletes the table
 %systemd_postun_with_restart chp-workstation-egress.service
-if [ "$1" -eq 0 ]; then /usr/sbin/nft delete table inet chp_workstation_egress >/dev/null 2>&1 || :; fi
+if [ "$1" -eq 0 ]; then
+  /usr/sbin/nft delete table inet chp_workstation_egress >/dev/null 2>&1 || :
+  /usr/sbin/nft delete table inet chp_workstation_lockdown >/dev/null 2>&1 || :
+fi
 
 %files
 %license %{_datadir}/licenses/%{name}/LICENSE
@@ -80,6 +87,8 @@ if [ "$1" -eq 0 ]; then /usr/sbin/nft delete table inet chp_workstation_egress >
 %{_sysconfdir}/nftables/chp-workstation-egress.nft
 %ghost %attr(0644,root,root) %{_sysconfdir}/chp/workstation-egress-addr.nft
 %{_unitdir}/chp-workstation-egress.service
+%{_sysconfdir}/nftables/chp-workstation-lockdown.nft
+%{_unitdir}/chp-workstation-egress-lockdown.service
 %{_unitdir}/chp-onlyoffice-sweep.service
 %{_unitdir}/chp-onlyoffice-sweep.timer
 %{_sysconfdir}/systemd/logind.conf.d/50-chp-docs.conf
@@ -87,6 +96,9 @@ if [ "$1" -eq 0 ]; then /usr/sbin/nft delete table inet chp_workstation_egress >
 
 %changelog
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-1.chp
+- Egress fails closed at boot: a render failure loads the last good addresses; no file or a failed load starts
+  chp-workstation-egress-lockdown.service (loopback only, journal tag chp-egress-lockdown, Wazuh 100628 level 12).
+  NTP only to the NTP_UPSTREAM addresses when all are addresses (CHP_WS_NTP4/6).
 - First release (ISO 0.7.0 Plan 3 Task 8): AI Tools removal (%%post, %%posttrans, trigger on
   onlyoffice-desktopeditors), /etc/xdg preseed, the workstation egress table (site server + site resolver only;
   DoT/DoH refused), the hourly autosave sweep (12 h, no live session, as the user; journal tag chp-doc-sweep),

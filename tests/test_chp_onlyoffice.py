@@ -194,7 +194,12 @@ def test_sweep_turns_linger_off(tmp_path):
     ld.mkdir()
     (ld / "alice").write_text("")
     seen = []
-    out, _, _ = _sweep(tmp_path, {}, run=lambda argv, **k: seen.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+
+    def loginctl(argv, **k):                                # the real loginctl removes the linger file
+        seen.append(argv)
+        (ld / argv[-1]).unlink()
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    out, _, _ = _sweep(tmp_path, {}, run=loginctl)
     assert ["loginctl", "disable-linger", "alice"] in seen
     assert any(ln.startswith("linger turned off for alice") for ln in out)
     ev = {"decoder": "x", "location": "journald", "program_name": "chp-doc-sweep",
@@ -216,18 +221,18 @@ def test_editor_running_uses_the_shared_process_table(tmp_path):
 # ---------- G3: the workstation egress table ----------
 
 def _defines(text):
-    return dict(re.findall(r"^define (\w+) = (\S+)$", text, re.M))
+    return dict(re.findall(r"^define (\w+) = (.+)$", text, re.M))
 
 
 def _tokens(s):
     return re.findall(r'\{[^}]*\}|"[^"]*"|\S+', s)
 
 
-def _rules():
+def _rules(site_kw=None, name="nft/chp-workstation-egress.nft"):
     """The output chain of the shipped table: (policy, [rule token lists]); $VARS replaced from chp-site's rendering."""
-    site, hosts = _site()
+    site, hosts = _site(**(site_kw or {}))
     defs = _defines(OO.egress_defines(site, hosts))
-    n = re.sub(r"#.*", "", t("nft/chp-workstation-egress.nft"))
+    n = re.sub(r"#.*", "", t(name))
     body = re.search(r"chain output \{(.*?)\n\s*\}", n, re.S).group(1)
     lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
     head = lines[0]
@@ -248,9 +253,10 @@ def _in(addr, tok):
                if (":" in x) == (a.version == 6))
 
 
-def verdict(daddr, proto, dport=None, oif="eth0", skuid="alice", icmp=None):
+def verdict(daddr, proto, dport=None, oif="eth0", skuid="alice", icmp=None, site_kw=None,
+            name="nft/chp-workstation-egress.nft"):
     """What the table does with the FIRST packet of a new flow (no conntrack state)."""
-    policy, rules = _rules()
+    policy, rules = _rules(site_kw, name)
     fam = ipaddress.ip_address(daddr).version
     for toks in rules:
         i, ok, v = 0, True, None
@@ -307,8 +313,9 @@ def test_egress_rules_default_drop_except_server():
                              ("2001:db8::5", "tcp", 443), ("203.0.113.5", "udp", 4500)):
         assert verdict(dst, proto, port) in ("drop", "reject"), (dst, proto, port)
     # time: only chronyd speaks NTP (its servers may be names, resolved through the site resolver)
-    assert verdict("203.0.113.123", "udp", 123, skuid="chrony") == "accept"
-    assert verdict("203.0.113.123", "udp", 123, skuid="alice") in ("drop", "reject")
+    assert verdict("192.0.2.123", "udp", 123, skuid="chrony") == "accept"     # NTP_UPSTREAM=192.0.2.123
+    assert verdict("203.0.113.123", "udp", 123, skuid="chrony") == "reject"   # not an upstream (fix round 1, m1)
+    assert verdict("192.0.2.123", "udp", 123, skuid="alice") in ("drop", "reject")
     # IPv6 neighbour discovery (no payload) works; multicast goes nowhere
     assert verdict("ff02::1:ff00:5", "icmpv6", icmp="nd-neighbor-solicit") == "accept"
     assert verdict("224.0.0.251", "udp", 5353) == "drop" and verdict("ff02::fb", "udp", 5353) == "drop"
@@ -326,7 +333,8 @@ def test_dns_only_site_resolver_v4_v6():
     site, hosts = _site()
     d = _defines(OO.egress_defines(site, hosts))
     # clients resolve through the server (render.net_ks): the resolver is the server's address, from the site files
-    assert d == {"CHP_WS_SERVER_IP": "192.0.2.10", "CHP_WS_RESOLVER_IP": "192.0.2.10"}
+    assert d == {"CHP_WS_SERVER_IP": "192.0.2.10", "CHP_WS_RESOLVER_IP": "192.0.2.10",
+                 "CHP_WS_NTP4": "{ 192.0.2.123 }", "CHP_WS_NTP6": "{ ::/128 }"}
     for proto in ("udp", "tcp"):
         assert verdict("192.0.2.10", proto, 53) == "accept"
         for other in ("192.0.2.1", "8.8.8.8", "203.0.113.53", "2001:4860:4860::8888", "2606:4700:4700::1111", "fe80::1"):
@@ -367,7 +375,8 @@ def test_egress_defines_refuse_a_bad_server_address(tmp_path):
 
 def test_egress_unit_renders_at_start_and_fails_closed_on_stop():
     u = t("chp-workstation-egress.service")
-    assert "ExecStartPre=/usr/bin/chp-site onlyoffice egress-render" in u
+    assert "ExecStartPre=-/usr/bin/chp-site onlyoffice egress-render" in u      # fix round 1: never fatal
+    assert "OnFailure=chp-workstation-egress-lockdown.service" in u
     assert "ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft" in u
     assert "Before=network-pre.target" in u and "Wants=network-pre.target" in u
     assert "After=" in u and "firewalld.service" in u and "nftables.service" in u
@@ -400,12 +409,17 @@ def test_linger_policy():
 # ---------- enable (workstation role, DOCUMENTS=yes) ----------
 
 class Run:
-    def __init__(self, missing=("chp-onlyoffice",), active=True):
+    def __init__(self, missing=("chp-onlyoffice",), active=True, linger_dir=None, linger_rc=0):
         self.calls, self.missing, self.active = [], set(missing), active
+        self.linger_dir, self.linger_rc = linger_dir, linger_rc
 
     def __call__(self, argv, **kw):
         self.calls.append(list(argv))
         out, rc = "", 0
+        if argv[:2] == ["loginctl", "disable-linger"]:
+            rc = self.linger_rc
+            if rc == 0 and self.linger_dir:
+                (Path(self.linger_dir) / argv[-1]).unlink(missing_ok=True)
         if argv[:2] == ["rpm", "-q"]:
             rc = 1 if argv[-1] in self.missing else 0
         if argv[:3] == ["dnf", "--enablerepo=chp", "install"]:
@@ -428,7 +442,7 @@ def _enable(tmp_path, run, **kw):
 
 
 def test_enable_installs_renders_and_starts(tmp_path):
-    run = Run()
+    run = Run(linger_dir=tmp_path / "var/lib/systemd/linger")
     (tmp_path / "var/lib/systemd/linger").mkdir(parents=True)
     (tmp_path / "var/lib/systemd/linger/alice").write_text("")
     done, recs = _enable(tmp_path, run)
@@ -438,7 +452,12 @@ def test_enable_installs_renders_and_starts(tmp_path):
                and "chp-onlyoffice-sweep.timer" in c for c in run.calls)
     assert ["nft", "list", "table", "inet", "chp_workstation_egress"] in run.calls
     assert (tmp_path / OO.EGRESS_ADDR).read_text() == "define CHP_WS_SERVER_IP = 192.0.2.10\n" \
-                                                      "define CHP_WS_RESOLVER_IP = 192.0.2.10\n"
+                                                      "define CHP_WS_RESOLVER_IP = 192.0.2.10\n" \
+                                                      "define CHP_WS_NTP4 = { 192.0.2.123 }\n" \
+                                                      "define CHP_WS_NTP6 = { ::/128 }\n"
+    # m6: the files replaced by rename get their SELinux label back
+    assert ["restorecon", str(tmp_path / "etc/hosts")] in run.calls
+    assert ["restorecon", str(tmp_path / OO.EGRESS_ADDR)] in run.calls
     h = (tmp_path / "etc/hosts").read_text()
     assert h.startswith("127.0.0.1 localhost\n")
     for name in OO.VENDOR_NAMES:
@@ -592,3 +611,159 @@ def test_dead_fapolicyd_message_names_this_command(tmp_path):
     with pytest.raises(SiteError) as e:
         _enable(tmp_path, Run(active=False))
     assert "chp-site onlyoffice enable" in str(e.value) and "documents enable" not in str(e.value)
+
+
+# ---------- fix round 1 ----------
+
+def _unit(text):
+    """(ExecStartPre lines, ExecStart lines, OnFailure) of a unit file."""
+    k = lambda key: [ln.split("=", 1)[1] for ln in text.splitlines() if ln.startswith(key + "=")]  # noqa: E731
+    return k("ExecStartPre"), k("ExecStart"), (k("OnFailure") or [None])[0]
+
+
+class Host:
+    """systemd + nft, as far as these units use them: '-' makes a command's failure non-fatal; a failed unit starts
+    its OnFailure= unit; `nft -f` refuses a file whose include is missing, and loading a file applies its
+    `table`/`delete table` lines and its tables; chp-site egress-render is the real render_egress."""
+    def __init__(self, root, site, hosts):
+        self.root, self.site, self.hosts, self.tables, self.log = root, site, hosts, set(), []
+
+    def cmd(self, line):
+        argv = line.split()
+        if argv[0] == "/usr/bin/chp-site":
+            OO.render_egress(self.root, self.site, self.hosts)
+        elif argv[0] == "/usr/sbin/nft":
+            text = (D / "nft" / Path(argv[-1]).name).read_text()
+            for inc in re.findall(r'^include "([^"]+)"', text, re.M):
+                if not (self.root / inc.lstrip("/")).exists():
+                    raise FileNotFoundError(inc)
+            for verb, name in re.findall(r"^(table|delete table) inet (\w+)$", text, re.M):
+                (self.tables.add if verb == "table" else self.tables.discard)(name)
+            self.tables.update(re.findall(r"^table inet (\w+) \{", text, re.M))
+        elif argv[0] == "/usr/bin/logger":
+            self.log.append(line)
+        else:
+            raise AssertionError(line)
+
+    def start(self, unit):
+        pre, start, onf = _unit(t(unit))
+        try:
+            for c in pre + start:
+                try:
+                    self.cmd(c.lstrip("-"))
+                except Exception:
+                    if not c.startswith("-"):
+                        raise
+            return "active"
+        except Exception:
+            if onf:
+                self.start(onf)
+            return "failed"
+
+
+def test_egress_render_failure_loads_the_last_good_file(tmp_path):
+    site, hosts = _site()
+    h = Host(tmp_path, site, hosts)
+    assert h.start("chp-workstation-egress.service") == "active" and h.tables == {"chp_workstation_egress"}
+    good = (tmp_path / OO.EGRESS_ADDR).read_text()
+    # the next boot: the site files are damaged (here: a server address that cannot be one)
+    h2 = Host(tmp_path, site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
+    assert h2.start("chp-workstation-egress.service") == "active"
+    assert h2.tables == {"chp_workstation_egress"} and (tmp_path / OO.EGRESS_ADDR).read_text() == good
+    assert h2.log == []
+
+
+def test_egress_without_any_file_or_load_fails_closed(tmp_path):
+    site, hosts = _site()
+    h = Host(tmp_path, site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])   # bad site files, no last good file
+    assert h.start("chp-workstation-egress.service") == "failed"
+    assert h.tables == {"chp_workstation_lockdown"} and any("EGRESS LOCKDOWN" in ln for ln in h.log)
+    # the lock-down table lets only loopback out
+    for dst, proto, port in (("192.0.2.10", "tcp", 443), ("192.0.2.10", "udp", 53), ("192.0.2.10", "tcp", 1514),
+                             ("203.0.113.5", "tcp", 443), ("2001:db8::1", "udp", 53)):
+        assert verdict(dst, proto, port, name="nft/chp-workstation-lockdown.nft") == "drop", (dst, port)
+    assert verdict("127.0.0.1", "tcp", 631, oif="lo", name="nft/chp-workstation-lockdown.nft") == "accept"
+    # fixed site files: a restart loads the egress table and removes the lock-down table
+    h.hosts = hosts
+    assert h.start("chp-workstation-egress.service") == "active" and h.tables == {"chp_workstation_egress"}
+    # a load failure (nft refuses the table) with a good address file also locks down
+    h3 = Host(tmp_path, site, hosts)
+    h3.cmd = (lambda orig: lambda line: (_ for _ in ()).throw(OSError("nft: syntax"))
+              if line.startswith("/usr/sbin/nft -f /etc/nftables/chp-workstation-egress") else orig(line))(h3.cmd)
+    assert h3.start("chp-workstation-egress.service") == "failed" and "chp_workstation_lockdown" in h3.tables
+    # shipped and alerted at once
+    assert "/etc/nftables/chp-workstation-lockdown.nft" in SPEC and "chp-workstation-egress-lockdown.service" in SPEC
+    lk = t("chp-workstation-egress-lockdown.service")
+    line = re.search(r'"(EGRESS LOCKDOWN[^"]*)"', lk).group(1)
+    ev = {"decoder": "x", "location": "journald", "program_name": "chp-egress-lockdown", "log": line}
+    assert _level(w.NEXTCLOUD_RULES, ev) == (w.WS_LOCKDOWN_RULE, 12)
+    assert w.WS_LOCKDOWN_RULE not in w.NEXTCLOUD_RULE_IDS
+    for f in ("nft/chp-workstation-lockdown.nft", "chp-workstation-egress-lockdown.service"):
+        assert f in t("build-rpm.sh"), f
+
+
+def test_ntp_only_to_the_upstream_addresses_or_any_for_names():
+    two = {"NTP_UPSTREAM": "192.0.2.123, 192.0.2.124"}
+    assert verdict("192.0.2.124", "udp", 123, skuid="chrony", site_kw=two) == "accept"
+    assert verdict("198.51.100.7", "udp", 123, skuid="chrony", site_kw=two) == "reject"
+    assert verdict("2001:db8::123", "udp", 123, skuid="chrony", site_kw=two) == "reject"
+    names = {"NTP_UPSTREAM": "time.example.test, 192.0.2.123"}       # a name: chrony resolves it, any address
+    assert verdict("198.51.100.7", "udp", 123, skuid="chrony", site_kw=names) == "accept"
+    assert verdict("2001:db8::123", "udp", 123, skuid="chrony", site_kw=names) == "accept"
+    assert verdict("198.51.100.7", "udp", 123, skuid="alice", site_kw=names) == "reject"
+
+
+def test_sweep_reports_removals_done_before_an_error(tmp_path, monkeypatch):
+    a = _home(tmp_path / "home", "alice")
+    first = _copy(a, "DE__aaaaaa", str(a / "x/CUI_A_v1.0-DRAFT.docx"), 30)
+    second = _copy(a, "DE__bbbbbb", str(a / "x/CUI_B_v1.0-DRAFT.docx"), 30)
+    real = DOC.shutil.rmtree
+
+    def flaky(p, *k, **kw):
+        if Path(p) == second:
+            raise PermissionError("disk said no")
+        return real(p, *k, **kw)
+    monkeypatch.setattr(DOC.shutil, "rmtree", flaky)
+    out, _, res = _sweep(tmp_path, {})
+    assert not first.exists() and second.exists()
+    assert any(ln.startswith(f"removed {first} ") for ln in out) and res == [str(first)]
+    assert any("could not sweep" in ln and "disk said no" in ln for ln in out)
+
+
+def test_sweep_rechecks_the_editor_just_before_removing(tmp_path):
+    a = _home(tmp_path / "home", "alice")
+    old = _copy(a, "DE__aaaaaa", str(a / "x/CUI_A_v1.0-DRAFT.docx"), 30)
+    asked = []
+    out, calls, res = _sweep(tmp_path, {}, recheck=lambda uid: asked.append(uid) or True)   # started after the snapshot
+    assert old.exists() and res == [] and asked == [os.getuid()] and calls
+    assert any("ONLYOFFICE started since" in ln for ln in out)
+    # and the real check reads the process table for that uid
+    assert OO._editor_live(-12345) is False
+
+
+def test_linger_off_checks_loginctl(tmp_path):
+    ld = tmp_path / "linger"
+    ld.mkdir()
+    (ld / "alice").write_text("")
+    out = []
+    bad = lambda argv, **k: subprocess.CompletedProcess(argv, 1, "", "Access denied")   # noqa: E731
+    assert OO.linger_off(bad, str(ld), out.append) == []
+    assert out and out[0].startswith("could not turn linger off for alice (loginctl exit 1: Access denied")
+    assert not any(ln.startswith("linger turned off") for ln in out)
+    # exit 0 but the file is still there: not off either
+    out = []
+    assert OO.linger_off(lambda argv, **k: subprocess.CompletedProcess(argv, 0, "", ""), str(ld), out.append) == []
+    assert out[0].startswith("could not turn linger off")
+    # enable refuses rather than claiming linger is off
+    (tmp_path / "var/lib/systemd/linger").mkdir(parents=True)
+    (tmp_path / "var/lib/systemd/linger/alice").write_text("")
+    with pytest.raises(SiteError, match="linger"):
+        _enable(tmp_path, Run(linger_dir=tmp_path / "var/lib/systemd/linger", linger_rc=1))
+
+
+def test_restorecon_absent_is_tolerated(tmp_path):
+    def norestorecon(argv, **k):
+        if argv[0] == "restorecon":
+            raise FileNotFoundError("restorecon")
+        return Run()(argv, **k)
+    OO._restorecon(norestorecon, tmp_path / "x")                   # no exception

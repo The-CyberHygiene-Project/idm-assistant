@@ -951,17 +951,23 @@ def _recover_names(d):
     return names
 
 
-def remove_editor_copies(home, match, keep_dir=None, say=print):
+def remove_editor_copies(home, match, keep_dir=None, say=print, on_removed=None):
     """Remove ONLYOFFICE's auto-recovery copies (data/recover/DE__*/) and recents.xml entries of the files for which
     match(path) is true; a recover dir is matched on the files in it (and its asc_name.info). Returns what was
-    removed. The Task 8 sweep calls this with its own rule (age, no live editor)."""
+    removed. The Task 8 sweep calls this with its own rule (age, no live editor) and on_removed(item), called as
+    each removal is DONE, so a failure part-way still leaves a record of what was already removed."""
     removed = []
+
+    def done(item):
+        removed.append(item)
+        if on_removed:
+            on_removed(item)
     for d in _recover_dirs(home, say):
         if d == keep_dir:
             continue
         if any(match(n) for n in _recover_names(d)):
             shutil.rmtree(d)
-            removed.append(str(d))
+            done(str(d))
     for rel in RECENTS:
         p = Path(home) / rel
         if not _real_dirs(home, rel.parent, say) or not p.is_file() or p.is_symlink():
@@ -980,7 +986,6 @@ def remove_editor_copies(home, match, keep_dir=None, say=print):
             continue
         for e in gone:
             root.remove(e)
-            removed.append(f"{p}: {e.get('path')}")
         new = (b"\xef\xbb\xbf" if bom else b"") + b'<?xml version="1.0" encoding="utf-8"?>' + \
             ET.tostring(root, encoding="unicode").encode()
         fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=".recents-", suffix=".tmp")
@@ -988,6 +993,8 @@ def remove_editor_copies(home, match, keep_dir=None, say=print):
             fh.write(new)
         os.chmod(tmp, stat.S_IMODE(os.stat(p).st_mode))
         os.replace(tmp, p)
+        for e in gone:                                    # recorded once the file without them is in place
+            done(f"{p}: {e.get('path')}")
     return removed
 
 

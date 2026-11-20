@@ -229,6 +229,7 @@ BREAKGLASS_RULE = "100622"                               # final review I2
 ACCOUNT_RULE, OIDC_PROVISION_RULE, CANARY_SETUP_RULE = "100623", "100624", "100625"
 DOC_SWEEP_RULE = "100626"                                # Plan 3 Task 8 (G2): a workstation's ONLYOFFICE autosave sweep
 WS_EGRESS_RULE = "100627"                                # Plan 3 Task 8 (G3): a workstation's egress table refused a packet
+WS_LOCKDOWN_RULE = "100628"                              # Plan 3 Task 8 fix 1: the egress table failed; loopback-only lockdown
 BREAKGLASS_USER = "ncadmin"                              # = documents.ADMIN (not imported: documents imports this module)
 _CTRL = "(CUI|FCI|Archive)"                              # the controlled team folders (share off, contained)
 
@@ -430,6 +431,15 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>Workstation egress block (a process tried to reach something other than the site server)</description>
     <group>chp_egress,</group>
   </rule>
+  <!-- level 12 (ALERT_HOOK at once): a G3 control FAILED at boot. The host fails closed (loopback only), so this is
+       an outage and a broken control, not a leak; but the agent cannot send until the link is back, so the manager's
+       disconnected-agent check (71) is the first signal and this line the explanation -->
+  <rule id="{WS_LOCKDOWN_RULE}" level="12">
+    <program_name>^chp-egress-lockdown$</program_name>
+    <match>EGRESS LOCKDOWN</match>
+    <description>Workstation egress table failed to load: the workstation is locked down to loopback</description>
+    <group>chp_egress,</group>
+  </rule>
 </group>
 """
 
@@ -438,7 +448,8 @@ CANARY_RULE = "100608"
 KANIDM_TOTP_RULE = "100630"                      # in the same rules file, but Kanidm's, not NextCloud's
 # the review's NextCloud rows: not the Kanidm rule nor the workstation rules that share the file
 NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE, DOC_SWEEP_RULE,
-                                                                                    WS_EGRESS_RULE} | {CANARY_RULE}
+                                                                                    WS_EGRESS_RULE,
+                                                                                    WS_LOCKDOWN_RULE} | {CANARY_RULE}
 
 
 def canary_rules(fileid):

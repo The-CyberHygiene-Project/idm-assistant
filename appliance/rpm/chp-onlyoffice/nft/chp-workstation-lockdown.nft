@@ -1,0 +1,16 @@
+# /etc/nftables/chp-workstation-lockdown.nft (chp-onlyoffice; Plan 3 Task 8 fix round 1): the workstation's egress
+# table could not be loaded (chp-workstation-egress.service failed: no rendered addresses and no last good file, or
+# nft refused the table). Fail CLOSED: only loopback leaves. The Wazuh agent cannot reach the manager either, so
+# the manager's disconnected-agent check is the immediate signal; the journal line (chp-egress-lockdown, Wazuh rule
+# 100628, level 12) is sent when the link is back. A later good load of chp-workstation-egress.nft removes this table.
+# No addresses at all: this file needs nothing rendered.
+table inet chp_workstation_lockdown
+delete table inet chp_workstation_lockdown
+table inet chp_workstation_lockdown {
+    chain output {
+        type filter hook output priority filter; policy drop;
+        oifname "lo" accept
+        limit rate 6/minute log prefix "CHP-WS-LOCKDOWN " level warn flags skuid
+        drop
+    }
+}

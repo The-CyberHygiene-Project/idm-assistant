@@ -62,7 +62,23 @@ def egress_defines(site, hosts):
     a = ipaddress.ip_address(str(ip))
     if a.version != 4 or a.is_unspecified or a.is_loopback or a.is_multicast or a.is_link_local:
         raise SiteError(f"the server address {ip} cannot be the workstation's egress destination")
-    return f"define CHP_WS_SERVER_IP = {a}\ndefine CHP_WS_RESOLVER_IP = {a}\n"
+    v4, v6 = ntp_sets(site)
+    return (f"define CHP_WS_SERVER_IP = {a}\ndefine CHP_WS_RESOLVER_IP = {a}\n"
+            f"define CHP_WS_NTP4 = {{ {', '.join(v4)} }}\ndefine CHP_WS_NTP6 = {{ {', '.join(v6)} }}\n")
+
+
+def ntp_sets(site):
+    """chronyd's NTP destinations for the egress table: when EVERY NTP_UPSTREAM entry is an address, exactly those
+    (an address family with none gets a set that matches nothing: 0.0.0.0/32 or ::/128); when any entry is a host
+    name (chrony resolves it at run time), any address (0.0.0.0/0, ::/0), still from chronyd only."""
+    v4, v6 = [], []
+    for x in site.get("NTP_UPSTREAM", []):
+        try:
+            a = ipaddress.ip_address(str(x))
+        except ValueError:
+            return ["0.0.0.0/0"], ["::/0"]
+        (v4 if a.version == 4 else v6).append(str(a))
+    return (v4 or ["0.0.0.0/32"]), (v6 or ["::/128"])
 
 
 def _write(path, text, mode):
@@ -152,8 +168,14 @@ def _newest(d, depth=4):
     return best
 
 
-def _sweep_home(home, now, hours):
-    """As the user: remove the recovery folders untouched for `hours`, and the recents entries only they name."""
+def _editor_live(uid):
+    return bool(processes().get(uid, set()) & set(DOC.EDITOR_PROCESSES))
+
+
+def _sweep_home(home, now, hours, live=lambda: False):
+    """As the user: remove the recovery folders untouched for `hours`, and the recents entries only they name.
+    `live()` is asked again just before removing (an editor may have started since the parent's snapshot). Every
+    removal is recorded as it is done, so an error part-way still returns what was already removed."""
     notes = []
     say = lambda m: notes.append(["note", m])            # noqa: E731
     cut = now - hours * 3600
@@ -165,14 +187,21 @@ def _sweep_home(home, now, hours):
             young.append(d)                                # unreadable: never removed on a guess
     if not old:
         return notes
-    old_names = set().union(*(DOC._recover_names(d) for d in old))
-    young_names = set().union(*(DOC._recover_names(d) for d in young)) if young else set()
-    removed = DOC.remove_editor_copies(home, lambda n: n in old_names and n not in young_names, say=say)
-    for d in old:                                          # a folder that names no file (Editor.bin only) is CUI too
-        if os.path.lexists(d) and not os.path.islink(d) and os.path.isdir(d):
-            shutil.rmtree(d)
-            removed.append(str(d))
-    return notes + [["removed", x] for x in removed]
+    if live():
+        return notes + [["note", "kept: ONLYOFFICE started since the sweep looked; its recovery copies are in use"]]
+    removed = []
+    on = lambda x: removed.append(["removed", x])        # noqa: E731
+    try:
+        old_names = set().union(*(DOC._recover_names(d) for d in old))
+        young_names = set().union(*(DOC._recover_names(d) for d in young)) if young else set()
+        DOC.remove_editor_copies(home, lambda n: n in old_names and n not in young_names, say=say, on_removed=on)
+        for d in old:                                      # a folder that names no file (Editor.bin only) is CUI too
+            if os.path.lexists(d) and not os.path.islink(d) and os.path.isdir(d):
+                shutil.rmtree(d)
+                on(str(d))
+    except Exception as e:                                 # noqa: BLE001 - reported with what was already removed
+        return notes + removed + [["error", f"{type(e).__name__}: {e}"]]
+    return notes + removed
 
 
 def _homes(home_root, min_uid):
@@ -205,14 +234,21 @@ def linger_off(run, linger_dir=LINGER_DIR, say=print):
         names = sorted(os.listdir(linger_dir))
     except OSError:
         return []
+    off = []
     for n in names:
-        run(["loginctl", "disable-linger", n], capture_output=True, text=True)
+        r = run(["loginctl", "disable-linger", n], capture_output=True, text=True)
+        if r.returncode != 0 or os.path.lexists(os.path.join(linger_dir, n)):
+            why = (getattr(r, "stderr", "") or "").strip()[:200]
+            say(f"could not turn linger off for {n} (loginctl exit {r.returncode}"
+                + (f": {why}" if why else "") + "; still on)")
+            continue
+        off.append(n)
         say(f"linger turned off for {n} (ruling F3: no lingering user manager keeps sign-in tokens after logout)")
-    return names
+    return off
 
 
 def sweep(*, run, home_root="/home", now=None, procs=None, as_user=_as_user, say=print, hours=SWEEP_HOURS,
-          min_uid=MIN_UID, linger_dir=LINGER_DIR):
+          min_uid=MIN_UID, linger_dir=LINGER_DIR, recheck=_editor_live):
     """G2 (see the module text). Returns the removed paths and entries."""
     now = time.time() if now is None else now
     procs = processes() if procs is None else procs
@@ -230,7 +266,7 @@ def sweep(*, run, home_root="/home", now=None, procs=None, as_user=_as_user, say
         if comms:
             say(f"kept {home}: a live session ({who}); swept after the user's last process ends")
             continue
-        for kind, text in as_user(uid, gid, lambda: _sweep_home(home, now, hours)):
+        for kind, text in as_user(uid, gid, lambda: _sweep_home(home, now, hours, lambda: recheck(uid))):
             if kind == "removed":
                 removed.append(text)
                 say(f"removed {text} ({who}; no live session; older than {hours} h)")
@@ -243,6 +279,15 @@ def sweep(*, run, home_root="/home", now=None, procs=None, as_user=_as_user, say
 
 
 # ---------- enable (the workstation) ----------
+
+def _restorecon(run, path):
+    """restorecon on a file just replaced by rename (it carries the temp file's label); skipped where SELinux tools
+    are absent (a test root, a Mac)."""
+    try:
+        run(["restorecon", str(path)], capture_output=True, text=True)
+    except FileNotFoundError:
+        pass
+
 
 def _ok(run, argv):
     return run(argv, capture_output=True, text=True).returncode == 0
@@ -275,12 +320,18 @@ def enable(me, site, hosts, *, run, root=Path("/"), record=None, sleep=time.slee
         done.append(f"fapolicyd was not running: restarted ({n} time(s)); Denied accesses: {denied}")
     else:
         done.append("fapolicyd active")
-    render_egress(root, site, hosts)
     srv = server_of(hosts).ip
     hp = _p(root, "etc/hosts")
-    _write(hp, hosts_text(hp.read_text() if hp.exists() else ""), 0o644)
+    for path, changed in ((_p(root, EGRESS_ADDR), render_egress(root, site, hosts)),
+                          (hp, _write(hp, hosts_text(hp.read_text() if hp.exists() else ""), 0o644))):
+        if changed:
+            _restorecon(run, path)                         # temp + rename: give the file its policy label (net_conf_t)
     done.append(f"/etc/hosts: {len(VENDOR_NAMES)} ONLYOFFICE vendor names -> 0.0.0.0")
-    names = linger_off(run, str(_p(root, LINGER_DIR)), say=lambda m: None)
+    failed = []
+    names = linger_off(run, str(_p(root, LINGER_DIR)), say=lambda m: failed.append(m) if m.startswith("could") else None)
+    if failed:
+        raise SiteError("; ".join(failed) + ": turn it off (loginctl disable-linger NAME), then re-run chp-site "
+                        "onlyoffice enable")
     done.append("linger off" + (f" (was on for {', '.join(names)})" if names else " (nobody had it)"))
     run(["systemctl", "daemon-reload"], check=True)
     run(["systemctl", "enable", "--now", EGRESS_UNIT, SWEEP_TIMER], check=True)

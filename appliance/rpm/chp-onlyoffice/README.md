@@ -16,7 +16,7 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
 | G4 | removes the **AI Tools** plugin (`sdkjs-plugins/{9DC93CDB-…}`, agent tools `run_script`, `file_opener`) | `/usr/libexec/chp/onlyoffice-ai-off`: `%post`, `%posttrans`, trigger on every install/upgrade of `onlyoffice-desktopeditors`; `enable` refuses while it exists |
 | G4 | system-wide defaults: no update check, portals locked, plugins off, start-page AI entries hidden | `/etc/xdg/onlyoffice/DesktopEditors.conf` |
 | G4 | the vendor names lead to `0.0.0.0` (defence in depth, as the spike proved) | `/etc/hosts`, a marked block written by `enable` |
-| G3 | the whole workstation may reach only the site server (22, 443, 8443, 1514, 9000, ping) and the site resolver (53 udp/tcp); DoT/DoQ 853 refused to anyone; DNS to anyone else refused over IPv4 and IPv6; DoH (443 elsewhere) refused by the default rule; NTP only from chronyd | `/etc/nftables/chp-workstation-egress.nft`, `chp-workstation-egress.service` |
+| G3 | the whole workstation may reach only the site server (22, 443, 8443, 1514, 9000, ping) and the site resolver (53 udp/tcp); DoT/DoQ 853 refused to anyone; DNS to anyone else refused over IPv4 and IPv6; DoH (443 elsewhere) refused by the default rule; NTP only from chronyd, to the upstream addresses; loopback-only lock-down when the table cannot load | `/etc/nftables/chp-workstation-{egress,lockdown}.nft`, `chp-workstation-egress{,-lockdown}.service` |
 | G2 | hourly sweep of ONLYOFFICE's auto-recovery copies (`~/.local/share/onlyoffice/desktopeditors/data/recover/DE__*`) and their `recents.xml` entries | `chp-onlyoffice-sweep.timer` → `chp-site onlyoffice sweep` |
 | F3 | logout ends the user's processes; linger off (and refused) | `/etc/systemd/logind.conf.d/50-chp-docs.conf`, `/etc/polkit-1/rules.d/50-chp-no-linger.rules`; `enable` and the sweep run `loginctl disable-linger` for anyone who has it |
 
@@ -42,6 +42,14 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
 - The resolver is the server's address, because clients resolve through the server.
 - The unit has **no ExecStop**. Stopping it leaves the table in place (fail closed); only removing the package deletes
   the table.
+- **At boot it fails closed too.** A render failure (a damaged site file, a bad address) is not fatal: the last good
+  address file is loaded (a failed render never overwrites it). With no file, or when nft refuses the table, the unit
+  fails and `OnFailure=` starts `chp-workstation-egress-lockdown.service`: the table `inet chp_workstation_lockdown`
+  lets only loopback out, and the journal line `EGRESS LOCKDOWN` (tag `chp-egress-lockdown`) is Wazuh rule 100628,
+  level 12. The agent cannot send until the link is back, so the manager's disconnected-agent check (71) is the first
+  signal. Fix the cause, then `systemctl restart chp-workstation-egress`: a good load removes the lock-down table.
+- NTP leaves only from chronyd, and only to the `NTP_UPSTREAM` addresses when every entry is an address; when any
+  entry is a host name, to any address.
 - Refused packets are logged with the prefix `CHP-WS-EGRESS` (DNS: `CHP-WS-EGRESS-DNS`), at most 6 a minute. Wazuh
   rule 100627 puts them in the daily summary (level 7).
 - Multicast and broadcast are dropped without a log line.
@@ -84,4 +92,6 @@ do **not** load the table into a kernel. The following still need a live check o
 - `KillUserProcesses=yes` after a reboot;
 - the polkit rule refuses `loginctl enable-linger` for a user;
 - the sweep's privilege drop under SELinux and fapolicyd;
-- Wazuh rules 100626 and 100627, with `wazuh-logtest`.
+- Wazuh rules 100626, 100627 and 100628, with `wazuh-logtest`;
+- the lock-down: break the site files with no address file present, reboot, and see the lock-down table and the
+  alert after recovery.

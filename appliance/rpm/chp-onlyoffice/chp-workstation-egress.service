@@ -7,13 +7,17 @@ Wants=network-pre.target
 Before=network-pre.target shutdown.target
 After=local-fs.target firewalld.service nftables.service
 Conflicts=shutdown.target
+# fail CLOSED: when this unit fails (no addresses and no last good file, or nft refused the table), loopback only
+OnFailure=chp-workstation-egress-lockdown.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# the addresses are written from the site files before every load (a re-IP of the server needs only a restart)
-ExecStartPre=/usr/bin/chp-site onlyoffice egress-render
+# the addresses are written from the site files before every load (a re-IP of the server needs only a restart).
+# "-": a render failure (damaged site file, bad address) is logged but not fatal: the LAST GOOD file (enable wrote
+# it; a failed render never overwrites it) is loaded; with no file at all, nft fails and OnFailure= locks down.
+ExecStartPre=-/usr/bin/chp-site onlyoffice egress-render
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
-ExecReload=/usr/bin/chp-site onlyoffice egress-render
+ExecReload=-/usr/bin/chp-site onlyoffice egress-render
 ExecReload=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
 # No ExecStop on purpose: stopping the unit leaves the table loaded (fail closed). Removing chp-onlyoffice deletes it.
 [Install]

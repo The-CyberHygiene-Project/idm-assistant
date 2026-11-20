@@ -1,0 +1,12 @@
+[Unit]
+Description=CHP: the workstation egress table failed to load: loopback only (fail closed)
+Documentation=file:///usr/share/doc/chp-onlyoffice/README.md
+DefaultDependencies=no
+After=local-fs.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+SyslogIdentifier=chp-egress-lockdown
+# the line first, so it exists even if the load below fails
+ExecStartPre=/usr/bin/logger -p auth.crit -t chp-egress-lockdown "EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl restart chp-workstation-egress)"
+ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-lockdown.nft
