@@ -19,6 +19,9 @@ RemainAfterExit=yes
 SyslogIdentifier=chp-workstation-egress
 ExecStartPre=-/usr/bin/chp-site onlyoffice egress-render
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
+# after a good load: ONE recovery line (tag chp-egress-recovered; Wazuh 100635/100636) for a lock-down or a render
+# failure that has ended, once the agent is connected (else check 83 sends it later). Never fatal (Task 13a, P3-D7)
+ExecStartPost=-/usr/bin/chp-site onlyoffice egress-recovered
 ExecReload=-/usr/bin/chp-site onlyoffice egress-render
 ExecReload=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
 # No ExecStop on purpose: stopping the unit leaves the table loaded (fail closed). Removing chp-onlyoffice deletes it.

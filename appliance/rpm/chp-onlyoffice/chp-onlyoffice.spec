@@ -26,8 +26,10 @@ Source12:       83-workstation-editor.sh
 Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
 Requires:       poppler-utils
-# chp-site onlyoffice (enable, sweep, egress-render) and the doc commands of Plan 3
+# chp-site onlyoffice (enable, sweep, egress-render, egress-lockdown, egress-recovered) and the doc commands of Plan 3
 Requires:       chp-site >= 0.14.0-9
+# doc new's marked templates (lab 11c, P3-D2: no workstation had them)
+Requires:       chp-templates >= 1.4.0-2
 # monitor check 83 runs under chp-base's monitor (/usr/lib/chp/monitor.d)
 Requires:       nftables, systemd, polkit, chrony, python3, util-linux, chp-base
 BuildRequires:  systemd-rpm-macros
@@ -58,6 +60,7 @@ install -Dm0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/polkit-1/rules.d/50-chp-no
 install -Dm0644 %{SOURCE8} %{buildroot}%{_docdir}/%{name}/README.md
 install -Dm0644 %{SOURCE9} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -Dm0755 %{SOURCE12} %{buildroot}%{_prefix}/lib/chp/monitor.d/83-workstation-editor.sh
+install -d -m0700 %{buildroot}%{_sharedstatedir}/chp/workstation-egress
 
 %post
 %systemd_post chp-workstation-egress.service chp-onlyoffice-sweep.timer
@@ -98,6 +101,7 @@ fi
 %{_sysconfdir}/systemd/logind.conf.d/50-chp-docs.conf
 %{_sysconfdir}/polkit-1/rules.d/50-chp-no-linger.rules
 %{_prefix}/lib/chp/monitor.d/83-workstation-editor.sh
+%dir %attr(0700,root,root) %{_sharedstatedir}/chp/workstation-egress
 
 %changelog
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-4.chp

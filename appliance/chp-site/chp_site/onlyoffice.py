@@ -10,6 +10,11 @@ spike's gates. Root only.
                  to 0.0.0.0 in /etc/hosts, turns linger off, and starts the egress table and the sweep timer.
   egress-render  writes /etc/chp/workstation-egress-addr.nft from the site files (the egress unit runs it before
                  every load, so the table always follows the site's server address). G3.
+  egress-lockdown   (the lock-down unit, before its log line) records when the lock-down began and why.
+  egress-recovered  (the egress unit after a good load, and monitor check 83) journals ONE recovery line for a
+                 lock-down (Wazuh WS_RECOVERED_RULE, 12) or a render failure (WS_RECOVERED_RENDER_RULE, 7) that has
+                 ended, once the Wazuh agent is connected: lines written while the link was down never reached the
+                 manager (Task 13a, P3-D7).
   sweep          (chp-onlyoffice-sweep.timer, hourly) removes ONLYOFFICE's auto-recovery copies (CUI) of closed or
                  abandoned sessions: only for a user with NO running process at all (so never a live editor session,
                  nor a logged-in user's), and only recovery folders untouched for SWEEP_HOURS. The removal runs as
@@ -20,6 +25,7 @@ import ipaddress
 import json
 import os
 import pwd
+import re
 import shutil
 import stat
 import subprocess
@@ -39,6 +45,11 @@ EGRESS_TABLE = "chp_workstation_egress"
 EGRESS_UNIT = "chp-workstation-egress.service"
 SWEEP_TIMER = "chp-onlyoffice-sweep.timer"
 PACKAGE = "chp-onlyoffice"
+TEMPLATES_PACKAGE = "chp-templates"              # doc new's marked templates (P3-D2: never installed on workstations)
+STATE_DIR = "var/lib/chp/workstation-egress"     # P3-D7: what happened while the link was down (root 0700)
+AGENT_STATE = "/var/ossec/var/run/wazuh-agentd.state"
+RECOVERED_TAG = "chp-egress-recovered"
+LOCKDOWN_TABLE = "chp_workstation_lockdown"
 AI_PLUGIN = "/opt/onlyoffice/desktopeditors/editors/sdkjs-plugins/{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}"
 LINGER_DIR = "/var/lib/systemd/linger"
 # The vendor names the spike found in the binaries and web apps (update check, templates, registration, DocSpace,
@@ -90,11 +101,12 @@ def render_egress(root, site, hosts):
     return _write(_p(root, EGRESS_ADDR), egress_defines(site, hosts), 0o644)
 
 
-def egress_render(root, load, run=subprocess.run):
+def egress_render(root, load, run=subprocess.run, now=time.time):
     """`chp-site onlyoffice egress-render` (chp-workstation-egress.service's ExecStartPre, "-": never fatal). A
     failure is ONE stderr line, "EGRESS RENDER FAILED: ..." (journal tag chp-workstation-egress: Wazuh 100632,
-    level 7), and the last good file is left as it is (nft then loads it). A replaced file is relabelled (temp +
-    rename leaves the temp file's label: Task 8 out-of-scope item, carry 10)."""
+    level 7), and the last good file is left as it is (nft then loads it). The file is relabelled on every render,
+    written or not (temp + rename leaves the temp file's label: carry 10; O5, lab 11c). P3-D7: a failure is also
+    kept on disk (its first time and latest cause) and, after the next good render, reported by egress-recovered."""
     try:
         site, hosts = load()
         changed = render_egress(root, site, hosts)
@@ -103,10 +115,135 @@ def egress_render(root, load, run=subprocess.run):
         print(f"EGRESS RENDER FAILED: {why}; the last good address file /{EGRESS_ADDR} is loaded if there is one "
               "(stale if the server or resolver moved; none: the unit fails and the workstation locks down)",
               file=sys.stderr)
+        _note(root, "render-failed", why, now)
         return 1
-    if changed:
+    if _p(root, EGRESS_ADDR).exists():
         _restorecon(run, _p(root, EGRESS_ADDR))
+    _render_ok(root, now)
     print(f"/{EGRESS_ADDR}: {'written' if changed else 'unchanged'}")
+    return 0
+
+
+# ---------- P3-D7: say after the link is back what happened while it was down ----------
+
+def _state(root):
+    return _p(root, STATE_DIR)
+
+
+def _read_state(root, name):
+    try:
+        d = json.loads((_state(root) / f"{name}.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def _write_state(root, name, d):
+    """Best effort (never gates the egress unit): a root-only folder, one small JSON file per state."""
+    try:
+        sd = _state(root)
+        sd.mkdir(parents=True, exist_ok=True)
+        os.chmod(sd, 0o700)
+        _write(sd / f"{name}.json", json.dumps(d, sort_keys=True) + "\n", 0o600)
+    except OSError:
+        pass
+
+
+def _drop_state(root, name):
+    try:
+        (_state(root) / f"{name}.json").unlink()
+    except OSError:
+        pass
+
+
+def _ts(t):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+
+
+def _note(root, name, why, now):
+    """A failure: its FIRST time is kept (when it began), its cause is the latest one."""
+    old = _read_state(root, name) or {}
+    _write_state(root, name, {"since": old.get("since") or int(now()), "why": why[:300]})
+
+
+def _render_ok(root, now):
+    """A good render after failed ones: the failure has ended; egress-recovered reports it (once)."""
+    f = _read_state(root, "render-failed")
+    if f is not None:
+        old = _read_state(root, "render-recovered") or {}       # one not reported yet: keep the earliest start
+        since = min([x for x in (f.get("since"), old.get("since")) if isinstance(x, int)] or [int(now())])
+        _write_state(root, "render-recovered", {"since": since, "why": f.get("why"), "ended": int(now())})
+        _drop_state(root, "render-failed")
+
+
+def egress_lockdown(root, now=time.time):
+    """`chp-site onlyoffice egress-lockdown` (the lock-down unit's first ExecStartPre, "-"): when it began and why
+    (a failed render's cause, a missing address file, or nft refusing the table)."""
+    if _read_state(root, "lockdown") is not None:
+        return 0                                          # a second failure in the same lock-down: the first time stays
+    f = _read_state(root, "render-failed")
+    if not _p(root, EGRESS_ADDR).exists():
+        why = (f"the address file /{EGRESS_ADDR} was missing"
+               + (f" and the egress addresses could not be rendered ({f.get('why')})" if f else ""))
+    elif f is not None:
+        why = f"the egress table did not load; the egress addresses could not be rendered ({f.get('why')})"
+    else:
+        why = f"nft refused the egress table (journalctl -u {EGRESS_UNIT} for that boot)"
+    _write_state(root, "lockdown", {"since": int(now()), "why": why[:400]})
+    return 0
+
+
+def _agent_connected(root):
+    """None: no Wazuh agent state file (nothing to wait for); else whether wazuh-agentd says it is connected."""
+    try:
+        text = _p(root, AGENT_STATE).read_text()
+    except OSError:
+        return None
+    return re.search(r"^status='connected'\s*$", text, re.M) is not None
+
+
+def egress_recovered(root, run=subprocess.run, now=time.time):
+    """`chp-site onlyoffice egress-recovered` (the egress unit's ExecStartPost, "-", and monitor check 83): for a
+    lock-down that has ended (the egress table loaded, no lock-down table) and a render failure followed by a good
+    render, ONE journal line each under the tag chp-egress-recovered, naming when it began and why. Not before the
+    Wazuh agent says it is connected (lines sent into a dead link were lost: P3-D7); a line logger could not write
+    (early boot) stays for the next run. Prints OK lines (check 83 ignores them)."""
+    lock, rend = _read_state(root, "lockdown"), _read_state(root, "render-recovered")
+    if lock is None and rend is None:
+        print("OK egress: no ended lock-down or render failure to report")
+        return 0
+    if lock is not None:
+        loaded = run(["nft", "list", "table", "inet", EGRESS_TABLE], capture_output=True, text=True).returncode == 0
+        locked = run(["nft", "list", "table", "inet", LOCKDOWN_TABLE], capture_output=True, text=True).returncode == 0
+        if not loaded or locked:
+            lock = None                                   # still locked down: nothing has ended yet
+    todo = []
+    if lock is not None:
+        todo.append(("lockdown", "auth.crit",
+                     f"EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at {_ts(lock['since'])} "
+                     f"({lock.get('why')}) has ended by {_ts(now())}; the egress table is loaded again (lines "
+                     "written during the lock-down may never have reached the manager)"))
+    if rend is not None:
+        todo.append(("render-recovered", "auth.warning",
+                     f"EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from "
+                     f"{_ts(rend['since'])} until {_ts(rend.get('ended') or now())} ({rend.get('why')}); the last "
+                     "good address file was in use meanwhile"))
+    if not todo:
+        print("OK egress: still in lock-down; nothing to report yet")
+        return 0
+    if _agent_connected(root) is False:
+        print("OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries)")
+        return 0
+    for name, prio, line in todo:
+        try:
+            ok = run(["logger", "-p", prio, "-t", RECOVERED_TAG, line], capture_output=True, text=True).returncode == 0
+        except OSError:
+            ok = False
+        if ok:
+            _drop_state(root, name)
+            print(f"OK egress: reported: {line}")
+        else:
+            print("OK egress: recovered; the report could not be logged yet (retried at the next run)")
     return 0
 
 
@@ -316,7 +453,11 @@ def enable(me, site, hosts, *, run, root=Path("/"), record=None, sleep=time.slee
     record("onlyoffice-enable", {"host": me.hostname, "step": "start"})
     if not _ok(run, ["rpm", "-q", PACKAGE]):
         run(["dnf", "--enablerepo=chp", "install", "-y", PACKAGE], check=True)
-        done.append("installed chp-onlyoffice (ONLYOFFICE Desktop Editors 10.0.0, re-signed; poppler-utils)")
+        done.append("installed chp-onlyoffice (ONLYOFFICE Desktop Editors 10.0.0, re-signed; poppler-utils; "
+                    "chp-templates)")
+    if not _ok(run, ["rpm", "-q", TEMPLATES_PACKAGE]):    # P3-D2: an editor installed before it Required them
+        run(["dnf", "--enablerepo=chp", "install", "-y", TEMPLATES_PACKAGE], check=True)
+        done.append("installed chp-templates (doc new's marked templates)")
     if os.path.lexists(_p(root, AI_PLUGIN)):
         raise SiteError(f"ONLYOFFICE's AI Tools plugin is still installed ({AI_PLUGIN}): run "
                         "/usr/libexec/chp/onlyoffice-ai-off (chp-onlyoffice), then re-run chp-site onlyoffice enable")
@@ -333,10 +474,10 @@ def enable(me, site, hosts, *, run, root=Path("/"), record=None, sleep=time.slee
         done.append("fapolicyd active")
     srv = server_of(hosts).ip
     hp = _p(root, "etc/hosts")
-    for path, changed in ((_p(root, EGRESS_ADDR), render_egress(root, site, hosts)),
+    for path, changed in ((_p(root, EGRESS_ADDR), render_egress(root, site, hosts) or True),   # O5: always
                           (hp, _write(hp, hosts_text(hp.read_text() if hp.exists() else ""), 0o644))):
         if changed:
-            _restorecon(run, path)                         # temp + rename: give the file its policy label (net_conf_t)
+            _restorecon(run, path)                         # temp + rename: give the file its policy label
     done.append(f"/etc/hosts: {len(VENDOR_NAMES)} ONLYOFFICE vendor names -> 0.0.0.0")
     failed = []
     names = linger_off(run, str(_p(root, LINGER_DIR)), say=lambda m: failed.append(m) if m.startswith("could") else None)

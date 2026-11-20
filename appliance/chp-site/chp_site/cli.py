@@ -632,7 +632,8 @@ def _doc_ledger(a):
 
 
 def _onlyoffice(a):
-    """chp-site onlyoffice enable|sweep|egress-render (Plan 3 Task 8; root): the workstation's editor and its gates."""
+    """chp-site onlyoffice enable|sweep|egress-render|egress-lockdown|egress-recovered (Plan 3 Task 8, Task 13a; root):
+    the workstation's editor and its gates."""
     import subprocess
     from . import onlyoffice as oo
     if os.geteuid() != 0:
@@ -642,6 +643,10 @@ def _onlyoffice(a):
         return 0
     if a.action == "egress-render":                      # a failure is one alertable stderr line, exit 1
         return oo.egress_render(Path("/"), lambda: _load(a.site), run=subprocess.run)
+    if a.action == "egress-lockdown":                    # P3-D7: the lock-down unit records when and why
+        return oo.egress_lockdown(Path("/"))
+    if a.action == "egress-recovered":                   # P3-D7: one recovery line once the link (and agent) is back
+        return oo.egress_recovered(Path("/"), run=subprocess.run)
     site, hosts = _load(a.site)
     me = next((h for h in hosts if h.hostname == _host()), None)
     if me is None:
@@ -755,8 +760,11 @@ def main(argv=None):
     _docmod.add_parser(sub)
     oo_ = sub.add_parser("onlyoffice", help="(workstation; root) the editor: enable (DOCUMENTS=yes; installs "
                                             "chp-onlyoffice, egress table, sweep timer, linger off), sweep (the "
-                                            "hourly autosave sweep), egress-render (the egress table's addresses)")
-    oo_.add_argument("action", choices=("enable", "sweep", "egress-render")); oo_.add_argument("--site", default="/etc/chp")
+                                            "hourly autosave sweep), egress-render (the egress table's addresses), "
+                                            "egress-lockdown / egress-recovered (the lock-down's record and its "
+                                            "recovery line)")
+    oo_.add_argument("action", choices=("enable", "sweep", "egress-render", "egress-lockdown", "egress-recovered"))
+    oo_.add_argument("--site", default="/etc/chp")
     ts = sub.add_parser("time-sync", help="(root) chrony for this host's role: the server serves the site subnet "
                                           "only (123/udp); a workstation takes time from the server only")
     ts.add_argument("--role", required=True, choices=("server", "client")); ts.add_argument("--site", default="/etc/chp")

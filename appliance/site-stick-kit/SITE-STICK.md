@@ -440,9 +440,13 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
   `chp-site doc login` refuses and says how to turn it off (`loginctl disable-linger <account>`).
 - **Egress lock-down.** If the workstation's egress table cannot load at boot (a damaged site file and no earlier
   good one), the workstation falls to loopback only. Nothing leaves it, not even replies to ssh. The journal line is
-  `EGRESS LOCKDOWN` (Wazuh 100628, level 12). It arrives only after the link is back. The first live sign is the
-  server's "agent disconnected" check (71). Monitor check 83 on the workstation alerts every 15 minutes while it
-  lasts, but that alert cannot leave the workstation either: it is seen at the console, or after recovery. To recover, at the console:
+  `EGRESS LOCKDOWN` (Wazuh 100628, level 12), but it is written while the link is down and **may never reach the
+  manager** (lab 11c). The first live sign is the server's "agent disconnected" check (71). Monitor check 83 on the
+  workstation alerts every 15 minutes while it lasts, but that alert cannot leave the workstation either: it is seen
+  at the console. **After recovery** the workstation sends one line `EGRESS RECOVERED after LOCKDOWN` (Wazuh 100635,
+  level 12) that says when the lock-down began and why, once its Wazuh agent is connected again. A render failure
+  that the last good file covered is reported the same way (`EGRESS RECOVERED after RENDER FAILED`, 100636, level 7).
+  To recover, at the console:
   1. Read `journalctl -u chp-workstation-egress` and fix the cause.
   2. Run `systemctl restart chp-workstation-egress`. A good load removes the lock-down.
   3. Check 83 turns to OK at its next run.
@@ -467,6 +471,8 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
 | 100626 | 3 | The sweep removed a recovery copy. |
 | 100631, 100632, 100627 | 7 | The sweep failed, the egress addresses did not render, a packet was refused. |
 | 100628 | 12 | Egress lock-down. |
+| 100635 | 12 | A workstation's egress lock-down has ended (it says when it began and why). |
+| 100636 | 7 | A workstation's egress addresses could not be rendered for a while; the last good file was used. |
 | 100634 | 12 | A NextCloud account with no groups sent a doc request. A chp-doc sign-in made the account before the person ever signed in on the web. The nightly check lists such accounts too. The person signs in once in the browser. |
 
 **Keep `SECURITY_ALERT_LEVEL` at 12 or lower while `DOCUMENTS=yes`.** Approvals and overrides are level 12. Above

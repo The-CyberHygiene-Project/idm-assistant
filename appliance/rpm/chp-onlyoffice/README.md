@@ -48,10 +48,19 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
   address file is loaded (a failed render never overwrites it). With no file, or when nft refuses the table, the unit
   fails and `OnFailure=` starts `chp-workstation-egress-lockdown.service`: the table `inet chp_workstation_lockdown`
   lets only loopback out, and the journal line `EGRESS LOCKDOWN` (tag `chp-egress-lockdown`) is Wazuh rule 100628,
-  level 12. The agent cannot send until the link is back, so the manager's disconnected-agent check (71) is the first
-  signal. Fix the cause, then `systemctl restart chp-workstation-egress`: a good load removes the lock-down table.
+  level 12. The agent cannot send until the link is back and that line may never arrive (lab 11c, P3-D7), so the
+  manager's disconnected-agent check (71) is the first signal. Fix the cause, then `systemctl restart
+  chp-workstation-egress`: a good load removes the lock-down table.
 - A failed render is one journal line `EGRESS RENDER FAILED: …` (tag `chp-workstation-egress`): Wazuh rule 100632,
-  level 7 (the table holds, with the last good addresses). A replaced address file is restorecon'd.
+  level 7 (the table holds, with the last good addresses). The address file is restorecon'd on every render.
+- **After recovery** (Task 13a, P3-D7): the lock-down unit records when it began and why
+  (`chp-site onlyoffice egress-lockdown`, in `/var/lib/chp/workstation-egress`, root 0700), and a failed render its
+  first time and cause. After a good load the egress unit's `ExecStartPost` (and check 83 every 15 minutes) runs
+  `chp-site onlyoffice egress-recovered`: once the Wazuh agent says it is connected, ONE journal line under the tag
+  `chp-egress-recovered`: `EGRESS RECOVERED after LOCKDOWN …` (Wazuh 100635, level 12) or `EGRESS RECOVERED after
+  RENDER FAILED …` (100636, level 7).
+- `doc new` needs the marked templates: the package Requires `chp-templates >= 1.4.0-2`, and `chp-site onlyoffice
+  enable` installs them on a workstation that has an older chp-onlyoffice (lab 11c, P3-D2).
 - **Monitor check 83** (run by chp-base's monitor every 15 min, wherever chp-onlyoffice is installed): the address
   file present, the unit enabled and active, the live table equal to the one
   built from the shipped files (policy drop), no lock-down table, `chp-onlyoffice-sweep.timer` active. Stopping

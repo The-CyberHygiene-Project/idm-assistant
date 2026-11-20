@@ -12,6 +12,8 @@ After=local-fs.target
 # it, and loads the table, again. There is no ExecStop: stopping or finishing never removes the table.
 Type=oneshot
 SyslogIdentifier=chp-egress-lockdown
+# "-": the record of when and why (for the recovery line after the link is back: Task 13a, P3-D7) never gates the load
+ExecStartPre=-/usr/bin/chp-site onlyoffice egress-lockdown
 # "-": the log line never gates the load (logger exits 1 when /dev/log is not up yet, at early boot)
 ExecStartPre=-/usr/bin/logger -p auth.crit -t chp-egress-lockdown "EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl restart chp-workstation-egress)"
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-lockdown.nft

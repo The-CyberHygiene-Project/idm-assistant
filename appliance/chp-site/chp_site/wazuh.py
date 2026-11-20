@@ -233,6 +233,8 @@ WS_LOCKDOWN_RULE = "100628"                              # Plan 3 Task 8 fix 1: 
 OIDC_PRIVILEGED_RULE = "100629"                          # Plan 3 Task 9 (Task 1 minor): the sign-in adds admin/cui-users
 DOC_SWEEP_FAILED_RULE = "100631"                         # Plan 3 Task 9 (Task 8 carry): the sweep could not sweep / unlinger
 WS_RENDER_RULE = "100632"                                # Plan 3 Task 9 (Task 8 carry): egress addresses not rendered at start
+WS_RECOVERED_RULE = "100635"                             # Task 13a (P3-D7): a workstation's egress lock-down has ended
+WS_RECOVERED_RENDER_RULE = "100636"                      # Task 13a (P3-D7): a workstation's egress render failure has ended
 LEDGER_AUDIT_RULE = "100633"                             # Task 13a (P3-D3): chp_ledger's own audit lines (base, not stored)
 LEDGER_NOGROUPS_RULE = "100634"                          # Task 13a (P3-D3): a request from a NextCloud account with no groups
 # the document ledger's journal lines (Plan 3 Task 9; ruling F4: doc_ledger.journal(), SYSLOG_IDENTIFIER chp-docs-ledger)
@@ -504,6 +506,22 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <group>chp_egress,</group>
   </rule>
 
+  <!-- Task 13a (P3-D7): the EGRESS LOCKDOWN / RENDER FAILED lines are written while the workstation's link is down and
+       may never reach the manager. After a good load, once the agent is connected, ONE recovery line names when it
+       began and why: a lock-down that WAS active pages (12); a render failure (the last good file held) is 7 -->
+  <rule id="{WS_RECOVERED_RULE}" level="12">
+    <program_name>^chp-egress-recovered$</program_name>
+    <match>EGRESS RECOVERED after LOCKDOWN</match>
+    <description>Workstation egress lock-down has ENDED (it was locked down to loopback; its own alert may never have arrived)</description>
+    <group>chp_egress,</group>
+  </rule>
+  <rule id="{WS_RECOVERED_RENDER_RULE}" level="7">
+    <program_name>^chp-egress-recovered$</program_name>
+    <match>EGRESS RECOVERED after RENDER FAILED</match>
+    <description>Workstation egress addresses could not be rendered for a while (the last good file was loaded); now rendered again</description>
+    <group>chp_egress,</group>
+  </rule>
+
   <!-- the document ledger (Plan 3 Task 9; owner decision 9: every approval and override at once, level 12;
        publications 7; checkout and new 3). Every line of the appender is stored at least at level 3 (100653, 100641)
        except none: an unknown event is stored too. A forged line (logger -t chp-docs-ledger) can only ADD an alert;
@@ -615,7 +633,8 @@ KANIDM_TOTP_RULE = "100630"                      # in the same rules file, but K
 NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE, DOC_SWEEP_RULE,
                                                                                     WS_EGRESS_RULE, WS_LOCKDOWN_RULE,
                                                                                     DOC_SWEEP_FAILED_RULE,
-                                                                                    WS_RENDER_RULE} | {CANARY_RULE}
+                                                                                    WS_RENDER_RULE, WS_RECOVERED_RULE,
+                                                                                    WS_RECOVERED_RENDER_RULE} | {CANARY_RULE}
 
 
 def canary_rules(fileid):

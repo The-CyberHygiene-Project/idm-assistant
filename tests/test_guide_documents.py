@@ -132,3 +132,11 @@ def test_13a_d5_first_enable_raises_100623_five_times_in_the_guide():
         i = flat.index("100623")
         part = flat[i:i + 600]
         assert "five times" in part and "twice" not in part and "chp-publisher" in part and "ncadmin" in part
+
+
+def test_13a_d7_the_guide_does_not_promise_the_lockdown_line_arrives():
+    flat = " ".join(GUIDE.read_text().split())
+    assert "It arrives only after the link is back" not in flat
+    assert "may never reach the manager" in flat and "EGRESS RECOVERED after LOCKDOWN" in flat and "100635" in flat
+    known = " ".join(KNOWN.read_text().split())
+    assert "which arrives after recovery" not in known and "100635" in known

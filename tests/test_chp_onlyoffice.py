@@ -637,8 +637,12 @@ class Host:
 
     def cmd(self, line):
         argv = line.split()
-        if argv[0] == "/usr/bin/chp-site":
+        if argv[0] == "/usr/bin/chp-site" and argv[2] == "egress-render":
             OO.render_egress(self.root, self.site, self.hosts)
+        elif argv[0] == "/usr/bin/chp-site" and argv[2] == "egress-lockdown":
+            OO.egress_lockdown(self.root)
+        elif argv[0] == "/usr/bin/chp-site" and argv[2] == "egress-recovered":
+            self.recovered = getattr(self, "recovered", 0) + 1
         elif argv[0] == "/usr/sbin/nft":
             text = (D / "nft" / Path(argv[-1]).name).read_text()
             for inc in re.findall(r'^include "([^"]+)"', text, re.M):
@@ -926,7 +930,9 @@ def test_egress_render_failure_is_one_alertable_line(tmp_path, capsys):
     assert calls == [["restorecon", str(tmp_path / OO.EGRESS_ADDR)]]             # replaced by rename: relabelled
     good = (tmp_path / OO.EGRESS_ADDR).read_text()
     calls.clear()
-    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0 and calls == []   # unchanged: untouched
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0                  # unchanged: untouched,
+    assert calls == [["restorecon", str(tmp_path / OO.EGRESS_ADDR)]]                       # but relabelled (O5)
+    calls.clear()
     bad = lambda: (site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
 
     def broken():
@@ -944,3 +950,144 @@ def test_egress_render_failure_is_one_alertable_line(tmp_path, capsys):
 def test_egress_unit_logs_under_the_rules_program_name():
     u = t("chp-workstation-egress.service")
     assert re.search(r"^SyslogIdentifier=chp-workstation-egress$", u, re.M)
+
+
+# ---------- Task 13a: the 11c lab defects on the workstation ----------
+
+def test_13a_d2_the_editor_brings_the_templates():
+    """P3-D2 (logs/120): `doc new` refused on every workstation: nothing installed chp-templates there."""
+    tpl = (TOP / "appliance/rpm/chp-templates/chp-templates.spec").read_text()
+    v = re.search(r"^Version:\s+(\S+)", tpl, re.M).group(1)
+    rel = re.search(r"^Release:\s+(\d+)\.chp", tpl, re.M).group(1)
+    assert f"{v}-{rel}" == "1.4.0-2"
+    assert re.search(r"^Requires:\s+chp-templates >= 1\.4\.0-2$", SPEC, re.M)
+
+
+def test_13a_d2_enable_installs_the_templates_on_a_host_that_has_the_editor(tmp_path):
+    run = Run(missing=("chp-templates",))                    # chp-onlyoffice 0.1.0-4 is there, chp-templates is not
+    _enable(tmp_path, run)
+    assert ["dnf", "--enablerepo=chp", "install", "-y", "chp-templates"] in run.calls
+    run2 = Run(missing=())
+    _enable(tmp_path, run2)
+    assert not any(c[:2] == ["dnf", "--enablerepo=chp"] for c in run2.calls)
+
+
+class Net:
+    """nft list + logger for egress-recovered: which tables are loaded, what was logged."""
+    def __init__(self, tables=("chp_workstation_egress",), logger_rc=0):
+        self.tables, self.logged, self.calls, self.logger_rc = set(tables), [], [], logger_rc
+
+    def __call__(self, argv, **kw):
+        argv = list(argv)
+        self.calls.append(argv)
+        if argv[:4] == ["nft", "list", "table", "inet"]:
+            return subprocess.CompletedProcess(argv, 0 if argv[4] in self.tables else 1, "", "")
+        if argv[:1] == ["logger"]:
+            if self.logger_rc == 0:
+                self.logged.append(argv)
+            return subprocess.CompletedProcess(argv, self.logger_rc, "", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+def _agent(tmp_path, status):
+    p = tmp_path / OO.AGENT_STATE.lstrip("/")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"# State file for wazuh-agentd\nstatus='{status}'\nlast_keepalive='2026-11-20 19:54:00'\n")
+
+
+def test_13a_d7_recovery_after_a_lockdown_is_reported_once_when_the_agent_is_connected(tmp_path):
+    """P3-D7 (logs/154, 155): the EGRESS LOCKDOWN / RENDER FAILED lines written while the link was down never reached
+    the manager. The state is kept on disk; once the egress table is back AND the agent is connected, ONE recovery
+    line says when the lock-down began and why (Wazuh level 12; a render failure alone: level 7)."""
+    site, hosts = _site()
+    bad = lambda: (site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
+    assert OO.egress_render(tmp_path, bad, run=Net(), now=lambda: 1795204201) == 1     # no last good file
+    OO.egress_lockdown(tmp_path, now=lambda: 1795204202)                             # the lock-down unit's mark
+    # still locked down: nothing to report
+    n = Net(tables=("chp_workstation_lockdown",))
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204300)
+    assert n.logged == []
+    # fixed, the egress table loads; the agent has not reconnected yet: the report waits
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=Net(), now=lambda: 1795204400) == 0
+    _agent(tmp_path, "disconnected")
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204401)
+    assert n.logged == []
+    _agent(tmp_path, "connected")                              # check 83, 15 minutes later
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795205300)
+    lines = {a[a.index("-t") + 1]: a[-1] for a in n.logged}
+    assert set(lines) == {"chp-egress-recovered"} and len(n.logged) == 2, n.logged
+    lock = next(a[-1] for a in n.logged if "LOCKDOWN" in a[-1])
+    rend = next(a[-1] for a in n.logged if "RENDER FAILED" in a[-1])
+    assert "2026-11-20T" in lock and "address file" in lock and "began" in lock
+    assert "0.0.0.0" in rend or "server address" in rend
+    for line, (rule, level) in ((lock, (w.WS_RECOVERED_RULE, 12)), (rend, (w.WS_RECOVERED_RENDER_RULE, 7))):
+        ev = {"decoder": "x", "location": "journald", "program_name": "chp-egress-recovered", "log": line}
+        assert _level(w.NEXTCLOUD_RULES, ev) == (rule, level), line
+    assert w.WS_RECOVERED_RULE not in w.NEXTCLOUD_RULE_IDS and w.WS_RECOVERED_RENDER_RULE not in w.NEXTCLOUD_RULE_IDS
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795206200)             # reported once only
+    assert n.logged == []
+
+
+def test_13a_d7_a_render_failure_alone_is_reported_after_a_good_render(tmp_path):
+    site, hosts = _site()
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=Net(), now=lambda: 1795204000) == 0
+    bad = lambda: (site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
+    for t_ in (1795204100, 1795204200):                       # two failed starts: the FIRST time is kept
+        assert OO.egress_render(tmp_path, bad, run=Net(), now=lambda: t_) == 1
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204250)            # last good file loaded: not recovered
+    assert n.logged == []
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=Net(), now=lambda: 1795204300) == 0
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204301)            # no agent state file: report now
+    (a,) = n.logged
+    assert "RENDER FAILED" in a[-1] and "LOCKDOWN" not in a[-1] and "2026-11-20T" in a[-1]
+    # logger failing (early boot, /dev/log not up) keeps the report for the next run
+    bad2 = Net(logger_rc=1)
+    assert OO.egress_render(tmp_path, bad, run=Net(), now=lambda: 1795204400) == 1
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=Net(), now=lambda: 1795204500) == 0
+    OO.egress_recovered(tmp_path, run=bad2, now=lambda: 1795204501)
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204600)
+    assert len(n.logged) == 1
+
+
+def test_13a_d7_units_and_check83_drive_the_recovery_report():
+    u = t("chp-workstation-egress.service")
+    assert re.search(r"^ExecStartPost=-/usr/bin/chp-site onlyoffice egress-recovered$", u, re.M)
+    lk = t("chp-workstation-egress-lockdown.service")
+    pre = [ln for ln in lk.splitlines() if ln.startswith("ExecStartPre=")]
+    assert pre[0] == "ExecStartPre=-/usr/bin/chp-site onlyoffice egress-lockdown"          # before the log line
+    c83 = t("monitor.d/83-workstation-editor.sh")
+    assert "onlyoffice egress-recovered" in c83
+    assert re.search(r"^%dir %attr\(0700,root,root\) %\{_sharedstatedir\}/chp/workstation-egress$", SPEC, re.M)
+    for action in ("egress-lockdown", "egress-recovered"):
+        with pytest.raises(SystemExit) as e:
+            cli.main(["onlyoffice", action, "--help"])
+        assert e.value.code == 0
+
+
+def test_13a_d7_check83_runs_the_recovery_report(tmp_path):
+    b = tmp_path / "cs"
+    log = tmp_path / "cs.log"
+    b.write_text(f"#!/bin/bash\necho \"$@\" >> {log}\nexit 0\n")
+    b.chmod(0o755)
+    os.environ["CHP_SITE_BIN"] = str(b)
+    try:
+        out = run83(tmp_path)
+    finally:
+        del os.environ["CHP_SITE_BIN"]
+    assert out.startswith("OK workstation editor") and log.read_text() == "onlyoffice egress-recovered\n"
+
+
+def test_13a_o5_the_address_file_is_relabelled_on_every_render(tmp_path):
+    """O5: the address file stayed etc_t after a render that did not rewrite it; every render relabels it."""
+    site, hosts = _site()
+    calls = []
+    run = lambda argv, **kw: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", "")
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0          # unchanged: relabelled too
+    assert calls.count(["restorecon", str(tmp_path / OO.EGRESS_ADDR)]) == 2
