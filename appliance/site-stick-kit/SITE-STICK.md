@@ -124,6 +124,310 @@ Core 0.2.0 adds a daily file-integrity check (AIDE). Nothing below applies to 0.
 - **Who may accept file changes:** the ISSO (`ISSO_NAME`), plus anyone listed in `BASELINE_DELEGATES` in `site.conf`
   (names separated by commas; it may be left empty). This list is separate from `UNEXPIRE_DELEGATES` on purpose.
 
+### From 0.7.0 on: controlled documents
+
+0.7.0 adds an optional **document server** (NextCloud, on the server, at `https://files.<your domain>:8443`) and a
+way to change **controlled documents** (SSP, POA&M, policies, procedures, runbooks, change records, evidence) under
+control. A controlled document is published only after someone else has approved the exact file.
+
+Ordinary CUI work files (drawings, data, customer material) do not go through this. People put them in the CUI or
+FCI folders with the browser. Everything in those folders is tagged and audited.
+
+#### What you need
+
+- **Site stick:** `DOCUMENTS=yes` and `SECURITY_ADDONS=yes` in `site.conf`, and the keys `DOC_ISSO_ACCOUNT`,
+  `DOC_APPROVER_ACCOUNTS`, `CUI_CONTROLLED_BY`, `CUI_CATEGORY` and `CUI_POC` (the template has them). The ISSO's
+  account is listed in `DOC_ISSO_ACCOUNT` only, never also in the approver list. Until at least one of the two is set,
+  every approval is refused.
+- **Server memory: at least 8 GiB.** The lab server that passed its proofs had 8 GiB. Do not install the document
+  server on less.
+- **Turn it on:** on the server, as an administrator, with the site stick plugged in and a Kanidm admin session:
+  `chp-site documents enable`. Look at it any time with `chp-site documents status`.
+- **Workstations:** client enrolment sets up the editor and the document commands when the site has `DOCUMENTS=yes`.
+  The editor takes about 1.2 GB under `/opt/onlyoffice`.
+- **Sign-in:** each person signs in with their own Kanidm account. A typed name is never enough.
+
+#### The author's day
+
+You work on a **working copy** in `~/Documents/CHP-Working`. That folder is yours (mode 0700) and must be on the
+encrypted disk, or the commands refuse. Run `chp-site doc` as yourself, never as root.
+
+1. Sign in: `chp-site doc login`. A browser opens at Kanidm. If it does not, open the address the command prints.
+   The sign-in lives in memory only and ends when your last session ends, or when Kanidm ends it (about 8 hours).
+2. Start from one of two places.
+   - A new document: `chp-site doc new MyPolicy --cui`. Use `--non-cui` for a document with no CUI marks. Add
+     `--type xlsx` or `--type md` for another format (the default is `docx`). The title has no spaces. You get
+     `CUI_MyPolicy_v0.1-DRAFT.docx` with the CUI marks already in it.
+   - A change to a published one: `chp-site doc checkout CUI_MyPolicy_v1.0.docx`. You get the next minor version,
+     `CUI_MyPolicy_v1.1-DRAFT.docx`. Rename it by hand for a major change (for example `v2.0`).
+3. Open the file in ONLYOFFICE, edit it, save it.
+4. Ask what is missing: `chp-site doc check CUI_MyPolicy_v1.1-DRAFT.docx`. It changes nothing. It checks the name,
+   the CUI marks, `-DRAFT`, and whether the published copy changed since your checkout. It prints `OK` or
+   `NOT READY`.
+5. If marks are missing, see what would be added: `chp-site doc mark CUI_MyPolicy_v1.1-DRAFT.docx`. To add them,
+   run the same command with `--apply`. Marks are added only to a `-DRAFT` file with a `CUI_` or `FCI_` name.
+6. Hand the draft to an approver (next part). Wait for the approval.
+7. Rename the approved file, **changing nothing else**: remove `-DRAFT` (`mv CUI_MyPolicy_v1.1-DRAFT.docx
+   CUI_MyPolicy_v1.1.docx`). The approval covers the file's bytes (its sha256), not its name. Do not open the file
+   in ONLYOFFICE again: saving changes the bytes and the approval no longer counts.
+8. Publish: `chp-site doc publish CUI_MyPolicy_v1.1.docx`. It makes the reader PDF, checks the marks on both files,
+   and sends them. The server then writes the new version and its PDF to the Compliance area, moves the old version
+   to Superseded, tags the files, and gives the change a number (`CR-<year>-<number>`). `publish` never renames
+   anything and refuses a `-DRAFT` name. It refuses a file larger than 64 MiB together with its PDF.
+9. Clean up: `chp-site doc close CUI_MyPolicy_v1.1.docx`. It removes your working copy and ONLYOFFICE's recovery
+   copies. It refuses while ONLYOFFICE is running, so quit ONLYOFFICE first.
+
+Only an author can publish. You are an author of a change if you created it or checked it out since the last
+publish. If the published copy changes after your checkout, `publish` refuses and you check it out again.
+
+`chp-site doc logout` revokes the sign-in and removes the tokens.
+
+#### Handing the draft to the approver
+
+The approver needs to read your exact file. The way to hand it over:
+
+1. You upload the `-DRAFT` file with the **browser** to an ordinary location: a folder in the CUI team folder (for a
+   CUI document) or in Internal (for a non-CUI document). Not into Compliance, which only `publish` can write to.
+2. The approver downloads it from there into their own `~/Documents/CHP-Working`. It is CUI, so it must stay on the
+   encrypted disk. Move it from the browser's download folder.
+3. The approver runs `chp-site doc approve CUI_MyPolicy_v1.1-DRAFT.docx`.
+
+The approval is bound to the sha256 of the exact file, so the way it travelled needs no trust. If one byte differs,
+the approval does not match and `publish` refuses.
+
+The approver must **not** run `chp-site doc checkout` on it. That makes the approver an author of this change (see
+the next part).
+
+The upload is an ordinary work file, tagged and audited. Remove it when the document is published.
+
+#### The approver's rules
+
+Approvers are the accounts in `DOC_APPROVER_ACCOUNTS`, and the ISSO's account in `DOC_ISSO_ACCOUNT`.
+
+- Sign in as yourself (`chp-site doc login`), then `chp-site doc approve <file>`. Add `--notes "text"` if you want a
+  note in the record.
+- Your local marking check runs first. A file that fails it is not sent.
+- **You cannot approve a change you are an author of.** The author is whoever created the document or checked it
+  out since the last publish.
+- **The trap of a reader checkout.** If you run `chp-site doc checkout` just to read a document, you become an author
+  of that change for the whole cycle. Your approval is then refused, and an earlier approval of yours stops
+  counting. To read a document, open it in the browser, download it, or read its PDF.
+- **An approval counts only if it comes after the last checkout.** If anyone checks the document out after you
+  approved, approve again.
+- **An approval is for one file.** The author must publish the same bytes you approved.
+
+#### The ISSO override
+
+On a one-person site nobody else can approve. The ISSO may then approve a change they authored, with a reason:
+
+`chp-site doc override CUI_MyPolicy_v1.1-DRAFT.docx --reason "sole administrator; no other approver"`
+
+The override is refused when:
+
+- you are not the account in `DOC_ISSO_ACCOUNT`;
+- any approver account other than the authors of this change exists (ask one of them to approve instead);
+- there is no `--reason`.
+
+Every override raises a level-12 alert at once (Wazuh 100643, sent to `ALERT_HOOK`) and is listed under
+"Needs attention" in the daily review until a signed review covers it.
+
+#### Answers and exit codes
+
+Every `chp-site doc` command ends with one of these:
+
+| Exit | Meaning |
+|---|---|
+| 0 | Done. |
+| 1 | The server said no (it tells you why), or `check` found problems. |
+| 2 | Refused before anything was sent: not signed in, name rule, working folder, a missing file. A plain message. |
+| 3 | **Pending.** The server has not answered. Wait a minute and run **the same command again**. |
+
+A pending command is never sent twice. The second run asks about the same request. The request ids are kept when you
+run `chp-site doc logout`. They are lost only when your last session ends and your runtime folder goes away.
+
+If the sign-in ends, the command says so. Run `chp-site doc login` and then the same command again.
+
+The sign-in is refreshed 60 seconds before it ends. That assumes the workstation clock is right. chrony keeps it
+right, and it is the only program allowed to reach the time servers (`NTP_UPSTREAM`).
+
+#### The ISSO's duties
+
+On the server, as root:
+
+1. Read the daily review (`chp-site review`) and sign it. Publications show as routine. Overrides show under
+   "Needs attention" until the review that covers them is signed. A day whose ledger did not verify keeps every
+   override listed: the review says it cannot list them.
+2. Check the ledger: `chp-site doc-ledger verify` (exit 0 good, 1 a problem, 3 the appender was busy). With the
+   site stick plugged in, `chp-site doc-ledger export` records the ledger's head on the stick, and
+   `chp-site doc-ledger verify --stick` checks the ledger against the heads kept there (exit 2 if the stick is
+   absent).
+3. Look for unfinished publishes: `chp-site doc-ledger pending` (exit 0 none, 1 some, 2 cannot tell, 3 busy).
+   A line is a publish that started and never finished, or whose undo was incomplete ("UNDO INCOMPLETE": parts may
+   be in the area). Look at the document named, in its Compliance area and in Superseded. Put it right with an
+   administrator. Then record what you checked and did:
+   `chp-site doc-ledger resolve <request id> --reason "checked the area, nothing half-written"`.
+   Until you resolve it, a re-sent publish with that request id is refused.
+4. Look at the quarantine, which holds requests set aside as malformed (`/var/lib/chp-docs/quarantine`). Then clear
+   it: `chp-site doc-ledger purge-quarantine`.
+
+Monitor check 82 watches all of this: the ledger path unit is active, the chain verifies, the quarantine is empty,
+and no publish is unfinished. If the appender holds the lock when the check runs, the check says "not checked this
+run" and does not report all clear. After 4 runs in a row (about an hour) it alerts.
+
+A publish that finished but whose record could not be removed (the journal says `unfinished-clear-failed`, level 7)
+is not listed as pending: the ledger holds the publish.
+
+#### When the database cannot do MD5
+
+Under FIPS the database refuses the MD5 function that NextCloud uses for some moves. The server then runs in
+**DEGRADED mode** (POA&M item T-08). `chp-site documents status` and the nightly check say "DEGRADED: database MD5
+unavailable". The first refusal each day raises a level-7 alert. It ends by itself when the database can compute MD5.
+
+What works:
+
+- Uploading, downloading, editing, renaming and deleting **files**.
+- Copying files.
+- Making, renaming and deleting **empty** folders.
+- Moving files from one folder to another inside the same team folder.
+- Moving a file CUI to Archive, or Archive to CUI, when the file has no old versions.
+
+What is refused:
+
+- Moving, renaming or deleting a folder that has files in it.
+- Moving a file that has old versions to another team folder.
+
+Copying or moving out of CUI, FCI or Archive to any other place is refused in any case. The only exceptions are CUI
+to Archive and Archive to CUI.
+
+To change a folder with files in it, an administrator does it one file at a time:
+
+1. Make the new, empty folder.
+2. Move the files into it one by one. A single file moved inside its own team folder works.
+3. Delete the old folder when it is empty. Do the same for any folder inside it, starting at the bottom.
+
+To move a file with old versions between CUI and Archive: copy it, check the copy, then delete the original.
+Check the copy's versions first. Do not rely on a copy to carry the old versions.
+
+If `publish` says the old version could not be moved to Superseded (DEGRADED), nothing was changed. The new copy was
+removed. This happens only when the published file has old versions, which a normal publish never creates. Keep the
+approved file. Tell the ISSO and an administrator. There is no tested way around it, and nobody moves files on the
+disk by hand. Run `publish` again once `documents status` no longer says DEGRADED.
+
+#### Site rules
+
+1. **Download then re-upload.** A person who can download a CUI file can upload it somewhere else. The server cannot
+   stop that, and the owner accepted it as an insider risk. CUI taken from the document server is never uploaded
+   outside the CUI folders. Every download and upload is logged (Wazuh 100607 and 100621, level 3). The ISSO reviews
+   those records. This is also recorded in the SSP (3.1.3).
+2. **No sharing.** Sharing is off in CUI, FCI and Archive. A share there raises a level-12 alert at once.
+3. **Alert text carries CUI file names and paths.** Wazuh alerts go to `ALERT_HOOK`. The site delivers them only
+   inside the CUI boundary, or to a channel that is authorised for CUI.
+4. **The audit log and the Wazuh index are CUI-boundary records.** Keep them on the appliance. Backups under
+   `/backup/nextcloud` hold the documents and are inside the boundary too.
+5. **FCI marking.** As built, FCI documents carry the CUI banner. Whether FCI needs its own marking is under review.
+   The names still use the `FCI_` prefix.
+
+#### ONLYOFFICE on the workstation
+
+- **Open it once first.** Before the first `chp-site doc publish` on a workstation, start ONLYOFFICE from the desktop
+  and close it. That first run builds its font list (`AllFonts.js`), which the reader PDF needs. It is once per
+  person on each workstation, not once per file. Until then `publish` refuses and says so.
+- **AI and start-page features are off.** The AI Tools plugin is removed at install and again after every ONLYOFFICE
+  upgrade. A settings file hides the AI entries on the start page, turns off update checks, plugins and cloud
+  portals. Treat the plugin removal, the egress table and the hosts block as the controls you can rely on.
+- **Recovery copies are CUI.** ONLYOFFICE keeps autosave copies. `chp-site doc close` removes them. An hourly sweep
+  removes the rest, but only for a person who has no process running at all, and only copies older than 12 hours.
+- **The whole workstation is confined, Firefox included.** Outgoing connections go only to the site server
+  (ports 22, 443, 8443, 1514 and 9000, and ping) and to the site resolver for DNS. Time comes only from chrony, to the
+  `NTP_UPSTREAM` addresses when every entry is an address, otherwise to any address. The workstation has no
+  internet. This is by design.
+- **Sessions end at logout.** `KillUserProcesses=yes` and an hourly `disable-linger` apply to **all** accounts, not
+  only ordinary users (only root is left out of the kill). An administrator's `tmux` or `screen` session ends when
+  the administrator logs out. A rule refuses `loginctl enable-linger` for everyone but root. If linger is on anyway,
+  `chp-site doc login` refuses and says how to turn it off (`loginctl disable-linger <account>`).
+- **Egress lock-down.** If the workstation's egress table cannot load at boot (a damaged site file and no earlier
+  good one), the workstation falls to loopback only. Nothing leaves it, not even replies to ssh. The journal line is
+  `EGRESS LOCKDOWN` (Wazuh 100628, level 12). It arrives only after the link is back. The first live sign is the
+  server's "agent disconnected" check (71). Monitor check 83 on the workstation alerts every 15 minutes while it
+  lasts. To recover, at the console:
+  1. Read `journalctl -u chp-workstation-egress` and fix the cause.
+  2. Run `systemctl restart chp-workstation-egress`. A good load removes the lock-down.
+  3. Check 83 turns to OK at its next run.
+
+#### Alerts you will see
+
+| Wazuh rule | Level | When |
+|---|---|---|
+| 100642 | 12 | An approval was recorded. |
+| 100643 | 12 | An ISSO override was recorded. |
+| 100644 | 7 | A document was published. |
+| 100641, 100649, 100653, 100654 | 3 | Checkout, new, publish start, other ledger lines. |
+| 100645 | 12 | A malformed request was set aside (quarantine). |
+| 100646 | 12 | The ledger appender failed. |
+| 100647 | 12 | A publish failed and its undo was incomplete. |
+| 100648 | 12 | The ledger may end in a partial line. |
+| 100655 | 12 | The record of an unfinished publish could not be written. |
+| 100650, 100651, 100652 | 7 | A publish was undone, an unfinished publish was resolved, an appender problem. |
+| 100629 | 12 | The Kanidm sign-in added an account to `admin` or `cui-users`. It pages once for each new CUI reader's first sign-in. |
+| 100623 | 12 | An account or group was changed inside NextCloud. The **first** `documents enable` raises it twice. Tell the ISSO first. |
+| 100609 | 12 | `chp-canary` was enabled outside 03:05-03:45. Running `chp-site documents check` by hand does this. |
+| 100626 | 3 | The sweep removed a recovery copy. |
+| 100631, 100632, 100627 | 7 | The sweep failed, the egress addresses did not render, a packet was refused. |
+| 100628 | 12 | Egress lock-down. |
+
+The ledger forgery residual (POA&M item T-13): anyone with a shell on the server can write false
+`chp-docs-ledger` lines to the journal (`logger -t chp-docs-ledger`). That can raise a false level-12 alert. It never
+hides a real event: check 82 and the daily review trust only the ledger and root's own journal lines.
+
+After **any Wazuh upgrade**, prove the ledger rules again with `wazuh-logtest`. A `chp-docs-ledger` line must come
+out as one of the 1006xx rules above. Its base rule (100640) is level 15 on purpose, so it is tried before Wazuh's own
+syslog rules. A line that comes out as a stock rule means the family needs fixing.
+
+#### Accounts outside Kanidm
+
+Two NextCloud accounts are local and are not in Kanidm. Record both in the SSP's account types and name an owner
+for each (POA&M item T-15).
+
+- **`chp-publisher`** is the ledger appender's account. It alone writes the Compliance and Superseded areas. It has
+  no usable password: a random one is set at every `chp-site documents enable` and thrown away.
+- **`chp-canary`** is the nightly share test. It is switched off between runs. The nightly check (03:10) switches it
+  on for a few minutes inside 03:05-03:45.
+
+#### New installs, and the upgrade notes
+
+**0.7.0 is for new installs only.** The disk layout and the place of NextCloud on `/data` do not fit older installs.
+A site that has an earlier version moves by reinstalling. There is no upgrade path for the document server.
+
+If you upgrade `chp-documents` anyway, know these two things:
+
+- The NextCloud sign-in rewrite is live as soon as the package is installed, before `chp-site documents enable`
+  runs. It sends `/login` straight to Kanidm, so Kanidm must be user_oidc provider number 1. `documents enable`
+  refuses if it is not.
+- `/etc/httpd/conf.d/chp-nextcloud.conf` is kept if you edited it. The new file arrives beside it as
+  `chp-nextcloud.conf.rpmnew` and holds a new `Include` line. If you do not merge it, the login page shows **two
+  buttons**. To merge: add the two lines below, inside the `<VirtualHost>`, right after `RewriteEngine On`. Then run
+  `apachectl configtest` and `systemctl reload httpd`.
+
+      # /login straight to Kanidm with two user_oidc providers (ISO 0.7.0 Plan 3)
+      Include /etc/httpd/conf.d/chp-nextcloud-login-rewrite.inc
+
+#### Open items
+
+These are recorded for the SSP and the POA&M. The seed rows are in `poam-seeds-0.7.0.md` in this kit, and the
+release's known issues are in `docs/release/0.7.0-known-issues.md` in the project repository.
+
+| Id | Item |
+|---|---|
+| T-08 | MD5 degraded mode |
+| T-09 | fapolicyd filesystem marks off, and the restart crash |
+| T-10 | ONLYOFFICE: non-validated crypto and `--no-sandbox` |
+| T-11 | Move off PHP 8.3 before NextCloud 37 |
+| T-12 | The OIDC code in NextCloud's audit log |
+| T-13 | Ledger forgery residual, with detection |
+| T-14 | DNS tunnelling through the site resolver |
+| T-15 | `chp-publisher` and `chp-canary` outside Kanidm |
+| T-16 | The banner check reads text only |
+
 ### From 0.6.0 on: disks, the layout, and the backup drive
 
 **What is new in 0.6.0.** The installer now sizes the volumes by the size of the disk. Before 0.6.0 every machine got
