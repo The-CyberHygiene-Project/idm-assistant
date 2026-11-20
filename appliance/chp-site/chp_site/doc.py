@@ -592,27 +592,28 @@ def cmd_checkout(env, a, say):
     return 0
 
 
-TEMPLATE_PLACEHOLDERS = (("{{CUI_CONTROLLED_BY}}", "controlled_by"), ("{{CUI_CATEGORY}}", "category"),
-                         ("{{CUI_POC}}", "poc"))
+TEMPLATE_PLACEHOLDERS = {"CUI_CONTROLLED_BY": "controlled_by", "CUI_CATEGORY": "category", "CUI_POC": "poc"}
+_PLACEHOLDER = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
 
 def fill_template(data, ext, values):
     """A marked template (chp-templates 1.4.0 doc/cui/) with its {{CUI_CONTROLLED_BY}}, {{CUI_CATEGORY}} and {{CUI_POC}}
     placeholders filled from the site's marking values (the values as marking.check compares them). docx/xlsx: in the
     XML text of every part, XML-escaped, in a package rebuilt with the same order, dates and compression (the same
-    template and values always give the same bytes); md: as text. The templates hold the placeholders only in body
-    text, footer paragraphs and cells, never inside an Excel header/footer code string. A placeholder left over
-    afterwards is refused (DocError)."""
+    template and values always give the same bytes); md: as text. One substitution pass over the template, so a value
+    that itself holds "{{...}}" stays literal. A placeholder in the template that chp-site does not fill is refused
+    (DocError) before anything is filled. The templates hold the placeholders only in body text, footer paragraphs
+    and cells, never inside an Excel header/footer code string."""
     from . import marking
-    subs = [(ph, marking._norm(getattr(values, attr, "") or "")) for ph, attr in TEMPLATE_PLACEHOLDERS]
+    vals = {k: marking._norm(getattr(values, attr, "") or "") for k, attr in TEMPLATE_PLACEHOLDERS.items()}
 
     def fill(text, xml):
-        for ph, v in subs:
-            text = text.replace(ph, escape(v, {'"': "&quot;"}) if xml else v)
-        if re.search(r"\{\{[A-Z0-9_]+\}\}", text):
-            raise DocError("refused: the template holds a placeholder that chp-site does not fill; install the "
-                           f"template from {TEMPLATES_PKG}")
-        return text
+        unknown = sorted({m.group(1) for m in _PLACEHOLDER.finditer(text)} - set(vals))
+        if unknown:
+            raise DocError("refused: the template holds a placeholder that chp-site does not fill ("
+                           + ", ".join("{{%s}}" % u for u in unknown) + f"); install the template from {TEMPLATES_PKG}")
+        return _PLACEHOLDER.sub(lambda m: escape(vals[m.group(1)], {'"': "&quot;"}) if xml else vals[m.group(1)],
+                                text)
 
     if ext == "md":
         try:

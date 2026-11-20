@@ -10,7 +10,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 REL=${CHP_TEMPLATES_RELEASE:?set CHP_TEMPLATES_RELEASE to the signed release folder}
 V=1.4.0
 TAR=chp-templates-$V.tar.gz
-SHA=ea793f1d376ee25a98722a511062767c8e3c93a74daf78fcf0a5db0a228c2cb9   # templates-1.4.0 = git archive of the local tag at ea4d9f6 (re-pin if the tag moves before the owner signs)
+SHA=73964274430484e387a23e2cb95bee1747007841ecbd04c7f8c2f245dfc2c34f   # templates-1.4.0 = git archive of the local tag at 0a18aca (re-pin if the tag moves before the owner signs)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 gpg --verify "$REL/SHA256SUMS.asc" "$REL/SHA256SUMS" 2>&1 | grep -q "Good signature" || { echo "refusing: bad signature"; exit 1; }
 gpg --verify --status-fd 1 "$REL/SHA256SUMS.asc" "$REL/SHA256SUMS" 2>/dev/null | grep -q "VALIDSIG $FPR" || { echo "refusing: not signed by $FPR"; exit 1; }

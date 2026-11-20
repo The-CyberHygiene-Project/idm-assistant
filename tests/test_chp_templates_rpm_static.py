@@ -2,7 +2,7 @@
 from pathlib import Path
 
 D = Path(__file__).resolve().parents[1] / "appliance" / "rpm" / "chp-templates"
-SHA = "ea793f1d376ee25a98722a511062767c8e3c93a74daf78fcf0a5db0a228c2cb9"   # templates-1.4.0 (local tag, unsigned until the owner releases)
+SHA = "73964274430484e387a23e2cb95bee1747007841ecbd04c7f8c2f245dfc2c34f"   # templates-1.4.0 (local tag, unsigned until the owner releases)
 
 
 def test_spec_installs_only_the_shipped_library():
