@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.2
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -18,7 +18,7 @@ Source8:        31-renew-timer.sh
 Source9:        40-escrow-pending.sh
 Source10:       LICENSE
 Source11:       chp-server-cui-tailoring.xml
-Requires:       chp-base, chp-site >= 0.14.0-8, chp-identity-client >= 0.2.4-3, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
+Requires:       chp-base, chp-site >= 0.14.0-9, chp-identity-client >= 0.2.4-3, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
 
@@ -65,6 +65,10 @@ install -Dm0644 %{SOURCE11} %{buildroot}%{_datadir}/chp/scap/chp-server-cui-tail
 %{_datadir}/chp/scap/chp-server-cui-tailoring.xml
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-5.chp
+- ISO 0.7.0 Plan 3 Task 12b: Requires chp-site >= 0.14.0-9, so the server's marking re-check is never more lenient
+  than the workstation's checker.
+
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-4.chp
 - First boot step `time` (Task 12, owner decision 2026-11-20), after bind: `chp-site time-sync --role server` (the
   server serves NTP to the site subnet only; firewalld 123/udp from SUBNET only, the owner-approved exception to

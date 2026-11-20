@@ -408,7 +408,9 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
      not inside a list). A Markdown line longer than 8192 characters cannot be checked and is refused; break it up.
 
      In a non-CUI Markdown file the first and last lines are checked strictly: never start or end it with a line that
-     begins with the word and a dash, colon or bracket, or with the full name. Sentences in the body such as
+     begins with the word (even `# CUI handling policy`) or with the full name. The same holds for every header and
+     footer line in Word, Excel and PDF: a line that starts with the other kind's word, such as `CUI SP-PROPIN` or
+     `FCI contract data`, is a banner there. Sentences in the body such as
      "Controlled Unclassified Information (CUI) is defined in 32 CFR 2002." pass.
 
 #### ONLYOFFICE on the workstation

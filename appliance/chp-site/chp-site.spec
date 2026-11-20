@@ -51,7 +51,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   block (4 columns after a blank line, outside a list) is exempt like a fenced one (the first and last lines stay
   banner positions). Every Markdown reading is linear in the line, and a judged line over 8192 characters is
   refused ("cannot be checked"), so a crafted file cannot stall the check or the publish. The required banner stays
-  the exact ASCII text.
+  the exact ASCII text. In banner positions (every header/footer, the Markdown first and last lines) the other
+  kind's word followed by white space and anything is a banner too ("CUI SP-PROPIN"; controller ruling), so
+  "# CUI handling policy" can no longer open a non-CUI Markdown file. chp-documents and chp-identity-server now
+  require this release.
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
 - ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):

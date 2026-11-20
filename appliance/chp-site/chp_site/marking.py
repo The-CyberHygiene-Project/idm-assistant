@@ -430,7 +430,8 @@ def _looks_like(line, kind, wide=True):
     the phrase allows up to 3 non-letters between its words (Controlled-Unclassified-Information). A banner line is:
       - the word alone (also spaced, dotted or otherwise split: "C U I", "C.U.I."), or the word with //markings;
       - the word or the spelled-out phrase followed by a separator (- – — : | ( [) and a tail;
-      - the spelled-out phrase alone, or (wide) followed by anything.
+      - the spelled-out phrase alone, or (wide) followed by anything;
+      - (wide only, controller ruling 2026-11-20) the word, white space and anything: "CUI SP-PROPIN".
     wide (docx/xlsx/pdf banner positions, the first and last Markdown lines): any tail counts, and l/1 read as i
     everywhere. Not wide (the Markdown body, where lines are prose): a separator tail counts only when it starts with
     the spelled-out phrase, holds //, or has at most SHORT_TAIL words; l/1 read as i only in CUl/FCl capitals."""
@@ -447,6 +448,8 @@ def _looks_like(line, kind, wide=True):
         return True
     if head != word and wide:
         return True                                        # the phrase followed by anything, in a banner position
+    if wide and re.match(r"[^\w\s]{0,10}\s", s[len(word):]):
+        return True                                        # the word, white space and anything (ruling 2026-11-20)
     sep = re.match(rf"{_SEP}\s*(.*)", rest)
     if not sep:
         return False

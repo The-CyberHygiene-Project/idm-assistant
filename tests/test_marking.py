@@ -871,8 +871,10 @@ PROSE = [
                                                    "banner line at top and bottom.\n\nCUI\n"),
     ("CUI_P_v1.0.md", True, "CUI\n\n" + BLOCK_MD + "An FCI document carries the banner\nFCI (no designation block) at "
                                                    "top and bottom.\n\nCUI\n"),
-    ("Policy_v1.0.md", False, "# CUI handling policy\n\nControlled Unclassified Information (CUI) is information the "
-                              "government\ncreates or possesses.\n"),
+    # Task 12b ruling (1): "# CUI handling policy" as the FIRST line of a non-CUI file is now refused (the word and
+    # white space in a banner position); in the body it passes
+    ("Policy_v1.0.md", False, "Notes\n\n# CUI handling policy\n\nControlled Unclassified Information (CUI) is "
+                              "information the government\ncreates or possesses.\n"),
     # round 3 (controller ruling (c)): the first and last lines of a non-CUI Markdown file are banner positions, so
     # these prose lines sit in the body here; "CUI (Controlled Unclassified Information) ..." is refused, see below
     ("Policy_v1.0.md", False, "Notes\n\nStaff must mark documents that hold\nCUI - see the CUI handling procedure.\n\n"
@@ -1206,3 +1208,83 @@ def test_12b_indented_code_at_the_ends_is_still_a_banner_position(tmp_path):
         f.write_text(text, encoding="utf-8")
         r = M.check(f, False, NO_VALUES)
         assert not r.ok and any("non-CUI area" in p for p in r.problems), (text, r.problems)
+
+
+# ---------- Task 12b pre-review additions (controller rulings 2026-11-20) ----------
+
+@pytest.mark.parametrize("text", ["CUI SP-PROPIN", "CUI\tSP-PROPIN", "CUI PROPIN", "C̲UI SP-PROPIN",
+                                  "“CUI” SP-PROPIN"])
+def test_12b_wide_word_and_space_is_a_banner_docx_xlsx(tmp_path, text):
+    """Ruling (1): in a banner position the other kind's word, white space and anything is a banner (fail closed)."""
+    r = _fci_docx_header(tmp_path, text)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+    mk = _make()
+    g = tmp_path / "FCI_Hdr_v1.0.xlsx"
+    g.write_bytes(mk.xlsx([("Items", mk.sheet([["A"]], dict(mk.FCI_HF, oddHeader="&CFCI\n" + text)))]))
+    r = M.check(g, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+    assert M._looks_like(text, "cui", True)
+
+
+@pytest.mark.parametrize("text", ["FCI contract data", "FCI SP-X"])
+def test_12b_wide_word_and_space_fci_in_a_cui_docx_header(tmp_path, text):
+    mk = _make()
+    f = tmp_path / "CUI_Hdr_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.p(text, True)),
+                                         mk.BANNER_FTR], mk.REFS))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (text, r.problems)
+
+
+@pytest.mark.parametrize("name,cui,text,want", [
+    ("Policy_v1.0.md", False, "# CUI handling policy\n\nBody text.\n\nEnd\n", "a CUI banner"),
+    ("Policy_v1.0.md", False, "Notes\n\nBody text.\n\nCUI SP-PROPIN\n", "a CUI banner"),
+    ("Policy_v1.0.md", False, "FCI contract data\n\nBody text.\n\nEnd\n", "an FCI banner"),
+    ("FCI_H_v1.0.md", True, "FCI\n\nBody\n\nFCI\n\nCUI SP-PROPIN\n", "a CUI banner"),
+    ("CUI_H_v1.0.md", True, "FCI contract data\n\n" + BLOCK_MD + "Body\n\nCUI\n", "an FCI banner")])
+def test_12b_wide_word_and_space_md_ends(tmp_path, name, cui, text, want):
+    f = tmp_path / name
+    f.write_text(text, encoding="utf-8")
+    r = M.check(f, cui, VALUES if name.startswith("CUI_") else NO_VALUES)
+    assert not r.ok and any(want in p for p in r.problems), (text, r.problems)
+
+
+def test_12b_word_and_space_in_the_md_body_still_passes(tmp_path):
+    """Ruling (1): the Markdown body is unchanged; prose that starts with the word passes there."""
+    for line in ["CUI handling policy", "CUI documents go in the CUI area.", "FCI contract data is kept apart."]:
+        f = tmp_path / "Policy_v1.0.md"
+        f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (line, r.problems)
+
+
+def test_12b_correctly_marked_documents_still_pass(tmp_path):
+    """The right banner (with //markings for CUI) and the designation block are not caught by the wide rule."""
+    for name in ("CUI_Access-Policy_v1.0.docx", "CUI_Access-Policy_v1.0.xlsx", "FCI_Access-Policy_v1.0.docx",
+                 "FCI_Access-Policy_v1.0.xlsx"):
+        if (FX / name).exists():
+            r = M.check(FX / name, True, NO_VALUES if name.startswith("FCI_") else VALUES)
+            assert r.ok, (name, r.problems)
+    f = tmp_path / "CUI_Ok_v1.0.md"
+    f.write_text("CUI//SP-PROPIN\n\n" + BLOCK_MD + "Body about FCI contract data.\n\nCUI//SP-PROPIN\n", encoding="utf-8")
+    assert M.check(f, True, VALUES).ok
+    g = tmp_path / "FCI_Ok_v1.0.md"
+    g.write_text("FCI\n\nBody: CUI handling is elsewhere.\n\nFCI\n", encoding="utf-8")
+    assert M.check(g, True, NO_VALUES).ok
+    mk = _make()
+    h = tmp_path / "CUI_Hdr_v1.0.docx"
+    h.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI//SP-PROPIN", True)), mk.BANNER_FTR],
+                          mk.REFS))
+    assert M.check(h, True, VALUES).ok
+
+
+def test_12b_server_packages_pin_the_current_chp_site():
+    """Ruling (3): the server's publish re-check is never more lenient than the workstation checker: chp-documents
+    and chp-identity-server require chp-site's current release."""
+    cs = (TOP / "appliance/chp-site/chp-site.spec").read_text()
+    cur = re.search(r"^Version:\s+(\S+)", cs, re.M).group(1) + "-" + re.search(r"^Release:\s+(\d+)\.chp", cs,
+                                                                                re.M).group(1)
+    for spec in ("chp-documents/chp-documents.spec", "chp-identity-server/chp-identity-server.spec"):
+        s = (TOP / "appliance/rpm" / spec).read_text()
+        pin = re.search(r"^Requires:.*\bchp-site >= (\S+?),?(?:\s|$)", s, re.M)
+        assert pin and pin.group(1) == cur, (spec, pin and pin.group(1), cur)

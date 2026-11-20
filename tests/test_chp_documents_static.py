@@ -112,7 +112,7 @@ def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh",
               "82-docs-ledger.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        8.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        9.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
@@ -122,7 +122,7 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
     assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
     assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
-    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        8.chp" in SPEC
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        9.chp" in SPEC
     assert "UMask=0077" in t("chp-nextcloud-backup.service")
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
@@ -244,7 +244,7 @@ def test_nightly_check_timer_and_service():
         assert "%{_unitdir}/" + u in SPEC
     assert "%systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer " \
            "chp-nextcloud-cert-renew.timer chp-documents-check.timer" in SPEC
-    assert re.search(r"^Requires:.*\bchp-site >= 0\.14\.0-7\b", SPEC, re.M)          # Task 11a: set-aside, held files
+    assert re.search(r"^Requires:.*\bchp-site >= 0\.14\.0-9\b", SPEC, re.M)          # Task 12b: the marking re-check
     # Task 9d: documents trust (restore), the proven fapolicyd restart, the D7/D8 app fixes
     assert re.search(r"^Requires:.*\bchp-base >= 0\.1\.0-12\b", SPEC, re.M)
     assert re.search(r"^Requires:.*\bnextcloud-chp >= 35\.0\.3-6\b", SPEC, re.M)   # chp_ledger (Plan 3)
