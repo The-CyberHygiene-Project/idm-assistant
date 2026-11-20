@@ -1398,3 +1398,49 @@ def test_12b_r2_underscore_without_a_citation_is_still_a_banner(tmp_path, line):
     if kind == "cui":
         r = _fci_docx_header(tmp_path, line)
         assert not r.ok and any("a CUI banner" in p for p in r.problems), (line, r.problems)
+
+
+# ---------- Task 12b fix round 3 (re-review: tab variants; judge what follows a cited name; SP- titles) ----------
+
+@pytest.mark.parametrize("head", ['===+ "Tab"', '===! "Tab"', '===!+ "Tab"'])
+def test_12b_r3_tab_head_variants_open_a_container(tmp_path, head):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{head}\n\n    CUI\n\nBody\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (head, r.problems)
+
+
+CITE_BANNER_TAILS = ["CUI_SSP_v1.2 // SP-PROPIN", "CUI_SSP_v1.2//SP-PROPIN", "CUI_SSP_v1.2 ⁄⁄ SP-PROPIN",
+                     "CUI_x_v1.0 // NOFORN", "CUI_SP_PROPIN_v1.0 // NOFORN", "CUI_SSP_v1.2 - CUI//SP-PROPIN",
+                     "CUI_x_v1.0 CUI//SP-PROPIN", "CUI_SSP_v1.2 CUI", "CUI_SSP_v1.2 Controlled Unclassified Information",
+                     "CUI_x_v1.0 SP-PROPIN", "CUI_SSP_v1.2 | CUI", "CUI_SSP_v1.2_CUI//SP-PROPIN",
+                     "CUI_SSP_v1.2 NOFORN", "CUI_SSP_v1.2·SP-PROPIN", "CUI_SSP_v1.2CUI", "CUI_SP-PROPIN_v1.0",
+                     "CUI_SP-PROPIN_v1.0-DRAFT.docx", "CUI_v1.0", "CUI__SSP_v1.2", "C-U-I_SSP_v1.2", "CUI_SSP_v1.2.3",
+                     "CUI_SSP_v01.2", "CUI_-_v1.0"]
+
+
+@pytest.mark.parametrize("line", CITE_BANNER_TAILS)
+def test_12b_r3_what_follows_a_cited_name_is_judged(tmp_path, line):
+    """Only the name token is a citation; a //, the word, the phrase or a capitals marking after it is a banner;
+    an SP- title, an empty title or a broken version is no citation at all. Same verdict in docx and md."""
+    assert M._looks_like(line, "cui", True), line
+    r = _fci_docx_header(tmp_path, line)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (line, r.problems)
+    for text in (f"{line}\n\nIntro.\n\nMore.\n", f"Handbook\n\nIntro.\n\n{line}\n"):
+        f = tmp_path / "Handbook_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        assert not M.check(f, False, NO_VALUES).ok, text
+
+
+@pytest.mark.parametrize("line", ["CUI_SSP_v1.2 - System Security Plan", "CUI_SSP_v1.2 review notes",
+                                  "CUI_SSP_v1.2 — page 1", "CUI_SSP_v1.2 cross-reference", "CUI_SSP_v1.2",
+                                  "CUI_SSP_V1.2", "CUI_SSP_v1.2-DRAFT.docx (draft)", "CUI_PROPIN_v1.0",
+                                  "CUI_SSP_v1.2: see page 3"])
+def test_12b_r3_allowed_tails_after_a_cited_name_pass(tmp_path, line):
+    assert not M._looks_like(line, "cui", True), line
+    assert _fci_docx_header(tmp_path, line).ok, line
+    for text in (f"{line}\n\nIntro.\n\nMore.\n", f"Handbook\n\nIntro.\n\n{line}\n"):
+        f = tmp_path / "Handbook_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (text, r.problems)

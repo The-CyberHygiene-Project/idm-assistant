@@ -58,7 +58,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   (CUI/SP-PROPIN, CUI_SP-PROPIN, CUI.X) counts; in the Markdown body / and the middle dots join the separators;
   indented text after a footnote definition, a definition line or an admonition head is judged (it renders as text).
   Fix round 2: pandoc "~" definitions and "===" tab heads open a container too; a document name after the word
-  (CUI_SSP_v1.2, <title>_vX.Y, ASCII digits) is a citation, not a banner, in banner positions.
+  (CUI_SSP_v1.2, <title>_vX.Y, ASCII digits) is a citation, not a banner, in banner positions. Fix round 3: only the
+  name token is carved out; what follows it is still a banner when it holds //, the word, the phrase or a capitals
+  marking; an SP- title is no citation; Markdown and docx give the same verdict; ===+/===! tab heads are containers.
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
 - ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):

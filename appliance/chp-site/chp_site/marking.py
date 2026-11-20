@@ -200,18 +200,20 @@ _WMAP = str.maketrans({"l": "i", "1": "i"})
 _CAPS_L1 = re.compile(r"(?<![^\W\d_])(CU|FC)[l1](?![^\W\d_])")
 
 
-def _wfold(s, li=True):
+def _wfold(s, li=True, cf=True):
     """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms, NBSP,
     format characters (zero-width, soft hyphen: Unicode Cf) and combining marks (accents, underlines, enclosing
     circles: NFKD, every category M dropped, NFKC; Task 12b) dropped, cross-script lookalikes, case. li=True: l / 1
     read as i everywhere (the wide forms); li=False: only in a capitals context (CUl, CU1, FCl, FC1: the Markdown body,
-    so "Cul-de-sac" stays a word). Runs of white space become one space."""
+    so "Cul-de-sac" stays a word). cf=False keeps the case (the citation tail check). Runs of white space become one
+    space."""
     s = "".join(c for c in unicodedata.normalize("NFKD", s) if unicodedata.category(c)[0] != "M"
                 and unicodedata.category(c) != "Cf")
     s = unicodedata.normalize("NFKC", s).replace("\u00a0", " ").translate(_LOOKALIKE)
     if not li:
         s = _CAPS_L1.sub(lambda m: m.group(1) + "I", s)
-    s = s.casefold()
+    if cf:
+        s = s.casefold()
     return " ".join((s.translate(_WMAP) if li else s).split())
 
 
@@ -234,8 +236,10 @@ _CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
 # a document name after its prefix: <title>_vX.Y (ASCII digits; shared with the citation check, _CITE). In a banner
 # position, the word, _ and this is a citation of a controlled document, not a banner (review fix round 2)
 _CITE_TAIL = r"([^\W_][\w-]*?)_v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})(?![0-9]|\.[0-9])"
-_FOLDED_CITE = re.compile("_" + _CITE_TAIL.replace("_v(", "_[vV]("))
-_ANY_CITE = re.compile(r"(?<![\w-])" + _CITE_TAIL.replace("_v(", "_[vV]("))
+# the name token of a citation in a banner position: the word, _, the title, the version, -DRAFT and the extension
+_NAME_TOKEN = {k: re.compile(v[2][0] + "_" + _CITE_TAIL + r"(?:-draft)?(?:\.[a-z0-9]{1,10})?(?![^\W_])", re.I)
+               for k, v in _KINDS.items()}
+_CAPS_TOKEN = re.compile(r"[\W_]*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*)(?![^\W_])")
 _MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>|[-*+]\s+|\d{1,9}[.)]\s+|\[[ xX]\])\s*")
 _MD_TAG = re.compile(r"<[^<>]{0,200}>")
 # tags that render as a line break or a new block: each piece around them is judged as a line (Task 12b)
@@ -250,7 +254,7 @@ _MD_STRIP = " \t()[]{}<>\"'.,;:!?\\"
 MD_MAX_LINE = 8192                # a longer Markdown line is refused, not scanned (Task 12b: no unbounded work)
 
 
-def _md_plain(cell):
+def _md_plain(cell, keep_us=False):
     """A Markdown line (or table cell) without its block and inline markup: heading #s (and closing #s), quote >s,
     list and task-list markers, the * _ ` ~ wrappers, and surrounding brackets, parentheses and punctuation. Linear:
     no pattern here can backtrack over the line."""
@@ -260,7 +264,7 @@ def _md_plain(cell):
         if not m or not m.group(0):
             break
         pos = m.end()
-    s = re.sub(r"[*_`~]", "", s[pos:]).rstrip()
+    s = re.sub(r"[*`~]" if keep_us else r"[*_`~]", "", s[pos:]).rstrip()
     k = len(s)
     while k and s[k - 1] == "#":
         k -= 1
@@ -360,10 +364,9 @@ def _md_cells(line):
             v = _md_attrs(_MD_ESCAPE.sub(r"\1", _md_links(v) if "[" in v else v))
             cells = v.split("|") if "|" in v else [v]
             out += [_md_plain(c) for c in cells]
-            # an intraword _ renders as itself (CUI_SP-PROPIN): a second reading keeps it as a separator (review I2)
-            # (a document name such as CUI_SSP_v1.2 is a citation: it is left out of this reading, review round 2)
-            cells = [_ANY_CITE.sub(" ", c) for c in cells if "_" in c]
-            out += [_md_plain(c.replace("_", " ")) for c in cells if "_" in c]
+            # an intraword _ renders as itself (CUI_SP-PROPIN): a second reading keeps it, so the banner-position rules
+            # (and the citation carve-out, _cite_rest) see what docx sees (review I2, fix round 3)
+            out += [_md_plain(c, keep_us=True) for c in cells if "_" in c]
     return [c for c in out if c]
 
 
@@ -434,11 +437,25 @@ def _trim(s):
     return s[i:j]
 
 
-def _cites(line, word):
-    """The line (folded without the l/1 reading, which would turn digits into letters) starts with the word, _ and a
-    document name: a citation such as CUI_SSP_v1.2."""
-    s = _trim(_wfold(line, li=False))
-    return s[:len(word)] == word and bool(_FOLDED_CITE.match(s, len(word)))
+def _cite_rest(line, kind):
+    """When the line (folded without the l/1 reading, which would turn digits into letters, and keeping case) starts
+    with a citation of a controlled document, the word, _ and a document name (CUI_SSP_v1.2[-DRAFT][.ext]): the text
+    after the name token; else None. A title that starts with SP- (a CUI category marking) is no citation."""
+    t = _trim(_wfold(line, li=False, cf=False))
+    m = _NAME_TOKEN[kind].match(t)
+    if not m or m.group(1).casefold().startswith("sp-"):
+        return None
+    return t[m.end():]
+
+
+def _tail_banner(rest, word, phrase):
+    """What follows a cited name is a banner when it holds // (after the slash fold), the word or the phrase as a
+    whole word, or starts with a capitals token of 3 letters or more (SP-PROPIN, NOFORN) (review fix round 3)."""
+    r = _SLASHES.sub("//", _wfold(rest, li=False))
+    if "//" in r or re.search(rf"(?<![^\W_])(?:{word}|{phrase})(?![^\W_])", r):
+        return True
+    m = _CAPS_TOKEN.match(rest)
+    return bool(m) and sum(c.isalpha() for c in m.group(1)) >= 3
 
 
 def _looks_like(line, kind, wide=True):
@@ -467,8 +484,11 @@ def _looks_like(line, kind, wide=True):
         return True
     if head != word and wide:
         return True                                        # the phrase followed by anything, in a banner position
-    if wide and not s[len(word)].isalnum() and not (s[len(word)] == "_" and _cites(line, word)):
-        return True                    # the word, then white space or any non-alphanumeric and anything (rulings)
+    if wide and not s[len(word)].isalnum():
+        # the word, then white space or any non-alphanumeric and anything (rulings), unless it is a citation (the
+        # word, _ and a document name) with a tail that is no banner
+        tail = _cite_rest(line, kind) if s[len(word)] == "_" else None
+        return tail is None or _tail_banner(tail, word, phrase)
     sep = re.match(rf"{_SEP}\s*(.*)", rest)
     if not sep:
         return False
@@ -1075,7 +1095,7 @@ _FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})")
 # a line that opens a container whose indented continuation renders as text: a list item, a footnote definition, a
 # definition (": ..." or pandoc's "~ ..."), an admonition head (!!! / ???), a tab head (=== "Tab") (review I1 and fix
 # round 2: fail closed)
-_LIST_ITEM = re.compile(r" {0,3}(?:(?:[-*+]|\d{1,9}[.)]|[:~])(?:[ \t]|$)|\[\^[^\]]+\]:|!!!|\?\?\?|===[ \t])")
+_LIST_ITEM = re.compile(r" {0,3}(?:(?:[-*+]|\d{1,9}[.)]|[:~])(?:[ \t]|$)|\[\^[^\]]+\]:|!!!|\?\?\?|===[+!]{0,2}[ \t])")
 
 
 def _indent(x):
