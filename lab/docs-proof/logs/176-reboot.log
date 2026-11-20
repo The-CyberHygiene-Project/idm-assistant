@@ -1,0 +1,50 @@
+PASS after reboot the TPM unlocked the disk
+PASS unixd online after reboot
+stage reboot: ALL PASS
+active active active active active active active active active 
+ActiveEnterTimestampMonotonic=10436513  ActiveEnterTimestampMonotonic=10900891  ActiveEnterTimestampMonotonic=11340170 
+76-disk-space.sh: OK no XFS file system at or above 85% (or already alerted)
+77-nextcloud-services.sh: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-20T20:22:54Z
+78-nextcloud-cert.sh: OK NextCloud certificate: 21 h left of 24 h
+79-nextcloud-egress.sh: OK NextCloud egress table present, matches the shipped rules, address file valid
+80-fapolicyd.sh: OK fapolicyd active and enforcing
+81-documents-tags.sh: ALERT NextCloud check: cui-users holds lablocal, which is not a Kanidm (user_oidc) account: access to CUI, FCI and Archive was gra
+82-docs-ledger.sh: OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish
+Denied accesses: 0
+journal-volatile
+== iso5-cli1 up: yes
+active active active active active active 
+table inet firewalld table inet chp_workstation_egress 
+0
+Reference ID    : C0A86401 (_gateway)
+Leap status     : Normal
+KillUserProcesses=yes
+KillExcludeUsers=root
+b true
+80-fapolicyd.sh: OK fapolicyd active and enforcing
+83-workstation-editor.sh: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+Denied accesses: 0
+0
+== iso5-cli2 up: yes
+active active active active active active 
+table inet firewalld table inet chp_workstation_egress 
+0
+Reference ID    : C0A86401 (_gateway)
+Leap status     : Normal
+KillUserProcesses=yes
+KillExcludeUsers=root
+b true
+80-fapolicyd.sh: OK fapolicyd active and enforcing
+83-workstation-editor.sh: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+Denied accesses: 0
+0
+		meta l4proto { tcp, udp } th dport 853 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta l4proto { tcp, udp } th dport 53 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta skuid 997 ip daddr 192.168.100.1 udp dport 123 accept
+		meta skuid 997 ip6 daddr :: udp dport 123 accept
+		limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS " flags skuid
+997
+[   10.536464] iso5-cli1.iso5.lab.test systemd[1]: Starting CHP: this workstation may reach only the site server and the
+[   10.704824] iso5-cli1.iso5.lab.test chp-workstation-egress[1578]: /etc/chp/workstation-egress-addr.nft: unchanged
+[   10.795539] iso5-cli1.iso5.lab.test systemd[1]: Finished CHP: this workstation may reach only the site server and the
+[   16.304471] iso5-cli1.iso5.lab.test chronyd[1527]: Selected source 192.168.100.1

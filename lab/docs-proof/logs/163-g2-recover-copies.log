@@ -1,0 +1,42 @@
+== lab06 recover dirs while open:
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/CUI_SecPolicy_v0.2.docx
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/asc_name.info
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/media
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/Editor.bin
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/changes
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__yzSdaG/user_name.log
+﻿<?xml version="1.0" encoding="utf-8"?><info type="65" name="CUI_SecPolicy_v0.2.docx" />
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/:
+data
+
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/:
+cache
+dictionaries
+fonts
+recents.xml
+recover
+sdkjs-plugins
+settings.xml
+== lab01 recover dirs while open:
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/CUI_SecPolicy_v0.7-DRAFT.docx
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/asc_name.info
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/media
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/Editor.bin
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/changes
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/recover/DE__8AhSI0/user_name.log
+﻿<?xml version="1.0" encoding="utf-8"?><info type="65" name="CUI_SecPolicy_v0.7-DRAFT.docx" />
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/:
+data
+
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/:
+cache
+dictionaries
+fonts
+recents.xml
+recover
+sdkjs-plugins
+settings.xml

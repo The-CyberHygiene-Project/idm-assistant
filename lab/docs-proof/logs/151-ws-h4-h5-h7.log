@@ -1,0 +1,13 @@
+## H4: inbound to a closed port from aero (firewalld rejects; does the reply leave?)
+bash: line 1: /dev/tcp/192.168.100.51/8080: No route to host
+port 8080: rc=0 after .005 s
+bash: line 1: /dev/tcp/192.168.100.51/3389: No route to host
+port 3389: rc=0 after .004 s
+## H5: firewall-cmd --reload
+success
+table inet chp_workstation_egress
+table inet firewalld
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## H7: enable-linger as the user (polkit)
+Could not enable linger: Access denied
+rc=1

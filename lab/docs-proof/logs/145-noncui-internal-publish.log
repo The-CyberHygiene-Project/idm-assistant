@@ -1,0 +1,16 @@
+new recorded (ledger entry 16)
+new document: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/Handbook_v0.1-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+OK
+HTTP 201
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 17)
+published Internal/Compliance/Handbook_v0.1.docx as CR-2026-0004 (ledger entry 18)
+When you are done with it: chp-site doc close Handbook_v0.1.docx
+rc=0
+Handbook_v0.1.docx
+Handbook_v0.1.pdf
+Superseded
+0
+(CUI lines in the non-CUI reader PDF)

@@ -1,0 +1,16 @@
+sign-in URL printed (redirect_uri http://127.0.0.1:44343/)
+browser:   GET https://idm.iso5.lab.test/ui/oauth2 -> 200
+browser:   form /ui/login/begin fields=['password', 'totp', 'username']
+browser:   POST https://idm.iso5.lab.test/ui/login/begin -> 200
+browser:   form /ui/login/totp fields=['password', 'totp']
+browser:   POST https://idm.iso5.lab.test/ui/login/totp -> 200
+browser:   form /ui/login/pw fields=['password']
+browser:   POST https://idm.iso5.lab.test/ui/login/pw -> 303
+browser:   GET https://idm.iso5.lab.test/ui/oauth2/resume -> 200
+browser:   form /ui/oauth2/consent fields=['consent_token']
+browser:   POST https://idm.iso5.lab.test/ui/oauth2/consent -> 303
+browser:   GET http://127.0.0.1:44343/ -> 200
+browser: DONE loopback answered 200: Signed in. You can close this tab and go back to the terminal.
+Sign in at Kanidm in the browser (it should open by itself; if not, open this address):
+signed in as lab01 (sign-in ends: Kanidm did not say)
+EXIT=0

@@ -1,0 +1,21 @@
+closed CUI_SecPolicy_v0.7.docx
+checkout recorded (ledger entry 41)
+edited CUI_SecPolicy_v0.8-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 42)
+sampler started
+published CUI/Compliance/CUI_SecPolicy_v0.8.docx as CR-2026-0010 (ledger entry 43)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.8.docx
+rc=0
+  38913   38913   38913 root           0 /usr/bin/python3 /usr/share/chp-site/chp-site.pyz doc-ledger process
+  39114   38913   38913 root           0 runuser -u apache -- psql -d nextcloud -qtAX -v ON_ERROR_STOP=1 -c SELECT coalesce(json_agg(t), '[]'::json) F
+  39141   39141   39141 root           0 runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:put -
+  39142   39141   39141 apache         0 /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:put - /chp-publisher/files
+  39191   39191   39191 root           1 runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:move 
+  39192   39191   39191 apache         1 /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:move /chp-publisher/files/
+  39249   39249   39249 root           0 runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:move 
+  39250   39249   39249 apache         0 /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:move /chp-publisher/files/
+  39294   39294   39294 root           0 runuser -u apache -- /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:put -
+  39295   39294   39294 apache         0 /usr/bin/php -d apc.enable_cli=1 -d memory_limit=512M /usr/lib/nextcloud/occ files:put - /chp-publisher/files
+0

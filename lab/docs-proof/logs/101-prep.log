@@ -1,0 +1,6 @@
+aero before: Mem:              30          17           0           0          13          13
+iso5-cli1 iso5-srv iso5-cli2 chp-build iso5-dcli iso5-docs  
+ISO sha256: 0cb27c1497acdd245af74508ab16a8d9f75a57dd10089372ac2ef9a68067cac0 (want 0cb27c1497acdd245af74508ab16a8d9f75a57dd10089372ac2ef9a68067cac0)
+PASS chp-site validate (iso5 site, diag key)
+PASS stick image made
+stage prep: ALL PASS

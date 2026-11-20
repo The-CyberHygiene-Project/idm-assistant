@@ -1,0 +1,185 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-20T17:33:31Z
+Last metadata expiration check: 0:02:38 ago on Fri 20 Nov 2026 10:30:56 AM MST.
+Dependencies resolved.
+================================================================================
+ Package                Arch   Version                                Repo
+                                                                           Size
+================================================================================
+Installing:
+ chp-documents          noarch 0.1.0-8.chp.el9                        chp  46 k
+ nextcloud-chp          noarch 35.0.3-6.chp.el9                       chp 212 M
+Installing dependencies:
+ apr                    x86_64 1.7.0-12.el9_3                         chp 122 k
+ apr-util               x86_64 1.6.1-23.el9                           chp  94 k
+ apr-util-bdb           x86_64 1.6.1-23.el9                           chp  12 k
+ capstone               x86_64 4.0.2-12.el9_8                         chp 755 k
+ httpd                  x86_64 2.4.62-13.el9                          chp  45 k
+ httpd-core             x86_64 2.4.62-13.el9                          chp 1.4 M
+ httpd-filesystem       noarch 2.4.62-13.el9                          chp  12 k
+ httpd-tools            x86_64 2.4.62-13.el9                          chp  79 k
+ libpq                  x86_64 13.23-1.el9_7                          chp 208 k
+ libzip                 x86_64 1.7.3-8.el9                            chp  61 k
+ mod_ssl                x86_64 1:2.4.62-13.el9                        chp 110 k
+ nginx-filesystem       noarch 2:1.20.1-28.el9.rocky.0.1              chp 9.9 k
+ php-bcmath             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  33 k
+ php-cli                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 3.7 M
+ php-common             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 714 k
+ php-fpm                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 1.9 M
+ php-gd                 x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  40 k
+ php-gmp                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  30 k
+ php-intl               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 169 k
+ php-mbstring           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 524 k
+ php-opcache            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 353 k
+ php-pdo                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  86 k
+ php-pecl-apcu          x86_64 5.1.23-1.module+el9.7.0+40005+715283ec chp  60 k
+ php-pecl-zip           x86_64 1.22.3-1.module+el9.7.0+40005+715283ec chp  63 k
+ php-pgsql              x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  75 k
+ php-process            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  42 k
+ php-xml                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 150 k
+ postgresql             x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 1.9 M
+ postgresql-private-libs
+                        x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 143 k
+ postgresql-server      x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 6.9 M
+ rocky-logos-httpd      noarch 90.17-1.el9                            chp  24 k
+
+Transaction Summary
+================================================================================
+Install  33 Packages
+
+Total size: 232 M
+Installed size: 887 M
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Installing       : php-common-8.3.29-1.module+el9.7.0+40074+b1038bdd.    1/33 
+  Running scriptlet: httpd-filesystem-2.4.62-13.el9.noarch                 2/33 
+  Installing       : httpd-filesystem-2.4.62-13.el9.noarch                 2/33 
+  Installing       : apr-1.7.0-12.el9_3.x86_64                             3/33 
+  Installing       : apr-util-bdb-1.6.1-23.el9.x86_64                      4/33 
+  Installing       : apr-util-1.6.1-23.el9.x86_64                          5/33 
+  Installing       : php-pdo-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86    6/33 
+  Installing       : postgresql-private-libs-16.13-1.module+el9.8.0+401    7/33 
+  Installing       : postgresql-16.13-1.module+el9.8.0+40159+adcaa225.x    8/33 
+  Running scriptlet: postgresql-server-16.13-1.module+el9.8.0+40159+adc    9/33 
+  Installing       : postgresql-server-16.13-1.module+el9.8.0+40159+adc    9/33 
+  Running scriptlet: postgresql-server-16.13-1.module+el9.8.0+40159+adc    9/33 
+  Installing       : httpd-tools-2.4.62-13.el9.x86_64                     10/33 
+  Installing       : httpd-core-2.4.62-13.el9.x86_64                      11/33 
+  Installing       : mod_ssl-1:2.4.62-13.el9.x86_64                       12/33 
+  Installing       : php-bcmath-8.3.29-1.module+el9.7.0+40074+b1038bdd.   13/33 
+  Installing       : php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   14/33 
+  Installing       : php-gd-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_   15/33 
+  Installing       : php-gmp-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   16/33 
+  Installing       : php-intl-8.3.29-1.module+el9.7.0+40074+b1038bdd.x8   17/33 
+  Installing       : php-mbstring-8.3.29-1.module+el9.7.0+40074+b1038bd   18/33 
+  Installing       : php-pecl-apcu-5.1.23-1.module+el9.7.0+40005+715283   19/33 
+  Installing       : php-process-8.3.29-1.module+el9.7.0+40074+b1038bdd   20/33 
+  Installing       : php-xml-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   21/33 
+  Installing       : rocky-logos-httpd-90.17-1.el9.noarch                 22/33 
+  Installing       : httpd-2.4.62-13.el9.x86_64                           23/33 
+  Running scriptlet: httpd-2.4.62-13.el9.x86_64                           23/33 
+  Running scriptlet: nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch    24/33 
+  Installing       : nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch    24/33 
+  Installing       : php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   25/33 
+  Running scriptlet: php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   25/33 
+  Installing       : libzip-1.7.3-8.el9.x86_64                            26/33 
+  Installing       : php-pecl-zip-1.22.3-1.module+el9.7.0+40005+715283e   27/33 
+  Installing       : libpq-13.23-1.el9_7.x86_64                           28/33 
+  Installing       : php-pgsql-8.3.29-1.module+el9.7.0+40074+b1038bdd.x   29/33 
+  Installing       : capstone-4.0.2-12.el9_8.x86_64                       30/33 
+  Installing       : php-opcache-8.3.29-1.module+el9.7.0+40074+b1038bdd   31/33 
+  Installing       : nextcloud-chp-35.0.3-6.chp.el9.noarch                32/33 
+  Running scriptlet: nextcloud-chp-35.0.3-6.chp.el9.noarch                32/33 
+File context for /etc/nextcloud(/.*)? already defined, modifying instead
+
+  Installing       : chp-documents-0.1.0-8.chp.el9.noarch                 33/33 
+  Running scriptlet: chp-documents-0.1.0-8.chp.el9.noarch                 33/33 
+  Running scriptlet: httpd-2.4.62-13.el9.x86_64                           33/33 
+  Running scriptlet: nextcloud-chp-35.0.3-6.chp.el9.noarch                33/33 
+  Running scriptlet: chp-documents-0.1.0-8.chp.el9.noarch                 33/33 
+  Verifying        : apr-1.7.0-12.el9_3.x86_64                             1/33 
+  Verifying        : apr-util-1.6.1-23.el9.x86_64                          2/33 
+  Verifying        : apr-util-bdb-1.6.1-23.el9.x86_64                      3/33 
+  Verifying        : capstone-4.0.2-12.el9_8.x86_64                        4/33 
+  Verifying        : chp-documents-0.1.0-8.chp.el9.noarch                  5/33 
+  Verifying        : httpd-2.4.62-13.el9.x86_64                            6/33 
+  Verifying        : httpd-core-2.4.62-13.el9.x86_64                       7/33 
+  Verifying        : httpd-filesystem-2.4.62-13.el9.noarch                 8/33 
+  Verifying        : httpd-tools-2.4.62-13.el9.x86_64                      9/33 
+  Verifying        : libpq-13.23-1.el9_7.x86_64                           10/33 
+  Verifying        : libzip-1.7.3-8.el9.x86_64                            11/33 
+  Verifying        : mod_ssl-1:2.4.62-13.el9.x86_64                       12/33 
+  Verifying        : nextcloud-chp-35.0.3-6.chp.el9.noarch                13/33 
+  Verifying        : nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch    14/33 
+  Verifying        : php-bcmath-8.3.29-1.module+el9.7.0+40074+b1038bdd.   15/33 
+  Verifying        : php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   16/33 
+  Verifying        : php-common-8.3.29-1.module+el9.7.0+40074+b1038bdd.   17/33 
+  Verifying        : php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   18/33 
+  Verifying        : php-gd-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_   19/33 
+  Verifying        : php-gmp-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   20/33 
+  Verifying        : php-intl-8.3.29-1.module+el9.7.0+40074+b1038bdd.x8   21/33 
+  Verifying        : php-mbstring-8.3.29-1.module+el9.7.0+40074+b1038bd   22/33 
+  Verifying        : php-opcache-8.3.29-1.module+el9.7.0+40074+b1038bdd   23/33 
+  Verifying        : php-pdo-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   24/33 
+  Verifying        : php-pecl-apcu-5.1.23-1.module+el9.7.0+40005+715283   25/33 
+  Verifying        : php-pecl-zip-1.22.3-1.module+el9.7.0+40005+715283e   26/33 
+  Verifying        : php-pgsql-8.3.29-1.module+el9.7.0+40074+b1038bdd.x   27/33 
+  Verifying        : php-process-8.3.29-1.module+el9.7.0+40074+b1038bdd   28/33 
+  Verifying        : php-xml-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   29/33 
+  Verifying        : postgresql-16.13-1.module+el9.8.0+40159+adcaa225.x   30/33 
+  Verifying        : postgresql-private-libs-16.13-1.module+el9.8.0+401   31/33 
+  Verifying        : postgresql-server-16.13-1.module+el9.8.0+40159+adc   32/33 
+  Verifying        : rocky-logos-httpd-90.17-1.el9.noarch                 33/33 
+Installed products updated.
+
+Installed:
+  apr-1.7.0-12.el9_3.x86_64                                                     
+  apr-util-1.6.1-23.el9.x86_64                                                  
+  apr-util-bdb-1.6.1-23.el9.x86_64                                              
+  capstone-4.0.2-12.el9_8.x86_64                                                
+  chp-documents-0.1.0-8.chp.el9.noarch                                          
+  httpd-2.4.62-13.el9.x86_64                                                    
+  httpd-core-2.4.62-13.el9.x86_64                                               
+  httpd-filesystem-2.4.62-13.el9.noarch                                         
+  httpd-tools-2.4.62-13.el9.x86_64                                              
+  libpq-13.23-1.el9_7.x86_64                                                    
+  libzip-1.7.3-8.el9.x86_64                                                     
+  mod_ssl-1:2.4.62-13.el9.x86_64                                                
+  nextcloud-chp-35.0.3-6.chp.el9.noarch                                         
+  nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch                             
+  php-bcmath-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                      
+  php-cli-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-common-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                      
+  php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-gd-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                          
+  php-gmp-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-intl-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                        
+  php-mbstring-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                    
+  php-opcache-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                     
+  php-pdo-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  php-pecl-apcu-5.1.23-1.module+el9.7.0+40005+715283ec.x86_64                   
+  php-pecl-zip-1.22.3-1.module+el9.7.0+40005+715283ec.x86_64                    
+  php-pgsql-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                       
+  php-process-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                     
+  php-xml-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86_64                         
+  postgresql-16.13-1.module+el9.8.0+40159+adcaa225.x86_64                       
+  postgresql-private-libs-16.13-1.module+el9.8.0+40159+adcaa225.x86_64          
+  postgresql-server-16.13-1.module+el9.8.0+40159+adcaa225.x86_64                
+  rocky-logos-httpd-90.17-1.el9.noarch                                          
+
+Complete!
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-nextcloud-egress.service → /usr/lib/systemd/system/chp-nextcloud-egress.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/postgresql.service → /usr/lib/systemd/system/postgresql.service.
+Fapolicyd was notified
+chp-site: occ maintenance:install failed: {"reqId":"xpXMsZqBq8Xrri46EkmM","level":3,"time":"2026-11-20T17:34:31+00:00","remoteAddr":"","user":"--","app":"PHP","method":"","url":"--","scriptName":"/usr/lib/nextcloud/occ","message":"fopen(/usr/; fix the cause, then re-run chp-site documents enable (it is safe to repeat)
+enable-rc=2
+2026-11-20T17:34:31Z
+EXIT=0
+stick-detached

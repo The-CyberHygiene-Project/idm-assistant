@@ -1,0 +1,15 @@
+## I9/I2: a LOCAL NextCloud account added to cui-users by hand
+The account "lablocal" was created successfully
+Display name set to "lab local"
+user lablocal added
+A18 adduser again (existing member): rc=0
+ALERT NextCloud check: cui-users holds lablocal, which is not a Kanidm (user_oidc) account: access to CUI, FCI and Archive was granted inside NextCloud, outside Kanidm. Remove it (occ group:removeuser cui-users lablocal)
+The specified user was deleted
+## A17: chp-publisher DISABLED, then occ files:put as it
+The specified user is disabled
+files:put rc=0
+probe.txt
+file /chp-publisher/files/CUI/Compliance/probe.txt not found
+0
+The specified user is enabled
+EXIT=0

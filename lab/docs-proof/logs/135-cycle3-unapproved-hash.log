@@ -1,0 +1,15 @@
+removed CUI_SecPolicy_v0.2.docx
+removed the checkout record of CUI_SecPolicy_v0.2.docx
+closed CUI_SecPolicy_v0.2.docx
+rc=0
+checkout recorded (ledger entry 9)
+working copy: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.3-DRAFT.docx
+edited CUI_SecPolicy_v0.3-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 10)
+rc=0
+## lab01 edits AFTER the approval, renames, publishes (unapproved hash)
+edited CUI_SecPolicy_v0.3-DRAFT.docx
+refused: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+rc=1

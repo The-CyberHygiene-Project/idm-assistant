@@ -1,0 +1,7 @@
+Successfully added ["lab06"] to group "cui-users"
+SIGNED IN: id=lab06 display='Lab User 6' groups=['chp-users', 'cui-users'] backend=user_oidc
+1
+lab06 700
+tmpfs
+signed in as lab06 (sign-in ends: Kanidm did not say)
+EXIT=0

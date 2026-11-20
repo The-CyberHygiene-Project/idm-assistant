@@ -1,0 +1,49 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-20T17:36:50Z
+[32m[32m✔[0m [1mProvisioner[0m[1m:[0m acme (ACME)
+Using Standalone Mode HTTP challenge to validate files.iso5.lab.test . done!
+Waiting for Order to be 'ready' for finalization .. done!
+Finalizing Order .. done!
+[32m[32m✔[0m [1mCertificate[0m[1m:[0m /etc/pki/nextcloud/chain.pem
+[32m[32m✔[0m [1mPrivate Key[0m[1m:[0m /etc/pki/nextcloud/key.pem
+Created symlink /etc/systemd/system/multi-user.target.wants/php-fpm.service → /usr/lib/systemd/system/php-fpm.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/httpd.service → /usr/lib/systemd/system/httpd.service.
+Created symlink /etc/systemd/system/timers.target.wants/nextcloud-cron.timer → /usr/lib/systemd/system/nextcloud-cron.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-nextcloud-backup.timer → /usr/lib/systemd/system/chp-nextcloud-backup.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-nextcloud-cert-renew.timer → /usr/lib/systemd/system/chp-nextcloud-cert-renew.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-documents-check.timer → /usr/lib/systemd/system/chp-documents-check.timer.
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-docs-ledger.path → /usr/lib/systemd/system/chp-docs-ledger.path.
+Fapolicyd was notified
+- packages: nextcloud-chp, chp-documents (PHP 8.3, PostgreSQL 16.13, httpd from Rocky)
+- mail: no mail server installed (postfix, sendmail, exim, opensmtpd absent); NextCloud mail off
+- /etc/hosts: the site names -> 192.168.100.50 (apache has no DNS)
+- DNS: files.iso5.lab.test IN A 192.168.100.50 in the site zone
+- rendered: LAN-only httpd (192.168.100.0/24), egress address 192.168.100.50, /etc/chp/documents.conf
+- egress table inet chp_nextcloud_egress loaded (apache: this server only, no DNS)
+- Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress/break-glass/accounts at 12; uploads and downloads stored)
+- database: PostgreSQL 16.13, socket only, peer authentication, database nextcloud (owner apache)
+- NextCloud installed offline (data /data/nextcloud/data); /etc/nextcloud/config.php trusted by fapolicyd first
+- settings: no internet connection, app store and update checker off, mail off, trusted domain files.iso5.lab.test, https://files.iso5.lab.test:8443, sharing locked down
+- apps on: admin_audit, groupfolders, files_accesscontrol, user_oidc, chp_foldertag, chp_ledger, systemtags, password_policy, bruteforcesettings, files_downloadlimit, workflowengine, viewer, files_pdfviewer; editors and outbound apps off
+- break-glass NextCloud admin ncadmin made (bcrypt); secret to the escrow
+- Kanidm: groups cui-users, doc-reviewers; OAuth2 client nextcloud (ES256, PKCE), chp_groups claim
+- sign-in: user_oidc provider kanidm; the login page goes straight to Kanidm
+- team folders: CUI=1, FCI=2, Archive=3, Operations=4, Internal=5, Public=6; read back: CUI/FCI/Archive mapped to cui-users only, share off; reviewers read-only there
+- tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive
+- doc client: Kanidm public client chp-doc (PKCE S256, redirect http://127.0.0.1/ on any port, scopes openid profile groups, refresh token 8 h), chp_groups claim
+- Bearer: user_oidc provider kanidm-cli checks chp-doc tokens at Kanidm's userinfo (no provisioning); /login still goes straight to Kanidm (provider 1)
+- compliance areas: CUI/Compliance=36, Internal/Compliance=37, Archive/Superseded=38, Internal/Compliance/Superseded=39; read-only to every group there (CUI: cui-users, doc-reviewers; Archive: cui-users, doc-reviewers; Internal: chp-users); only the root appender writes them (as the local account chp-publisher, through occ: write, create, delete on these four areas only; no password anyone knows)
+- document approvers: not set (DOC_ISSO_ACCOUNT, DOC_APPROVER_ACCOUNTS in site.conf): controlled documents cannot be approved until they are
+- certificate for files.iso5.lab.test from the site CA (renewed by chp-nextcloud-cert-renew.timer)
+- started: php-fpm, httpd, nextcloud-cron.timer, chp-nextcloud-backup.timer, chp-nextcloud-cert-renew.timer, chp-documents-check.timer, chp-docs-ledger.path (HTTPS 8443, LAN 192.168.100.0/24 only)
+- fapolicyd trust entry for /etc/nextcloud/config.php refreshed (it did not match the file)
+- fapolicyd restarted (rule 65 loaded); active over 5 s; Denied accesses: 0
+- break-glass secret written to the site stick (escrow/), read back, shredded here
+- documents.conf ENABLED=yes
+- AIDE: this run changed /etc/chp/documents.conf, /var/lib/pgsql/data/postgresql.conf, /etc/nextcloud/config.php, /etc/fapolicyd/trust.d/nextcloud, /etc/nextcloud/oidc-secret, SELinux boolean httpd_can_network_relay, firewalld rule, unit enabled: php-fpm and 6 more: refresh the baseline now with chp-site aide-accept --approver "<ISSO>" --reason "documents enable"
+enable-rc=0
+2026-11-20T17:38:45Z
+EXIT=0
+stick-detached

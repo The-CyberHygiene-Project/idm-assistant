@@ -1,0 +1,22 @@
+## C2: 12 POSTs in a few seconds (invalid bodies, nothing spooled)
+1: HTTP 400
+2: HTTP 400
+3: HTTP 400
+4: HTTP 400
+5: HTTP 400
+6: HTTP 400
+7: HTTP 400
+8: HTTP 429
+9: HTTP 429
+10: HTTP 429
+11: HTTP 429
+12: HTTP 429
+## B10: app password (Basic) on the ledger
+HTTP 403
+{"ocs":{"meta":{"status":"failure","statuscode":403,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+## B10: app password sent as a Bearer
+HTTP 403
+{"ocs":{"meta":{"status":"failure","statuscode":403,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+## B11: forged Bearer (random string)
+HTTP 401
+{"ocs":{"meta":{"status":"failure","statuscode":997,"message":"Current user is not logged in"},"data":[]}}

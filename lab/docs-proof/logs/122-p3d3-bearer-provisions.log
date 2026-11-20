@@ -1,0 +1,32 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+tunnel up
+1
+  GET files.iso5.lab.test:8443/index.php/apps/user_oidc/login/1 -> 303
+  GET idm.iso5.lab.test/ui/oauth2 -> 200
+  form /ui/login/begin fields=['password', 'totp', 'username']
+  POST idm.iso5.lab.test/ui/login/begin -> 200
+  form /ui/login/totp fields=['password', 'totp']
+  POST idm.iso5.lab.test/ui/login/totp -> 200
+  form /ui/login/pw fields=['password']
+  POST idm.iso5.lab.test/ui/login/pw -> 303
+  GET idm.iso5.lab.test/ui/oauth2/resume -> 200
+  form /ui/oauth2/consent fields=['consent_token']
+  POST idm.iso5.lab.test/ui/oauth2/consent -> 303
+  GET files.iso5.lab.test:8443/index.php/apps/user_oidc/code -> 303
+  GET files.iso5.lab.test:8443/index.php/apps/files/ -> 200
+  GET files.iso5.lab.test:8443/ocs/v2.php/cloud/user -> 200
+SIGNED IN: id=lab01 display='Lab User 1' groups=['chp-users', 'cui-users'] backend=user_oidc
+  - groups:
+    - chp-users
+    - cui-users
+  - quota: none
+  - storage:
+  - ncadmin: Break-glass admin
+  - chp-publisher: CHP document publisher (root, occ only)
+  - lab01: Lab User 1
+SIGNED IN: id=lab04 display='Lab User 4' groups=['chp-users', 'cui-users', 'doc-reviewers'] backend=user_oidc

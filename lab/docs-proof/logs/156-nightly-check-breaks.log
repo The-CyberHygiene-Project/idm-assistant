@@ -1,0 +1,42 @@
+## D6/B2: documents check (manual run; chp-canary enabled outside 03:05-03:45 -> 100609 expected)
+ALERT NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+rc=0
+## D7a: remove the cui-users RO rule on CUI/Compliance
+ALERT NextCloud check: group cui-users has no read-only rule on CUI/Compliance: its members can WRITE the controlled-document area (only the root appender may): occ groupfolders:permissions 1 --group cui-users -- /Compli
+ALERT NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+## D7b: map chp-users onto Internal by hand? (Internal is already chp-users) -> map doc-reviewers to Internal
+ALERT NextCloud check: group cui-users has no read-only rule on CUI/Compliance: its members can WRITE the controlled-document area (only the root appender may): occ groupfolders:permissions 1 --group cui-users -- /Compli
+ALERT NextCloud check: group doc-reviewers (mapped to Internal by hand) has no read-only rule on Internal/Compliance: its members can WRITE the controlled-document area (only the root appender may): occ groupfolders:perm
+ALERT NextCloud check: group doc-reviewers (mapped to Internal by hand) has no read-only rule on Internal/Compliance/Superseded: its members can WRITE the controlled-document area (only the root appender may): occ groupf
+ALERT NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+## I10: occ app:disable chp_ledger (100603 / 100612 expected)
+19:59:52
+chp_ledger 1.0.1 disabled
+ALERT NextCloud check: the NextCloud app chp_ledger is not enabled: no document request reaches the appender (occ app:enable chp_ledger, then find out who switched it off)
+ALERT NextCloud check: group cui-users has no read-only rule on CUI/Compliance: its members can WRITE the controlled-document area (only the root appender may): occ groupfolders:permissions 1 --group cui-users -- /Compli
+ALERT NextCloud check: group doc-reviewers (mapped to Internal by hand) has no read-only rule on Internal/Compliance: its members can WRITE the controlled-document area (only the root appender may): occ groupfolders:perm
+ALERT NextCloud check: group doc-reviewers (mapped to Internal by hand) has no read-only rule on Internal/Compliance/Superseded: its members can WRITE the controlled-document area (only the root appender may): occ groupf
+ALERT NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+## restore by enable is the operator path; here: app:enable + the two rules by hand, then check
+chp_ledger 1.0.1 enabled
+ALERT NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+EXIT=0
+2026-11-20T12:59:26 100609 12 NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary"
+2026-11-20T12:59:40 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:40 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:44 100609 12 NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary"
+2026-11-20T12:59:46 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:46 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:50 100609 12 NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary"
+2026-11-20T12:59:50 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:50 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:54 100603 12 NextCloud: a CUI control app was switched OFF: App "chp_ledger" disabled
+2026-11-20T12:59:54 100612 12 NextCloud: a CUI control app was switched OFF: chp.app.disabled: app chp_ledger disabled by occ (a CUI control app)
+2026-11-20T12:59:56 100609 12 NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary"
+2026-11-20T12:59:56 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T12:59:56 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T13:00:02 100609 12 NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary"
+2026-11-20T13:00:04 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f
+2026-11-20T13:00:04 100608 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Interaction\Actions\ShareAction f

@@ -1,0 +1,79 @@
+chp-docs-ledger
+data
+etc-nextcloud
+MANIFEST
+nextcloud.pgdump
+ce3da849fda84328af8ebb34fc0bc4f42a3c4af04385101c86f5de76fb0f22fe  /var/lib/chp-docs/ledger/ledger.jsonl
+ledger moved aside (a server with no ledger)
+restore-rc=3
+ls: cannot access '/var/lib/chp-docs/ledger': No such file or directory
+sha256sum: /var/lib/chp-docs/ledger/ledger.jsonl: No such file or directory
+ce3da849fda84328af8ebb34fc0bc4f42a3c4af04385101c86f5de76fb0f22fe  /root/ledger.live-before-restore/ledger.jsonl
+PROBLEM: head 1 (2026-11-20T19:43:00Z): the stick saw 20 entries; the server has 0 (entries removed)
+verify-stick-rc=1
+ALERT NextCloud check: /etc/nextcloud/config.php does not match its fapolicyd trust entry (size/sha256): NextCloud changed it since the last enable; check the change, then re-run chp-site documents en
+ALERT NextCloud check: share canary could not run to the end: [Errno 111] Connection refused
+ALERT NextCloud check: share canary: could not list shares on the canary file: [Errno 111] Connection refused
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+inactive inactive inactive active Denied accesses: 0
+EXIT=0
+postgres
+template1
+template0
+nextcloud
+postgres|postgres|psql|active|2026-11-20 13:16:45.905135-07
+NOTICE:  database "nextcloud_probe_x" does not exist, skipping
+psql-rc=0
+ls: cannot access '/var/lib/chp-docs/ledger': No such file or directory
++ set -Eeuo pipefail
++ CONF=/etc/chp/documents.conf
++ B=/backup/nextcloud
++ D=/data/nextcloud/data
++ OCC=/usr/bin/occ
++ CHP_SITE=/usr/bin/chp-site
++ SD=/var/lib/chp/documents
++ MIN_KEEP=2
++ LEDGER=/var/lib/chp-docs/ledger
++ KEEP=14
++ case ${1:-backup} in
++ o=/backup/nextcloud/20261120T201535Z
++ '[' -s /backup/nextcloud/20261120T201535Z/MANIFEST ']'
++ cd /backup/nextcloud/20261120T201535Z
++ sha256sum --quiet -c MANIFEST
++ systemctl stop httpd php-fpm nextcloud-cron.timer
++ runuser -u postgres -- psql -qc 'DROP DATABASE IF EXISTS nextcloud' -c 'CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING '\''UTF8'\'''
++ runuser -u postgres -- pg_restore -d nextcloud --no-owner --role=apache
++ install -d -m 0750 -o apache -g apache /data/nextcloud /data/nextcloud/data
++ rsync -aHAX --numeric-ids --delete /backup/nextcloud/20261120T201535Z/data/ /data/nextcloud/data/
+rsync: [sender] change_dir "/backup/nextcloud/20261120T201535Z/data" failed: Permission denied (13)
+rsync: [Receiver] ERROR: cannot stat destination "/data/nextcloud/data/": Permission denied (13)
+rsync error: errors selecting input/output files, dirs (code 3) at main.c(761) [Receiver=3.2.5]
+restore-rc=
+ls: cannot access '/var/lib/chp-docs/ledger': No such file or directory
+PROBLEM: head 1 (2026-11-20T19:43:00Z): the stick saw 20 entries; the server has 0 (entries removed)
+verify-stick-rc=1
+ALERT NextCloud check: /etc/nextcloud/config.php does not match its fapolicyd trust entry (size/sha256): NextCloud changed it since the last enable; check the change, then re-run chp-site documents en
+ALERT NextCloud check: share canary could not run to the end: [Errno 111] Connection refused
+ALERT NextCloud check: share canary: could not list shares on the canary file: [Errno 111] Connection refused
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+inactive inactive inactive active Denied accesses: 0
+EXIT=0
+/root/lab-nightly.log:21:## restore by enable is the operator path; here: app:enable + the two rules by hand, then check
+/root/lab-restore2.log:19:+ runuser -u postgres -- pg_restore -d nextcloud --no-owner --role=apache
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
+Fapolicyd was notified
+OK fapolicyd trust entry for /etc/nextcloud/config.php refreshed (fapolicyd-cli --file update, --update): size 2549, sha256 03b468c1d0d452c8ccdb98d947ccc3840cb9bcfbfdd52df3f34c1f096fcb9ff6
+restored from /backup/nextcloud/20261120T201535Z
+restore-rc=0
+total 24
+drwx------. 2 root root   system_u:object_r:var_lib_t:s0        45 Nov 20 13:14 .
+drwxr-x---. 8 root apache system_u:object_r:var_lib_t:s0        92 Nov 20 13:17 ..
+-rw-------. 1 root root   unconfined_u:object_r:var_lib_t:s0    68 Nov 20 13:14 ledger.head
+-rw-------. 1 root root   system_u:object_r:var_lib_t:s0     18736 Nov 20 13:14 ledger.jsonl
+ce3da849fda84328af8ebb34fc0bc4f42a3c4af04385101c86f5de76fb0f22fe  /var/lib/chp-docs/ledger/ledger.jsonl
+OK: chain and head match, 39 entries; stick anchor OK
+verify-stick-rc=0
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; cui-users and admin as Kanidm and enable made them, reviewers read-only; share canary ref
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+active active active active Denied accesses: 0
+EXIT=0

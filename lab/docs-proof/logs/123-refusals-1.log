@@ -1,0 +1,12 @@
+## self-approval (lab01 = author, also ISSO)
+refused: lab01 created it in this cycle, so lab01 is an author of this change (authors: lab01); an approver must be someone else (a reviewer reads the document without checking it out)
+rc=1
+## override by the ISSO while a delegate (lab04) exists
+refused: not a one-person site: approver account(s) other than the author exist (lab04); ask one of them to approve
+rc=1
+## publish of a -DRAFT name
+chp-site: refused: CUI_SecPolicy_v0.1-DRAFT.docx is still -DRAFT. publish never renames: rename the approved file yourself, unchanged (mv CUI_SecPolicy_v0.1-DRAFT.docx CUI_SecPolicy_v0.1.docx), then publish that
+rc=2
+## publish before the first ONLYOFFICE run (copy renamed, unapproved)
+chp-site: refused: ONLYOFFICE has not had its first run yet (it builds its font list then, and the reader PDF needs it): start ONLYOFFICE once from the desktop, close it, then run publish again
+rc=2

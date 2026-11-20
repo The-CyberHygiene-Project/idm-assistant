@@ -1,0 +1,12 @@
+checkout file_id=88: POST HTTP 400: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=92: POST HTTP 400: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=71: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=84: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=13: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=69: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=70: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout file_id=95: POST HTTP 403: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'} 
+checkout {file_id:88} only: HTTP 200 {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"request_id":"86d25c83a4a36cc02e4522859b61a3c5","state":"queued"}}} 
+checkout {file_id:92} only: HTTP 200 {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"request_id":"c4be5b8097508b1088b33fb6841c69ab","state":"queued"}}} 
+checkout {file_id:71} only: HTTP 429 {"ocs":{"meta":{"status":"failure","statuscode":429,"message":""},"data":{"state":"refused","message":"refused: too many requests (at most 10 a minute); wait a minute and run the command again"}}} 
+checkout {file_id:95} only: HTTP 429 {"ocs":{"meta":{"status":"failure","statuscode":429,"message":""},"data":{"state":"refused","message":"refused: too many requests (at most 10 a minute); wait a minute and run the command again"}}} 

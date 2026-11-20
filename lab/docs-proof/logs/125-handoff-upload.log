@@ -1,0 +1,12 @@
+## MKCOL CUI/Drafts (Bearer, WebDAV)
+HTTP 201
+
+## PUT the draft
+HTTP 201
+
+de06320e7cad3e54d5b1d8a94c3e64b5bf80271b9885f239ef9fd80b3851d9cb  CUI_SecPolicy_v0.1-DRAFT.docx
+## PROPFIND CUI/Compliance (C9)
+HTTP 207
+<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:response><d:href>/remote.php/dav/files/lab01/CUI/Compliance/</d:href><d:propstat><d:prop><d:getlastmodified>Fri, 20 Nov 2026 17:38:15 GMT</d:getlastmodified><d:resourcetype><d:collection/></d:resourcetype><d:quota-used-bytes>0</d:quota-used-bytes><d:quota-available-bytes>-3</d:quota-available-bytes><d:getetag>&quot;6b008587e7dfa&quot;</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>
+

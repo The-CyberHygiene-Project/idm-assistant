@@ -1,0 +1,24 @@
+## max (v2)
+HTTP 200
+{"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"request_id":"de96b19f6ba09d8b2d5446db038e5db0","state":"queued"}}}
+1.26 s
+## over1 (v2)
+HTTP 413
+{"ocs":{"meta":{"status":"failure","statuscode":413,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+1.06 s
+## huge (v2)
+HTTP 400
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+0.58 s
+## nl (v2)
+HTTP 400
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+0.21 s
+## huge (v1 path)
+HTTP 200
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":"","totalitems":"","itemsperpage":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a con
+nextcloud.log lines + spool count before:
+0
+after:
+0
+Mem:            7870        2119        4427          73        1686        5751

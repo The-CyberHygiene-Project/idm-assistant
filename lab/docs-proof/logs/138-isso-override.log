@@ -1,0 +1,19 @@
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+stick: DOC_ISSO_ACCOUNT=lab01
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: DOC_ISSO_ACCOUNT=lab01
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+10
+19:34:21
+## override with no reason (client requires --reason): skipped; raw override with an empty reason
+POST HTTP 400: {'state': 'refused', 'message': 'refused: the request is not valid, or the document is not a controlled document you can use'}
+## lab01 (ISSO, author) override on the one-person site
+override recorded (ledger entry 14)
+rc=0
+published CUI/Compliance/CUI_SecPolicy_v0.3.docx as CR-2026-0003 (ledger entry 15)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.3.docx
+rc=0
+2026-11-20T12:26:47 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system. (25 more in the last 15 min)
+2026-11-20T12:28:33 iso5-srv.iso5.lab.test rule 100629 level 12: NextCloud: the Kanidm sign-in added an account to a privileged group: User "lab06" added to group "cui-users"
+2026-11-20T12:29:25 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+2026-11-20T12:34:26 iso5-srv.iso5.lab.test rule 100643 level 12: Controlled document ISSO OVERRIDE (no independent approver) by lab01: CUI/Compliance/CUI_SecPolicy_v0.3.docx; reason: lab 11c: one-person site, sole administrator

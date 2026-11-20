@@ -1,0 +1,35 @@
+ls: cannot access '/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/fonts/': No such file or directory
+6724 /bin/bash -lc cd; { export QT_QPA_PLATFORM=offscreen; (timeout 90 /usr/bin/desktopeditors > /tmp/oo-first-run-$USER
+    PID    PGID COMMAND
+   3932    3932 sleep
+   3936    3936 systemd
+   3938    3936 (sd-pam)
+   3949    3932 (sd-pam)
+   6724    6724 bash
+   6725    6724 (sd-pam)
+   6810    6724 ps
+   6811    6724 head
+== offscreen
+ls: cannot access '/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/fonts/': No such file or directory
+
+(DesktopEditors:7035): Gtk-WARNING **: 12:11:06.633: cannot open display: 
+DISPLAY=
+ls: cannot access '/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/fonts/': No such file or directory
+7343 /bin/bash -lc cd; { pgrep -a -u $USER Xwayland | cut -c1-200; d=$(pgrep -a -u $USER X
+qt.qpa.screen: QXcbConnection: Could not connect to display 
+Could not connect to any X display.
+7793 /usr/bin/Xwayland :0 -rootless -noreset -accessx -core -auth /run/user/2104078988/.mutter-Xwaylandauth.VWNGZ3 -list
+DISPLAY=:0
+total 12236
+drwx------. 2 lab01 lab01   4096 Nov 20 12:15 .
+drwxr-xr-x. 7 lab01 lab01    107 Nov 20 12:15 ..
+-rw-r--r--. 1 lab01 lab01 135680 Nov 20 12:15 AllFonts.js
+-rw-r--r--. 1 lab01 lab01 162396 Nov 20 12:15 AllFonts.js.1
+7749 /bin/bash -lc cd; { mutter --headless --wayland --virtual-monitor 1280x800 > /tmp/mut
+7807 /opt/onlyoffice/desktopeditors/DesktopEditors
+7881 /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-zygote-sandbox --no-
+7882 /opt/onlyoffice/desktopeditors/editors_helper --type=zygote --no-sandbox --force-devi
+QXcbConnection: XCB error: 8 (BadMatch), sequence: 702, resource id: 4194367, major code: 130 (Unknown), minor code: 3
+QXcbConnection: XCB error: 8 (BadMatch), sequence: 733, resource id: 4194367, major code: 130 (Unknown), minor code: 3
+QXcbConnection: XCB error: 8 (BadMatch), sequence: 747, resource id: 4194367, major code: 130 (Unknown), minor code: 3
+/home/lab06@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/fonts/AllFonts.js

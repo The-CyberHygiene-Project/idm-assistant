@@ -1,0 +1,60 @@
+## H13a: systemctl stop nftables
+table inet chp_workstation_egress
+table inet firewalld
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## H13b: sweep timer off
+ALERT workstation sweep: chp-onlyoffice-sweep.timer is inactive: ONLYOFFICE recovery copies (CUI) are not being removed (systemctl enable --now chp-onlyoffice-sweep.timer)
+## H14: damaged site.conf, address file present -> render fails, last good loaded
+active
+/etc/chp/workstation-egress-addr.nft: unchanged
+EGRESS RENDER FAILED: DOMAIN: 'bad domain!' is not a lower-case DNS domain with at least two labels; the last good address file /etc/chp/workstation-egress-addr.nft is loaded if there is one (stale if
+table inet firewalld
+table inet chp_workstation_egress
+unconfined_u:object_r:etc_t:s0 /etc/chp/workstation-egress-addr.nft
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## H9/H11: lock-down (no address file + damaged site.conf); auto-restore in 150 s by a local timer
+Job for chp-workstation-egress.service failed because the control process exited with error code.
+See "systemctl status chp-workstation-egress.service" and "journalctl -xeu chp-workstation-egress.service" for details.
+egress: failed
+table inet firewalld
+table inet chp_workstation_egress
+table inet chp_workstation_lockdown
+ALERT workstation egress: the address file /etc/chp/workstation-egress-addr.nft is missing or empty (chp-site onlyoffice enable never ran, or it was removed): the next start of chp-workstation-egress.
+ALERT workstation egress: chp-workstation-egress.service is failed (journalctl -u chp-workstation-egress.service; fix the cause, then systemctl restart chp-workstation-egress.service)
+ALERT workstation egress: the expected table could not be built from /etc/nftables/chp-workstation-egress.nft (unshare -n / nft failed: /etc/nftables/chp-workstation-egress.nft:25:1-47: Error: File no
+ALERT workstation is in EGRESS LOCKDOWN (table chp_workstation_lockdown loaded: the egress table failed to load; journalctl -u chp-workstation-egress.service -u chp-workstation-egress-lockdown)
+-- 2nd failure in the same boot: lock-down table removed by hand, egress fails again
+table inet firewalld
+table inet chp_workstation_egress
+Job for chp-workstation-egress.service failed because the control process exited with error code.
+See "systemctl status chp-workstation-egress.service" and "journalctl -xeu chp-workstation-egress.service" for details.
+table inet firewalld
+table inet chp_workstation_egress
+table inet chp_workstation_lockdown
+EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl rest
+EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl rest
+4
+ping server: blocked (lock-down)
+## restored at 19:53:52
+active
+table inet firewalld
+table inet chp_workstation_egress
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## H13a': nftables.service start then stop (its ExecStop is flush ruleset)
+table inet firewalld
+ALERT workstation egress table chp_workstation_egress is MISSING: this workstation can reach anything (was nftables.service stopped or restarted? systemctl restart chp-workstation-egress.service)
+table inet chp_workstation_egress
+table inet firewalld
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## H11: lock-down line on the manager
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:43 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:45 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:45 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)
+2026-11-20T12:49:45 iso5-cli1 100627 7 Workstation egress block (a process tried to reach something other than the site server)

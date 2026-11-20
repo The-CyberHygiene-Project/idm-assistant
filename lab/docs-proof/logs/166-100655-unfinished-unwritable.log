@@ -1,0 +1,21 @@
+checkout recorded (ledger entry 36)
+edited CUI_SecPolicy_v0.7-DRAFT.docx
+HTTP 201
+EXIT=0
+HTTP 200
+approve recorded (ledger entry 37)
+----i----------------- /var/lib/chp-docs/unfinished
+24
+## I8: publish with unfinished/ unwritable
+refused: the publish could not be recorded as started ([Errno 1] Operation not permitted: '/var/lib/chp-docs/unfinished'); nothing was written; run the command again
+rc=1
+{"auth":"bearer","cycle":7,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":null,"kanidm_sub":"51d59692-93e7-4fe7-ae87-e130d052f7f1","kind":"approve","path":"CUI/Compliance/CUI_SecPolicy_v0.7-DRAFT.docx","prev":"912e5272a9
+{"error":"[Errno 1] Operation not permitted: '/var/lib/chp-docs/unfinished'","event":"unfinished-record-failed","request_id":"9a3d488bf17d123947214ce70552e60a","stage":"start"}
+{"event":"refused","file_id":36,"kind":"publish","message":"refused: the publish could not be recorded as started ([Errno 1] Operation not permitted: '/var/lib/chp-docs/unfinished'); nothing was written; run the command again","re
+2026-11-20T13:02:05 iso5-srv.iso5.lab.test rule 100642 level 12: Controlled document APPROVED by lab04: CUI/Compliance/CUI_SecPolicy_v0.4-DRAFT.docx (sha256 1bc426b1568ae9f3f4821f1451dc5076bf92848b5df2eab423312791aa76497
+2026-11-20T13:11:45 NextCloud check: file home of lab01: Compliance/CUI_Own_v1.0.docx (id 95) is named CUI_/FCI_ but has no matching tag
+2026-11-20T13:12:12 iso5-srv.iso5.lab.test rule 100655 level 12: Document ledger: the unfinished-publish record could NOT be written (start): [Errno 1] Operation not permitted: '/var/lib/chp-docs/unfinished'
+## the same command again (unfinished/ writable)
+published CUI/Compliance/CUI_SecPolicy_v0.7.docx as CR-2026-0009 (ledger entry 38)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.7.docx
+rc=0

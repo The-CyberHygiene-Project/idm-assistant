@@ -1,0 +1,11 @@
+checkout recorded (ledger entry 4)
+working copy: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.2-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+The next version is a minor one (v0.2); rename it for a major change.
+rc=0
+/bin/bash: line 1: cd: /home/lab06@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+checkout recorded (ledger entry 5)
+working copy: /home/lab06@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.2-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+The next version is a minor one (v0.2); rename it for a major change.
+rc=0

@@ -1,0 +1,15 @@
+published CUI/Compliance/CUI_SecPolicy_v0.1.docx as CR-2026-0001 (ledger entry 3)
+When you are done with it: chp-site doc close CUI_SecPolicy_v0.1.docx
+
+real	0m3.390s
+user	0m0.527s
+sys	0m0.162s
+rc=0
+total 64
+drwxr-x---. 2 apache apache    67 Nov 20 12:25 .
+drwxr-xr-x. 4 apache apache    38 Nov 20 12:23 ..
+-rw-r--r--. 1 apache apache  7726 Nov 20 12:25 CUI_SecPolicy_v0.1.docx
+-rw-r--r--. 1 apache apache 57172 Nov 20 12:25 CUI_SecPolicy_v0.1.pdf
+{"auth":"bearer","cycle":1,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":null,"kanidm_sub":"51d59692-93e7-4fe7-ae87-e130d052f7f1","kind":"approve","notes":"lab 11c: delegate approval","path":"CUI/Compliance/CUI_SecPolicy_v0.1-DRAFT.docx","prev":"4ef2b919277a81f0cb7d0238276823f7f4e536f820c
+{"doc":"36/CUI_SecPolicy.docx","event":"publish-started","name":"CUI_SecPolicy_v0.1.docx","request_id":"7861c674d10e3e4eccb05589cdd80ffe","supersedes":null,"user":"lab01"}
+{"auth":"bearer","cr":"CR-2026-0001","cycle":1,"doc":"36/CUI_SecPolicy.docx","event":"ledger","file_id":71,"kanidm_sub":"c6c3b14d-588a-4da0-82f0-20914d69b28c","kind":"publish","path":"CUI/Compliance/CUI_SecPolicy_v0.1.docx","pdf_sha256":"2f1ca4d7bd84b671dd67448b38704664ff9f5e838c624ab487105878553b96

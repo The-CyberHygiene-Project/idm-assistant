@@ -1,0 +1,122 @@
+== iso5-cli1
+2026-11-20T17:39:43Z
+Last metadata expiration check: 0:08:25 ago on Fri 20 Nov 2026 10:31:18 AM MST.
+Dependencies resolved.
+================================================================================
+ Package                       Arch       Version                 Repo     Size
+================================================================================
+Installing:
+ chp-onlyoffice                noarch     0.1.0-3.chp.el9         chp      25 k
+Installing dependencies:
+ boost-filesystem              x86_64     1.75.0-13.el9_7         chp      55 k
+ boost-system                  x86_64     1.75.0-13.el9_7         chp      11 k
+ libXScrnSaver                 x86_64     1.2.3-10.el9            chp      24 k
+ liberation-narrow-fonts       noarch     2:1.07.6-9.el9          chp     205 k
+ onlyoffice-desktopeditors     x86_64     10.0.0-169.el7          chp     278 M
+ xcb-util-image                x86_64     0.4.0-19.el9.0.1        chp      18 k
+ xcb-util-keysyms              x86_64     0.4.0-17.el9            chp      14 k
+ xcb-util-renderutil           x86_64     0.3.9-20.el9.0.1        chp      16 k
+ xcb-util-wm                   x86_64     0.4.1-22.el9            chp      31 k
+
+Transaction Summary
+================================================================================
+Install  10 Packages
+
+Total size: 278 M
+Installed size: 1.1 G
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+Installed products updated.
+
+Installed:
+  boost-filesystem-1.75.0-13.el9_7.x86_64                                       
+  boost-system-1.75.0-13.el9_7.x86_64                                           
+  chp-onlyoffice-0.1.0-3.chp.el9.noarch                                         
+  libXScrnSaver-1.2.3-10.el9.x86_64                                             
+  liberation-narrow-fonts-2:1.07.6-9.el9.noarch                                 
+  onlyoffice-desktopeditors-10.0.0-169.el7.x86_64                               
+  xcb-util-image-0.4.0-19.el9.0.1.x86_64                                        
+  xcb-util-keysyms-0.4.0-17.el9.x86_64                                          
+  xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64                                   
+  xcb-util-wm-0.4.1-22.el9.x86_64                                               
+
+Complete!
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-workstation-egress.service → /usr/lib/systemd/system/chp-workstation-egress.service.
+Created symlink /etc/systemd/system/timers.target.wants/chp-onlyoffice-sweep.timer → /usr/lib/systemd/system/chp-onlyoffice-sweep.timer.
+- installed chp-onlyoffice (ONLYOFFICE Desktop Editors 10.0.0, re-signed; poppler-utils)
+- AI Tools plugin absent
+- fapolicyd active
+- /etc/hosts: 7 ONLYOFFICE vendor names -> 0.0.0.0
+- linger off (nobody had it)
+- egress table inet chp_workstation_egress: only the site server 192.168.100.50 (and its resolver); DoT/DoH refused
+- sweep timer chp-onlyoffice-sweep.timer: recovery copies older than 12 h of users with no session
+- logind KillUserProcesses=yes takes effect at the next boot
+enable-rc=0
+2026-11-20T17:40:08Z
+EXIT=0
+== iso5-cli2
+2026-11-20T17:40:18Z
+Last metadata expiration check: 0:08:40 ago on Fri 20 Nov 2026 10:31:39 AM MST.
+Dependencies resolved.
+================================================================================
+ Package                       Arch       Version                 Repo     Size
+================================================================================
+Installing:
+ chp-onlyoffice                noarch     0.1.0-3.chp.el9         chp      25 k
+Installing dependencies:
+ boost-filesystem              x86_64     1.75.0-13.el9_7         chp      55 k
+ boost-system                  x86_64     1.75.0-13.el9_7         chp      11 k
+ libXScrnSaver                 x86_64     1.2.3-10.el9            chp      24 k
+ liberation-narrow-fonts       noarch     2:1.07.6-9.el9          chp     205 k
+ onlyoffice-desktopeditors     x86_64     10.0.0-169.el7          chp     278 M
+ xcb-util-image                x86_64     0.4.0-19.el9.0.1        chp      18 k
+ xcb-util-keysyms              x86_64     0.4.0-17.el9            chp      14 k
+ xcb-util-renderutil           x86_64     0.3.9-20.el9.0.1        chp      16 k
+ xcb-util-wm                   x86_64     0.4.1-22.el9            chp      31 k
+
+Transaction Summary
+================================================================================
+Install  10 Packages
+
+Total size: 278 M
+Installed size: 1.1 G
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+Installed products updated.
+
+Installed:
+  boost-filesystem-1.75.0-13.el9_7.x86_64                                       
+  boost-system-1.75.0-13.el9_7.x86_64                                           
+  chp-onlyoffice-0.1.0-3.chp.el9.noarch                                         
+  libXScrnSaver-1.2.3-10.el9.x86_64                                             
+  liberation-narrow-fonts-2:1.07.6-9.el9.noarch                                 
+  onlyoffice-desktopeditors-10.0.0-169.el7.x86_64                               
+  xcb-util-image-0.4.0-19.el9.0.1.x86_64                                        
+  xcb-util-keysyms-0.4.0-17.el9.x86_64                                          
+  xcb-util-renderutil-0.3.9-20.el9.0.1.x86_64                                   
+  xcb-util-wm-0.4.1-22.el9.x86_64                                               
+
+Complete!
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-workstation-egress.service → /usr/lib/systemd/system/chp-workstation-egress.service.
+Created symlink /etc/systemd/system/timers.target.wants/chp-onlyoffice-sweep.timer → /usr/lib/systemd/system/chp-onlyoffice-sweep.timer.
+- installed chp-onlyoffice (ONLYOFFICE Desktop Editors 10.0.0, re-signed; poppler-utils)
+- AI Tools plugin absent
+- fapolicyd active
+- /etc/hosts: 7 ONLYOFFICE vendor names -> 0.0.0.0
+- linger off (nobody had it)
+- egress table inet chp_workstation_egress: only the site server 192.168.100.50 (and its resolver); DoT/DoH refused
+- sweep timer chp-onlyoffice-sweep.timer: recovery copies older than 12 h of users with no session
+- logind KillUserProcesses=yes takes effect at the next boot
+enable-rc=0
+2026-11-20T17:40:43Z
+EXIT=0

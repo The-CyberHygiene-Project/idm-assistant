@@ -1,0 +1,90 @@
+155-  <localfile>
+156:    <log_format>journald</log_format>
+157:    <location>journald</location>
+158-  </localfile>
+159-  <localfile>
+160-    <log_format>audit</log_format>
+161-    <location>/var/log/audit/audit.log</location>
+162-  </localfile>
+163-  <localfile>
+164-    <log_format>syslog</log_format>
+165-    <location>/var/ossec/logs/active-responses.log</location>
+166-  </localfile>
+chp-workstation-egress stdout 6 0 /etc/chp/workstation-egress-addr.nft: unchanged
+chp-workstation-egress stdout 6 0 EGRESS RENDER FAILED: DOMAIN: 'bad domain!' is not a lower-case DNS do
+chp-workstation-egress stdout 6 0 /etc/chp/workstation-egress-addr.nft: unchanged
+chp-workstation-egress stdout 6 0 EGRESS RENDER FAILED: DOMAIN: 'bad domain!' is not a lower-case DNS do
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:25:1-47: Error: File not foun
+chp-workstation-egress stdout 6 0 include "/etc/chp/workstation-egress-addr.nft"
+chp-workstation-egress stdout 6 0 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:37:19-36: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_RESOLVER_IP meta l4proto { tcp, udp } th dpor
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:40:19-34: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_SERVER_IP tcp dport { 22, 443, 1514, 8443, 90
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:41:19-34: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_SERVER_IP icmp type echo-request accept
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:42:39-49: Error: unknown iden
+chp-workstation-egress stdout 6 0         meta skuid "chrony" ip daddr $CHP_WS_NTP4 udp dport 123 accept
+chp-workstation-egress stdout 6 0                                       ^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:43:40-50: Error: unknown iden
+chp-workstation-egress stdout 6 0         meta skuid "chrony" ip6 daddr $CHP_WS_NTP6 udp dport 123 accep
+chp-workstation-egress stdout 6 0                                        ^^^^^^^^^^^
+chp-egress-lockdown syslog 2 0 EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback 
+chp-workstation-egress stdout 6 0 EGRESS RENDER FAILED: DOMAIN: 'bad domain!' is not a lower-case DNS do
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:25:1-47: Error: File not foun
+chp-workstation-egress stdout 6 0 include "/etc/chp/workstation-egress-addr.nft"
+chp-workstation-egress stdout 6 0 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:37:19-36: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_RESOLVER_IP meta l4proto { tcp, udp } th dpor
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:40:19-34: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_SERVER_IP tcp dport { 22, 443, 1514, 8443, 90
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:41:19-34: Error: unknown iden
+chp-workstation-egress stdout 6 0         ip daddr $CHP_WS_SERVER_IP icmp type echo-request accept
+chp-workstation-egress stdout 6 0                   ^^^^^^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:42:39-49: Error: unknown iden
+chp-workstation-egress stdout 6 0         meta skuid "chrony" ip daddr $CHP_WS_NTP4 udp dport 123 accept
+chp-workstation-egress stdout 6 0                                       ^^^^^^^^^^^
+chp-workstation-egress stdout 6 0 /etc/nftables/chp-workstation-egress.nft:43:40-50: Error: unknown iden
+chp-workstation-egress stdout 6 0         meta skuid "chrony" ip6 daddr $CHP_WS_NTP6 udp dport 123 accep
+chp-workstation-egress stdout 6 0                                        ^^^^^^^^^^^
+chp-egress-lockdown syslog 2 0 EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback 
+chp-workstation-egress stdout 6 0 /etc/chp/workstation-egress-addr.nft: unchanged
+chp-workstation-egress stdout 6 0 /etc/chp/workstation-egress-addr.nft: unchanged
+2026/11/20 10:34:26 wazuh-agentd: INFO: (4102): Connected to the server ([192.168.100.50]:1514/tcp).
+2026/11/20 11:31:25 wazuh-agentd: ERROR: (1137): Lost connection with manager. Setting lock.
+2026/11/20 11:32:06 wazuh-agentd: INFO: (4102): Connected to the server ([192.168.100.50]:1514/tcp).
+2026/11/20 12:54:29 wazuh-agentd: INFO: (4102): Connected to the server ([192.168.100.50]:1514/tcp).
+	program_name: 'chp-workstation-egress'
+	No decoder matched.
+**Phase 3: Completed filtering (rules).
+	id: '100632'
+	level: '7'
+	description: 'Workstation egress addresses not rendered: the last good address file was loaded'
+	program_name: 'chp-egress-lockdown'
+	No decoder matched.
+**Phase 3: Completed filtering (rules).
+	id: '100628'
+	level: '12'
+	description: 'Workstation egress table failed to load: the workstation is locked down to loopback'
+	program_name: 'chp-doc-sweep'
+	No decoder matched.
+	program_name: 'chp-doc-sweep'
+	No decoder matched.
+188:  <rule id="100626" level="3">
+189-    <program_name>^chp-doc-sweep$</program_name>
+194-  <rule id="100627" level="7">
+204:  <rule id="100628" level="12">
+205-    <program_name>^chp-egress-lockdown$</program_name>
+206-    <match>EGRESS LOCKDOWN</match>
+221:  <rule id="100632" level="7">
+222-    <program_name>^chp-workstation-egress$</program_name>
+223-    <match>EGRESS RENDER FAILED</match>
+2026-11-20T12:58:09 100632 881]: EGRESS RENDER FAILED: lab 11c test via logger (syslog transport)
+2026-11-20T12:58:09 100632  EGRESS RENDER FAILED: lab 11c test via systemd-cat (stdout transport)
+2026-11-20T12:58:09 100632 on-egress[17885]: EGRESS RENDER FAILED: lab 11c test via a unit stdout
+100628+100632 alerts from cli1 before the lab test lines: 3

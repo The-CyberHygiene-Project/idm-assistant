@@ -1,0 +1,30 @@
+## groups
+Successfully added ["lab01", "lab04"] to group "cui-users"
+Successfully added ["lab03", "lab04"] to group "doc-reviewers"
+member: lab04 member: lab01 name: cui-users 
+member: lab04 member: lab03 name: doc-reviewers 
+member: lab02 member: lab04 member: lab03 member: lab01 member: lab06 name: chp_users 
+## DOC keys with an unknown approver (expect refusal)
+stick: ALERT_HOOK=
+stick: DOCUMENTS=yes
+stick: CUI_CONTROLLED_BY=iso5 Lab Org
+stick: CUI_CATEGORY=CTI
+stick: CUI_POC=Lab ISSO isso@iso5.lab.test
+stick: DOC_ISSO_ACCOUNT=lab01
+stick: DOC_APPROVER_ACCOUNTS=nosuchuser
+server: ALERT_HOOK=
+server: DOCUMENTS=yes
+server: CUI_CONTROLLED_BY=iso5 Lab Org
+server: CUI_CATEGORY=CTI
+server: CUI_POC=Lab ISSO isso@iso5.lab.test
+server: DOC_ISSO_ACCOUNT=lab01
+server: DOC_APPROVER_ACCOUNTS=nosuchuser
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+RC=0
+stick-attached
+2026-11-20T18:34:16Z
+chp-site: DOC_APPROVER_ACCOUNTS names nosuchuser, which is not a Kanidm account (kanidm person get nosuchuser: no match): create the account or correct site.conf on the site stick, apply it, then re-run chp-site documents enable; nothing was changed
+enable-rc=2
+2026-11-20T18:34:18Z
+EXIT=0
+stick-detached

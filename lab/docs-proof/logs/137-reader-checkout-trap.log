@@ -1,0 +1,18 @@
+HTTP 201
+## lab04 checks out to read (becomes an author)
+chp-site: refused: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.3-DRAFT.docx already exists; publish it or close it first (chp-site doc close)
+HTTP 200
+## lab04 approves lab01's file
+approve recorded (ledger entry 12)
+rc=0
+closed CUI_SecPolicy_v0.3-DRAFT.docx
+## lab04 checks out to read (becomes an author of this cycle)
+CUI_SecPolicy_v0.1-DRAFT.docx
+checkout recorded (ledger entry 13)
+HTTP 200
+## lab04 approves lab01's file again
+refused: lab04 checked it out in this cycle, so lab04 is an author of this change (authors: lab01, lab04); an approver must be someone else (a reviewer reads the document without checking it out)
+rc=1
+## lab01 publishes: lab04's earlier approval (entry 12) no longer counts
+refused: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+rc=1

@@ -1,0 +1,18 @@
+setup: Old/{a,b}.txt, Old/Sub/c.txt
+MKCOL Old HTTP 201
+MKCOL Old/Sub HTTP 201
+PUT Old/a.txt HTTP 201
+PUT Old/b.txt HTTP 201
+PUT Old/Sub/c.txt HTTP 201
+refused as the guide says: MOVE Old -> New: HTTP 403
+step 2: MKCOL New, New/Sub: HTTP 201 HTTP 201
+step 3: move files one by one: HTTP 201 HTTP 201 HTTP 201
+step 5: delete the empty old folders bottom up: HTTP 204 HTTP 204
+check: PROPFIND New depth infinity
+<d:href>/remote.php/dav/files/lab01/CUI/New/</d:href>
+PROPFIND Old: HTTP 404
+files/New/a.txt|CUI
+files/New/b.txt|CUI
+files/New/Sub/c.txt|CUI
+files/New|
+files/New/Sub|
