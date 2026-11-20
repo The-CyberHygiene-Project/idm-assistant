@@ -3,13 +3,15 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # sign-repo.sh <stage-dir> <out-dir> <signer-fpr> <keys-dir>: sign every UNSIGNED RPM of stage-dir with signer-fpr, keep
-# signatures by pinned third-party keys (e.g. EPEL) as they are, REFUSE anything signed by an unpinned key, build
+# signatures by pinned third-party keys (e.g. EPEL) as they are, REFUSE anything signed by an unpinned key (and any
+# unsigned RPM that is neither ours nor a vendor RPM pinned in VENDOR.txt for re-signing), build
 # repodata (make-repodata.sh: with the stage's modules.yaml, if any), sign repomd.xml, verify. Works in a temp copy next
 # to out-dir; out-dir appears only when all of it passed (all-or-nothing: an unplugged YubiKey or a missed touch leaves
 # nothing half-signed). stage-dir is unchanged.
 set -Eeuo pipefail
 S=$1; O=$2; FPR=$3; K=$4
 here="$(cd "$(dirname "$0")" && pwd)"
+VT=${CHP_VENDOR_TXT:-$here/VENDOR.txt}         # vendor RPMs carried re-signed (stage-vendor.sh)
 [[ -e $O ]] && { echo "refusing: $O already exists"; exit 1; }
 mkdir -p "$(dirname "$O")"
 work=$(mktemp -d "$(dirname "$O")/.sign.XXXXXX"); db=$(mktemp -d)
@@ -32,10 +34,20 @@ for f in "$work"/*.rpm; do
   if grep -q 'Signature, key ID' <<<"$out"; then
     grep -qE 'NOKEY|NOT OK|BAD' <<<"$out" && { echo "REFUSED: $(basename "$f") is signed by an unpinned key or is damaged"; exit 1; }
   else
-    # only OUR builds get our signature: a stray lab/upstream RPM must never be blessed with the project key
+    # only OUR builds get our signature: a stray lab/upstream RPM must never be blessed with the project key...
     vr=$(rpm -qp --qf '%{VENDOR}|%{RELEASE}' "$f" 2>/dev/null)
-    [[ ${vr%%|*} == "The CyberHygiene Project" && ${vr#*|} == *.chp* ]] \
-      || { echo "REFUSED: $(basename "$f") is unsigned but not ours (vendor|release: $vr); not signing it"; exit 1; }
+    if [[ ! ( ${vr%%|*} == "The CyberHygiene Project" && ${vr#*|} == *.chp* ) ]]; then
+      # ...except a vendor RPM the repo carries RE-SIGNED: its name and header sha256 (%{SHA256HEADER}, unchanged by
+      # stage-vendor.sh's --delsign) on a VENDOR.txt line, and its digests intact
+      nh=$(rpm -qp --nosignature --qf '%{NAME} %{SHA256HEADER}' "$f" 2>/dev/null || true)
+      dg=$(rpm --dbpath "$db" -Kv --nosignature "$f" 2>&1 || true)
+      if ! sed 's/#.*//' "$VT" | awk -v n="${nh% *}" -v h="${nh#* }" 'NF==6 && $1==n && $4==h {f=1} END {exit !f}' \
+         || ! grep -q 'digest: OK' <<<"$dg" || grep -qE 'NOT OK|BAD' <<<"$dg"; then
+        echo "REFUSED: $(basename "$f") is unsigned but not ours (vendor|release: $vr) and not a pinned vendor RPM ($VT); not signing it"
+        exit 1
+      fi
+      echo "re-signing pinned vendor RPM: $(basename "$f") (${nh})"
+    fi
     to_sign+=("$f")
   fi
 done

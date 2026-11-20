@@ -1,0 +1,9 @@
+[Unit]
+Description=CHP: hourly sweep of ONLYOFFICE's auto-recovery copies
+Documentation=file:///usr/share/doc/chp-onlyoffice/README.md
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+[Install]
+WantedBy=timers.target

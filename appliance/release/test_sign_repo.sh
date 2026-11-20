@@ -131,4 +131,22 @@ t "verify: modules streams != the tools' MODULES.txt (php+postgresql) fails" "ou
 t "verify: a repo without modules metadata fails against the tools' MODULES.txt" "out bash '$here/verify-repo.sh' '$T/out' '$T/keys' '$here/MODULES.txt' | grep -q 'MISSING modules metadata'"
 cp -a "$T/m4out" "$T/w5"; f=$(ls "$T"/w5/repodata/*modules.yaml*); printf x >> "$f"
 t "verify: a changed modules record fails its repomd checksum" "out bash '$here/verify-repo.sh' '$T/w5' '$T/k9' '$T/m1.txt' | grep -q 'BAD repodata checksum: modules'"
+# 11 Plan 3 Task 8: a vendor RPM carried RE-SIGNED (VENDOR.txt). Fixture: the unsigned lab kanidm-clients plays the
+# vendor RPM; key B plays the vendor key. "$A!" = A's primary key (section 7 gave A a signing subkey).
+LAB=$FIX/kanidm-clients-1.11.2-1.lab.el9.x86_64.rpm
+HDR=$(rpm -qp --nosignature --qf '%{SHA256HEADER}' "$LAB" 2>/dev/null)
+gpg --armor --export "$B" > "$T/B.asc"
+cp "$LAB" "$T/vend.rpm"; rpmsign --addsign --define "_gpg_name $B" --define "_gpg_digest_algo sha256" "$T/vend.rpm" >/dev/null 2>&1
+printf 'kanidm-clients 1.11.2-1.lab.el9 %s %s %s file:///fixture\n' "$(sha256sum "$T/vend.rpm" | cut -d' ' -f1)" "$HDR" "$B" > "$T/vendor.txt"
+mkdir "$T/third11" "$T/third11b"
+t "fixture: signing did not change the header sha256" "[[ -n '$HDR' && \$(rpm -qp --nosignature --qf '%{SHA256HEADER}' '$T/vend.rpm' 2>/dev/null) == '$HDR' ]]"
+t "stage-vendor: refuses the pinned file checked against another key" "out env CHP_VENDOR_TXT='$T/vendor.txt' bash '$here/stage-vendor.sh' '$T/vend.rpm' '$T/keys/A.asc' '$T/third11b' | grep -q refusing && [[ -z \$(ls '$T/third11b') ]]"
+cp "$T/vend.rpm" "$T/vend2.rpm"; printf x >> "$T/vend2.rpm"
+t "stage-vendor: refuses a file that is not the pinned one" "out env CHP_VENDOR_TXT='$T/vendor.txt' bash '$here/stage-vendor.sh' '$T/vend2.rpm' '$T/B.asc' '$T/third11b' | grep -q 'not a vendor file pinned' && [[ -z \$(ls '$T/third11b') ]]"
+t "stage-vendor: checks the vendor signature, stages the RPM unsigned" "CHP_VENDOR_TXT='$T/vendor.txt' bash '$here/stage-vendor.sh' '$T/vend.rpm' '$T/B.asc' '$T/third11' | grep -q STAGED && ! rpm -qp --qf '%{RSAHEADER:pgpsig}' '$T'/third11/*.rpm 2>/dev/null | grep -qi 'key id'"
+mkdir "$T/s11"; cp "$T"/third11/*.rpm "$T/s11/"
+t "sign-repo: re-signs a pinned vendor RPM with OUR key" "CHP_VENDOR_TXT='$T/vendor.txt' bash '$here/sign-repo.sh' '$T/s11' '$T/o11' '$A!' '$T/keys' >/dev/null && rpm -qp --qf '%{RSAHEADER:pgpsig}\n' '$T'/o11/kanidm-clients-*.rpm 2>/dev/null | grep -qi '${A: -16}'"
+t "sign-repo: the re-signed RPM keeps the pinned header sha256" "[[ \$(rpm -qp --nosignature --qf '%{SHA256HEADER}' '$T'/o11/kanidm-clients-*.rpm 2>/dev/null) == '$HDR' ]]"
+sed "s/ $HDR / $(printf 0%.0s {1..64}) /" "$T/vendor.txt" > "$T/vendor2.txt"
+t "sign-repo: refuses it when the header is not the pinned one" "out env CHP_VENDOR_TXT='$T/vendor2.txt' bash '$here/sign-repo.sh' '$T/s11' '$T/o11b' '$A!' '$T/keys' | grep -q 'not a pinned vendor RPM' && [[ ! -e $T/o11b ]]"
 exit $fails

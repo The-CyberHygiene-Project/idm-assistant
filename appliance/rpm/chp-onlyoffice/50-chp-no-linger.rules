@@ -1,0 +1,9 @@
+// /etc/polkit-1/rules.d/50-chp-no-linger.rules (chp-onlyoffice; ISO 0.7.0 Plan 3, ruling F3): no user may turn
+// linger on (`loginctl enable-linger`), for themselves or anyone else. A lingering user manager would keep
+// $XDG_RUNTIME_DIR, and the document sign-in tokens in it, after logout. root does not go through polkit.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.login1.set-self-linger" ||
+        action.id == "org.freedesktop.login1.set-user-linger") {
+        return polkit.Result.NO;
+    }
+});

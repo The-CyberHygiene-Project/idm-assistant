@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
 aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | documents | alerts | wazuh-forward |
-doc-ledger | doc (the workstation's controlled-document commands)."""
+doc-ledger | doc (the workstation's controlled-document commands) | onlyoffice (the workstation's editor and gates)."""
 import argparse
 import os
 import sys
@@ -572,6 +572,27 @@ def _doc_ledger(a):
     return L.verify(ctx.ledger, ctx.head, heads)
 
 
+def _onlyoffice(a):
+    """chp-site onlyoffice enable|sweep|egress-render (Plan 3 Task 8; root): the workstation's editor and its gates."""
+    import subprocess
+    from . import onlyoffice as oo
+    if os.geteuid() != 0:
+        raise SiteError(f"onlyoffice {a.action}: run as root")
+    if a.action == "sweep":
+        oo.sweep(run=subprocess.run)
+        return 0
+    site, hosts = _load(a.site)
+    if a.action == "egress-render":
+        changed = oo.render_egress(Path("/"), site, hosts)
+        print(f"/{oo.EGRESS_ADDR}: {'written' if changed else 'unchanged'}")
+        return 0
+    me = next((h for h in hosts if h.hostname == _host()), None)
+    if me is None:
+        raise SiteError(f"this host ({_host()}) is not in the hosts table")
+    print("\n".join(f"- {x}" for x in oo.enable(me, site, hosts, run=subprocess.run)))
+    return 0
+
+
 def _doc(a):
     """chp-site doc ... (Plan 3 Task 6): the workstation's controlled-document commands (exit 0 done, 1 refused or
     problems found, 2 a plain refusal before anything was sent, 3 pending: run the same command again)."""
@@ -655,6 +676,10 @@ def main(argv=None):
     dl.add_argument("--stick", nargs="?", const=True, help="verify/export: the pinned site stick (or a folder, for tests)")
     from . import doc as _docmod
     _docmod.add_parser(sub)
+    oo_ = sub.add_parser("onlyoffice", help="(workstation; root) the editor: enable (DOCUMENTS=yes; installs "
+                                            "chp-onlyoffice, egress table, sweep timer, linger off), sweep (the "
+                                            "hourly autosave sweep), egress-render (the egress table's addresses)")
+    oo_.add_argument("action", choices=("enable", "sweep", "egress-render")); oo_.add_argument("--site", default="/etc/chp")
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
     rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
@@ -675,7 +700,7 @@ def main(argv=None):
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
          "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review,
-         "doc-ledger": _doc_ledger, "doc": _doc}[a.cmd](a)
+         "doc-ledger": _doc_ledger, "doc": _doc, "onlyoffice": _onlyoffice}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:

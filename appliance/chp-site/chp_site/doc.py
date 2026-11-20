@@ -79,22 +79,26 @@ class DocError(SiteError):
 
 # ---------- the environment ----------
 
-def _editor_running(env):
-    """An ONLYOFFICE process of this user is running (from /proc)."""
+def processes(proc="/proc"):
+    """{uid: {comm, ...}} of the running processes (from /proc). doc close and the Task 8 sweep both read it."""
+    tab = {}
     try:
-        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+        pids = [p for p in os.listdir(proc) if p.isdigit()]
     except OSError:
-        return False
+        return tab
     for p in pids:
         try:
-            if os.stat(f"/proc/{p}").st_uid != env.uid:
-                continue
-            with open(f"/proc/{p}/comm") as f:
-                if f.read().strip() in EDITOR_PROCESSES:
-                    return True
+            uid = os.stat(os.path.join(proc, p)).st_uid
+            with open(os.path.join(proc, p, "comm")) as f:
+                tab.setdefault(uid, set()).add(f.read().strip())
         except OSError:
             continue
-    return False
+    return tab
+
+
+def _editor_running(env):
+    """An ONLYOFFICE process of this user is running (from /proc)."""
+    return bool(processes().get(env.uid, set()) & set(EDITOR_PROCESSES))
 
 
 def system_env():

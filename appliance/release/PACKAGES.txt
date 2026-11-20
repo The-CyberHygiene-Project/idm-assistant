@@ -64,3 +64,19 @@ postgresql rocky
 postgresql-private-libs rocky
 postgresql-server rocky
 rocky-logos-httpd rocky
+# ISO 0.7.0 Plan 3: the workstation editor. chp-onlyoffice is ours; onlyoffice-desktopeditors is the VENDOR RPM carried
+# RE-SIGNED with the project key (VENDOR.txt pins it; stage-vendor.sh checks the vendor signature and puts it in the
+# third-party dir unsigned; sign-repo.sh signs only a pinned one). Then the Rocky 9.8 packages its install pulled in on
+# the CUI workstation (lab/docs-spike/logs/78: eight, though the spike text says six) and poppler-utils (pdftotext,
+# pdfinfo: the reader-PDF marking check; its own dependency closure is a Task 11 staging step).
+chp-onlyoffice ours
+onlyoffice-desktopeditors onlyoffice
+boost-filesystem rocky
+boost-system rocky
+libXScrnSaver rocky
+liberation-narrow-fonts rocky
+xcb-util-image rocky
+xcb-util-keysyms rocky
+xcb-util-renderutil rocky
+xcb-util-wm rocky
+poppler-utils rocky

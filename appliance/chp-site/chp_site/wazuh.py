@@ -227,6 +227,8 @@ FOLDEROP_FIRST_RULE = "100616"
 UPLOAD_RULE = "100621"                                   # final review I1: uploads stored like downloads (100607)
 BREAKGLASS_RULE = "100622"                               # final review I2
 ACCOUNT_RULE, OIDC_PROVISION_RULE, CANARY_SETUP_RULE = "100623", "100624", "100625"
+DOC_SWEEP_RULE = "100626"                                # Plan 3 Task 8 (G2): a workstation's ONLYOFFICE autosave sweep
+WS_EGRESS_RULE = "100627"                                # Plan 3 Task 8 (G3): a workstation's egress table refused a packet
 BREAKGLASS_USER = "ncadmin"                              # = documents.ADMIN (not imported: documents imports this module)
 _CTRL = "(CUI|FCI|Archive)"                              # the controlled team folders (share off, contained)
 
@@ -412,13 +414,31 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>Kanidm: failed sign-in (authenticator code refused)</description>
     <group>authentication_failed,</group>
   </rule>
+  <!-- workstations (chp-onlyoffice, Plan 3 Task 8). G2: every removal of an ONLYOFFICE recovery copy (CUI) and every
+       linger switched off by the hourly sweep is stored (level 3); its other lines are not. G3: the workstation egress
+       table refused a packet (logged at most 6 a minute): the daily summary (level 7), a child of 4100 as 100620 is -->
+  <rule id="{DOC_SWEEP_RULE}" level="3">
+    <program_name>^chp-doc-sweep$</program_name>
+    <regex type="pcre2">removed .*; no live session; older than \\d+ h\\)$|linger turned off for \\S+ \\(ruling F3</regex>
+    <description>Workstation sweep: an ONLYOFFICE recovery copy (CUI) removed, or linger turned off</description>
+    <group>chp_doc_sweep,</group>
+  </rule>
+  <rule id="{WS_EGRESS_RULE}" level="7">
+    <if_sid>4100</if_sid>
+    <program_name>^kernel$</program_name>
+    <match>CHP-WS-EGRESS</match>
+    <description>Workstation egress block (a process tried to reach something other than the site server)</description>
+    <group>chp_egress,</group>
+  </rule>
 </group>
 """
 
 
 CANARY_RULE = "100608"
 KANIDM_TOTP_RULE = "100630"                      # in the same rules file, but Kanidm's, not NextCloud's
-NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE} | {CANARY_RULE}
+# the review's NextCloud rows: not the Kanidm rule nor the workstation rules that share the file
+NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE, DOC_SWEEP_RULE,
+                                                                                    WS_EGRESS_RULE} | {CANARY_RULE}
 
 
 def canary_rules(fileid):

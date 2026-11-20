@@ -1,0 +1,13 @@
+# Vendor RPMs the repo carries RE-SIGNED with the project key (ISO 0.7.0 Plan 3 Task 8, editor spike gate G4).
+# <name> <version-release> <file sha256> <header sha256> <vendor key fingerprint> <source>
+# - file sha256: the vendor-SIGNED file as downloaded (stage-vendor.sh refuses any other file);
+# - header sha256: rpm's %{SHA256HEADER}, the digest of the package header, which also covers the payload digest.
+#   Re-signing changes the signature only, so it identifies the same package before and after: sign-repo.sh signs
+#   an unsigned RPM that is not ours ONLY when its name and header sha256 are on a line here;
+# - vendor key: the key whose signature stage-vendor.sh checks (vendor-keys/), before stripping it. Never a repo key
+#   (it is not in trusted-keys.txt: the repo carries only our signature on this package).
+# ONLYOFFICE: the vendor's yum-repository copy (signed); the "latest" direct link is the same package unsigned
+# (sha256 2572599736765cef...c6bf, same header sha256). The path says noarch; the file is x86_64. Key: Ascensio System
+# Limited (ONLYOFFICE), RSA 4096, created 2016-12-15 (first use: trust on first use, same key from two sources;
+# lab/docs-spike/SPIKE-NEXTCLOUD.md §Editor). The download is a live step (Task 11), into a new empty folder.
+onlyoffice-desktopeditors 10.0.0-169.el7 2e63445620f8df8449e5c485754861bdfc662482b711024e2d38f2ec545c2df9 64189290d93e8e85debbd276e3c0cb2c236bed54c3267dc54e67af4cce5dc785 E09CA29F6E178040EF22B4098320CA65CB2DE8E5 https://download.onlyoffice.com/repo/centos/main/noarch/onlyoffice-desktopeditors-10.0.0.x86_64.rpm

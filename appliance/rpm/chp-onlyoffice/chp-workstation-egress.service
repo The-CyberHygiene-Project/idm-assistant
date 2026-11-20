@@ -1,0 +1,20 @@
+[Unit]
+Description=CHP: this workstation may reach only the site server and the site resolver
+Documentation=file:///usr/share/doc/chp-onlyoffice/README.md
+# loaded before the network comes up (as nftables.service is); firewalld and nftables first, so neither replaces it
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target shutdown.target
+After=local-fs.target firewalld.service nftables.service
+Conflicts=shutdown.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# the addresses are written from the site files before every load (a re-IP of the server needs only a restart)
+ExecStartPre=/usr/bin/chp-site onlyoffice egress-render
+ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
+ExecReload=/usr/bin/chp-site onlyoffice egress-render
+ExecReload=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
+# No ExecStop on purpose: stopping the unit leaves the table loaded (fail closed). Removing chp-onlyoffice deletes it.
+[Install]
+WantedBy=multi-user.target

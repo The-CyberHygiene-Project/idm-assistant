@@ -1,0 +1,42 @@
+# /etc/nftables/chp-workstation-egress.nft (chp-onlyoffice; ISO 0.7.0 Plan 3 Task 8, editor spike gate G3).
+# The WHOLE workstation (every user and service, not only the editor) may open connections only to:
+#   - loopback;
+#   - the site server: 443 (Kanidm: kanidm-unixd and `chp-site doc login`), 8443 (NextCloud), 1514 (Wazuh agent;
+#     enrolment 1515 is off, keys are staged), 9000 (step-ca: client enrolment's root fetch), 22 (ssh), ping;
+#   - the site resolver, DNS on 53 (udp and tcp) only. DNS to anyone else, over IPv4 or IPv6, is refused (the
+#     spike's Chromium probe to a public IPv6 resolver), and DoT / DNS over QUIC (853) to anyone at all. DoH is HTTPS:
+#     443 to anything but the server falls to the default refusal;
+#   - NTP (123/udp) from chronyd only (NTP_UPSTREAM may be names, which chrony resolves through the site resolver).
+# Replies to connections the host accepted (ssh in, the server's collector) pass as established. Multicast and
+# broadcast (mDNS, LLMNR from the desktop) are dropped without a log line; anything else is logged (CHP-WS-EGRESS,
+# at most 6 a minute) and refused. IPv6 has no destination here but neighbour discovery: the site files carry no
+# IPv6 addresses.
+# SITE-INDEPENDENT: the addresses come from /etc/chp/workstation-egress-addr.nft, written from the site files by
+# `chp-site onlyoffice egress-render` (chp-workstation-egress.service runs it before every load):
+#   define CHP_WS_SERVER_IP = <SERVER_IP>
+#   define CHP_WS_RESOLVER_IP = <the server's address: clients resolve through the server>
+# A separate table: firewalld's own table (and its reloads) are left alone; a packet dropped here is dropped, whatever
+# firewalld's output chain says. Loading the file replaces the table atomically.
+include "/etc/chp/workstation-egress-addr.nft"
+table inet chp_workstation_egress
+delete table inet chp_workstation_egress
+table inet chp_workstation_egress {
+    chain output {
+        type filter hook output priority filter; policy drop;
+        oifname "lo" accept
+        ct state established,related accept
+        meta l4proto { tcp, udp } th dport 853 limit rate 6/minute log prefix "CHP-WS-EGRESS-DNS " level warn flags skuid
+        meta l4proto { tcp, udp } th dport 853 reject with icmpx type admin-prohibited
+        ip daddr $CHP_WS_RESOLVER_IP meta l4proto { tcp, udp } th dport 53 accept
+        meta l4proto { tcp, udp } th dport 53 limit rate 6/minute log prefix "CHP-WS-EGRESS-DNS " level warn flags skuid
+        meta l4proto { tcp, udp } th dport 53 reject with icmpx type admin-prohibited
+        ip daddr $CHP_WS_SERVER_IP tcp dport { 22, 443, 1514, 8443, 9000 } accept
+        ip daddr $CHP_WS_SERVER_IP icmp type echo-request accept
+        meta skuid "chrony" udp dport 123 accept
+        icmpv6 type { nd-router-solicit, nd-neighbor-solicit, nd-neighbor-advert, mld-listener-report, mld2-listener-report } accept
+        ip daddr { 224.0.0.0/4, 255.255.255.255 } drop
+        ip6 daddr ff00::/8 drop
+        limit rate 6/minute log prefix "CHP-WS-EGRESS " level warn flags skuid
+        reject with icmpx type admin-prohibited
+    }
+}

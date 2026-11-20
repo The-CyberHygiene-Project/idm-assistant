@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        4.chp%{?dist}
+Release:        5.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,15 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-5.chp
+- ISO 0.7.0 Plan 3 (Tasks 1-8, one release for the plan's chp-site changes so far): documents enable's doc-workflow
+  steps; doc-ledger (the root appender); doc (the workstation's controlled-document commands); marking; the template
+  fill of doc new.
+- onlyoffice enable|sweep|egress-render (Task 8): the workstation's editor (chp-onlyoffice), its egress table
+  addresses from the site files, the hourly autosave sweep (12 h, no live session, as the user; tag chp-doc-sweep),
+  linger off. Wazuh rules 100626 (sweep, level 3) and 100627 (workstation egress block, level 7) in the documents
+  rules file, outside the review's NextCloud rows.
+
 * Sat Nov 14 2026 The CyberHygiene Project - 0.14.0-4.chp
 - documents enable (lab round 3, D6): the fapolicyd restart is proven: active at three samples over about 5 s, a
   parsed "Denied accesses" counter, then chp-base's fapolicyd-fsmark --verify; a fapolicyd found dead (the known

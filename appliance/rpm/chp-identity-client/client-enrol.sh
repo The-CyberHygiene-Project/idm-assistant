@@ -115,6 +115,14 @@ do_security() {
   chp-site security enable --firstboot
 }
 
+# Documents (ISO 0.7.0 Plan 3 Task 8): the editor and the workstation gates when the site has the document server
+# (DOCUMENTS=yes needs SECURITY_ADDONS=yes, so the local signed repo is there).
+do_docs() {
+  [ "$ROLE" = client ] || return 0
+  [ "$(chp-site get DOCUMENTS)" = yes ] || return 0
+  chp-site onlyoffice enable
+}
+
 step trust do_trust
 step unixd do_unixd
 step authselect do_authselect
@@ -122,4 +130,5 @@ step sshd do_sshd
 step accounts do_accounts
 step collect do_collect
 step security do_security
+step docs do_docs
 if [ -z "$ONLY" ]; then current=done; touch "$M/client.done"; log "CHP: client enrolment complete ($ROLE; logins: $LOGIN_GROUP)"; fi

@@ -1,0 +1,12 @@
+[Unit]
+Description=CHP: remove ONLYOFFICE's auto-recovery copies (CUI) of closed or abandoned editor sessions (12 h)
+Documentation=file:///usr/share/doc/chp-onlyoffice/README.md
+[Service]
+Type=oneshot
+# as root; each user's folder is swept by a child running as that user (chp_site.onlyoffice._as_user)
+ExecStart=/usr/bin/chp-site onlyoffice sweep
+SyslogIdentifier=chp-doc-sweep
+UMask=0077
+PrivateNetwork=yes
+PrivateTmp=yes
+ProtectSystem=full
