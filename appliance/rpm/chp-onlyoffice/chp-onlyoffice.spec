@@ -97,7 +97,8 @@ fi
 %changelog
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-1.chp
 - Egress fails closed at boot: a render failure loads the last good addresses; no file or a failed load starts
-  chp-workstation-egress-lockdown.service (loopback only, journal tag chp-egress-lockdown, Wazuh 100628 level 12).
+  chp-workstation-egress-lockdown.service (loopback only, before network-pre.target, re-runnable in the same boot;
+  its log line never gates the load; journal tag chp-egress-lockdown, Wazuh 100628 level 12).
   NTP only to the NTP_UPSTREAM addresses when all are addresses (CHP_WS_NTP4/6).
 - First release (ISO 0.7.0 Plan 3 Task 8): AI Tools removal (%%post, %%posttrans, trigger on
   onlyoffice-desktopeditors), /etc/xdg preseed, the workstation egress table (site server + site resolver only;

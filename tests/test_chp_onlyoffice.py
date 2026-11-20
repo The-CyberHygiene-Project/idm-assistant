@@ -625,8 +625,9 @@ class Host:
     """systemd + nft, as far as these units use them: '-' makes a command's failure non-fatal; a failed unit starts
     its OnFailure= unit; `nft -f` refuses a file whose include is missing, and loading a file applies its
     `table`/`delete table` lines and its tables; chp-site egress-render is the real render_egress."""
-    def __init__(self, root, site, hosts):
+    def __init__(self, root, site, hosts, logger_fails=False):
         self.root, self.site, self.hosts, self.tables, self.log = root, site, hosts, set(), []
+        self.logger_fails, self.active = logger_fails, set()
 
     def cmd(self, line):
         argv = line.split()
@@ -641,12 +642,21 @@ class Host:
                 (self.tables.add if verb == "table" else self.tables.discard)(name)
             self.tables.update(re.findall(r"^table inet (\w+) \{", text, re.M))
         elif argv[0] == "/usr/bin/logger":
+            if self.logger_fails:                              # /dev/log unreachable at early boot: exit 1
+                raise OSError("logger: socket /dev/log: No such file or directory")
             self.log.append(line)
         else:
             raise AssertionError(line)
 
-    def start(self, unit):
-        pre, start, onf = _unit(t(unit))
+    def start(self, unit, restart=False):
+        """systemctl start (a no-op for an active RemainAfterExit=yes unit) or restart; then ExecStartPost."""
+        text = t(unit)
+        remain = re.search(r"^RemainAfterExit=yes$", text, re.M) is not None
+        if unit in self.active and remain and not restart:
+            return "active"
+        self.active.discard(unit)
+        pre, start, onf = _unit(text)
+        post = [ln.split("=", 1)[1] for ln in text.splitlines() if ln.startswith("ExecStartPost=")]
         try:
             for c in pre + start:
                 try:
@@ -654,11 +664,19 @@ class Host:
                 except Exception:
                     if not c.startswith("-"):
                         raise
-            return "active"
         except Exception:
             if onf:
                 self.start(onf)
             return "failed"
+        for c in post:
+            try:
+                self.cmd(c.lstrip("-"))
+            except Exception:
+                if not c.startswith("-"):
+                    return "failed"
+        if remain:
+            self.active.add(unit)
+        return "active"
 
 
 def test_egress_render_failure_loads_the_last_good_file(tmp_path):
@@ -767,3 +785,38 @@ def test_restorecon_absent_is_tolerated(tmp_path):
             raise FileNotFoundError("restorecon")
         return Run()(argv, **k)
     OO._restorecon(norestorecon, tmp_path / "x")                   # no exception
+
+
+# ---------- fix round 2 ----------
+
+def test_lockdown_loads_even_when_logger_fails(tmp_path):
+    site, hosts = _site()
+    h = Host(tmp_path, site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]], logger_fails=True)
+    assert h.start("chp-workstation-egress.service") == "failed"
+    assert h.tables == {"chp_workstation_lockdown"}            # logging never gates the load (N1)
+    lk = t("chp-workstation-egress-lockdown.service")
+    ex = [ln for ln in lk.splitlines() if ln.startswith("Exec") and "logger" in ln]
+    assert ex and all(ln.startswith("ExecStartPre=-") for ln in ex)
+
+
+def test_lockdown_is_ordered_before_the_network():
+    lk = t("chp-workstation-egress-lockdown.service")
+    assert re.search(r"^Wants=network-pre\.target$", lk, re.M)
+    assert re.search(r"^Before=.*\bnetwork-pre\.target\b", lk, re.M)                    # N2
+    assert "DefaultDependencies=no" in lk
+
+
+def test_a_second_failure_in_the_same_boot_locks_down_again(tmp_path):
+    site, hosts = _site()
+    bad = [hosts[0]._replace(ip="0.0.0.0"), hosts[1]]
+    h = Host(tmp_path, site, bad)
+    assert h.start("chp-workstation-egress.service") == "failed" and h.tables == {"chp_workstation_lockdown"}
+    h.hosts = hosts                                            # fixed; restart: the egress table, no lock-down
+    assert h.start("chp-workstation-egress.service", restart=True) == "active"
+    assert h.tables == {"chp_workstation_egress"}
+    # later the same boot nft refuses the table (e.g. a damaged shipped file): the lock-down must load again (N3)
+    orig = h.cmd
+    h.cmd = lambda line: (_ for _ in ()).throw(OSError("nft: syntax")) \
+        if line.startswith("/usr/sbin/nft -f /etc/nftables/chp-workstation-egress") else orig(line)
+    assert h.start("chp-workstation-egress.service", restart=True) == "failed"
+    assert "chp_workstation_lockdown" in h.tables

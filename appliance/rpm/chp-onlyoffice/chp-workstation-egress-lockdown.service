@@ -1,12 +1,17 @@
 [Unit]
 Description=CHP: the workstation egress table failed to load: loopback only (fail closed)
 Documentation=file:///usr/share/doc/chp-onlyoffice/README.md
+# as early as the egress unit it stands in for: the network must not come up before the lock-down table is in
 DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target
 After=local-fs.target
 [Service]
+# No RemainAfterExit: the TABLE is the state, not the unit. The unit goes inactive once the table is loaded, so a
+# second failure of chp-workstation-egress.service in the same boot (after a good restart removed the table) starts
+# it, and loads the table, again. There is no ExecStop: stopping or finishing never removes the table.
 Type=oneshot
-RemainAfterExit=yes
 SyslogIdentifier=chp-egress-lockdown
-# the line first, so it exists even if the load below fails
-ExecStartPre=/usr/bin/logger -p auth.crit -t chp-egress-lockdown "EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl restart chp-workstation-egress)"
+# "-": the log line never gates the load (logger exits 1 when /dev/log is not up yet, at early boot)
+ExecStartPre=-/usr/bin/logger -p auth.crit -t chp-egress-lockdown "EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this workstation (journalctl -u chp-workstation-egress; fix, then systemctl restart chp-workstation-egress)"
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-lockdown.nft
