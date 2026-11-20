@@ -577,10 +577,14 @@ def test_vendor_rpm_sha_pinned(tmp_path):
 
 
 def test_spec_requires_and_pins():
-    for r in ("onlyoffice-desktopeditors = 10.0.0", "poppler-utils", "chp-site >= 0.14.0-6", "nftables", "chp-base"):
+    for r in ("onlyoffice-desktopeditors = 10.0.0", "poppler-utils", "nftables", "chp-base"):
         assert re.search(rf"^Requires:.*{re.escape(r)}", SPEC, re.M), r
+    # the doc commands' pin is chp-site's CURRENT release (Task 11a fix round 1, m4: the workstation client fixes)
     cs = (TOP / "appliance/chp-site/chp-site.spec").read_text()
-    assert re.search(r"^Release:\s+7\.chp", cs, re.M) and "0.14.0-6.chp" in cs
+    v = re.search(r"^Version:\s+(\S+)", cs, re.M).group(1)
+    rel = re.search(r"^Release:\s+(\d+)\.chp", cs, re.M).group(1)
+    pin = re.search(r"^Requires:\s+chp-site >= (\S+)$", SPEC, re.M)
+    assert pin and pin.group(1) == f"{v}-{rel}", (pin and pin.group(1), f"{v}-{rel}")
     assert "Vendor:         The CyberHygiene Project" in SPEC and re.search(r"^Release:\s+\d+\.chp%\{\?dist\}", SPEC, re.M)
     b = t("build-rpm.sh")
     for f in ("chp-onlyoffice.spec", "onlyoffice-ai-off.sh", "DesktopEditors.conf", "nft/chp-workstation-egress.nft",

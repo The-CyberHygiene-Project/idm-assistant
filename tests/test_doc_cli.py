@@ -697,3 +697,34 @@ def test_other_errors_on_the_first_post_are_still_refused(tmp_path, monkeypatch,
         if url.endswith("/request?format=json") else stub(method, url, headers, body)
     rc, out = run(env, monkeypatch, capsys, "approve", str(f))
     assert rc == 1 and "refused" in out and not _pending_ids(env)
+
+
+# ---------- Task 11a fix round 1, I3: drop a kept id only when the server holds nothing for it ----------
+
+def test_a_lasting_4xx_while_the_server_still_holds_the_id_queued_stays_pending(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    env.stub.script["*"] = ["queued"] * 100000                # spooled; the appender has not answered
+    rc, _ = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3
+    (rid,) = _pending_ids(env).values()
+    env.stub.post_status[rid] = [403]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out
+    env.stub.script["*"] = ["retry"]                           # a retry result: the server still holds it too
+    env.stub.post_status[rid] = [400]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and list(_pending_ids(env).values()) == [rid], out
+
+
+@pytest.mark.parametrize("lookup", [401, 503])
+def test_a_lasting_4xx_whose_result_lookup_fails_stays_pending(tmp_path, monkeypatch, capsys, lookup):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    rid = _kept_id(env, monkeypatch, capsys, f)
+    stub = env.stub
+    stub.post_status[rid] = [413]
+    env.transport = lambda method, url, headers=None, body=None: (lookup, {}, b"") \
+        if "/result/" in url else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out

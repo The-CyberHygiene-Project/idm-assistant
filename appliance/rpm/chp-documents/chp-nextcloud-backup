@@ -60,11 +60,12 @@ case ${1:-backup} in
     trap 'rc=$?; occ maintenance:mode --off >/dev/null 2>&1 || true; if [ $rc -ne 0 ]; then rm -rf "$o"; status FAILED "backup $t exited $rc"; fi' EXIT
     install -d -m 0700 "$o"
     # the document ledger FIRST, under its shared lock (Task 9 review M1: no half-written line is copied), and the lock
-    # released BEFORE maintenance mode (Task 11a, revising round 2 d): the appender waits for this one rsync of the
-    # ledger, never for the whole backup. A publish that lands after this copy is in the data copy below but not in
-    # this ledger copy; restore never rolls a live ledger back, and verify checks a restored one against the stick.
-    # rsync copies ledger.head before ledger.jsonl and the appender writes the line before the head, so the copy's
-    # head is never ahead of its ledger.
+    # released only once maintenance mode is ON (Task 11a fix round 1, I1): a publish that took the lock in a gap before
+    # maintenance mode could do its first files:put before it and the rest (or its undo) inside it, or finish so the
+    # data copy holds a file the ledger copy lacks. Now no publish starts until maintenance mode is on, and one that
+    # starts after it fails at its first occ call, before any write. The appender waits for this one rsync and the
+    # switch, never for the whole backup. rsync copies ledger.head before ledger.jsonl and the appender writes the line
+    # before the head, so the copy's head is never ahead of its ledger.
     if [ -d "$LEDGER" ]; then
       if [ -e "$LEDGER/ledger.jsonl" ]; then
         exec 8<"$LEDGER/ledger.jsonl"
@@ -73,9 +74,9 @@ case ${1:-backup} in
         fi
       fi
       rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"
-      exec 8<&- 2>/dev/null || true                       # the appender may run again
     fi
     occ maintenance:mode --on >/dev/null
+    exec 8<&- 2>/dev/null || true                         # the appender may run again (occ refuses in maintenance mode)
     runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
     link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
     rsync -aHAX --numeric-ids ${link[@]+"${link[@]}"} "$D/" "$o/data/"

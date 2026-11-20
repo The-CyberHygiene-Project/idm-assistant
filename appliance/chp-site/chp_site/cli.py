@@ -560,8 +560,8 @@ def _doc_ledger(a):
     if a.action == "process":                    # never a restart storm: a set-up failure empties the spool (11a 6a)
         rs, err = L.run_process()
         if err is not None:
-            print(f"chp-site doc-ledger could not start ({err}): {len(rs)} request(s) refused and set aside in "
-                  "quarantine")
+            print(f"chp-site doc-ledger could not start ({err}): {len(rs)} request(s) answered retry (nothing "
+                  "recorded) and removed from the spool")
             return 0
         n = {s: sum(r.state == s for r in rs) for s in ("done", "refused", "retry")}
         print(f"processed {len(rs)} request(s): {n['done']} done, {n['refused']} refused, {n['retry']} to retry")

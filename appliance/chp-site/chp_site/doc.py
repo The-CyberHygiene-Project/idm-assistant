@@ -440,15 +440,20 @@ PROXY = (502, 503, 504)            # a proxy in front of NextCloud: the POST may
 
 
 def _result_once(env, rid):
-    """One look at the ledger's result for rid: (state, answer) when it holds a final one (done / refused), else
-    None. Raises auth.Unreachable / auth.AuthError."""
+    """One look at the ledger's result for rid: ("final", (state, answer)) for done / refused; ("absent", None) only
+    when the app answers 404 (it holds nothing for rid: neither waiting in the spool nor a result); else ("held", why):
+    queued, retry, 401, 5xx or anything else, the server may still hold it (fix round 1, I3). Raises
+    auth.Unreachable / auth.AuthError."""
     s = auth.fresh(env)
     st, _, data = auth._call(env, "GET", f"{env.files}{LEDGER}/result/{rid}?format=json",
                              dict(_bearer(s), **{"OCS-APIRequest": "true", "Accept": "application/json"}))
     d = _ocs(data)
     if st == 200 and d.get("state") in ("done", "refused"):
-        return d["state"], d
-    return None
+        return "final", (d["state"], d)
+    if st == 404:
+        return "absent", None
+    what = d.get("state") if st == 200 else f"HTTP {st}"
+    return "held", f"the server may still hold this request (its result is {what or 'unknown'})"
 
 
 def _plain(e):
@@ -463,8 +468,8 @@ def send(env, kind, fields, say=print):
     here answers "refused" on its own: a sign-in that ends, NextCloud or Kanidm unreachable, or an HTTP answer other
     than 200 to the POST is "pending" and the id is kept, so the next run asks about the same request. The ledger's
     own result (done / refused) ends it, and so does a LASTING refusal of the request itself (400, 403, 413: the same
-    body is refused every time): after one look for a result the server already holds, it is refused and the id
-    dropped (Task 11a). 401, 409, 429 and 5xx stay pending. On the FIRST POST of a new id any non-200 answer is a
+    body is refused every time): after one look at its result, the id is dropped only when the server holds nothing for
+    it (404; a done/refused result is answered instead; queued, retry or a failed look stays pending) (Task 11a). 401, 409, 429 and 5xx stay pending. On the FIRST POST of a new id any non-200 answer is a
     refusal (nothing was spooled), except a proxy's 502/503/504: the request may have got through, so pending."""
     key_src = {"kind": kind, **{k: v for k, v in fields.items() if k not in ("content", "pdf_content")}}
     key = hashlib.sha256(json.dumps(key_src, sort_keys=True).encode()).hexdigest()
@@ -515,14 +520,16 @@ def send(env, kind, fields, say=print):
                 return "refused", {"message": d.get("message") or f"refused: the ledger answered HTTP {st}"}
             if st in LASTING:
                 try:                                      # an earlier send of this id may have been processed
-                    final = _result_once(env, rid)
+                    how, got = _result_once(env, rid)
                 except auth.Unreachable as e:
                     return pending(str(e))
                 except auth.AuthError as e:
                     return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
+                if how == "held":
+                    return pending(got)
                 pend.drop(key)
-                if final is not None:
-                    return final
+                if how == "final":
+                    return got
                 return "refused", {"message": (d.get("message") or f"refused: the ledger answered HTTP {st}")
                                    + " (this request is refused every time it is sent: it is dropped; fix the cause "
                                      "and run the command again)"}

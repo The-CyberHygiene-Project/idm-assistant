@@ -24,6 +24,9 @@ UNITS = TOP / "appliance/rpm/chp-documents/units"
 NOW = 1795000000.0                       # 2026-11-18T...Z
 
 
+HEX64 = re.compile(r"[0-9a-f]{64}")
+
+
 def sha(b):
     return hashlib.sha256(b).hexdigest()
 
@@ -750,6 +753,9 @@ def test_unlink_failure_does_not_crash(env, monkeypatch):
     assert not list((env.base / "spool").iterdir())
     held = [q for q in env.quarantine() if "-held-" in q.name]
     assert len(held) == 1 and oct(held[0].stat().st_mode & 0o777) == "0o600"
+    # fix round 1, m1: a held regular file is rewritten without its Bearer token (the original's sha256 kept)
+    rec = json.loads(held[0].read_text())
+    assert "tok-" not in held[0].read_text() and HEX64.fullmatch(rec["original_sha256"]) and rec["held_from"]
     assert oct((env.base / "quarantine").stat().st_mode & 0o777) == "0o700"
     assert [j for j in env.journal if j.get("event") == "quarantine" and "moved aside" in j.get("why", "")]
     L.process(env.ctx)                          # nothing left to re-process
@@ -800,7 +806,7 @@ def test_a_stray_json_in_the_spool_is_set_aside_not_left_to_retrigger(env):     
     assert len([j for j in qs if "not a request file name" in j["why"]]) == 3, qs
 
 
-def test_appender_that_cannot_start_sets_the_spool_aside_and_alerts_once(env, monkeypatch, capsys):   # 6a
+def test_appender_that_cannot_start_answers_retry_and_alerts_once(env, monkeypatch, capsys):   # 6a, round 1 I2
     from chp_site import cli
 
     def broken(cls):
@@ -813,18 +819,17 @@ def test_appender_that_cannot_start_sets_the_spool_aside_and_alerts_once(env, mo
     body = {"request_id": rid, "kind": "checkout", "user": "alice", "bearer_token": "tok-alice", "auth": "bearer"}
     (env.base / "spool" / f"{rid}.json").write_text(json.dumps(body))
     assert cli.main(["doc-ledger", "process"]) == 0                # exit 0: no restart storm; the alert is our own
-    assert not list((env.base / "spool").iterdir())
+    assert not list((env.base / "spool").iterdir())               # deleted: no token kept, nothing re-triggers
     assert "could not start" in capsys.readouterr().out
-    assert env.out(rid)["state"] == "refused" and "could not start" in env.out(rid)["message"]
-    q = [x for x in env.quarantine() if x.is_file()]
-    assert len(q) == 1 and "tok-alice" not in q[0].read_text()
+    assert env.out(rid)["state"] == "retry" and "could not start" in env.out(rid)["message"]   # never "refused"
+    assert env.quarantine() == []
     rid2 = "09" * 16
     (env.base / "spool" / f"{rid2}.json").write_text(json.dumps(dict(body, request_id=rid2)))
     assert cli.main(["doc-ledger", "process"]) == 0
     alerts = [j for j in env.journal if j.get("event") == "appender-failed"]
     assert len(alerts) == 1 and "DOMAIN is not a domain name" in alerts[0]["message"]
-    assert not [j for j in env.journal if j.get("event") == "quarantine"]      # level 12 once, not once per file
-    assert len([j for j in env.journal if j.get("event") == "set-aside"]) == 2
+    assert not [j for j in env.journal if j.get("event") in ("quarantine", "refused")]
+    assert len([j for j in env.journal if j.get("event") == "deferred"]) == 2
     # once it starts again the next failure alerts again
     monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
     assert cli.main(["doc-ledger", "process"]) == 0
@@ -832,6 +837,70 @@ def test_appender_that_cannot_start_sets_the_spool_aside_and_alerts_once(env, mo
     assert cli.main(["doc-ledger", "process"]) == 0
     assert len([j for j in env.journal if j.get("event") == "appender-failed"]) == 2
 
+
+def test_cannot_start_never_refuses_an_appended_request(env, monkeypatch, capsys):     # round 1 I2
+    from chp_site import cli
+    monkeypatch.setattr(L, "BASE", env.base)
+    monkeypatch.setattr(L, "journal", env.journal.append)
+    monkeypatch.setattr(L, "_chown_apache", lambda p: None)
+    rid = "0a" * 16
+    monkeypatch.setattr(L, "_unlink_raw", lambda p: None)          # killed between the append and the unlink
+    e = ok(env.checkout("alice", rid=rid))
+    monkeypatch.undo()
+    monkeypatch.setattr(L, "BASE", env.base)
+    monkeypatch.setattr(L, "journal", env.journal.append)
+    monkeypatch.setattr(L, "_chown_apache", lambda p: None)
+    survivor = env.base / "spool" / f"{rid}.json"
+    assert survivor.exists() and env.out(rid)["state"] == "done"
+
+    def broken(cls):
+        raise SiteError("documents.conf unreadable")
+    monkeypatch.setattr(L.Ctx, "system", classmethod(broken))
+    assert cli.main(["doc-ledger", "process"]) == 0
+    assert not survivor.exists() and env.out(rid)["state"] == "done"            # the done result stays
+    assert env.out(rid)["entry"]["seq"] == e["seq"]
+    # the client re-sends the same id; on the next good start _prior answers it "done"
+    monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
+    r = env.checkout("alice", rid=rid)
+    assert r.state == "done" and r.entry["seq"] == e["seq"] and len(env.ledger()) == 1
+    assert cli.main(["doc-ledger", "process"]) == 0
+
+
+def test_many_strays_alert_once(env):                                              # round 1 m2
+    sp = env.base / "spool"
+    for n in range(L.STRAY_ALERT_MAX + 2):
+        (sp / f"junk{n}.json").write_text("{}")
+    rs = L.process(env.ctx)
+    assert len(rs) == L.STRAY_ALERT_MAX + 2 and not list(sp.iterdir())
+    qs = [j for j in env.journal if j.get("event") == "quarantine"]
+    assert len(qs) == 1 and f"{L.STRAY_ALERT_MAX + 2} files" in qs[0]["why"]
+    assert len([j for j in env.journal if j.get("event") == "set-aside"]) == L.STRAY_ALERT_MAX + 2
+    assert len([q for q in env.quarantine() if q.is_file()]) == L.STRAY_ALERT_MAX + 2   # each one recorded
+
+
+def test_publish_in_maintenance_mode_is_retry_not_refused(env):                    # round 1 m3
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    real = env.store.put
+
+    def maint(folder, name, data):
+        raise L.Maintenance("occ files:put: Nextcloud is in maintenance mode, no apps are loaded.")
+    env.store.put = maint
+    rid = "0b" * 16
+    r = env.publish("alice", V11, rid=rid)
+    assert r.state == "retry" and "maintenance" in r.message, r
+    assert env.out(rid)["state"] == "retry" and [e["kind"] for e in env.ledger()] == ["checkout", "approve"]
+    assert not (env.base / "unfinished" / rid).exists()
+    env.store.put = real
+    ok(env.publish("alice", V11, rid=rid))                         # the re-send after the backup: published
+    # occ's own text maps to Maintenance (NextCloud 35 lib/private/Console/Application.php)
+    for text in (b"Nextcloud is in maintenance mode, no apps are loaded.\nCommands provided by apps are unavailable.\n"
+                 b"\n  Command \"files:put\" is not defined.",
+                 b"Nextcloud is in maintenance mode, only AppAPI commands are loaded.\n"):
+        st = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=lambda q: [],
+                        run=lambda argv, **kw: SimpleNamespace(returncode=1, stdout=b"", stderr=text))
+        with pytest.raises(L.Maintenance):
+            st._occ("files:put", "-", "/chp-publisher/files/CUI/Compliance/x")
 
 def test_never_refused_after_append(env, monkeypatch):
     ok(env.checkout("alice"))
@@ -1213,8 +1282,9 @@ def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkey
     monkeypatch.setenv("CHP_DOCS_LEDGER", str(led))
     rc, out, calls = S._backup(tmp_path, 10**9, ["20260101T000000Z"])
     assert rc == 0, out and any(str(led) in ln for ln in calls.splitlines() if ln.startswith("rsync"))
-    # Task 11a item 2 (revises round 2 (d)): the ledger is copied FIRST, under the shared lock, and the lock is
-    # released BEFORE maintenance mode on: the appender waits for one rsync of the ledger, never for the whole backup
+    # Task 11a item 2, fix round 1 I1: the ledger is copied FIRST, under the shared lock, and the lock is released
+    # only AFTER maintenance mode is on (no publish can start in a gap and straddle it): the appender waits for one
+    # rsync of the ledger and the maintenance switch, never for the whole backup
     seq = [ln for ln in calls.splitlines() if ln.startswith(("flock -s", "occ maintenance", "rsync"))]
     on, off = seq.index("occ maintenance:mode --on"), seq.index("occ maintenance:mode --off")
     led_rs = [i for i, ln in enumerate(seq) if str(led) in ln and ln.startswith("rsync")]
@@ -1223,7 +1293,7 @@ def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkey
     script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
     lock, rs = script.index('exec 8<"$LEDGER/ledger.jsonl"'), script.index('"$LEDGER/" "$o/chp-docs-ledger/"')
     rel, mon = script.index("exec 8<&-"), script.index("occ maintenance:mode --on")
-    assert lock < rs < rel < mon
+    assert lock < rs < mon < rel < script.index("runuser -u postgres -- pg_dump")
     assert script.count("exec 8<&-") == 1 and script.count('"$LEDGER/" "$o/chp-docs-ledger/"') == 1
 
 

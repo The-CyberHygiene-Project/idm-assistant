@@ -109,6 +109,14 @@ class OccTimeout(StoreError):
         self.killed = killed
 
 
+class Maintenance(StoreError):
+    """occ refused because NextCloud is in maintenance mode (the nightly backup): retry later, never refused (Task 11a
+    fix round 1, m3). The text is NextCloud 35's lib/private/Console/Application.php writeMaintenanceModeInfo()."""
+
+
+MAINTENANCE_TEXT = "is in maintenance mode"
+
+
 class Degraded(StoreError):
     """A move refused because the database cannot compute MD5 (design §12, FolderGuardListener)."""
 
@@ -561,14 +569,49 @@ def _hold(ctx, p, err):
     except (OSError, StopIteration) as e2:
         _stuck(ctx, p, err, e2)
         return
+    note = ""
     try:
         if stat.S_ISREG(os.lstat(dest).st_mode):
             os.chmod(dest, 0o600)
-    except OSError:
-        pass
+            _held_record(ctx, p.name, dest, err)          # fix round 1, m1: the Bearer token goes at once
+    except (OSError, ValueError) as e:
+        note = f"; it still holds its Bearer token until purge-quarantine (rewrite failed: {str(e)[:80]})"
     _safe(ctx.journal, {"event": "quarantine", "request_id": p.name[:32] if REQ_NAME.fullmatch(p.name) else None,
                         "user": None, "why": f"the spool file {_clean(p.name, 80)} could not be deleted "
-                                             f"({str(err)[:120]}): moved aside to quarantine as {dest.name}"})
+                                             f"({str(err)[:120]}): moved aside to quarantine as {dest.name}{note}"})
+
+
+def _held_record(ctx, name, dest, err):
+    """Replace a held regular file by its record: no Bearer token, no file bytes, the original's size and sha256."""
+    h, n, head = hashlib.sha256(), 0, b""
+    fd = os.open(dest, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+            if n <= MAX_SPOOL:
+                head += chunk
+            n += len(chunk)
+    try:
+        req = json.loads(head) if n <= MAX_SPOOL else None
+    except ValueError:
+        req = None
+    rec = {"held_from": name, "held_at": _ts(ctx.now()), "original_sha256": h.hexdigest(), "bytes": n,
+           "why": f"could not be deleted from the spool ({str(err)[:200]})",
+           "request": _sanitize(req) if isinstance(req, dict) else {"unparsed": True}}
+    tmp = dest.with_name(dest.name + ".rec")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(rec, f, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _stuck_marker(ctx, name):
@@ -627,7 +670,7 @@ def _read_spool(p):
     return data
 
 
-def _write_result(ctx, rid, user, state, message, entry=None):
+def _write_result(ctx, rid, user, state, message, entry=None, keep_final=False):
     """out/<id>.json, root:apache 0640, via a temporary file and rename. Never over another user's result (the app
     shows a result only to its owner; a request id reused by someone else must not take it over). False = not
     written because it belongs to someone else."""
@@ -638,6 +681,8 @@ def _write_result(ctx, rid, user, state, message, entry=None):
             cur = json.loads(f.read(1 << 20))
         if isinstance(cur, dict) and cur.get("user") not in (None, user):
             return False
+        if keep_final and isinstance(cur, dict) and cur.get("state") in ("done", "refused"):
+            return False                                  # a final answer is never replaced by a "retry"
     except FileNotFoundError:
         pass
     except (OSError, ValueError):
@@ -1049,16 +1094,25 @@ def process(ctx=None, budget=BUDGET, clock=time.monotonic):
     _clear_stuck(ctx)
     start, out = clock(), []
     # anything else the path unit's glob (*.json) sees is set aside first: left there it would re-trigger the unit until
-    # its limit stops the appender (Task 11a item 6a). chp_ledger writes only <32 hex>.json (and .<id>.tmp).
+    # its limit stops the appender (Task 11a item 6a). chp_ledger writes only <32 hex>.json (and .<id>.tmp). More than
+    # STRAY_ALERT_MAX in one run: one alert for them all (fix round 1, m2), each still recorded.
+    why = "not a request file name (chp_ledger writes <32 hex>.json only)"
+    many = len(strays) > STRAY_ALERT_MAX
     for n in sorted(strays):
-        out.append(_set_aside(ctx, ctx.spool / n, "not a request file name (chp_ledger writes <32 hex>.json only)",
-                              answer=False))
+        out.append(_set_aside(ctx, ctx.spool / n, why, answer=False, event="set-aside" if many else "quarantine"))
+    if many:
+        _safe(ctx.journal, {"event": "quarantine", "request_id": None, "user": None,
+                            "why": f"{len(strays)} files in the spool were {why}; set aside in quarantine (first: "
+                                   + ", ".join(_clean(n, 40) for n in sorted(strays)[:STRAY_ALERT_MAX]) + ")"})
     for _, n in sorted(names):
         if out and clock() - start > budget:
             _safe(ctx.journal, {"event": "budget-reached", "processed": len(out), "waiting": len(names) - len(out)})
             break
         out.append(process_one(ctx.spool / n, ctx))
     return out
+
+
+STRAY_ALERT_MAX = 5                # strays in one run alerted one by one; more = one aggregated line
 
 
 def _triggers(name):
@@ -1091,9 +1145,10 @@ def _set_aside(ctx, p, why, *, event="quarantine", answer=True):
 
 def run_process(budget=BUDGET):
     """chp-site doc-ledger process (the path unit's service): (results, None), or, when the appender cannot even set
-    up (site.conf or documents.conf unreadable, Ctx.system() failing), (the spool set aside, the error): every request
-    is refused to its owner and recorded in quarantine without its token, and appender-failed is journalled ONCE until
-    a start succeeds again (Task 11a item 6a). Either way the spool is emptied: no restart storm, no permanent stop."""
+    up (site.conf or documents.conf unreadable, Ctx.system() failing), (the spool deferred, the error): every request
+    is deleted and answered "retry" (never over a final result; fix round 1, I2), a stray set aside, and
+    appender-failed is journalled ONCE until a start succeeds again (Task 11a item 6a). Either way the spool is
+    emptied: no restart storm, no permanent stop."""
     try:
         ctx = Ctx.system()
     except Exception as err:                              # noqa: BLE001 - whatever stops the set-up
@@ -1109,13 +1164,17 @@ def run_process(budget=BUDGET):
 
 
 def _cannot_start(ctx, err):
+    """The appender cannot set up: one appender-failed alert (until a start succeeds), and every request in the spool is
+    deleted (no token kept, nothing re-triggers) and answered "retry" (fix round 1, I2): never "refused", since a spool
+    file can outlive its own append (killed between the append and the unlink), and never over a final (done /
+    refused) result. The client re-sends the same id; the next good start answers an appended one from the ledger."""
     why = f"the appender could not start: {type(err).__name__}: {str(err)[:200]}"
     m = ctx.work / "start-failed"
     if not os.path.lexists(m):
         _safe(ctx.journal, {"event": "appender-failed",
                             "message": f"chp-site doc-ledger could not start ({type(err).__name__}: {str(err)[:300]}): "
-                                       "document requests are refused and set aside in quarantine until it is fixed "
-                                       "(journalctl -u chp-docs-ledger; chp-site doc-ledger purge-quarantine after)"})
+                                       "document requests are answered retry (nothing recorded) until it is fixed "
+                                       "(journalctl -u chp-docs-ledger)"})
         try:
             _dir0700(ctx.work)
             fd = os.open(m, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -1126,8 +1185,38 @@ def _cannot_start(ctx, err):
         names = sorted(n for n in os.listdir(ctx.spool) if _triggers(n))
     except FileNotFoundError:
         return []
-    return [_set_aside(ctx, ctx.spool / n, why, event="set-aside", answer=bool(REQ_NAME.fullmatch(n)))
-            for n in names]
+    out = []
+    for n in names:
+        p = ctx.spool / n
+        if not REQ_NAME.fullmatch(n):
+            out.append(_set_aside(ctx, p, why + "; not a request file name", event="set-aside", answer=False))
+            continue
+        out.append(_defer(ctx, p, why))
+    return out
+
+
+def _defer(ctx, p, why):
+    rid = p.name[:32]
+    try:
+        try:
+            raw = _read_spool(p)
+            req = json.loads(raw) if raw is not None else None
+        except (OSError, ValueError):
+            req = None
+        user = req.get("user") if isinstance(req, dict) and req.get("request_id") == rid else None
+        ok_user = isinstance(user, str) and USER.fullmatch(user)
+        _safe(ctx.journal, {"event": "deferred", "request_id": rid, "user": user if ok_user else None,
+                            "why": why[:300]})
+        msg = (f"pending: {why[:200]}; nothing was recorded; run the command again later (the ISSO has been "
+               "alerted)")
+        if ok_user:
+            try:
+                _write_result(ctx, rid, user, "retry", msg, keep_final=True)
+            except Exception as e:                        # noqa: BLE001
+                _safe(ctx.journal, {"event": "result-write-failed", "request_id": rid, "error": str(e)[:200]})
+        return Result("retry", msg, None)
+    finally:
+        _unlink(ctx, p)
 
 
 def _answer(ctx, rid, user, state, message, entry=None):
@@ -1177,6 +1266,12 @@ def _handle(ctx, rid, r):
                 e = _decide_and_act(ctx, led, r, ident, undo, warn)
             except _Refuse as err:
                 return _refused(ctx, rid, r, str(err))
+            except Maintenance as err:                    # the nightly backup: nothing was written (fix round 1, m3)
+                msg = ("pending: the document server is in maintenance mode (the nightly backup); nothing was "
+                       "recorded; run the command again in a few minutes")
+                _safe(ctx.journal, {"event": "retry", "request_id": rid, "user": user, "kind": kind,
+                                    "why": str(err)[:200]})
+                return _answer(ctx, rid, user, "retry", msg)
             except StoreError as err:
                 return _refused(ctx, rid, r, f"refused: the document server could not do it ({str(err)[:300]}); "
                                              "nothing was recorded; run the command again")
@@ -1687,6 +1782,8 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo, warn):
         failed = _undo(s, undo)
         undo.clear()
         _journal_undo(ctx, r, t.doc, failed)
+        if not failed and isinstance(err, Maintenance):
+            raise err                                     # nothing left in the area: the caller answers "retry"
         if failed:
             msg = _incomplete(str(err), failed)
         else:
@@ -1795,6 +1892,8 @@ class OccStore:
         if r.returncode != 0:
             text = (r.stderr or b"").decode("utf-8", "replace") + (r.stdout or b"").decode("utf-8", "replace")
             last = (text.strip().splitlines() or [f"exit {r.returncode}"])[-1][:300]
+            if MAINTENANCE_TEXT in text:
+                raise Maintenance(f"occ {argv[0]}: NextCloud is in maintenance mode")
             raise (Degraded if "md5" in text.lower() else StoreError)(f"occ {argv[0]}: {last}")
 
     def _row(self, fid):

@@ -178,9 +178,9 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-8.chp
 - ISO 0.7.0 Plan 3 Task 11a: the NextCloud vhost limits request bodies on chp_ledger's OCS route
   (/ocs/v1.php and /ocs/v2.php .../apps/chp_ledger/) to 96 MiB: the 64 MiB decoded publish cap is at most 85.33 MiB
-  of base64, plus the JSON. The nightly backup copies the document ledger FIRST, under its shared lock, and releases
-  the lock before maintenance mode (revises -7): the appender waits for one rsync of the ledger, not the whole
-  backup. Check 82 counts every quarantine entry (a held spool link or folder too).
+  of base64, plus the JSON. The nightly backup copies the document ledger FIRST, under its shared lock, turns
+  maintenance mode on and only then releases the lock (revises -7): no publish straddles the switch, and the
+  appender waits for one rsync of the ledger and the switch, not the whole backup. Check 82 counts every quarantine entry (a held spool link or folder too).
   Requires chp-site >= 0.14.0-7 (the appender's set-aside and held files), nextcloud-chp >= 35.0.3-6 (chp_ledger
   1.0.1).
 

@@ -46,15 +46,18 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 - ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):
 - doc-ledger: the server's marking check gets the current versions of the document's area folder, so superseded
   citations are reported; they never refuse and are named in the publish result.
-- doc-ledger process never stops for good: when it cannot set up (site.conf or documents.conf unreadable) the spool
-  is refused to its owners and set aside in quarantine (no token kept), appender-failed journalled once until a start
-  succeeds; a stray *.json in the spool is set aside; a spool file that cannot be deleted is moved into quarantine
-  (one that cannot be moved either is alerted once). purge-quarantine also removes held links and folders.
+- doc-ledger process never stops for good: when it cannot set up (site.conf or documents.conf unreadable) every
+  spooled request is deleted and answered retry (never refused, never over a done/refused result), appender-failed
+  journalled once until a start succeeds; a stray *.json in the spool is set aside (more than 5: one alert); a spool
+  file that cannot be deleted is moved into quarantine and rewritten without its Bearer token (one that cannot be
+  moved either is alerted once). purge-quarantine also removes held links and folders. A publish refused by occ
+  because NextCloud is in maintenance mode (the nightly backup) is answered retry.
 - doc-ledger: a logger failure goes to stderr (the unit's journal), never silently; verify (and export's verify.txt)
   report a ledger with entries but no ledger.head; an occ timeout whose process group cannot be killed is still an
   OccTimeout (unknown outcome).
-- doc (workstation): on a kept request id a lasting 400/403/413 is refused and the id dropped (after one look for a
-  result the server already holds); 401/409/429/5xx stay pending; a proxy's 502/503/504 on the first POST is pending.
+- doc (workstation): on a kept request id a lasting 400/403/413 is refused and the id dropped only when the result
+  look-up answers 404 (done/refused there is answered; queued, retry, 401, 5xx stay pending); 401/409/429/5xx stay
+  pending; a proxy's 502/503/504 on the first POST is pending.
 - documents enable warns when SECURITY_ALERT_LEVEL is above 12 (approvals and overrides would reach only the daily
   summary); a warning, never a refusal.
 
