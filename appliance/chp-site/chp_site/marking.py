@@ -221,7 +221,8 @@ def _phrase(text):
                                for w in text.split())
 
 
-_SEP = r"(?://|[-:|(\[\u2010-\u2015])"          # what may follow the word in a banner line: //, - – — : | ( [
+# what may follow the word in a banner line: //, - – — : | ( [ / and the middle dots · • ∙ ⋅ (review I2)
+_SEP = r"(?://|[-:|(\[\u2010-\u2015/\u00b7\u2022\u2219\u22c5])"
 SHORT_TAIL = 3                                  # Markdown body: a banner's tail after a separator has at most 3 words
 # kind -> (the banner text, the exact pattern a required banner must match, (the word, the spelled-out phrase))
 _KINDS = {"cui": (BANNER, _BANNER_RE, ("cui", _phrase("Controlled Unclassified Information"))),
@@ -352,7 +353,10 @@ def _md_cells(line):
             v = _MD_FOOTREF.sub("", v)                              # a footnote reference [^1]
             v = _MD_REFDEF.sub(r"\1", v)                            # a reference definition: its label
             v = _md_attrs(_MD_ESCAPE.sub(r"\1", _md_links(v) if "[" in v else v))
-            out += [_md_plain(c) for c in (v.split("|") if "|" in v else [v])]
+            cells = v.split("|") if "|" in v else [v]
+            out += [_md_plain(c) for c in cells]
+            # an intraword _ renders as itself (CUI_SP-PROPIN): a second reading keeps it as a separator (review I2)
+            out += [_md_plain(c.replace("_", " ")) for c in cells if "_" in c]
     return [c for c in out if c]
 
 
@@ -431,7 +435,8 @@ def _looks_like(line, kind, wide=True):
       - the word alone (also spaced, dotted or otherwise split: "C U I", "C.U.I."), or the word with //markings;
       - the word or the spelled-out phrase followed by a separator (- – — : | ( [) and a tail;
       - the spelled-out phrase alone, or (wide) followed by anything;
-      - (wide only, controller ruling 2026-11-20) the word, white space and anything: "CUI SP-PROPIN".
+      - (wide only, controller rulings 2026-11-20) the word followed by white space or any character that is not a
+        letter or digit, and anything: "CUI SP-PROPIN", "CUI/SP-PROPIN", "CUI_SP-PROPIN" ("CUI's ..." too).
     wide (docx/xlsx/pdf banner positions, the first and last Markdown lines): any tail counts, and l/1 read as i
     everywhere. Not wide (the Markdown body, where lines are prose): a separator tail counts only when it starts with
     the spelled-out phrase, holds //, or has at most SHORT_TAIL words; l/1 read as i only in CUl/FCl capitals."""
@@ -448,8 +453,8 @@ def _looks_like(line, kind, wide=True):
         return True
     if head != word and wide:
         return True                                        # the phrase followed by anything, in a banner position
-    if wide and re.match(r"[^\w\s]{0,10}\s", s[len(word):]):
-        return True                                        # the word, white space and anything (ruling 2026-11-20)
+    if wide and not s[len(word)].isalnum():
+        return True                    # the word, then white space or any non-alphanumeric and anything (rulings)
     sep = re.match(rf"{_SEP}\s*(.*)", rest)
     if not sep:
         return False
@@ -1053,7 +1058,9 @@ def _md_block_ok(lines, block):
 
 
 _FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})")
-_LIST_ITEM = re.compile(r" {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
+# a line that opens a container whose indented continuation renders as text: a list item, a footnote definition, a
+# definition (": ..."), an admonition head (!!! / ???) (review I1: fail closed)
+_LIST_ITEM = re.compile(r" {0,3}(?:(?:[-*+]|\d{1,9}[.)]|:)(?:[ \t]|$)|\[\^[^\]]+\]:|!!!|\?\?\?)")
 
 
 def _indent(x):
@@ -1073,7 +1080,8 @@ def _md_unfenced_idx(lines):
     """(index, line) for the lines outside code blocks: every one is searched for a wrong banner (Task 12 fix round 1:
     insert must not be able to push a wrong banner inward, and a hand-written one inside must be seen).
     Code blocks: fenced (``` or ~~~; a fence that never closes hides nothing), and indented (Task 12b: indented 4
-    columns or more, after a blank line, the start of the file or another code line, and not after a list item).
+    columns or more, after a blank line, the start of the file or another code line, and not after a list item, a
+    footnote definition, a definition line or an admonition head: _LIST_ITEM).
     Indented text that renders as text stays judged (fail closed): a paragraph continuation (no blank line before),
     and anything after a list item until a blank line and a line at column 0 that is not a list item end the list
     (indented text there is the item's paragraph; lazy continuation lines keep the list open)."""

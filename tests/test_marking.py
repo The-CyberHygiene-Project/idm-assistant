@@ -1288,3 +1288,67 @@ def test_12b_server_packages_pin_the_current_chp_site():
         s = (TOP / "appliance/rpm" / spec).read_text()
         pin = re.search(r"^Requires:.*\bchp-site >= (\S+?),?(?:\s|$)", s, re.M)
         assert pin and pin.group(1) == cur, (spec, pin and pin.group(1), cur)
+
+
+# ---------- Task 12b fix round 1 (review I1, I2; controller rulings) ----------
+
+@pytest.mark.parametrize("body", ["See it[^1].\n\n[^1]: A note.\n\n    CUI//SP-PROPIN\n\nBody",
+                                  "See it[^n].\n\n   [^n]: A note.\n\n    CUI\n\nBody",
+                                  "Term\n: definition\n\n    CUI\n\nBody",
+                                  "!!! note\n\n    CUI\n\nBody", "??? note \"Title\"\n\n    CUI\n\nBody"])
+def test_12b_r1_footnote_definition_and_admonition_open_a_container(tmp_path, body):
+    """I1: indented text after a footnote definition, a definition line or an admonition head belongs to it and
+    renders as text: it is judged (fail closed), like the text of a list item."""
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{body}\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (body, r.problems)
+
+
+def test_12b_r1_container_ends_at_a_column_0_paragraph(tmp_path):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text("FCI\n\nSee it[^1].\n\n[^1]: A note.\n\nA paragraph.\n\n    CUI\n\nBody\n\nFCI\n", encoding="utf-8")
+    assert M.check(f, True, NO_VALUES).ok
+
+
+WIDE_SEPS = ["CUI/SP-PROPIN", "CUI_SP-PROPIN", "CUI.SP-PROPIN", "CUI;SP-PROPIN", "CUI•SP", "CUI·SP",
+             "CUI's handling", "CUI,SP", "CUI+SP"]
+
+
+@pytest.mark.parametrize("text", WIDE_SEPS)
+def test_12b_r1_wide_word_and_any_non_alphanumeric(tmp_path, text):
+    """I2: in a banner position the other kind's word followed by any character that is not a letter or digit (or by
+    white space) is a banner."""
+    assert M._looks_like(text, "cui", True), text
+    r = _fci_docx_header(tmp_path, text)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+    f = tmp_path / "Policy_v1.0.md"
+    f.write_text(f"Notes\n\nBody text.\n\n{text}\n", encoding="utf-8")
+    r = M.check(f, False, NO_VALUES)
+    assert not r.ok and any("non-CUI area" in p for p in r.problems), (text, r.problems)
+
+
+@pytest.mark.parametrize("text", ["FCI/contract", "FCI_contract", "FCI.data"])
+def test_12b_r1_wide_fci_word_and_any_non_alphanumeric(tmp_path, text):
+    mk = _make()
+    f = tmp_path / "CUI_Hdr_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.p(text, True)),
+                                         mk.BANNER_FTR], mk.REFS))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (text, r.problems)
+
+
+@pytest.mark.parametrize("line", ["CUI/X", "CUI·X", "CUI•X", "CUI/SP-PROPIN", "CUI / X"])
+def test_12b_r1_md_body_slash_and_dot_separators(tmp_path, line):
+    r = _fci_md(tmp_path, line)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (line, r.problems)
+
+
+def test_12b_r1_md_body_prose_with_a_slash_still_passes(tmp_path):
+    for line in ["The CUI/FCI split is explained in the policy.", "CUI/FCI handling rules apply to every document here.",
+                 "Cuisine/food notes", "Cuisine•a note about food"]:
+        f = tmp_path / "Policy_v1.0.md"
+        f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (line, r.problems)
+    assert not M._looks_like("Cuisine Ltd", "cui", True) and not M._looks_like("CUI2 Ltd", "cui", True)

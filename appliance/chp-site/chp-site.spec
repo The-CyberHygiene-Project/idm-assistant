@@ -54,7 +54,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   the exact ASCII text. In banner positions (every header/footer, the Markdown first and last lines) the other
   kind's word followed by white space and anything is a banner too ("CUI SP-PROPIN"; controller ruling), so
   "# CUI handling policy" can no longer open a non-CUI Markdown file. chp-documents and chp-identity-server now
-  require this release.
+  require this release. Review fix round 1: in banner positions the word followed by ANY non-alphanumeric character
+  (CUI/SP-PROPIN, CUI_SP-PROPIN, CUI.X) counts; in the Markdown body / and the middle dots join the separators;
+  indented text after a footnote definition, a definition line or an admonition head is judged (it renders as text).
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
 - ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):
