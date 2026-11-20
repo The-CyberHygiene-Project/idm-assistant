@@ -865,7 +865,8 @@ def test_spec_ships_units_and_ledger_dirs():
     assert "%dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/work\n" in files
     post = spec.split("%post", 1)[1].split("%preun", 1)[0]
     assert "chp-docs-ledger.path" in post
-    assert "semanage fcontext -a -t var_lib_t '%{_localstatedir}/lib/chp-docs/(ledger|quarantine|work)(/.*)?'" in post
+    assert "semanage fcontext -a -t var_lib_t '%{_localstatedir}/lib/chp-docs/(ledger|quarantine|work|unfinished)(/.*)?'" in post
+    assert "%dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/unfinished" in spec       # Task 9 review I2
 
 
 def test_cli_doc_ledger_subcommands(env, monkeypatch, tmp_path, capsys):
@@ -1036,6 +1037,20 @@ def test_nightly_backup_copies_the_ledger_only(tmp_path, monkeypatch):
     assert "/var/lib/chp-docs/spool" not in script and "/var/lib/chp-docs\"" not in script
     # restore never overwrites a live ledger
     assert 'if [ -s "$LEDGER/ledger.jsonl" ]; then log "restore: kept the existing document ledger' in script
+
+
+
+def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkeypatch):     # Task 9 review M1
+    from tests import test_chp_documents_static as S
+    led = tmp_path / "chp-docs" / "ledger"
+    led.mkdir(parents=True)
+    (led / "ledger.jsonl").write_text("{}\n")
+    monkeypatch.setenv("CHP_DOCS_LEDGER", str(led))
+    rc, out, calls = S._backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 0, out and any(str(led) in ln for ln in calls.splitlines() if ln.startswith("rsync"))
+    script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
+    i, j = script.index('exec 8<"$LEDGER/ledger.jsonl"'), script.index('rsync -aHAX --numeric-ids "$LEDGER/"')
+    assert i < script.index("flock -s -w 900 8") < j and script.index("exec 8<&-") > j
 
 
 def test_occ_store_undo_delete_is_forced_and_skips_the_trash():
@@ -1612,3 +1627,137 @@ def test_cli_doc_ledger_pending_when_the_ledger_or_journal_is_broken(env, monkey
     (led / "ledger.jsonl").write_text("not json\n")
     assert cli.main(["doc-ledger", "pending"]) == 2
     assert "PROBLEM" in capsys.readouterr().out
+
+
+# ---------- Task 9 fix round 1: I1 (forged journal lines), I2 (durable unfinished records), M1 (shared lock), M4 ----
+
+def test_journal_is_read_for_roots_lines_only():
+    calls = []
+    run = lambda argv, **kw: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", "")
+    L.journal_records(run)
+    assert "_UID=0" in calls[0] and f"SYSLOG_IDENTIFIER={L.IDENT}" in calls[0]
+
+
+def test_a_forged_journal_ledger_line_never_closes_a_start(env):
+    rid = "f" * 32
+    recs = [(NOW - 7200, {"event": "publish-started", "request_id": rid, "doc": "100/CUI_SSP.docx"}),
+            (NOW - 7100, {"event": "ledger", "kind": "publish", "request_id": rid})]       # not in the ledger
+    assert [p["request_id"] for p in L.unresolved(recs, env.ledger(), now=NOW)] == [rid]
+    # a forged non-root publish-undone cannot clear the durable record either (the journal is read as root's only,
+    # and the record is closed by the appender alone)
+    L._mark_unfinished(env.ctx, rid, {"state": "unfinished", "at": NOW - 7200, "doc": "100/CUI_SSP.docx"})
+    recs.append((NOW - 7000, {"event": "publish-undone", "request_id": rid}))
+    out = L.unresolved(recs, env.ledger(), now=NOW, files=L.unfinished_records(env.ctx))
+    assert [p["request_id"] for p in out] == [rid]
+
+
+def test_publish_keeps_a_durable_record_while_it_runs(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    seen = []
+    real = env.store.put
+
+    def put(folder, name, data):
+        d = env.base / "unfinished"
+        f = d / env.req_rid
+        seen.append((f.exists(), oct(f.stat().st_mode & 0o777), oct(d.stat().st_mode & 0o777),
+                     json.loads(f.read_text())["state"]))
+        return real(folder, name, data)
+    env.store.put = put
+    env.req_rid = f"{env.n + 1:032x}"
+    ok(env.publish("alice", V11))
+    assert seen and seen[0] == (True, "0o600", "0o700", "unfinished")
+    assert list((env.base / "unfinished").iterdir()) == []               # the clean end removed it
+
+
+def test_a_refused_publish_removes_its_record_an_undo_failure_keeps_it(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    env.store.move_error = L.Degraded("SQLSTATE: function md5 is not available")
+    refused(env.publish("alice", V11))
+    assert list((env.base / "unfinished").iterdir()) == []
+    env.store.move_error = None
+    _timeout_put(env, "CUI_SSP_v1.1.docx", False)
+    refused(env.publish("alice", V11), "UNDO INCOMPLETE")
+    (f,) = list((env.base / "unfinished").iterdir())
+    r = json.loads(f.read_text())
+    assert r["state"] == "undo-failed" and "files:put" in r["failed"][0] and r["request_id"] == f.name
+
+
+def test_undo_failed_survives_journal_rotation_until_resolved(env):
+    _ready_to_publish(env)
+    _timeout_put(env, "CUI_SSP_v1.1.docx", False)
+    refused(env.publish("alice", V11), "UNDO INCOMPLETE")
+    rid = next(j for j in env.journal if j["event"] == "publish-undo-failed")["request_id"]
+    rotated = lambda: []                                                  # journald dropped every line
+    assert [(p["request_id"], p["state"]) for p in L.pending(env.ctx, rotated)] == [(rid, "undo-failed")]
+    L.resolve(env.ctx, rid, "area checked, stray copy removed", operator="isso", records=[])
+    assert not (env.base / "unfinished" / rid).exists()
+    assert L.pending(env.ctx, rotated) == []
+
+
+def test_a_publish_killed_mid_way_stays_listed(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+
+    def killed(folder, name, data):
+        raise KeyboardInterrupt                         # stands for SIGKILL: no except clause runs
+    env.store.put = killed
+    with pytest.raises(KeyboardInterrupt):
+        env.publish("alice", V11)
+    out = L.pending(env.ctx, lambda: [])
+    assert [p["state"] for p in out] == ["unfinished"] and out[0]["doc"]
+
+
+def test_no_record_no_publish(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    (env.base / "unfinished").write_text("not a folder")                 # the record cannot be written
+    refused(env.publish("alice", V11), "could not be recorded", "nothing was written")
+    assert not [c for c in env.store.calls if c[0] in ("put", "move", "delete")]
+
+
+def test_unresolved_ignores_request_ids_that_are_not_32_hex(env):
+    recs = [(NOW - 7200, {"event": "publish-started", "request_id": bad}) for bad in ("x" * 32, "F" * 32, "a" * 31,
+                                                                                    "a" * 32 + "\n")]
+    files = [{"request_id": "../x", "state": "undo-failed", "at": 0, "doc": "", "failed": []}]
+    assert L.unresolved(recs, [], now=NOW, files=files) == []
+    (env.base / "unfinished").mkdir(mode=0o700)
+    (env.base / "unfinished" / "notes.txt").write_text("{}")
+    assert L.unfinished_records(env.ctx) == []
+
+
+def test_readers_wait_for_the_appender_and_never_see_a_half_line(env):
+    import fcntl as _f
+    import time as _t
+    ok(env.checkout("alice"))
+    led, head = env.base / "ledger" / "ledger.jsonl", env.base / "ledger" / "ledger.head"
+    fd = os.open(led, os.O_RDWR | os.O_APPEND)
+    _f.flock(fd, _f.LOCK_EX)
+    size = os.fstat(fd).st_size
+    os.write(fd, b'{"seq":2,"half')                       # the appender mid-write
+    got = []
+    th = threading.Thread(target=lambda: got.append(L.read_shared(led, head, wait=10)))
+    th.start()
+    _t.sleep(0.4)
+    assert th.is_alive() and not got                       # waiting, not reading the half line
+    os.ftruncate(fd, size)                                 # the appender cut it back off (a failed append)
+    _f.flock(fd, _f.LOCK_UN)
+    os.close(fd)
+    th.join(5)
+    assert [e["kind"] for e in got[0]] == ["checkout"]
+
+
+def test_a_reader_gives_up_as_busy_and_verify_says_so(env):
+    import fcntl as _f
+    ok(env.checkout("alice"))
+    led, head = env.base / "ledger" / "ledger.jsonl", env.base / "ledger" / "ledger.head"
+    fd = os.open(led, os.O_RDWR)
+    _f.flock(fd, _f.LOCK_EX)
+    try:
+        with pytest.raises(L.LedgerBusy):
+            L.read_shared(led, head, wait=0.2)
+        said = []
+        assert L.verify(led, head, None, say=said.append, wait=0.2) == 3 and said[0].startswith("BUSY")
+    finally:
+        os.close(fd)

@@ -51,6 +51,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   render at start (level 7, one line "EGRESS RENDER FAILED", the address file restorecon'd when replaced).
 - doc-ledger pending|resolve: unfinished publishes (started and never ended, or undo incomplete) for monitor check 82;
   the ISSO's resolve is a chained ledger entry (kind resolve, cycle 0).
+- Review fix 1: durable root-only records /var/lib/chp-docs/unfinished/<request id> (written before a publish's
+  first write; journal rotation or a forged line cannot clear them); only root's journal lines are read (_UID=0);
+  every ledger reader takes the shared lock (BUSY = exit 3); a review built while the ledger did not verify
+  (ledger_ok false) never moves the overrides' "since" past its day, and its row is in Needs attention.
 - The daily review: each publication of the day, and each ISSO override since the last signed review as "Needs
   attention" (read from the verified document ledger).
 - documents check: every group reaching a Compliance/Superseded area has the read-only rule (Internal included, and

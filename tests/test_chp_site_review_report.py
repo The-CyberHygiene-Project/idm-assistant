@@ -471,10 +471,14 @@ def test_review_shows_overrides_since_last():
 
 
 def test_review_document_ledger_that_does_not_verify():
-    d = build_docs([], error="ledger x: entry 4 does not follow entry 3")
+    # Task 9 review I3: unowned (so in Needs attention), says the overrides cannot be listed, and the day is marked
+    # ledger_ok false so its sign-off never counts for them
+    d = build_docs([], error="ledger x: entry 4 does not follow entry 3", signed=["2026-11-01"])
     r = doc_rows(d)
-    assert [(x["item"], x["state"], x["owner"]) for x in r] == [("document ledger", "ATTENTION", "82-docs-ledger")]
-    assert "entry 4" in r[0]["detail"]
+    assert [(x["item"], x["state"], x["owner"]) for x in r] == [("document ledger", "ATTENTION", None)]
+    assert "entry 4" in r[0]["detail"] and "cannot be listed" in r[0]["detail"] and "2026-11-02 00:00" in r[0]["detail"]
+    assert [a["item"] for a in d["attention"]] == ["document ledger"] and d["ledger_ok"] is False
+    assert build_docs([])["ledger_ok"] is True and build(healthy())["ledger_ok"] is True
 
 
 def test_review_has_no_document_rows_without_the_ledger():

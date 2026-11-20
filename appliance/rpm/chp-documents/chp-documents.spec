@@ -103,16 +103,16 @@ install -Dm0644 %{SOURCE30} %{buildroot}%{_unitdir}/chp-docs-ledger.service
 install -Dm0644 %{SOURCE31} %{buildroot}%{_unitdir}/chp-docs-ledger-alert.service
 install -Dm0755 %{SOURCE32} %{buildroot}%{_prefix}/lib/chp/monitor.d/82-docs-ledger.sh
 install -dm0700 %{buildroot}%{_localstatedir}/lib/chp-docs/ledger %{buildroot}%{_localstatedir}/lib/chp-docs/quarantine \
-  %{buildroot}%{_localstatedir}/lib/chp-docs/work
+  %{buildroot}%{_localstatedir}/lib/chp-docs/work %{buildroot}%{_localstatedir}/lib/chp-docs/unfinished
 
 %post
 %systemd_post chp-nextcloud-egress.service nextcloud-cron.timer chp-nextcloud-backup.timer chp-nextcloud-cert-renew.timer chp-documents-check.timer
 %systemd_post chp-docs-ledger.path
 # the ledger, quarantine and work folders keep the generic var_lib_t (never an httpd_* type: the web server's domain
 # gets no access there), pinned so that no broader rule for /var/lib/chp-docs can relabel them; DAC: root 0700
-semanage fcontext -a -t var_lib_t '%{_localstatedir}/lib/chp-docs/(ledger|quarantine|work)(/.*)?' 2>/dev/null || :
+semanage fcontext -a -t var_lib_t '%{_localstatedir}/lib/chp-docs/(ledger|quarantine|work|unfinished)(/.*)?' 2>/dev/null || :
 restorecon -R %{_localstatedir}/lib/chp-docs/ledger %{_localstatedir}/lib/chp-docs/quarantine \
-  %{_localstatedir}/lib/chp-docs/work >/dev/null 2>&1 || :
+  %{_localstatedir}/lib/chp-docs/work %{_localstatedir}/lib/chp-docs/unfinished >/dev/null 2>&1 || :
 systemctl daemon-reload >/dev/null 2>&1 || :
 # the fapolicyd rule takes effect at the next rules load / fapolicyd restart (chp-site documents enable restarts it
 # and reads fapolicyd-cli --check-status)
@@ -172,12 +172,15 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/ledger
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/quarantine
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/work
+%dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/unfinished
 
 %changelog
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-7.chp
 - ISO 0.7.0 Plan 3 (one release for the plan): the root appender's units (chp-docs-ledger.path/.service and the
   OnFailure alert) and its root-only folders (Task 4); monitor check 82 (Task 9): chp-docs-ledger.path active,
-  chp-site doc-ledger verify, quarantine empty, no unfinished publish (doc-ledger pending; the ISSO resolves).
+  chp-site doc-ledger verify, quarantine empty, no unfinished publish (doc-ledger pending: the durable records in
+  /var/lib/chp-docs/unfinished, root 0700, var_lib_t; the ISSO resolves). The nightly backup copies the ledger
+  under its shared lock.
   Requires chp-site >= 0.14.0-6, nextcloud-chp >= 35.0.3-6 (chp_ledger).
 
 * Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-6.chp

@@ -409,7 +409,7 @@ def _doc_ledger_rows():
     if not (os.path.exists(DOCS_CONF) or ledger.exists()):
         return None
     try:
-        return {"entries": dl.read(ledger, dl.BASE / "ledger" / "ledger.head")}
+        return {"entries": dl.read_shared(ledger, dl.BASE / "ledger" / "ledger.head")}
     except dl.LedgerError as e:
         return {"error": str(e)[:300]}
     except OSError as e:
@@ -566,13 +566,15 @@ def _doc_ledger(a):
     if a.action == "purge-quarantine":
         print(f"removed {L.purge_quarantine(ctx)} quarantine record(s)")
         return 0
-    if a.action == "pending":                       # monitor check 82: 0 none, 1 some (PENDING lines), 2 cannot tell
+    if a.action == "pending":    # monitor check 82: 0 none, 1 some (PENDING lines), 2 cannot tell, 3 busy (not checked)
         try:
-            entries = L.read(ctx.ledger, ctx.head)
+            ps = L.pending(ctx)
+        except L.LedgerBusy as err:
+            print(f"BUSY: {err}")
+            return 3
         except L.LedgerError as err:
             print(f"PROBLEM: {err}")
             return 2
-        ps = L.unresolved(L.journal_records(), entries, L.time.time())
         for p in ps:
             print("PENDING " + L.pending_text(p))
         if not ps:

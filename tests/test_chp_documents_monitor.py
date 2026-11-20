@@ -399,3 +399,9 @@ def test_check82_flags_pending_that_cannot_be_read(tmp_path):
 def test_check82_text_is_cleaned(tmp_path):
     out = run82(tmp_path, verify=(1, "PROBLEM: bad `x`\x1b[31m"))
     assert "`" not in out and "\x1b" not in out
+
+
+def test_check82_busy_ledger_is_not_an_alert(tmp_path):                 # Task 9 review M1: readers wait, then 3
+    out = run82(tmp_path, verify=(3, "BUSY: locked"), pending=(3, "BUSY: locked"))
+    assert "ALERT" not in out and out.count("busy") == 2
+    assert "chain and head verify" not in out                          # no all-clear for a run that did not check

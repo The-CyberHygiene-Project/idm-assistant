@@ -269,7 +269,8 @@ def test_nightly_passes_the_document_ledger_and_the_signed_days(tmp_path, monkey
     from chp_site import review_report as rr
     site = {"SUBNET": ipaddress.IPv4Network("192.0.2.0/24"), "TIMEZONE": "America/Denver"}
     hosts = [Host("aa:01", "srv1", "192.0.2.10", "server", "vda")]
-    st.write_day(TODAY - timedelta(days=2), *day_files(TODAY - timedelta(days=2)), root=tmp_path)
+    data, md, html = day_files(TODAY - timedelta(days=2))
+    st.write_day(TODAY - timedelta(days=2), dict(data, ledger_ok=True), md, html, root=tmp_path)
     led = tmp_path / "var/lib/chp/review/ledger.jsonl"
     led.write_text(json.dumps({"date": (TODAY - timedelta(days=2)).isoformat()}) + "\n")
     seen = []
@@ -299,3 +300,33 @@ def test_cli_build_reads_the_document_ledger(monkeypatch, capsys, tmp_path):    
     (led / "ledger.jsonl").write_text("not json\n")
     assert cli.main(["review", "build"]) == 0
     assert "line 1" in seen["doc_ledger"]["error"]
+
+
+
+@pytest.mark.parametrize("ledger_ok", [False, None, True])
+def test_a_day_signed_without_a_verified_ledger_never_hides_its_overrides(tmp_path, ledger_ok):  # Task 9 review I3
+    import calendar
+    import ipaddress
+    from chp_site.hosts import Host
+    from chp_site import review_report as rr
+    from zoneinfo import ZoneInfo
+    site = {"SUBNET": ipaddress.IPv4Network("192.0.2.0/24"), "TIMEZONE": "America/Denver"}
+    hosts = [Host("aa:01", "srv1", "192.0.2.10", "server", "vda")]
+    bad = TODAY - timedelta(days=2)                     # built while the ledger did not verify, then signed
+    data, md, html = day_files(bad)
+    if ledger_ok is not None:                           # None: a report built before the flag existed
+        data = dict(data, ledger_ok=ledger_ok)
+    st.write_day(bad, data, md, html, root=tmp_path)
+    (tmp_path / "var/lib/chp/review/ledger.jsonl").write_text(json.dumps({"date": bad.isoformat()}) + "\n")
+    noon = rr.day_bounds(bad, ZoneInfo("America/Denver"))[0] + 12 * 3600
+    ov = {"seq": 1, "ts": __import__("time").strftime("%Y-%m-%dT%H:%M:%SZ", __import__("time").gmtime(noon)),
+          "kind": "override", "user": "dana", "auth": "bearer", "kanidm_sub": "s", "session_id": "x",
+          "request_id": "a" * 32, "doc": "100/CUI_SSP.docx", "file_id": 4, "path": "CUI/Compliance/CUI_SSP_v1.1.docx",
+          "sha256": "a" * 64, "cycle": 1, "prev": "0" * 64, "reason": "one-person site"}
+    built = st.nightly(root=tmp_path, today=TODAY, site=site, hosts=hosts, alerts=[], now=0,
+                       doc_ledger={"entries": [ov]})
+    assert built == [TODAY - timedelta(days=1)]
+    y = json.loads((tmp_path / "var/lib/chp/review" / (TODAY - timedelta(days=1)).isoformat() / "data.json").read_text())
+    listed = [a for a in y["attention"] if a["item"].startswith("document override")]
+    assert bool(listed) is (ledger_ok is not True), y["attention"]
+    assert y["ledger_ok"] is True

@@ -124,6 +124,10 @@ class LedgerError(SiteError):
     pass
 
 
+class LedgerBusy(LedgerError):
+    """A reader waited READ_WAIT seconds for the appender's exclusive lock (a long publish): not checked this time."""
+
+
 class _Refuse(Exception):
     pass
 
@@ -203,6 +207,10 @@ class Ctx:
     @property
     def work(self):
         return self.base / "work"
+
+    @property
+    def unfinished(self):
+        return self.base / "unfinished"
 
     @property
     def ledger(self):
@@ -342,6 +350,47 @@ def read(path, head):
     return out
 
 
+READ_WAIT = 120                    # a reader (verify, pending, export, the review) waits this long for the appender
+
+
+class _Shared:
+    """The ledger under a SHARED flock (Task 9 review M1): a reader never sees the appender's half-written line; it
+    waits up to `wait` seconds while a request holds the exclusive lock, then raises LedgerBusy. No ledger file yet:
+    nothing to lock (read() then checks the head witness on its own)."""
+    def __init__(self, path, wait=None, clock=time.monotonic, sleep=time.sleep):
+        wait = READ_WAIT if wait is None else wait
+        self.path, self.wait, self.clock, self.sleep, self.fd = Path(path), wait, clock, sleep, None
+
+    def __enter__(self):
+        try:
+            self.fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return self
+        end = self.clock() + self.wait
+        while True:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                return self
+            except BlockingIOError:
+                if self.clock() >= end:
+                    os.close(self.fd)
+                    self.fd = None
+                    raise LedgerBusy(f"the document ledger is locked by the appender (a request in progress) for more "
+                                     f"than {self.wait} s; try again later") from None
+                self.sleep(0.5)
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            os.close(self.fd)
+        return False
+
+
+def read_shared(path, head, wait=None):
+    """read(), under the shared lock."""
+    with _Shared(path, READ_WAIT if wait is None else wait):
+        return read(path, head)
+
+
 class _Ledger:
     """The ledger under an exclusive flock (the whole decide + publish + append runs inside it)."""
     def __init__(self, ctx):
@@ -408,11 +457,14 @@ class _Ledger:
         os.replace(tmp, self.head)
 
 
-def verify(ledger, head, stick_heads=None, say=print):
+def verify(ledger, head, stick_heads=None, say=print, wait=None):
     """0 = the chain and head verify (and every stick head is still in the chain); 1 = a problem (review_ledger's
-    exit codes; 2, the stick not present, is the command's)."""
+    exit codes; 2, the stick not present, is the command's; 3 = busy: the appender held the lock too long)."""
     try:
-        entries = read(ledger, head)
+        entries = read_shared(ledger, head, wait)
+    except LedgerBusy as e:
+        say(f"BUSY: {e}")
+        return 3
     except LedgerError as e:
         say(f"PROBLEM: {e}")
         return 1
@@ -436,16 +488,17 @@ def export(stick, ctx=None, now=None):
     ctx = ctx or Ctx.system()
     out = Path(stick) / "docs-ledger"
     out.mkdir(parents=True, exist_ok=True)
-    if ctx.ledger.exists():
-        shutil.copyfile(ctx.ledger, out / "ledger.jsonl")
-    try:
-        read(ctx.ledger, ctx.head)
-        problems = []
-    except LedgerError as e:
-        problems = [str(e)]
+    with _Shared(ctx.ledger):                            # the copy and its check see the same, whole lines
+        if ctx.ledger.exists():
+            shutil.copyfile(ctx.ledger, out / "ledger.jsonl")
+        try:
+            read(ctx.ledger, ctx.head)
+            problems = []
+        except LedgerError as e:
+            problems = [str(e)]
+        count, h = rl.head(ctx.ledger)
     (out / "verify.txt").write_text("OK: chain and head match\n" if not problems else
                                     "PROBLEMS:\n" + "".join(f"- {p}\n" for p in problems))
-    count, h = rl.head(ctx.ledger)
     with open(out / "heads.txt", "a") as f:
         f.write(f"{count} {h} {_ts(now if now is not None else ctx.now())}\n")
     return {"head": (count, h), "problems": problems}
@@ -600,12 +653,15 @@ def purge_quarantine(ctx=None):
 
 
 # ---------- unfinished publishes (monitor check 82) and the ISSO's resolve entry (Plan 3 Task 9) ----------
-# A publish journals "publish-started" before its first write and ends with its ledger entry or "publish-undone".
-# A start with neither (the service killed, the power lost) may have left a half publish in the area; a
-# "publish-undo-failed" did leave parts there. Both stay on check 82 until the ISSO has looked at the area and runs
-# chp-site doc-ledger resolve: a hash-chained ledger entry (kind "resolve", cycle 0: it never joins a document's
-# cycle, so the author/approver rules and CR numbering are unchanged).
-PENDING_GRACE = 1800              # a start younger than this may still be running (at most 7 occ calls of 120 s)
+# A publish writes a durable record unfinished/<request id> (root 0600 in a 0700 folder) under the ledger lock BEFORE
+# its first write, and journals "publish-started". A clean end (its ledger entry, or publish-undone) removes the
+# record; publish-undo-failed keeps it, with the failed steps. So a publish cut short (the service killed, the power
+# lost) or one that left parts in the area stays listed whatever the journal's retention (Task 9 review I2) until the
+# ISSO has looked at the area and runs chp-site doc-ledger resolve: a hash-chained ledger entry (kind "resolve",
+# cycle 0: it never joins a document's cycle, so the author/approver rules and CR numbering are unchanged), and the
+# record goes. The journal is a second source only, and only root's lines count (I1: anyone can write the tag).
+PENDING_GRACE = 1800              # a journal-only start younger than this may still be running
+RID = re.compile(r"[0-9a-f]{32}")
 RESOLVE_KIND = "resolve"          # a ledger kind only the root CLI writes: never accepted from the spool (KINDS)
 
 
@@ -613,7 +669,8 @@ def journal_records(run=subprocess.run):
     """Every retained journal line of the appender, as (epoch, record) in order; lines that are not a JSON object are
     skipped. SiteError when journalctl itself fails (check 82 then alerts: unknown is never OK)."""
     try:
-        r = run(["journalctl", "-q", "--no-pager", "-o", "json", f"SYSLOG_IDENTIFIER={IDENT}"],
+        # _UID is set by journald itself: a `logger -t chp-docs-ledger` by anyone but root is not the appender
+        r = run(["journalctl", "-q", "--no-pager", "-o", "json", f"SYSLOG_IDENTIFIER={IDENT}", "_UID=0"],
                 capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.SubprocessError) as e:
         raise SiteError(f"journalctl could not be run ({e})") from None
@@ -635,11 +692,69 @@ def journal_records(run=subprocess.run):
     return out
 
 
-def unresolved(records, entries, now, grace=PENDING_GRACE):
+def _mark_unfinished(ctx, rid, rec):
+    """Write unfinished/<rid> atomically (0600 in a 0700 folder, fsynced, never through a symlink). Raises OSError."""
+    _dir0700(ctx.unfinished)
+    tmp = ctx.unfinished / f".{rid}.tmp"
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(dict(rec, request_id=rid), f, sort_keys=True)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, ctx.unfinished / rid)
+    dfd = os.open(ctx.unfinished, os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
+def _clear_unfinished(ctx, rid):
+    """A clean end: the record goes. A failure is journalled, never raised (the record then stays listed: safe)."""
+    try:
+        os.unlink(ctx.unfinished / rid)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        _safe(ctx.journal, {"event": "unfinished-clear-failed", "request_id": rid, "error": str(e)[:200]})
+
+
+def unfinished_records(ctx):
+    """Every durable record: [{request_id, state, at, doc, failed}]. One that cannot be read is listed too
+    (state "unfinished", doc "?"): unknown is never OK."""
+    out = []
+    try:
+        names = sorted(os.listdir(ctx.unfinished))
+    except FileNotFoundError:
+        return out
+    for n in names:
+        if not RID.fullmatch(n):
+            continue
+        try:
+            fd = os.open(ctx.unfinished / n, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd) as f:
+                r = json.load(f)
+            if not isinstance(r, dict):
+                raise ValueError("not an object")
+        except (OSError, ValueError):
+            r = {"state": "unfinished", "doc": "?", "at": 0}
+        out.append({"request_id": n, "state": "undo-failed" if r.get("state") == "undo-failed" else "unfinished",
+                    "at": r.get("at") if isinstance(r.get("at"), (int, float)) else 0,
+                    "doc": r.get("doc"), "failed": r.get("failed") if isinstance(r.get("failed"), list) else []})
+    return out
+
+
+def unresolved(records, entries, now, grace=PENDING_GRACE, files=()):
     """The publishes the ISSO must look at: [{request_id, state ("unfinished" | "undo-failed"), at, doc, failed}].
-    An undo that failed is never closed by a later end event of the same request (parts may still be in the area);
-    only a resolve entry closes it. A start is closed by its ledger entry (read from the ledger, so a lost journal
-    line cannot make a published request look unfinished) or by publish-undone."""
+    `files` (unfinished_records, read under the ledger lock) are the record: an unfinished one is listed unless its
+    entry is in the ledger (a removal that failed after a clean publish); an undo-failed one until it is resolved.
+    `records` (the journal, root's lines only) add starts the files do not hold; a start there is closed only by the
+    ledger's own entry or by publish-undone, never by a journal "ledger" line. An undo that failed is never closed by a
+    later end event of the same request. Request ids that are not 32 hex are ignored."""
     published = {e.get("request_id") for e in entries if e.get("kind") == "publish"}
     resolved = {}                                         # request id -> when the ISSO resolved it
     for e in entries:
@@ -651,7 +766,7 @@ def unresolved(records, entries, now, grace=PENDING_GRACE):
     state = {}
     for t, r in sorted(records, key=lambda x: x[0]):
         rid, ev = r.get("request_id"), r.get("event")
-        if not isinstance(rid, str):
+        if not isinstance(rid, str) or not RID.fullmatch(rid):
             continue
         cur = state.get(rid)
         if ev == "publish-undo-failed":
@@ -660,12 +775,23 @@ def unresolved(records, entries, now, grace=PENDING_GRACE):
         elif cur is not None and cur["state"] == "undo-failed":
             continue
         elif ev == "publish-started":
-            state[rid] = {"request_id": rid, "state": "unfinished", "at": t, "doc": r.get("doc"), "failed": []}
-        elif cur is not None and (ev == "publish-undone" or (ev == "ledger" and r.get("kind") == "publish")):
+            state[rid] = {"request_id": rid, "state": "unfinished", "at": t, "doc": r.get("doc"), "failed": [],
+                          "journal": True}
+        elif cur is not None and ev == "publish-undone":
             del state[rid]
+    for f in files:
+        rid = f.get("request_id")
+        if not isinstance(rid, str) or not RID.fullmatch(rid):
+            continue
+        cur = state.get(rid)
+        if f["state"] == "undo-failed" or cur is None or cur["state"] != "undo-failed":
+            state[rid] = dict(f)
     # a resolve covers what happened before it: the same request failing again later is listed again
     out = [p for rid, p in state.items() if not (rid in resolved and p["at"] <= resolved[rid] + 1)
-           and (p["state"] == "undo-failed" or (rid not in published and p["at"] <= now - grace))]
+           and (p["state"] == "undo-failed" or (rid not in published and (not p.get("journal")
+                                                                         or p["at"] <= now - grace)))]
+    for p in out:
+        p.pop("journal", None)
     return sorted(out, key=lambda p: p["at"])
 
 
@@ -694,7 +820,7 @@ def resolve(ctx, request_id, reason, *, operator, records, now=None):
         raise SiteError(f"resolve needs a --reason: what was checked and done (one line, at most {MAX_TEXT} bytes)")
     now = ctx.now() if now is None else now
     with _Ledger(ctx) as led:
-        open_ = {p["request_id"]: p for p in unresolved(records, led.entries, now)}
+        open_ = {p["request_id"]: p for p in unresolved(records, led.entries, now, files=unfinished_records(ctx))}
         p = open_.get(request_id)
         if p is None:
             raise SiteError(f"{request_id} is not an unfinished publish (chp-site doc-ledger pending lists them; one "
@@ -709,8 +835,20 @@ def resolve(ctx, request_id, reason, *, operator, records, now=None):
             raise SiteError(f"the ledger could not be written ({str(err)[:200]}); nothing was recorded"
                             + ("" if err.cut else "; the ledger may end in a partial line: chp-site doc-ledger "
                                                   "verify")) from None
+        _clear_unfinished(ctx, request_id)                # resolved: the record goes (a leftover is covered by the entry)
     _safe(ctx.journal, {"event": "ledger", **e})
     return e
+
+
+def pending(ctx, records_fn=None, now=None):
+    """chp-site doc-ledger pending: (the unresolved publishes, or raises LedgerError / LedgerBusy). Reads the ledger,
+    the durable records and the journal under the shared lock, so no request is half-way while it looks."""
+    records_fn = records_fn or journal_records
+    with _Shared(ctx.ledger):
+        entries = read(ctx.ledger, ctx.head)
+        files = unfinished_records(ctx)
+        recs = records_fn()
+    return unresolved(recs, entries, ctx.now() if now is None else now, files=files)
 
 # ---------- one request ----------
 
@@ -871,6 +1009,8 @@ def _handle(ctx, rid, r):
                                              "nothing was recorded; run the command again")
             try:
                 e = led.append(e, ctx.journal)
+                if e["kind"] == "publish":
+                    _clear_unfinished(ctx, rid)            # the clean end, still under the lock
             except _NotAppended as err:
                 # step 9 failed: the publish's writes are undone, so nothing is live without its entry
                 failed = _undo(ctx.store, undo)
@@ -906,8 +1046,16 @@ def _incomplete(cause, failed):
 
 
 def _journal_undo(ctx, r, doc, failed):
-    _safe(ctx.journal, {"event": "publish-undo-failed" if failed else "publish-undone", "request_id": r["request_id"],
+    rid = r["request_id"]
+    _safe(ctx.journal, {"event": "publish-undo-failed" if failed else "publish-undone", "request_id": rid,
                         "doc": doc, **({"failed": failed} if failed else {})})
+    if not failed:
+        _clear_unfinished(ctx, rid)
+        return
+    try:                                                  # parts may be in the area: the record stays, with the steps
+        _mark_unfinished(ctx, rid, {"state": "undo-failed", "at": ctx.now(), "doc": doc, "failed": failed})
+    except OSError as e:
+        _safe(ctx.journal, {"event": "unfinished-record-failed", "request_id": rid, "error": str(e)[:200]})
 
 
 def _done_text(e):
@@ -1293,6 +1441,13 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
 
     # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure (also when step 9 fails: the caller
     # holds `undo`). The intent is journalled first, so a publish cut short (the service killed) can be found.
+    # the durable record first (Task 9 review I2): no write to the area without it
+    try:
+        _mark_unfinished(ctx, r["request_id"], {"state": "unfinished", "at": ctx.now(), "doc": t.doc, "name": name,
+                                                "user": user})
+    except OSError as err:
+        raise _Refuse(f"refused: the publish could not be recorded as started ({str(err)[:160]}); nothing was "
+                      "written; run the command again") from None
     _safe(ctx.journal, {"event": "publish-started", "request_id": r["request_id"], "user": user, "doc": t.doc,
                         "name": name, "supersedes": old.file_id if old is not None else None})
     try:

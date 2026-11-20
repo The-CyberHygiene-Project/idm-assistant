@@ -126,7 +126,7 @@ def nightly(*, root=Path("/"), today, site, hosts, alerts, now, doc_ledger=None)
 
     def make(day):
         data = rr.build(day, alerts=alerts, hosts=hosts, site=site, now=now, previous=previous(root=root, day=day),
-                        doc_ledger=doc_ledger, signed=sorted(_signed(root)))
+                        doc_ledger=doc_ledger, signed=_signed_with_ledger(root))
         return data, rr.render_md(data), rr.render_html(data)
 
     base = _dir(root)
@@ -165,6 +165,20 @@ def _signed(root):
                 out.add(json.loads(ln)["date"])
             except (ValueError, KeyError, TypeError):
                 pass                                     # a damaged ledger is reported by verify, not here
+    return out
+
+
+def _signed_with_ledger(root):
+    """The signed days whose report listed the document overrides from a verified ledger (data ledger_ok true; Task 9
+    review I3). A day signed while the ledger did not verify, or built before the flag existed, never moves the
+    overrides' "since" past it."""
+    out = []
+    for d in sorted(_signed(root)):
+        try:
+            if json.loads((_dir(root) / d / "data.json").read_text()).get("ledger_ok") is True:
+                out.append(d)
+        except (OSError, ValueError, AttributeError):
+            continue
     return out
 
 

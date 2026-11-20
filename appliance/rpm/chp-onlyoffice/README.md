@@ -52,7 +52,8 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
   signal. Fix the cause, then `systemctl restart chp-workstation-egress`: a good load removes the lock-down table.
 - A failed render is one journal line `EGRESS RENDER FAILED: …` (tag `chp-workstation-egress`): Wazuh rule 100632,
   level 7 (the table holds, with the last good addresses). A replaced address file is restorecon'd.
-- **Monitor check 83** (run by chp-base's monitor every 15 min): the unit active, the live table equal to the one
+- **Monitor check 83** (run by chp-base's monitor every 15 min, wherever chp-onlyoffice is installed): the address
+  file present, the unit enabled and active, the live table equal to the one
   built from the shipped files (policy drop), no lock-down table, `chp-onlyoffice-sweep.timer` active. Stopping
   `nftables.service` runs `flush ruleset`: the table is gone and check 83 alerts.
 - NTP leaves only from chronyd, and only to the `NTP_UPSTREAM` addresses when every entry is an address; when any

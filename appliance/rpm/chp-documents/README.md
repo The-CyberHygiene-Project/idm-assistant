@@ -73,12 +73,14 @@ restart. A stray group on CUI, FCI or Archive is removed together with its ACL r
   documents.conf.
   82 (Plan 3 Task 9): the document ledger: `chp-docs-ledger.path` active; `chp-site doc-ledger verify` exits 0; the
   quarantine is empty (look, then `chp-site doc-ledger purge-quarantine`); and no unfinished publish
-  (`chp-site doc-ledger pending`: a `publish-started` with neither its ledger entry nor `publish-undone`, and every
-  `publish-undo-failed`), until the ISSO has checked the area and run
+  (`chp-site doc-ledger pending`: the durable records `/var/lib/chp-docs/unfinished/<request id>`, root 0600 in
+  0700, written before a publish's first write, removed at its clean end and kept, with the failed steps, when its
+  undo failed; plus root's journal lines only, `_UID=0`), until the ISSO has checked the area and run
   `chp-site doc-ledger resolve <request id> --reason "..."` (a chained ledger entry, Wazuh 100651). The journal lines
   of the appender are Wazuh rules 100640-100654 (decoder `chp-docs-ledger`): approvals and overrides level 12 (at
-  once), publications 7, checkout and new 3, quarantine and appender failures 12. Check 82 reads the journal: keep
-  it persistent (`/var/log/journal`), or a publish cut short by a power loss is not found.
+  once), publications 7, checkout and new 3, quarantine and appender failures 12. Every reader (verify, pending,
+  export, the daily review, the nightly backup) takes the ledger's shared lock, so it never sees a half-written
+  line; one that waits too long reports BUSY (check 82: not checked this run, no all-clear).
   `ExecStopPost=chp-site documents canary-off` switches the canary account off after any end of the run (failure,
   timeout, kill). The timer has no `Persistent=`: Wazuh rule 100609 pages (12) when `chp-canary` is enabled other
   than by occ inside 03:05-03:45 (100618, level 3), and 100619 pages when its password is set or changed. The

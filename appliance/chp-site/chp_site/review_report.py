@@ -330,12 +330,18 @@ def _ledger_items(doc_ledger, signed, day, zone, hosts):
     if doc_ledger is None:
         return []
     server = next((_short(h.hostname) for h in hosts if h.role == "server"), "server")
-    if doc_ledger.get("error"):
-        return [_item(server, "document ledger", rr.ATTENTION, f"does not verify: {doc_ledger['error']}", LEDGER_OWNER)]
-    entries = [e for e in doc_ledger.get("entries") or [] if isinstance(e, dict) and _ledger_time(e) is not None]
     start, end = day_bounds(day, zone)
     before = [d for d in signed or () if isinstance(d, str) and d < day.isoformat()]
     since = day_bounds(date.fromisoformat(max(before)), zone)[1] if before else float("-inf")
+    if doc_ledger.get("error"):
+        # unowned, so it is in "Needs attention" (Task 9 review I3): this report could not list the overrides, and its
+        # sign-off does not count as theirs (ledger_ok false: the next build still starts from `since`)
+        frm = ("the last review signed with a verified ledger, " + _local(since, zone)) if before else \
+              "the start (no review was signed with a verified ledger yet)"
+        return [_item(server, "document ledger", rr.ATTENTION,
+                      f"does not verify: {doc_ledger['error']}; ISSO overrides since {frm} cannot be listed until it "
+                      f"verifies (check {LEDGER_OWNER}; restore it from the site stick)")]
+    entries = [e for e in doc_ledger.get("entries") or [] if isinstance(e, dict) and _ledger_time(e) is not None]
     out = []
     pubs = [e for e in entries if e.get("kind") == "publish" and start <= _ledger_time(e) < end]
     for e in pubs:
@@ -390,7 +396,8 @@ def _trend(resources, previous):
 
 def build(day, *, alerts, hosts, site, now, previous, doc_ledger=None, signed=()):
     """doc_ledger (server, documents on): {"entries": [...]} (verified) or {"error": text}; None = no document rows.
-    signed: the ISO dates already signed off (the overrides since the last of them stay "Needs attention")."""
+    signed: the ISO dates already signed off WHOSE REPORT HAD A VERIFIED LEDGER (review_store passes only those): the
+    overrides since the last of them stay "Needs attention". The data records ledger_ok for that purpose."""
     from zoneinfo import ZoneInfo
     zone = ZoneInfo(site.get("TIMEZONE") or "UTC")
     start, end = day_bounds(day, zone)
@@ -402,7 +409,8 @@ def build(day, *, alerts, hosts, site, now, previous, doc_ledger=None, signed=()
     resources = _resources(hosts, recs)
     feeders = ("record", "suricata_stats", "yara_recent")
     stale = sorted({s["host"] for s in status if s["item"] in feeders and s["state"] == rr.STALE})
-    return {"day": day.isoformat(), "built": now, "intrusions": intrusions, "routine_counts": routine,
+    return {"day": day.isoformat(), "built": now, "ledger_ok": doc_ledger is None or not doc_ledger.get("error"),
+            "intrusions": intrusions, "routine_counts": routine,
             "status": status, "resources": resources, "trend": _trend(resources, previous),
             "attention": [s for s in status if s["state"] != rr.OK and s["owner"] is None],
             "intrusion_sources_stale": stale,

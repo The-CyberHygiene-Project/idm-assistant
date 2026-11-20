@@ -829,8 +829,10 @@ LIVE = ("table inet chp_workstation_egress {\n\tchain output {\n\t\ttype filter 
 
 
 def run83(tmp, *, addr=True, enabled="enabled", unit="active", timer="active", live=LIVE % (3, 99),
-          expected=LIVE % (0, 0), lockdown=False):
+          expected=LIVE % (0, 0), lockdown=False, installed=True):
     b = tmp / "bin"; b.mkdir(exist_ok=True)
+    (b / "rpm").write_text("#!/bin/bash\n" + ('[ "$1 $2" = "-q chp-onlyoffice" ] && exit 0\n' if installed else "")
+                           + "exit 1\n")
     (b / "systemctl").write_text("#!/bin/bash\n"
                                  f'[ "$1 $2" = "is-enabled chp-workstation-egress.service" ] && {{ echo {enabled}; exit 0; }}\n'
                                  f'[ "$1 $2" = "is-active chp-workstation-egress.service" ] && {{ echo {unit}; exit 0; }}\n'
@@ -859,10 +861,17 @@ def test_check83_ok_when_the_gates_hold(tmp_path):
     assert out.startswith("OK workstation editor") and "ALERT" not in out
 
 
-def test_check83_silent_where_the_editor_was_never_enabled(tmp_path):
+def test_check83_silent_where_the_editor_is_not_installed(tmp_path):
+    out = run83(tmp_path, addr=False, enabled="disabled", unit="inactive", timer="inactive", live=None,
+                installed=False)
+    assert out.startswith("OK chp-onlyoffice not installed") and "ALERT" not in out
+
+
+def test_check83_installed_without_address_file_alerts(tmp_path):        # Task 9 review M3
     out = run83(tmp_path, addr=False, enabled="disabled", unit="inactive", timer="inactive", live=None)
-    assert out.startswith("OK editor not enabled") and "ALERT" not in out
-    assert "ALERT" in run83(fresh83(tmp_path), addr=False, unit="failed")     # unit enabled, file gone: checked
+    assert "address file" in out and "is disabled, not enabled" in out and not out.startswith("OK")
+    out = run83(fresh83(tmp_path), addr=False)                             # all else fine, the file gone
+    assert [x for x in out.splitlines() if x.startswith("ALERT")] and "address file" in out
 
 
 def fresh83(tmp_path, n=[0]):
