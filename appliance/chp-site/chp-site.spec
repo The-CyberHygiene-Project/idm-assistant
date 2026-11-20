@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        6.chp%{?dist}
+Release:        7.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,22 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-7.chp
+- ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):
+- doc-ledger: the server's marking check gets the current versions of the document's area folder, so superseded
+  citations are reported; they never refuse and are named in the publish result.
+- doc-ledger process never stops for good: when it cannot set up (site.conf or documents.conf unreadable) the spool
+  is refused to its owners and set aside in quarantine (no token kept), appender-failed journalled once until a start
+  succeeds; a stray *.json in the spool is set aside; a spool file that cannot be deleted is moved into quarantine
+  (one that cannot be moved either is alerted once). purge-quarantine also removes held links and folders.
+- doc-ledger: a logger failure goes to stderr (the unit's journal), never silently; verify (and export's verify.txt)
+  report a ledger with entries but no ledger.head; an occ timeout whose process group cannot be killed is still an
+  OccTimeout (unknown outcome).
+- doc (workstation): on a kept request id a lasting 400/403/413 is refused and the id dropped (after one look for a
+  result the server already holds); 401/409/429/5xx stay pending; a proxy's 502/503/504 on the first POST is pending.
+- documents enable warns when SECURITY_ALERT_LEVEL is above 12 (approvals and overrides would reach only the daily
+  summary); a warning, never a refusal.
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-6.chp
 - ISO 0.7.0 Plan 3 Task 9: the document ledger's journal lines decoded (Wazuh decoder chp-docs-ledger, written by
   documents enable with the rules and rolled back with them) and alerted: approve and override 100642/100643 level 12,

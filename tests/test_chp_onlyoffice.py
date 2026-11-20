@@ -580,7 +580,7 @@ def test_spec_requires_and_pins():
     for r in ("onlyoffice-desktopeditors = 10.0.0", "poppler-utils", "chp-site >= 0.14.0-6", "nftables", "chp-base"):
         assert re.search(rf"^Requires:.*{re.escape(r)}", SPEC, re.M), r
     cs = (TOP / "appliance/chp-site/chp-site.spec").read_text()
-    assert re.search(r"^Release:\s+6\.chp", cs, re.M) and "0.14.0-6.chp" in cs
+    assert re.search(r"^Release:\s+7\.chp", cs, re.M) and "0.14.0-6.chp" in cs
     assert "Vendor:         The CyberHygiene Project" in SPEC and re.search(r"^Release:\s+\d+\.chp%\{\?dist\}", SPEC, re.M)
     b = t("build-rpm.sh")
     for f in ("chp-onlyoffice.spec", "onlyoffice-ai-off.sh", "DesktopEditors.conf", "nft/chp-workstation-egress.nft",
