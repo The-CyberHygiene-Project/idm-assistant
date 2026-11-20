@@ -1,0 +1,7 @@
+[    9.469557] iso5-cli1.iso5.lab.test chp-egress-lockdown[1582]: EGRESS LOCKDOWN: chp-workstation-egress.service failed; only loopback may leave this
+network-pre reached: [    9.545033] iso5-cli1.iso5.lab.test systemd[1]: Reached t
+table inet firewalld table inet chp_workstation_egress 
+active
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+Removed "/etc/systemd/system/timers.target.wants/lab-egress-restore.timer".
+DOMAIN=iso5.lab.test

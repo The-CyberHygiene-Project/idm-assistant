@@ -1,0 +1,34 @@
+host iso5-srv; selinux Enforcing; fapolicyd active Denied accesses: 0; firewalld active
+kanidmd active; httpd active php-fpm active ledger.path active
+site.conf sha256 d991d39d0af91635bf44755df719de5b2cc16667611b1d7ed5a9fb8e1cfc92bf; good copy d991d39d0af91635bf44755df719de5b2cc16667611b1d7ed5a9fb8e1cfc92bf; DOMAIN=iso5.lab.test
+NC egress table policy drop: 0; check 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+maintenance: Maintenance mode is currently disabled
+chp_ledger: 1.0.1
+chp-publisher:   - enabled: true
+lablocal: user not found
+ACL rows:
+1|group|doc-reviewers|files|31|1
+1|user|chp-publisher|files/Compliance|31|15
+1|group|cui-users|files/Compliance|31|1
+1|group|doc-reviewers|files/Compliance|31|1
+2|group|doc-reviewers|files|31|1
+3|group|doc-reviewers|files|31|1
+3|user|chp-publisher|files/Superseded|31|15
+3|group|cui-users|files/Superseded|31|1
+3|group|doc-reviewers|files/Superseded|31|1
+5|user|chp-publisher|files/Compliance|31|15
+5|group|chp-users|files/Compliance|31|1
+5|user|chp-publisher|files/Compliance/Superseded|31|15
+5|group|chp-users|files/Compliance/Superseded|31|1
+Internal mappings: chp-users:31
+unfinished attr: ----------------------; immutable spool files: 0; quarantine: 0; logger bind mount: 0
+ledger verify: OK: chain and head match, 43 entries; stick anchor NOT check; pending: OK no unfinished publish
+units: 
+/root: chp-escrow-pending chp-post.log chp-post-nochroot.log chp-scan docs-enable-1.log docs-enable-2.log docs-enable-3.log docs-enable-4.log i2.sh j11.sh j2b.sh j2c.sh j2.sh j3.out j3.sh lab-aide-accept.log lab-check2.log lab-flood2.log lab-flood3.log lab-flood.log lab-i2.log lab-j11.log lab-nightly.log lab-repo-upgrade.log lab-restore2.log lab-restore3.log lab-restore.log lt.in lt.out lt.sh nc.sh openscap_data ps.out rb.out rb.sh site.conf.good st.out st.sh vs.out vs.sh 
+lab hook: -rwxr-xr-x. 1 root root 62 Nov 20 11:39 /usr/local/sbin/lab-; ALERT_HOOK=/usr/local/sbin/lab-hook
+check 77: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-2
+check 78: OK NextCloud certificate: 19 h left of 24 h
+check 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+check 80: OK fapolicyd active and enforcing
+check 81: OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accep
+check 82: OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish

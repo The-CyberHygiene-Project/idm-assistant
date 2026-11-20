@@ -155,6 +155,34 @@ folder's `task-11c-report.md`). **Product code was not changed.**
 - O7: With chp-publisher disabled, `occ files:put` says "The specified user is disabled": keeping it enabled
   (as built) is right.
 
-## Gates
+## Later proofs (after the regression)
 
-See "Gates (final)" below.
+| Proof | Result | Log |
+|---|---|---|
+| `SECURITY_ALERT_LEVEL=13`, enable | WARNING line printed, enable exit 0; key removed again (site.conf byte-identical) | 184 |
+| Citation of a superseded version | `check` WARNING and the publish result's "marking warnings (not refused)"; CR-2026-0011 | 185 |
+| Check 82 under a lock held 70 min | "busy, not checked" each run; ALERT on the 4th run in a row (15:48 MST, at the hook); OK after the release | 186 |
+| Early-boot egress failure (cli1) | OnFailure lock-down at 9.47 s, before network-pre (9.55 s); a lab boot timer restored the files | 179 |
+
+## Gates (final)
+
+| Gate | Result | Log |
+|---|---|---|
+| CUI scan, every host | 108 pass / 2 fail x3, no rule changed vs Plan 2 round 4; deviations MET (the two accepted AIDE rules) | 113, 114 |
+| adapter / nvram / snapspike / fixtures | ALL PASS / FIXTURES OK | 115, 116 |
+| Regression | **33/33 in one pass** (11 scenarios x 3; model 33/33 valid, 32/33 agreeing; c4 3/3) - `lab/iso5/regression-2026-11-20.md` | 178 |
+| Row 36 | **3/3**, label `var_auth_t` | 182 |
+| Golden | ALL PASS (177); retaken after removing the lab scripts and test files (188) | 177, 188 |
+
+## Fault injection and restoration
+
+Every deliberate weakening (stopped kanidmd, broken site.conf / address file, lock-downs, immutable files, a logger
+bind mount, maintenance mode, app off, rules removed, a local cui-users account, a disabled chp-publisher, a held lock,
+an IPv6 route, a tap capture on aero) and the evidence that each was undone is listed in the Task 11c report
+(`.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-report.md`), logs/180, 181, 183, 184, 186-188.
+Kept on purpose: the lab alert hook (`ALERT_HOOK=/usr/local/sbin/lab-hook`) and chp-templates on the workstations (W1).
+
+## Lab state at the end
+
+srv and cli2 at the final golden (188); cli1 restored (180). Overnight items pending: the 00:20 review (override under
+Needs attention, D14 counts), 01:40 backup, 03:10 check + canary, 04:04 AIDE (D15), and an 8 h sign-in end (B15).

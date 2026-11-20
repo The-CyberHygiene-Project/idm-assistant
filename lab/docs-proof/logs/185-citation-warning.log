@@ -1,0 +1,15 @@
+EXIT=0
+EXIT=0
+new recorded (ledger entry 44)
+edited CUI_Plan_v0.1-DRAFT.docx
+CUI_Plan_v0.1-DRAFT.docx: CUI area
+  WARNING: CUI_SecPolicy_v0.7 is cited, but the current version in the Compliance area is v0.8 (a superseded citation)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_Plan_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 45)
+published CUI/Compliance/CUI_Plan_v0.1.docx as CR-2026-0011 (ledger entry 46); marking warnings (not refused; fix them in the next version): CUI_SecPolicy_v0.7 is cited, but the current version in the Compliance area is v0.8 (a superseded citation)
+When you are done with it: chp-site doc close CUI_Plan_v0.1.docx
+rc=0

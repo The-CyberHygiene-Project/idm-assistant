@@ -1,0 +1,9 @@
+## srv cleanup of lab files
+chp-escrow-pending chp-post.log chp-post-nochroot.log chp-scan docs-enable-1.log docs-enable-2.log docs-enable-3.log docs-enable-4.log docs-enable-5.log lab-aide-accept.log lab-check2.log lab-flood2.log lab-flood3.log lab-flood.log lab-i2.log lab-j11.log lab-nightly.log lab-repo-upgrade.log lab-restore2.log lab-restore3.log lab-restore.log openscap_data 
+*.good: 0; flock: 0; getenforce: Enforcing; fapolicyd: active
+PASS iso5-srv: golden snapshot
+PASS iso5-cli2: golden snapshot
+PASS reset.sh from golden
+PASS engine findings on srv1 at golden
+PASS engine findings on client2 at golden
+stage golden: ALL PASS

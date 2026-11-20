@@ -1,0 +1,13 @@
+0
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+stick: SECURITY_ALERT_LEVEL=13
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: SECURITY_ALERT_LEVEL=13
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+- WARNING: SECURITY_ALERT_LEVEL is 13, above 12: document approvals and ISSO overrides (Wazuh level 12) will NOT alert at once, they reach only the daily summary. Set SECURITY_ALERT_LEVEL=12 or lower in site.conf and re-run chp-site security enable
+enable-rc=0
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+d991d39d0af91635bf44755df719de5b2cc16667611b1d7ed5a9fb8e1cfc92bf
+site.conf identical to the good copy

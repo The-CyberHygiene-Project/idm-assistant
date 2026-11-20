@@ -1,0 +1,11 @@
+8116 flock -x /var/lib/chp-docs/ledger/ledger.jsonl sleep 4200
+2026-11-20T21:58:25Z
+Fri 2026-11-20 14:59:04 MST 39s left Fri 2026-11-20 13:11:42
+flock running: 0
+Nov 20 15:48:10 iso5-srv.iso5.lab.test chp-monitor[10790]: document ledger: the appender has held the ledger lock on 4 monitor runs in a row: the chain and the unfinished publishes are NOT being checked (a flood of requests or a h
+Nov 20 15:48:10 iso5-srv.iso5.lab.test chp-monitor[10790]: document ledger: the appender has held the ledger lock on 4 monitor runs in a row: the chain and the unfinished publishes are NOT being checked (a flood of requests or a h
+2026-11-20T15:29:10 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+2026-11-20T15:44:11 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system. (1 more in the last 15 min)
+2026-11-20T15:48:10 document ledger: the appender has held the ledger lock on 4 monitor runs in a row: the chain and the unfinished publishes are NOT being checked (a flood of requests or a hung appen
+2026-11-20T15:59:10 iso5-srv.iso5.lab.test rule 40101 level 12: System user successfully logged to the system.
+OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish
