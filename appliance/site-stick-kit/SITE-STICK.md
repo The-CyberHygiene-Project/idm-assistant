@@ -196,6 +196,9 @@ encrypted disk, or the commands refuse. Run `chp-site doc` as yourself, never as
 
 1. Sign in: `chp-site doc login`. A browser opens at Kanidm. If it does not, open the address the command prints.
    The sign-in lives in memory only and ends when your last session ends, or when Kanidm ends it (about 8 hours).
+   The end time it prints is an **estimate** (sign-in time + 8 hours) when Kanidm does not say.
+   **The very first time, sign in once to NextCloud in the browser first** (`https://files.<domain>:8443/`). That
+   gives your NextCloud account its groups. `doc login` refuses an account that has no groups yet and says so.
 2. Start from one of two places.
    - A new document: `chp-site doc new MyPolicy --cui`. Use `--fci` for an FCI document (it gets the `FCI_` name
      and the FCI banner) and `--non-cui` for a document with no marks. Add `--type xlsx` or `--type md` for another
@@ -252,7 +255,7 @@ The upload is an ordinary work file, tagged and audited. The approver removes th
 Approvers are the accounts in `DOC_APPROVER_ACCOUNTS`, and the ISSO's account in `DOC_ISSO_ACCOUNT`.
 
 - Sign in as yourself (`chp-site doc login`), then `chp-site doc approve <file>`. Add `--notes "text"` if you want a
-  note in the record.
+  note in the record (at most 2000 bytes; an accented letter counts 2; so does a longer `--reason`).
 - Your local marking check runs first. A file that fails it is not sent.
 - **You cannot approve a change you are an author of.** The author is whoever created the document or checked it
   out since the last publish.
@@ -288,7 +291,7 @@ Every `chp-site doc` command ends with one of these:
 | 0 | Done. |
 | 1 | The server said no (it tells you why), a local check refused (the marking check in `approve`, `publish` or `mark`), or `check` found problems. |
 | 2 | Refused before anything was sent: not signed in, name rule, working folder, a missing file. A plain message. |
-| 3 | **Pending.** The server has not answered. Wait a minute and run **the same command again**. |
+| 3 | **Pending.** The server has not answered, or NextCloud or Kanidm cannot serve it right now (NextCloud's maintenance mode during the nightly backup, a Kanidm outage); then nothing was sent. Wait a minute and run **the same command again**. |
 
 A pending command is never sent twice. The second run asks about the same request. The request ids are kept when you
 run `chp-site doc logout`. They are lost only when your last session ends and your runtime folder goes away.
@@ -459,11 +462,12 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
 | 100655 | 12 | The record of an unfinished publish could not be written. |
 | 100650, 100651, 100652 | 7 | A publish was undone, an unfinished publish was resolved, an appender problem. |
 | 100629 | 12 | The Kanidm sign-in added an account to `admin` or `cui-users`. It pages once for each new CUI reader's first sign-in. |
-| 100623 | 12 | An account or group was changed inside NextCloud. The **first** `documents enable` raises it twice. Tell the ISSO first. |
+| 100623 | 12 | An account or group was changed inside NextCloud. The **first** `documents enable` raises it five times: the break-glass admin `ncadmin` is made and added to `admin` (2), and the publish account `chp-publisher` is made and added to `chp-users` and `cui-users` (3). Tell the ISSO first. |
 | 100609 | 12 | `chp-canary` was enabled outside 03:05-03:45. Running `chp-site documents check` by hand does this. |
 | 100626 | 3 | The sweep removed a recovery copy. |
 | 100631, 100632, 100627 | 7 | The sweep failed, the egress addresses did not render, a packet was refused. |
 | 100628 | 12 | Egress lock-down. |
+| 100634 | 12 | A NextCloud account with no groups sent a doc request. A chp-doc sign-in made the account before the person ever signed in on the web. The nightly check lists such accounts too. The person signs in once in the browser. |
 
 **Keep `SECURITY_ALERT_LEVEL` at 12 or lower while `DOCUMENTS=yes`.** Approvals and overrides are level 12. Above
 that, they reach only the daily summary, and the detection that T-13 relies on is gone.

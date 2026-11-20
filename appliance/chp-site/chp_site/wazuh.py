@@ -233,6 +233,8 @@ WS_LOCKDOWN_RULE = "100628"                              # Plan 3 Task 8 fix 1: 
 OIDC_PRIVILEGED_RULE = "100629"                          # Plan 3 Task 9 (Task 1 minor): the sign-in adds admin/cui-users
 DOC_SWEEP_FAILED_RULE = "100631"                         # Plan 3 Task 9 (Task 8 carry): the sweep could not sweep / unlinger
 WS_RENDER_RULE = "100632"                                # Plan 3 Task 9 (Task 8 carry): egress addresses not rendered at start
+LEDGER_AUDIT_RULE = "100633"                             # Task 13a (P3-D3): chp_ledger's own audit lines (base, not stored)
+LEDGER_NOGROUPS_RULE = "100634"                          # Task 13a (P3-D3): a request from a NextCloud account with no groups
 # the document ledger's journal lines (Plan 3 Task 9; ruling F4: doc_ledger.journal(), SYSLOG_IDENTIFIER chp-docs-ledger)
 DOC_BASE_RULE, DOC_ROUTINE_RULE, DOC_STARTS_RULE = "100640", "100641", "100649"
 DOC_APPROVE_RULE, DOC_OVERRIDE_RULE, DOC_PUBLISH_RULE = "100642", "100643", "100644"
@@ -409,6 +411,21 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <if_sid>100610</if_sid>
     <field name="data.event">^chp.tag.applied$</field>
     <description>NextCloud: tag applied: $(message)</description>
+  </rule>
+  <!-- chp_ledger's own audit lines (Task 13a, P3-D3). user_oidc makes a NextCloud account from a chp-doc Bearer for a
+       person who never signed in on the web: no groups, and no "User created" line (so {ACCOUNT_RULE} never fires).
+       Its doc-command requests are refused and each one is written here: at once (12) -->
+  <rule id="{LEDGER_AUDIT_RULE}" level="0">
+    <decoded_as>json</decoded_as>
+    <location>{NC_AUDIT}</location>
+    <field name="app">^chp_ledger$</field>
+    <description>chp_ledger: $(message)</description>
+  </rule>
+  <rule id="{LEDGER_NOGROUPS_RULE}" level="12">
+    <if_sid>{LEDGER_AUDIT_RULE}</if_sid>
+    <field name="data.event">^chp.ledger.nogroups$</field>
+    <description>NextCloud account with NO groups (made by a chp-doc Bearer, never signed in on the web) sent a doc request: $(message)</description>
+    <group>chp_access_granted,</group>
   </rule>
   <!-- §12 DEGRADED (database MD5 unavailable): each refusal is level 3. The FIRST one is raised to 7 by 100616:
        Wazuh's rule option ignore="86400" makes the rule fire once and then fall back to its parent (100615) for a

@@ -365,7 +365,27 @@ def _trust_entry(trust_file, target):
 # recorded size+sha256 is stale for the rest of the run. That is harmless ONLY because CHP's fapolicyd runs with
 # `integrity = none` (path trust: the entry's size/hash are not checked). With integrity = size or sha256, php would be
 # denied config.php after the first write; enable would then need a sync after every write.
-def _trust_sync(run, root, tf, cfg, mark=True):
+# P3-D1 (lab 11c, logs/106-107): `fapolicyd-cli --update` only NOTIFIES the daemon; it reloads its trust database
+# about 1 s later, and an occ call in that window is denied config.php. After every update, php's own read of
+# config.php as apache is polled (a cheap probe, the same exe and file occ uses) for at most TRUST_WAIT_TRIES tries.
+PHP_PROBE = ["runuser", "-u", "apache", "--", "php", "-r",
+             f"exit(@file_get_contents('{CONFIG_PHP}') === false ? 1 : 0);"]
+TRUST_WAIT_TRIES, TRUST_WAIT_STEP = 60, 0.5                # at most ~30 s
+
+
+def _trust_loaded(run, sleep):
+    """Wait until php may read config.php (fapolicyd has loaded the new entry); a bounded poll, never sleep-only."""
+    for i in range(TRUST_WAIT_TRIES):
+        if _ok(run, PHP_PROBE):
+            return
+        if i + 1 < TRUST_WAIT_TRIES:
+            sleep(TRUST_WAIT_STEP)
+    raise SiteError(f"fapolicyd still denies php reading {CONFIG_PHP} about {int(TRUST_WAIT_TRIES * TRUST_WAIT_STEP)} "
+                    "s after its trust entry was updated (fapolicyd-cli --update): check `fapolicyd-cli --list` and "
+                    "the fapolicyd journal, then re-run chp-site documents enable (it is safe to repeat)")
+
+
+def _trust_sync(run, root, tf, cfg, mark=True, sleep=time.sleep):
     """Make fapolicyd's trust entry for config.php equal the file as it is now ("<path> <size> <sha256>"): added when
     there is none, updated when it differs (stale, malformed or duplicated). Stateless: the entry is compared with
     the file itself, so a failed run, or NextCloud rewriting config.php between runs, is caught by the next call.
@@ -379,6 +399,7 @@ def _trust_sync(run, root, tf, cfg, mark=True):
         _mark(root, ["fapolicyd"])
     run(["fapolicyd-cli", "--file", op, CONFIG_PHP, "--trust-file", "nextcloud"], check=True)
     run(["fapolicyd-cli", "--update"], check=True)
+    _trust_loaded(run, sleep)
     return op
 
 
@@ -653,7 +674,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     if not cfg.exists():
         _put(cfg, MIN_CONFIG, 0o640, _owner(chown, "apache", "apache"))
         run(["restorecon", CONFIG_PHP], check=True)
-    _trust_sync(run, root, tf, cfg)
+    _trust_sync(run, root, tf, cfg, sleep=sleep)
     st = occ.json("status", "--output=json")
     if not st.get("installed"):
         occ("maintenance:install", "--database", "pgsql", "--database-name", "nextcloud", "--database-host",
@@ -825,7 +846,7 @@ def _enable(me, site, hosts, *, run, occ, k, root, record, stick, pending, chown
     # 15a. config.php's trust entry follows its content (spike §Under the CUI profile fix 2). Stateless: the entry
     # fapolicyd holds (trust.d/nextcloud: "<path> <size> <sha256>") is compared with the file itself on every run,
     # so a failed update in an earlier run, or NextCloud rewriting config.php between runs, is caught and fixed.
-    if _trust_sync(run, root, tf, cfg):
+    if _trust_sync(run, root, tf, cfg, sleep=sleep):
         step("trust", f"fapolicyd trust entry for {CONFIG_PHP} refreshed (it did not match the file)")
 
     # 15. fapolicyd: only when needed (packages installed or trust entry added this run or by a failed run, or
@@ -1140,7 +1161,7 @@ def _wazuh(root, run, chown):
     _restart(run, root, ["wazuh-manager"], extra=["wazuh-manager"])
 
 
-def trust(root, run):
+def trust(root, run, sleep=time.sleep):
     """`chp-site documents trust` (root): make config.php's fapolicyd trust entry equal the file again and prove it.
     For chp-nextcloud-backup restore (its occ maintenance:data-fingerprint rewrites config.php: lab round 3, D10) and
     for an operator who has checked an out-of-band config.php change that the nightly check reported ("trust").
@@ -1155,7 +1176,7 @@ def trust(root, run):
     if not cfg.exists():
         raise SiteError(f"{CONFIG_PHP} is missing: restore it (or re-run chp-site documents enable) first")
     try:
-        op = _trust_sync(run, root, tf, cfg, mark=False)
+        op = _trust_sync(run, root, tf, cfg, mark=False, sleep=sleep)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(e.cmd) if isinstance(e.cmd, (list, tuple)) else str(e.cmd)
         raise SiteError(f"{cmd} failed (exit {e.returncode}): the fapolicyd trust entry for {CONFIG_PHP} was not "
@@ -1236,6 +1257,11 @@ Q_CUI_LOCAL = (f"SELECT g.uid FROM oc_group_user g WHERE g.gid = 'cui-users' AND
                f"'{PUBLISH_USER}') AND NOT EXISTS "
                f"(SELECT 1 FROM oc_user_oidc o WHERE o.user_id = g.uid) ORDER BY g.uid LIMIT {LIST_MAX + 1}")
 Q_ADMINS = "SELECT uid FROM oc_group_user WHERE gid = 'admin' ORDER BY uid"
+# P3-D3 (lab 11c, ruling): user_oidc makes an account from a chp-doc Bearer for a person who never signed in on the web,
+# although that provider has bearer provisioning off, and without a "User created" audit line. Every Kanidm person who
+# signs in on the web is in chp-users at least, so a user_oidc account with NO group was made that way.
+Q_OIDC_NO_GROUPS = ("SELECT o.user_id AS uid FROM oc_user_oidc o WHERE NOT EXISTS (SELECT 1 FROM oc_group_user g "
+                    f"WHERE g.uid = o.user_id) ORDER BY o.user_id LIMIT {LIST_MAX + 1}")
 Q_LEDGER_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_ledger'"
 
 
@@ -1711,6 +1737,17 @@ def _access(sql, folders, ids, storages, alert):
     if len(rows) > LIST_MAX:
         alert("cui-member:more", f"more than {LIST_MAX} cui-users members are not Kanidm accounts; only the first "
                                  f"{LIST_MAX} are listed")
+    rows = sql(Q_OIDC_NO_GROUPS)
+    for r in rows[:LIST_MAX]:
+        u = _clean(r.get("uid"), 64)
+        alert(f"nogroups:{u}", f"the NextCloud account {u} (Kanidm, user_oidc) has no groups: a chp-doc Bearer made it "
+                               f"before {u} ever signed in on the web (user_oidc does this although bearer "
+                               f"provisioning is off; no audit line). {u} cannot use the doc commands until they sign in "
+                               "once in the browser (NextCloud then maps their Kanidm groups); if the person should "
+                               f"have no access, delete the account (occ user:delete {u})")
+    if len(rows) > LIST_MAX:
+        alert("nogroups:more", f"more than {LIST_MAX} Kanidm accounts in NextCloud have no groups; only the first "
+                               f"{LIST_MAX} are listed")
     admins = sorted(_clean(r.get("uid"), 64) for r in sql(Q_ADMINS))
     if admins != [ADMIN]:
         alert("admin", f"the NextCloud admin group must be exactly the break-glass account {ADMIN}; it is "

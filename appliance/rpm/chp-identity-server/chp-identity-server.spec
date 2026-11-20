@@ -18,6 +18,7 @@ Source8:        31-renew-timer.sh
 Source9:        40-escrow-pending.sh
 Source10:       LICENSE
 Source11:       chp-server-cui-tailoring.xml
+Source12:       journald-chp-persistent.conf
 Requires:       chp-base, chp-site >= 0.14.0-9, chp-identity-client >= 0.2.4-3, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
@@ -42,9 +43,13 @@ install -Dm0755 %{SOURCE8} %{buildroot}%{_prefix}/lib/chp/monitor.d/31-renew-tim
 install -Dm0755 %{SOURCE9} %{buildroot}%{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 install -Dm0644 %{SOURCE11} %{buildroot}%{_datadir}/chp/scap/chp-server-cui-tailoring.xml
+install -Dm0644 %{SOURCE12} %{buildroot}%{_sysconfdir}/systemd/journald.conf.d/50-chp-persistent.conf
 
 %post
 %systemd_post chp-server-firstboot.service cert-renew-kanidm.timer
+# P3-D14: the persistent journal now (journald reads its config at start; then move /run's journal to /var/log/journal)
+systemctl restart systemd-journald.service >/dev/null 2>&1 || :
+journalctl --flush >/dev/null 2>&1 || :
 %preun
 %systemd_preun chp-server-firstboot.service cert-renew-kanidm.timer
 
@@ -63,6 +68,8 @@ install -Dm0644 %{SOURCE11} %{buildroot}%{_datadir}/chp/scap/chp-server-cui-tail
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 %dir %{_datadir}/chp/scap
 %{_datadir}/chp/scap/chp-server-cui-tailoring.xml
+%dir %{_sysconfdir}/systemd/journald.conf.d
+%{_sysconfdir}/systemd/journald.conf.d/50-chp-persistent.conf
 
 %changelog
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-5.chp

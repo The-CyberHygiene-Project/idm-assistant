@@ -145,7 +145,7 @@ def test_generic_refusal_text():
     assert m and "Compliance" not in m.group(1) and "superseded" not in m.group(1).lower()
     # every refusal goes through refuse(); the only other texts are "not signed in" and the rate limit
     texts = re.findall(r"\$this->refuse\(([^,]+),", c)
-    assert texts and set(texts) <= {"self::REFUSED", "self::TOO_MANY", "self::SIGN_IN"}, set(texts)
+    assert texts and set(texts) <= {"self::REFUSED", "self::TOO_MANY", "self::SIGN_IN", "self::NO_GROUPS"}, set(texts)
     assert "'message' => $message" in method(c, "refuse") and "'state' => 'refused'" in method(c, "refuse")
     # not found, not visible, outside the areas and inside a Superseded area all read the same
     acc = method(c, "accept")
@@ -259,7 +259,7 @@ def test_duplicate_request_id_never_overwrites():
 
 def test_info_xml_and_licence_headers():
     info = (APP / "appinfo/info.xml").read_text()
-    assert "<id>chp_ledger</id>" in info and "<version>1.0.1</version>" in info
+    assert "<id>chp_ledger</id>" in info and "<version>1.0.2</version>" in info
     assert "<licence>Apache-2.0</licence>" in info and "<namespace>ChpLedger</namespace>" in info
     assert '<nextcloud min-version="35" max-version="35"/>' in info
     assert len(PHP) >= 5
@@ -282,7 +282,7 @@ def test_routes_are_ocs_api_routes():
 
 def test_spec_bundles_the_app_and_its_directories():
     g = dict(re.findall(r"^%global\s+(\S+)\s+(\S+)", SPEC, re.M))
-    assert g["ledger_ver"] == "1.0.1"
+    assert g["ledger_ver"] == "1.0.2"
     assert re.search(r"^Source7:\s+chp_ledger\.tar\.gz$", SPEC, re.M)
     prep = section("prep")
     assert "%{SOURCE7}" in prep and "chp_ledger:%{ledger_ver}" in prep
@@ -313,3 +313,36 @@ def test_no_validation_pattern_ends_in_a_bare_dollar():
             body, _, flags = pat[1:].rpartition(pat[0])
             assert not (body.endswith("$") and "D" not in flags), (p.name, pat)
     assert len([x for x in pats if x[1].endswith("\\z/")]) == 4, pats
+
+
+# ---------- Task 13a (P3-D3, ruling) ----------
+
+def test_13a_d3_an_account_without_groups_is_refused_plainly_and_audited():
+    """P3-D3: user_oidc makes a group-less account from a chp-doc Bearer for a person who never signed in on the web.
+    Its requests are refused with a plain "sign in once on the web" text (403) and one audit line (Wazuh) each;
+    nothing is spooled. Checked after the rate limit (no audit flood), before any other check or the spool."""
+    c = code(CTL)
+    m = re.search(r"public const NO_GROUPS = '([^']+)';", c)
+    assert m and "sign in once" in m.group(1) and "browser" in m.group(1) and "doc login" in m.group(1)
+    assert "IGroupManager $groupManager" in c and "use OCP\\IGroupManager;" in c
+    sub = method(c, "submit")
+    i_rl = sub.index("if ($this->rateLimit->exceeded($uid))")
+    i_g = sub.index("$this->groupManager->getUserGroupIds($user) === []")
+    i_acc = sub.index("$this->accept(")
+    assert i_rl < i_g < i_acc
+    blk = sub[i_g:i_acc]
+    assert "$this->audit->event(Audit::NO_GROUPS, " in blk and "'user' => $uid" in blk
+    assert "return $this->refuse(self::NO_GROUPS, Http::STATUS_FORBIDDEN);" in blk
+    a = code("Service/Audit.php")
+    assert "public const NO_GROUPS = 'chp.ledger.nogroups';" in a
+    assert "getCustomPsrLogger(" in a and "'logfile_audit'" in a and "->warning(" in a
+    assert "'app' => 'chp_ledger'" in a
+
+
+def test_13a_d3_wazuh_pages_the_audit_line():
+    from chp_site import wazuh as W
+    r = W.NEXTCLOUD_RULES
+    base = re.search(rf'<rule id="{W.LEDGER_AUDIT_RULE}" level="0">(.*?)</rule>', r, re.S).group(1)
+    assert "<decoded_as>json</decoded_as>" in base and "<field name=\"app\">^chp_ledger$</field>" in base
+    kid = re.search(rf'<rule id="{W.LEDGER_NOGROUPS_RULE}" level="12">(.*?)</rule>', r, re.S).group(1)
+    assert f"<if_sid>{W.LEDGER_AUDIT_RULE}</if_sid>" in kid and "chp.ledger.nogroups" in kid

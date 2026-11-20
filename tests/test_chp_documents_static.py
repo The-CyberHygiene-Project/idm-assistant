@@ -273,19 +273,25 @@ def test_d10_restore_refreshes_the_config_php_trust_entry_after_its_last_occ_cal
 
 def test_ledger_route_body_limit_covers_the_publish_cap_and_nothing_else():          # Plan 3 Task 11a item 1
     """chp_ledger's publish carries content + pdf_content as base64, together at most 64 MiB decoded (MAX_CONTENT):
-    4/3 of that is 85.33 MiB of base64 (MAX_B64), plus a few kB of JSON. 96 MiB leaves ~10 MiB of headroom and still
-    stops a runaway body long before PHP; httpd's own default (1 GiB) would not."""
+    4/3 of that is 85.33 MiB of base64 (MAX_B64), plus a few kB of JSON. 96 MiB leaves ~10 MiB of headroom.
+    Task 13a (P3-D6, ruling): the <LocationMatch> placement did not stop a 97 MiB body in the lab (php-fpm answered);
+    the limit is now an <If> on the request URI at vhost level (merged last, after <Location> and the FilesMatch php
+    handler). Whether httpd stops the body there is a LIVE item; the app's own 64 MiB check is the control."""
     c = t("nextcloud-httpd.conf")
-    m = re.search(r'<LocationMatch "\^/ocs/v\[12\]\\\.php/apps/chp_ledger/">\s*(.*?)\s*</LocationMatch>', c, re.S)
+    m = re.search(r'<If "%\{REQUEST_URI\} =~ m#\^/ocs/v\[12\]\\\.php/apps/chp_ledger/#">\s*(.*?)\s*</If>', c, re.S)
     assert m, "the chp_ledger OCS route needs its own LimitRequestBody section"
     body = [ln for ln in m.group(1).splitlines() if ln.strip() and not ln.strip().startswith("#")]
     assert [ln.split() for ln in body] == [["LimitRequestBody", str(96 << 20)]]       # nothing else (no Require: the LAN rule stays)
     limit = 96 << 20
     max_b64 = 4 * -(-(64 << 20) // 3)
     assert max_b64 == 89478488 and max_b64 + (1 << 20) < limit                          # the cap fits with room for the JSON
-    # inside the vhost and after the LAN <Location "/"> (sections merge in order; this one adds only the limit)
+    # inside the vhost and after the LAN <Location "/"> and the php handler (this one adds only the limit)
     vh = c.index("<VirtualHost *:8443>")
-    assert vh < c.index('<Location "/">') < m.start() < c.index("</VirtualHost>")
-    assert "LimitRequestBody" not in c.replace(m.group(0), "")
+    assert vh < c.index('<Location "/">') < c.index("<FilesMatch") < m.start() < c.index("</VirtualHost>")
+    live = "\n".join(ln for ln in c.replace(m.group(0), "").splitlines() if not ln.strip().startswith("#"))
+    assert "LimitRequestBody" not in live and "<LocationMatch" not in live
+    # the guide does not claim httpd stops the body: the app's check is the control
+    readme = " ".join(t("README.md").split())
+    assert "the app's own 64 MiB check is the control" in readme
     php = (D.parent / "nextcloud-chp/chp_ledger/lib/Controller/LedgerController.php").read_text()
     assert "MAX_B64 = 89478488;" in php and "MAX_CONTENT = 67108864;" in php

@@ -26,6 +26,11 @@ restart. A stray group on CUI, FCI or Archive is removed together with its ACL r
 
 ## Behaviour
 
+* **Request size on the ledger route.** A publish (content + reader PDF) is at most 64 MiB decoded; chp_ledger
+  refuses anything larger with 413 before it spools anything: the app's own 64 MiB check is the control.
+  `chp-nextcloud.conf` also sets `LimitRequestBody` 96 MiB on `/ocs/v[12].php/apps/chp_ledger/` (an `<If>` on the
+  URI); in the lab its first placement (`<LocationMatch>`) did not stop a 97 MiB body, PHP read it (P3-D6), so that
+  httpd limit is defence in depth only until a lab run shows a 413 from httpd itself.
 * **Egress.** Table `inet chp_nextcloud_egress` matches the socket owner `apache`: loopback and the server address
   only, port 53 refused (`CHP-NC-EGRESS-DNS`), everything else logged `CHP-NC-EGRESS` and rejected. The unit saves a
   address file is `include`d by nft, so `nextcloud-egress-validate` insists it is one valid IPv4 line equal to

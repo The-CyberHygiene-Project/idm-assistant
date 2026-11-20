@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\ChpLedger\Controller;
 
 use OCA\ChpLedger\Service\Areas;
+use OCA\ChpLedger\Service\Audit;
 use OCA\ChpLedger\Service\RateLimit;
 use OCA\ChpLedger\Service\Spool;
 use OCP\AppFramework\Http;
@@ -20,6 +21,7 @@ use OCP\AppFramework\OCSController;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\IGroupManager;
 use OCP\IRequest;
 use OCP\ISession;
 use OCP\IUserSession;
@@ -47,6 +49,9 @@ class LedgerController extends OCSController {
 	public const REFUSED = 'refused: the request is not valid, or the document is not a controlled document you can use';
 	public const TOO_MANY = 'refused: too many requests (at most 10 a minute); wait a minute and run the command again';
 	public const SIGN_IN = 'refused: not signed in';
+	// P3-D3: user_oidc makes an account from a chp-doc Bearer for a person who never signed in on the web, with no
+	// groups (so no area is visible); one web sign-in maps the person's Kanidm groups
+	public const NO_GROUPS = 'refused: your NextCloud account has no groups yet: sign in once to NextCloud in the browser (it then takes your groups from Kanidm), then run chp-site doc login and the same command again';
 	public const KINDS = ['checkout', 'new', 'approve', 'override', 'publish'];
 	public const MAX_CONTENT = 67108864;   // 64 MiB: content and pdf_content together, decoded
 	public const MAX_B64 = 89478488;       // 4 * ceil(MAX_CONTENT / 3): the longest base64 that can fit
@@ -64,6 +69,8 @@ class LedgerController extends OCSController {
 		private Areas $areas,
 		private RateLimit $rateLimit,
 		private Spool $spool,
+		private IGroupManager $groupManager,
+		private Audit $audit,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($appName, $request);
@@ -80,6 +87,10 @@ class LedgerController extends OCSController {
 			$uid = $user->getUID();
 			if ($this->rateLimit->exceeded($uid)) {
 				return $this->refuse(self::TOO_MANY, Http::STATUS_TOO_MANY_REQUESTS);
+			}
+			if ($this->groupManager->getUserGroupIds($user) === []) {
+				$this->audit->event(Audit::NO_GROUPS, 'a doc-command request from ' . $uid . ', a NextCloud account with no groups (made by a chp-doc Bearer before any web sign-in?), refused', ['user' => $uid]);
+				return $this->refuse(self::NO_GROUPS, Http::STATUS_FORBIDDEN);
 			}
 			return $this->accept($uid);
 		} catch (\Throwable $e) {

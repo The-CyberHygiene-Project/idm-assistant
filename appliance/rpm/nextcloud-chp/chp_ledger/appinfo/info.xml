@@ -8,7 +8,7 @@
 	<name>CHP approval ledger intake</name>
 	<summary>Takes the doc commands' checkout, new, approve, override and publish requests and spools them for the root-owned ledger appender.</summary>
 	<description>CyberHygiene appliance control app. OCS API POST /api/v1/request and GET /api/v1/result/{request_id}. Each request is stamped with the user NextCloud authenticated (never a name from the request) and how (bearer, app-password, session), checked (Compliance areas only, at most 10 requests a minute per user, 64 MiB for a publish) and written to /var/lib/chp-docs/spool. The app never writes the ledger or the Compliance areas: the root appender does, after checking every Bearer at Kanidm. Policy in app config (set by chp-site): compliance = [area folder ids], superseded = [area folder ids].</description>
-	<version>1.0.1</version>
+	<version>1.0.2</version>
 	<licence>Apache-2.0</licence>
 	<author>The CyberHygiene Project</author>
 	<namespace>ChpLedger</namespace>

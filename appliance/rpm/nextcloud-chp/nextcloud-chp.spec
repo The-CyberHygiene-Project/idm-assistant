@@ -16,7 +16,7 @@
 %global files_accesscontrol_ver 6.0.1
 %global user_oidc_ver 8.13.0
 %global foldertag_ver 1.0.0
-%global ledger_ver 1.0.1
+%global ledger_ver 1.0.2
 %global debug_package %{nil}
 %global __brp_mangle_shebangs %{nil}
 %global __os_install_post %{nil}

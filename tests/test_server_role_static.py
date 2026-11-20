@@ -160,3 +160,23 @@ def test_kanidm_login_pauses_before_sending_the_password():
     # (typed-ahead input is discarded) -> expect times out; seen twice in ~30 gate-2 runs on the lab copy.
     t = (SRV / "kanidm-login.exp").read_text()
     assert re.search(r"password\.\*:\} \{ after [1-9][0-9]{2,}; send -- \"\$pw\\r\" \}", t)
+
+
+def test_13a_d14_server_journal_is_persistent_and_bounded():
+    """P3-D14 (ruling): the server's journal is volatile on Rocky by default (no /var/log/journal), so the appender's
+    journal lines (check 82's journal side) and the ISSO review's journal rows were lost at every reboot. The server
+    role ships a journald drop-in: Storage=persistent with a bounded SystemMaxUse, applied by the package."""
+    conf = (SRV / "journald-chp-persistent.conf").read_text()
+    kv = dict(ln.split("=", 1) for ln in conf.splitlines() if "=" in ln and not ln.startswith("#"))
+    assert conf.splitlines()[[ln.startswith("[") for ln in conf.splitlines()].index(True)] == "[Journal]"
+    assert kv["Storage"] == "persistent"
+    m = re.fullmatch(r"(\d+)([MG])", kv["SystemMaxUse"])
+    assert m and 256 <= int(m.group(1)) * (1024 if m.group(2) == "G" else 1) <= 4096
+    spec = (SRV / "chp-identity-server.spec").read_text()
+    src = re.search(r"^(Source\d+):\s+journald-chp-persistent\.conf$", spec, re.M).group(1)
+    n = src[len("Source"):]
+    assert f"%{{SOURCE{n}}} %{{buildroot}}%{{_sysconfdir}}/systemd/journald.conf.d/50-chp-persistent.conf" in spec
+    assert "%{_sysconfdir}/systemd/journald.conf.d/50-chp-persistent.conf" in spec.split("%files", 1)[1]
+    post = spec.split("%post", 1)[1].split("%preun", 1)[0]
+    assert "systemctl restart systemd-journald" in post and "journalctl --flush" in post
+    assert "journald-chp-persistent.conf" in (SRV / "build-rpm.sh").read_text()

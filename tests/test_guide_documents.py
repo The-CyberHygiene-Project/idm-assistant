@@ -123,3 +123,12 @@ def test_known_issues_file_covers_the_open_issues():
               "PHP 8.3", "NextCloud 37", "OIDC", "forge", "DNS", "chp-publisher", "ncadmin", "SECURITY_ALERT_LEVEL", "banner", "FCI", "8 GiB",
               "new installs only", "download"):
         assert s.lower() in k.lower(), s
+
+
+def test_13a_d5_first_enable_raises_100623_five_times_in_the_guide():
+    """P3-D5 (logs/139): ncadmin made + added to admin, chp-publisher made + added to chp-users and cui-users."""
+    for text in (GUIDE.read_text(), KNOWN.read_text()):
+        flat = " ".join(text.split())
+        i = flat.index("100623")
+        part = flat[i:i + 600]
+        assert "five times" in part and "twice" not in part and "chp-publisher" in part and "ncadmin" in part

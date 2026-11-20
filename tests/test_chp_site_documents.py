@@ -41,6 +41,8 @@ class Run:
         self.enabled_units = set()                         # systemctl enable / is-enabled
         self.nc = None                                     # set by Env: the area lookup reads what occ scanned
         self.fileids = {}                                  # (folder id, path in filecache) -> fileid
+        # P3-D1: `fapolicyd-cli --update` is asynchronous; for reload_lag probes after it php is still denied
+        self.reload_lag, self.lag_left, self.probes = 0, 0, 0
 
     def __call__(self, argv, **kw):
         argv = list(argv)
@@ -124,6 +126,15 @@ class Run:
             lines = [ln for ln in (t.read_text().splitlines() if t.exists() else []) if ln.split()[:1] != [argv[3]]]
             t.write_text("\n".join(lines + [f"{argv[3]} {len(b)} {hashlib.sha256(b).hexdigest()}"]) + "\n")
             return R()
+        if argv == ["fapolicyd-cli", "--update"]:
+            self.lag_left = self.reload_lag
+            return R()
+        if argv == D.PHP_PROBE:
+            self.probes += 1
+            if self.lag_left > 0:
+                self.lag_left -= 1
+                return R(1, "", "")
+            return R()
         if argv[:2] == ["fapolicyd-cli", "--check-status"]:
             if self.fapo_dead() or self.no_counter:
                 return R(1, "", "")
@@ -188,8 +199,9 @@ class NC:
         self.envs.append(env)
         c, a = argv[0], argv[1:]
         cfg = self.root / "etc/nextcloud/config.php" if self.root is not None else None
-        # fapolicyd's %languages rule: an untrusted config.php cannot be read back by php (lab round 2, D3)
-        if cfg is not None and cfg.exists() and not _trusted(self.root):
+        # fapolicyd's %languages rule: an untrusted config.php cannot be read back by php (lab round 2, D3); nor one
+        # whose trust entry fapolicyd has not loaded yet (P3-D1: the reload after --update takes ~1 s)
+        if cfg is not None and cfg.exists() and (not _trusted(self.root) or getattr(getattr(self, "run", None), "lag_left", 0) > 0):
             return 1, "", DENIED
         if c == "status":
             return 0, json.dumps({"installed": self.installed}), ""
@@ -370,6 +382,7 @@ class Env:
         self.run, self.nc, self.kcli = Run(self.root, mta), NC(), KanidmCli()
         self.nc.root = self.root
         self.run.nc = self.nc
+        self.nc.run = self.run
         self.k = Kanidm("idm_admin", run=self.kcli)
         self.records = []
         self.stick = tmp_path / "stick"
@@ -2177,9 +2190,9 @@ def test_d10_documents_trust_refreshes_a_stale_entry_and_verifies(tmp_path):
     assert D._trust_entry(tf, D.CONFIG_PHP) == D._size_sha(cfg)
     assert out[0].startswith("OK") and "refreshed" in out[0]
     assert e.run.calls[n:] == [["fapolicyd-cli", "--file", "update", D.CONFIG_PHP, "--trust-file", "nextcloud"],
-                               ["fapolicyd-cli", "--update"]]               # no restart, nothing marked
+                               ["fapolicyd-cli", "--update"], D.PHP_PROBE]  # no restart, nothing marked; reload proven
     assert "fapolicyd" not in D._restart_marks(e.root)
-    assert D.trust(e.root, e.run)[0].startswith("OK") and len(e.run.calls) == n + 2      # already equal: no call
+    assert D.trust(e.root, e.run)[0].startswith("OK") and len(e.run.calls) == n + 3      # already equal: no call
 
 
 def test_d10_documents_trust_fails_when_the_entry_still_differs(tmp_path):
@@ -2347,4 +2360,52 @@ def test_check_flags_missing_reviewer_acl(tmp_path):
     db = DB()
     db.c.execute("UPDATE oc_group_folders SET acl = 0 WHERE folder_id = 4")              # open folders: not checked
     _, res, _ = do_check(tmp_path / "c", db=db)
+    assert res["alerts"] == []
+
+
+# ---------- Task 13a ----------
+
+def test_13a_d1_first_enable_waits_for_the_trust_reload_before_the_install(tmp_path):
+    """P3-D1 (logs/106, 107): fapolicyd-cli --update returns before the daemon has reloaded its trust database
+    (~1 s); the first occ call (maintenance:install) was denied config.php. enable now polls php's read of config.php
+    (as apache) with a bounded number of tries, and only then calls occ."""
+    e = Env(tmp_path)
+    e.run.reload_lag = 3
+    e.enable()
+    assert e.nc.installed
+    tl = e.run.calls
+    upd = _index(tl, lambda c: c == ["fapolicyd-cli", "--update"], "first --update")
+    assert tl[upd + 1:upd + 5] == [D.PHP_PROBE] * 4                          # 3 denied, the 4th reads it
+    assert len(e.sleeps) >= 3 and all(0 < x <= 1 for x in e.sleeps[:3])     # short waits between tries
+
+
+def test_13a_d1_a_reload_that_never_lands_fails_with_a_plain_message(tmp_path):
+    e = Env(tmp_path)
+    e.run.reload_lag = 10 ** 6
+    with pytest.raises(SiteError) as x:
+        e.enable()
+    m = str(x.value)
+    assert "fapolicyd" in m and D.CONFIG_PHP in m and "re-run chp-site documents enable" in m
+    assert e.run.probes == D.TRUST_WAIT_TRIES and not e.nc.installed
+    assert sum(e.sleeps) <= D.TRUST_WAIT_TRIES * D.TRUST_WAIT_STEP + 1           # bounded: never an endless wait
+
+
+def test_13a_d1_the_probe_reads_config_php_as_apache_with_php():
+    assert D.PHP_PROBE[:4] == ["runuser", "-u", "apache", "--"] and D.PHP_PROBE[4] == "php"
+    assert D.CONFIG_PHP in D.PHP_PROBE[-1] and "file_get_contents" in D.PHP_PROBE[-1]
+    assert 10 <= D.TRUST_WAIT_TRIES * D.TRUST_WAIT_STEP <= 60
+
+
+def test_13a_d3_nightly_check_flags_a_kanidm_account_without_groups(tmp_path):
+    """P3-D3 (ruling): a chp-doc Bearer made a NextCloud account (user_oidc) with NO groups for a person who never
+    signed in on the web (no "User created" audit line, so 100623 never fired). The nightly check finds every such
+    account and alerts (ALERT -> journal and ALERT_HOOK through check 81, Wazuh-visible); one web sign-in clears it."""
+    db = DB()
+    db.c.execute("INSERT INTO oc_user_oidc VALUES (2, 'lab02', 'lab02')")                 # made by the Bearer
+    _, res, _ = do_check(tmp_path, db=db)
+    assert keys(res) == {"nogroups:lab02"}, res["alerts"]
+    t = res["alerts"][0]["text"]
+    assert "lab02" in t and "no groups" in t and "Bearer" in t and "sign in once" in t
+    db.c.execute("INSERT INTO oc_group_user VALUES ('chp-users', 'lab02')")               # the web sign-in mapped them
+    _, res, _ = do_check(tmp_path / "b", db=db)
     assert res["alerts"] == []
