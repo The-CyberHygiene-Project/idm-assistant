@@ -77,9 +77,53 @@ def test_client_uses_the_server_only():
     assert [x for x in got if x.split()[0] in ("server", "pool", "peer", "sourcedir")] == \
         ["server 192.168.100.30 iburst maxpoll 16"]
     assert not any(x.split()[0] == "allow" for x in got)
-    # no server line at all: iburst only
+    # no server line at all: iburst, and the CUI maxpoll (m6)
     out = T.chrony_text("driftfile /var/lib/chrony/drift\nport 0\n", "client", SITE, HOSTS)
-    assert "server 192.168.100.30 iburst" in live(out)
+    assert "server 192.168.100.30 iburst maxpoll 16" in live(out)
+
+
+def test_server_binds_ntp_to_its_own_address():
+    """m8: chronyd serves on the server's site address only (defence in depth beside allow and firewalld)."""
+    got = live(T.chrony_text(HARDENED + "bindaddress 0.0.0.0\n", "server", SITE, HOSTS))
+    assert [x for x in got if x.split()[0] == "bindaddress"] == ["bindaddress 192.168.100.30"]
+
+
+def test_client_keeps_maxpoll_16_from_pool_lines_or_adds_it():
+    """m6: the CUI profile's maxpoll 16 stays on the one server line: taken from a pool line too (pool-only
+    options such as maxsources dropped), and added when the old line had no maxpoll."""
+    pool_only = "pool 2.rocky.pool.ntp.org iburst maxsources 4 maxpoll 16\ndriftfile /var/lib/chrony/drift\nport 0\n"
+    got = live(T.chrony_text(pool_only, "client", SITE, HOSTS))
+    assert [x for x in got if x.split()[0] in ("server", "pool")] == ["server 192.168.100.30 iburst maxpoll 16"]
+    bare = "server 192.168.100.1 iburst\nport 0\n"
+    assert "server 192.168.100.30 iburst maxpoll 16" in live(T.chrony_text(bare, "client", SITE, HOSTS))
+    none = "driftfile /var/lib/chrony/drift\nport 0\n"
+    out = T.chrony_text(none, "client", SITE, HOSTS)
+    assert "server 192.168.100.30 iburst maxpoll 16" in live(out) and T.chrony_text(out, "client", SITE, HOSTS) == out
+    keep = "server 192.168.100.1 iburst maxpoll 10\n"
+    assert "server 192.168.100.30 iburst maxpoll 10" in live(T.chrony_text(keep, "client", SITE, HOSTS))
+
+
+def test_client_waits_for_sync_and_only_warns(tmp_path):
+    """m5: after writing the client config, chronyc waitsync with a bounded wait; a timeout is a warning only."""
+    c = setup(tmp_path)
+
+    class Slow(Run):
+        def __call__(self, argv, **kw):
+            if argv[:2] == ["chronyc", "waitsync"]:
+                self.calls.append(list(argv))
+                assert kw.get("timeout")
+                raise T.subprocess.TimeoutExpired(argv, kw["timeout"])
+            return super().__call__(argv, **kw)
+    run = Slow()
+    lines = T.apply(tmp_path, "client", SITE, HOSTS, run=run)
+    w = [x for x in run.calls if x[:2] == ["chronyc", "waitsync"]]
+    assert len(w) == 1
+    assert any(x.startswith("WARNING") and "192.168.100.30" in x for x in lines), lines
+    assert "server 192.168.100.30" in c.read_text()
+    run = Run()                                            # synchronised: no warning
+    lines = T.apply(tmp_path, "client", SITE, HOSTS, run=run)
+    assert any(x[:2] == ["chronyc", "waitsync"] for x in run.calls)
+    assert not any(x.startswith("WARNING") for x in lines)
 
 
 def test_role_is_checked():

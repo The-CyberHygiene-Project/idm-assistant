@@ -774,7 +774,8 @@ def cmd_check(env, a, say):
         except (auth.AuthError, DocError) as e:
             note = f"freshness and citations not checked: {e}"
     rep = marking.check(f, cui, values, current)
-    marks = ("FCI banner" if f.name.startswith("FCI_") else "CUI marks") if cui else "no banner"
+    fci = rep.name is not None and rep.name.prefix == "FCI_"          # the checker's own reading of the name
+    marks = ("FCI banner" if fci else "CUI marks") if cui else "no banner"
     say(f"{f.name}: {'CUI' if cui else 'non-CUI'} area ({marks})")
     for p in rep.problems:
         say(f"  PROBLEM: {p}")

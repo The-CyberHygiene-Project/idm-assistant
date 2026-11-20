@@ -75,10 +75,6 @@ BANNER = "CUI"
 FCI_BANNER = "FCI"
 _BANNER_RE = re.compile(r"CUI(?://[A-Z0-9][A-Z0-9 ,/-]*)?")
 _FCI_RE = re.compile(r"FCI")
-# kind -> (the banner text, the exact pattern a required banner must match, the folded pattern a banner that must
-# not be there is found by: lookalikes, compatibility forms and case folded, with or without //<markings> after it)
-_KINDS = {"cui": (BANNER, _BANNER_RE, re.compile(r"cui(?:\s*//.*)?")),
-          "fci": (FCI_BANNER, _FCI_RE, re.compile(r"fci(?:\s*//.*)?"))}
 _ART = {"cui": "a CUI", "fci": "an FCI"}
 RULE = "<CUI_|FCI_><title>_vX.Y[-DRAFT].<ext> in the CUI area, <title>_vX.Y[-DRAFT].<ext> in the non-CUI area"
 FORMATS = {"docx": "docx", "xlsx": "xlsx", "md": "md", "pdf": "pdf"}
@@ -197,6 +193,32 @@ def _fold(s):
     return unicodedata.normalize("NFKC", s).translate(_LOOKALIKE).casefold()
 
 
+_WMAP = str.maketrans({"l": "i", "1": "i"})
+
+
+def _wfold(s):
+    """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms,
+    format characters (zero-width, soft hyphen: Unicode Cf) dropped, cross-script lookalikes, case, and l / 1 read as
+    i; runs of white space become one space."""
+    s = "".join(c for c in unicodedata.normalize("NFKC", s) if unicodedata.category(c) != "Cf")
+    return " ".join(s.translate(_LOOKALIKE).casefold().translate(_WMAP).split())
+
+
+def _phrase(text):
+    return r"\s*".join(re.escape(_wfold(w)) for w in text.split())
+
+
+# what follows the word in a banner-shaped line: //markings, or a separator (- – — : | or a bracket) and more text
+_BANNER_TAIL = r"(?:\s*(?://|[-:|(\[‐-―]).*)?"
+# kind -> (the banner text, the exact pattern a required banner must match, the folded (_wfold) pattern a banner
+# that must NOT be there is found by: the word alone, with //markings or a separator after it, or spelled out)
+_KINDS = {"cui": (BANNER, _BANNER_RE,
+                  re.compile(rf"cui{_BANNER_TAIL}|{_phrase('Controlled Unclassified Information')}.*")),
+          "fci": (FCI_BANNER, _FCI_RE,
+                  re.compile(rf"fci{_BANNER_TAIL}|{_phrase('Federal Contract Information')}.*"))}
+_CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
+
+
 def _series_key(s):
     return unicodedata.normalize("NFC", str(s)).casefold()
 
@@ -256,7 +278,7 @@ def _has_banner(lines, kind="cui"):
 
 def _looks_like(line, kind):
     """The folded search for a banner that must NOT be there (see the module notes)."""
-    return bool(_KINDS[kind][2].fullmatch(_fold(_norm(line)).strip()))
+    return bool(_KINDS[kind][2].fullmatch(_wfold(line)))
 
 
 def _wrong(lines, mode):
@@ -285,12 +307,10 @@ def _wrong_problems(found, mode, where, problems):
             problems.append(f"{_ART[k]} banner is {where}, but this is a CUI_ document: it carries the CUI banner")
 
 
-_CUI_BLOCK_LABEL = LABELS[1][2].casefold() + ":"         # "cui category:"
-
-
 def _fci_block_problems(lines, where, problems):
-    """An FCI_ document carries no CUI designation block: a `CUI Category:` line (lookalikes folded) is a problem."""
-    if any(_fold(_norm(x)).startswith(_CUI_BLOCK_LABEL) for x in lines):
+    """An FCI_ document carries no CUI designation block: a `CUI Category:` line (_wfold, any spacing) is a
+    problem."""
+    if any(_CUI_BLOCK_LABEL.match(_wfold(x)) for x in lines):
         problems.append(f"a CUI designation block (CUI Category) is on {where}, but this is an FCI_ document: an FCI "
                         "document carries no CUI designation block")
 
@@ -616,7 +636,7 @@ class _Docx:
                     continue
                 root = self.part(part)
                 lines = _part_lines(root, self.styles)
-                wrong |= _wrong(lines, mode)
+                wrong |= _wrong(lines + _boxed_lines(root), mode)     # a wrong banner in a text box still shows
                 if want and not _has_banner(lines, want):
                     hint = ""
                     if _has_banner(_boxed_lines(root), want):
@@ -839,6 +859,25 @@ def _md_block_ok(lines, block):
     return got == list(block)
 
 
+_FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})")
+
+
+def _md_unfenced(lines):
+    """The lines outside fenced code blocks (``` or ~~~): every one is searched for a wrong banner (Task 12 fix round
+    1: insert must not be able to push a wrong banner inward, and a hand-written one inside must be seen)."""
+    out, fence = [], None
+    for x in lines:
+        m = _FENCE.match(x)
+        if fence is None:
+            if m:
+                fence = m.group(1)[0] * 3
+                continue
+            out.append(x)
+        elif m and m.group(1).startswith(fence) and not x.strip().strip(fence[0]):
+            fence = None
+    return out if fence is None else list(lines)      # a fence that never closes hides nothing
+
+
 class _Md:
     def __init__(self, data):
         try:
@@ -852,8 +891,7 @@ class _Md:
     def check(self, mode, block, problems):
         lines = self.lines
         last = max((i for i, x in enumerate(lines) if x.strip()), default=-1)
-        ends = ([lines[0]] if lines else []) + ([lines[last]] if last > 0 else [])
-        _wrong_problems(_wrong(ends, mode), mode, "the first or last line", problems)
+        _wrong_problems(_wrong(_md_unfenced(lines), mode), mode, "a line of the document", problems)
         if mode == "none":
             return
         word = _KINDS[mode][0]
@@ -1382,6 +1420,10 @@ def _ins_md(data, values, mode="cui"):
     bom = data.startswith(b"\xef\xbb\xbf")
     nl = "\r\n" if "\r\n" in m.text_ else "\n"
     lines = list(m.lines)
+    found = _wrong(_md_unfenced(lines), mode)
+    if found:                                                # never wrap the right banner around a wrong one
+        raise MarkingError("refused: the file carries " + " and ".join(f"{_ART[k]} banner" for k in sorted(found))
+                           + "; insert never removes a mark: fix it in the editor")
     block = values.block()[0] if mode == "cui" else []       # an FCI_ document takes no designation block
     blk = [x for b in block for x in (b, "")]
     changes = []

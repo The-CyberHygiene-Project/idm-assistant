@@ -17,6 +17,7 @@ Source7:        30-kanidm-cert.sh
 Source8:        31-renew-timer.sh
 Source9:        40-escrow-pending.sh
 Source10:       LICENSE
+Source11:       chp-server-cui-tailoring.xml
 Requires:       chp-base, chp-site >= 0.14.0-8, chp-identity-client >= 0.2.4-3, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
@@ -40,6 +41,7 @@ install -Dm0755 %{SOURCE7} %{buildroot}%{_prefix}/lib/chp/monitor.d/30-kanidm-ce
 install -Dm0755 %{SOURCE8} %{buildroot}%{_prefix}/lib/chp/monitor.d/31-renew-timer.sh
 install -Dm0755 %{SOURCE9} %{buildroot}%{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
 install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+install -Dm0644 %{SOURCE11} %{buildroot}%{_datadir}/chp/scap/chp-server-cui-tailoring.xml
 
 %post
 %systemd_post chp-server-firstboot.service cert-renew-kanidm.timer
@@ -59,12 +61,17 @@ install -Dm0644 %{SOURCE10} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %{_prefix}/lib/chp/monitor.d/30-kanidm-cert.sh
 %{_prefix}/lib/chp/monitor.d/31-renew-timer.sh
 %{_prefix}/lib/chp/monitor.d/40-escrow-pending.sh
+%dir %{_datadir}/chp/scap
+%{_datadir}/chp/scap/chp-server-cui-tailoring.xml
 
 %changelog
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-4.chp
 - First boot step `time` (Task 12, owner decision 2026-11-20), after bind: `chp-site time-sync --role server` (the
   server serves NTP to the site subnet only; firewalld 123/udp from SUBNET only, the owner-approved exception to
   "no new network port"). Requires chp-site >= 0.14.0-8 and chp-identity-client >= 0.2.4-3.
+- /usr/share/chp/scap/chp-server-cui-tailoring.xml (owner decision 2026-11-20): the server's CUI profile, tailored to
+  unselect exactly chronyd_client_only (the server serves NTP to the site LAN); for scans with --tailoring-file.
+  Workstations keep the stock profile.
 
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.2-3.chp
 - cert-renew-kanidm.sh takes the shared ACME lock /run/chp-acme.lock (flock, up to 300 s) around opening port 80,

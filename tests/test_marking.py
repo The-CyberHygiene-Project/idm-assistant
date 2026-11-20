@@ -742,3 +742,90 @@ def test_fci_insert_refuses_a_cui_marked_draft(tmp_path):
     with pytest.raises(M.MarkingError, match="a CUI banner"):
         M.insert(f, NO_VALUES, dry_run=False)
     assert f.read_bytes() == before
+
+
+# ---------- fix round 1 (Task 12 review) ----------
+
+def test_md_insert_refuses_a_draft_with_the_other_banner(tmp_path):
+    """IMPORTANT 1: insert must not push a wrong banner inward behind the right one (a false pass)."""
+    f = tmp_path / "FCI_Probe_v0.1-DRAFT.md"
+    f.write_text("CUI\n\nBody\n\nCUI\n")
+    before = f.read_bytes()
+    with pytest.raises(M.MarkingError, match="a CUI banner"):
+        M.insert(f, NO_VALUES, dry_run=False)
+    assert f.read_bytes() == before
+    g = tmp_path / "CUI_Probe_v0.1-DRAFT.md"
+    g.write_text("FCI\n\nBody\n\nFCI\n")
+    before = g.read_bytes()
+    with pytest.raises(M.MarkingError, match="an FCI banner"):
+        M.insert(g, VALUES, dry_run=False)
+    assert g.read_bytes() == before
+
+
+def test_md_wrong_banner_anywhere_outside_code_fences(tmp_path):
+    """A hand-written FCI_ md with a CUI banner line inside, and the reverse, fail; a fenced example does not."""
+    f = tmp_path / "FCI_Hand_v1.0.md"
+    f.write_text("FCI\n\nCUI\n\nBody\n\nFCI\n")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), r.problems
+    f.write_text("FCI\n\nBody\n\nCUI//SP-PROPIN\n\nmore\n\nFCI\n")
+    assert not M.check(f, True, NO_VALUES).ok
+    g = tmp_path / "CUI_Hand_v1.0.md"
+    block = "".join(f"{x}\n\n" for x in VALUES.block()[0])
+    g.write_text("CUI\n\n" + block + "Body\n\nFCI\n\nCUI\n")
+    r = M.check(g, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), r.problems
+    g.write_text("CUI\n\n" + block + "Example:\n\n```\nFCI\n```\n\n~~~\nFCI\n~~~\n\nCUI\n")
+    r = M.check(g, True, VALUES)
+    assert r.ok, r.problems
+
+
+@pytest.mark.parametrize("word", ["CU​I", "‍CUI", "CUl", "CU1", "cuΙ", "C­UI"])
+def test_wrong_banner_fold_catches_more_disguises(tmp_path, word):
+    """m1: the wrong-banner search drops format characters (zero-width, soft hyphen) and folds l and 1 to i."""
+    mk = _make()
+    f = tmp_path / "FCI_Disguise_v1.0.docx"
+    f.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FCI", True) + mk.p(word, True)), mk.FCI_FTR],
+                          mk.REFS))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (word, r.problems)
+    # the required banner stays exact: a disguised FCI is not an FCI banner
+    g = tmp_path / "FCI_Disguise2_v1.0.docx"
+    g.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FC​I", True)), mk.FCI_FTR], mk.REFS))
+    assert not M.check(g, True, NO_VALUES).ok
+
+
+@pytest.mark.parametrize("line", ["CUI Category: PROPIN", "CUI  category :PROPIN", "cui​category: X",
+                                  "CUl Category: X"])
+def test_fci_block_label_variants(tmp_path, line):
+    f = tmp_path / "FCI_Block_v1.0.md"
+    f.write_text(f"FCI\n\n{line}\n\nBody\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("designation block" in p for p in r.problems), (line, r.problems)
+
+
+def test_wrong_banner_in_a_docx_text_box_and_spelled_out(tmp_path):
+    """m2: a wrong banner drawn in a header text box counts as present; "FCI - Federal Contract Information"-style
+    lines count as an FCI banner on a CUI_ document (and CUI-style lines on an FCI_ one)."""
+    mk = _make()
+    f = tmp_path / "CUI_Box_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.textbox("FCI")),
+                                         mk.BANNER_FTR], mk.REFS))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), r.problems
+    for text in ("FCI - Federal Contract Information", "FCI – Federal Contract Information",
+                 "FCI: Federal Contract Information", "Federal Contract Information"):
+        g = tmp_path / "CUI_Spelled_v1.0.docx"
+        g.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.p(text, True)),
+                                             mk.BANNER_FTR], mk.REFS))
+        r = M.check(g, True, VALUES)
+        assert not r.ok and any("an FCI banner" in p for p in r.problems), (text, r.problems)
+    for text in ("CUI - Controlled Unclassified Information", "Controlled Unclassified Information"):
+        h = tmp_path / "FCI_Spelled_v1.0.docx"
+        h.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FCI", True) + mk.p(text, True)), mk.FCI_FTR],
+                              mk.REFS))
+        r = M.check(h, True, NO_VALUES)
+        assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+    # the existing marks still pass
+    assert M.check(FX / "CUI_Access-Policy_v1.0.docx", True, VALUES).ok
+    assert M.check(FX / "FCI_Notice_v1.0.docx", True, NO_VALUES).ok

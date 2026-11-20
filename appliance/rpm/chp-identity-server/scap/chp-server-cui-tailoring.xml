@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CyberHygiene Project Lab Installer - based on Rocky Linux 9. Not an official Rocky Linux product.
+     Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
+     The CHP SERVER's CUI profile (chp-identity-server installs it at /usr/share/chp/scap/chp-server-cui-tailoring.xml).
+     Workstations keep the stock profile xccdf_org.ssgproject.content_profile_cui. Scan the server with oscap xccdf
+     eval, option tailoring-file = this file, option profile = xccdf_org.cyberhygiene_profile_cui_chp_server, and the
+     datastream /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml (the command is in the guide). -->
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2"
+                     id="xccdf_org.cyberhygiene_tailoring_chp_server">
+  <xccdf-1.2:benchmark href="/usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml" version="0.1.82"/>
+  <xccdf-1.2:version time="2026-11-20T00:00:00">1</xccdf-1.2:version>
+  <xccdf-1.2:Profile id="xccdf_org.cyberhygiene_profile_cui_chp_server" extends="xccdf_org.ssgproject.content_profile_cui">
+    <xccdf-1.2:title xml:lang="en-US" override="true">CUI, tailored for the CHP server</xccdf-1.2:title>
+    <xccdf-1.2:description xml:lang="en-US" override="true">
+      Extends xccdf_org.ssgproject.content_profile_cui with one documented deviation, on the CHP server only:
+      the rule chronyd_client_only is unselected.
+
+      Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow &lt;site subnet&gt;,
+      bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and never from
+      outside sources.
+
+      The server's chrony therefore does not keep the profile's client-only setting (port 0). Workstations keep the
+      stock profile, where the rule stays selected and passes.
+    </xccdf-1.2:description>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_chronyd_client_only" selected="false">
+      <xccdf-1.2:remark xml:lang="en-US">Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow &lt;site subnet&gt;, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and never from outside sources.</xccdf-1.2:remark>
+    </xccdf-1.2:select>
+  </xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>

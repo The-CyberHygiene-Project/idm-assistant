@@ -134,12 +134,27 @@ Workstations take their time from the CHP server only, never from an outside sou
   enrolment's first step (`chp-site time-sync --role client`) keeps it so. Monitor check 20 alerts when a workstation
   has any other time source, or none.
 - **A new port, approved by the owner.** The server opens 123/udp (NTP) to `SUBNET` only, as one firewalld rule:
-  `rule family="ipv4" source address="<SUBNET>" port port="123" protocol="udp" accept`. It is the one exception to
-  0.7.0's "no new network port" rule. The server's chrony leaves the CUI profile's client-only setting (`port 0`)
-  off, so an OpenSCAP scan of the server reports `chronyd_client_only` as failed. That is expected; workstations
-  keep it.
-- The server's first boot sets this up (step `time`). To set it up again, run `chp-site time-sync --role server` on
-  the server, then `chp-site time-sync --role client` on each workstation, as root.
+  `rule family="ipv4" source address="<SUBNET>" port port="123" protocol="udp" accept`. chrony on the server also
+  answers only on the server's own address (`bindaddress`). It is the one exception to 0.7.0's "no new network port"
+  rule.
+- **The server's OpenSCAP profile is tailored.** The server's chrony leaves the CUI profile's client-only setting
+  (`port 0`) off, so the server is scanned with a tailored profile that unselects that one rule
+  (`chronyd_client_only`). The tailoring file is `/usr/share/chp/scap/chp-server-cui-tailoring.xml` (the server role
+  only), and its reason reads: "Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony
+  allow <site subnet>, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and
+  never from outside sources." Workstations keep the stock profile, where the rule stays selected. Scan the server
+  with:
+
+      oscap xccdf eval --tailoring-file /usr/share/chp/scap/chp-server-cui-tailoring.xml \
+        --profile xccdf_org.cyberhygiene_profile_cui_chp_server /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
+
+  A scan of the server with the stock profile still reports `chronyd_client_only` as failed; that is expected.
+- **New installs:** the server's first boot sets this up (step `time`); each workstation's enrolment then points it
+  at the server and waits up to about a minute for it to synchronise (a warning only if it does not).
+- **An installed site, or to set it up again:** run `chp-site time-sync --role server` on the server **first**, then
+  `chp-site time-sync --role client` on each workstation, as root. Until a workstation has been done, the updated
+  workstation egress table already refuses its old time servers (`NTP_UPSTREAM`), so it has no time source and check
+  20 alerts on it.
 
 ### From 0.7.0 on: controlled documents
 

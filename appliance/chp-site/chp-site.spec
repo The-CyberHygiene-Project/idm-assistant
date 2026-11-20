@@ -56,6 +56,15 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   firewalld 123/udp from <SUBNET> only: the owner-approved exception to "no new network port"). A workstation's
   chrony uses the server only. The client kickstart's timesource is the server; the workstation egress addresses
   give chronyd the server only (the any-address path for host names in NTP_UPSTREAM is gone).
+- marking.insert now refuses, for CUI_ as well as FCI_ files, a file where nothing can be added but the check still
+  fails (it used to answer "nothing to add").
+- Review fix round 1: the wrong-banner search covers every Markdown line outside code fences (insert refuses a
+  Markdown draft that carries the other banner, instead of wrapping the right one around it), docx header/footer
+  text boxes, spelled-out forms ("FCI - Federal Contract Information", "Controlled Unclassified Information"), and
+  folds format characters (zero-width, soft hyphen) and l/1 as i; the FCI block check matches `cui category:` with
+  any spacing. time-sync: the server's chrony serves on SERVER_IP only (bindaddress); a workstation keeps maxpoll 16
+  (taken from a pool line too, or added) and waits up to about a minute for sync (warning only). doc check labels
+  the marks from the checker's reading of the name.
 
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-7.chp
 - ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):

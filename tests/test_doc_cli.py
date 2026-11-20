@@ -213,6 +213,16 @@ def test_new_fci_from_the_fci_template(tmp_path, monkeypatch, capsys):
     assert "FCI" in out and "PROBLEM" not in out, out
 
 
+def test_check_label_follows_the_checkers_reading_of_the_name(tmp_path, monkeypatch, capsys):
+    """m9: a name that does not parse is checked as CUI (the strictest reading), and the label says so."""
+    env = setup(tmp_path)
+    work(env).mkdir(parents=True, mode=0o700)
+    f = work(env) / "FCI_Two words_v1.0.md"
+    f.write_text("FCI\n\nx\n\nFCI\n")
+    rc, out = run(env, monkeypatch, capsys, "check", str(f))
+    assert "(CUI marks)" in out and "(FCI banner)" not in out, out
+
+
 def test_new_fci_refusals(tmp_path, monkeypatch, capsys):
     env = setup(tmp_path)
     rc, out = run(env, monkeypatch, capsys, "new", "Plan", "--fci", "--type", "xlsx")   # template not installed
