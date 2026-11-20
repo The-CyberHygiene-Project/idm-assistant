@@ -393,6 +393,19 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
      to an `FCI_` draft.
    - A published `FCI_` document carries the CUI tag, because tagging is by folder and `CUI/Compliance` is in the
      CUI folder. The nightly tag check accepts that for an `FCI_` file in CUI and Archive only.
+   - **Lines that look like a banner are read as one.** The check refuses the other kind's banner anywhere in a
+     Markdown file, through any markup (headings, lists, tables, links, HTML, entities). So, where they are the wrong
+     kind, write these differently:
+     - a heading or line that is just the word or the full name, such as `# CUI` or
+       `## Controlled Unclassified Information`;
+     - a table cell that is just `CUI` or `FCI`;
+     - a short line that starts with the word, a dash or colon, and at most three words, such as
+       `CUI: see section 3.` or `CUI - what it is`;
+     - the word followed by the full name, such as `CUI (Controlled Unclassified Information)`.
+
+     In a non-CUI Markdown file the first and last lines are checked strictly: never start or end it with a line that
+     begins with the word and a dash, colon or bracket, or with the full name. Sentences in the body such as
+     "Controlled Unclassified Information (CUI) is defined in 32 CFR 2002." pass.
 
 #### ONLYOFFICE on the workstation
 

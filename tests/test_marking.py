@@ -873,13 +873,15 @@ PROSE = [
                                                    "top and bottom.\n\nCUI\n"),
     ("Policy_v1.0.md", False, "# CUI handling policy\n\nControlled Unclassified Information (CUI) is information the "
                               "government\ncreates or possesses.\n"),
-    ("Policy_v1.0.md", False, "Staff must mark documents that hold\nCUI (Controlled Unclassified Information) with the "
-                              "banner.\n"),
-    ("Policy_v1.0.md", False, "Staff must mark documents that hold\nCUI - see the CUI handling procedure.\n"),
-    ("Policy_v1.0.md", False, "Directions: turn into the\nCul-de-sac at the end of the road.\n"),
-    ("Policy_v1.0.md", False, "Our tooling uses the\nFCl: field in the form.\n"),
+    # round 3 (controller ruling (c)): the first and last lines of a non-CUI Markdown file are banner positions, so
+    # these prose lines sit in the body here; "CUI (Controlled Unclassified Information) ..." is refused, see below
+    ("Policy_v1.0.md", False, "Notes\n\nStaff must mark documents that hold\nCUI - see the CUI handling procedure.\n\n"
+                              "End.\n"),
+    ("Policy_v1.0.md", False, "Notes\n\nDirections: turn into the\nCul-de-sac at the end of the road.\n\nEnd.\n"),
+    ("Policy_v1.0.md", False, "Notes\n\nOur tooling uses the\nFCl: field in the form.\n\nEnd.\n"),
     ("Policy_v1.0.md", False, "See the CUI policy. The word CUI appears mid-line, fine.\n"),
-    ("Policy_v1.0.md", False, "# Federal Contract Information handling\n\nThe rules for FCI at this site.\n"),
+    ("Policy_v1.0.md", False, "Notes\n\n# Federal Contract Information handling\n\nThe rules for FCI at this "
+                              "site.\n"),
 ]
 
 
@@ -900,3 +902,127 @@ def test_md_short_banner_forms_still_seen(tmp_path, line):
     g.write_text("CUI\n\n" + BLOCK_MD + f"{line}\n\nBody\n\nCUI\n")
     r = M.check(g, True, VALUES)
     assert not r.ok and any("an FCI banner" in p for p in r.problems), (line, r.problems)
+
+
+# ---------- fix round 3 (controller design: normalise, wide ends, phrase tails, l/1 restored) ----------
+
+# every probe of the reviewer's q.py and r.py (a wrong CUI banner inside an FCI_ Markdown file)
+MD_PROBES = ["__CUI__", "[CUI](x)", "~~CUI~~", "<span>C</span>UI", "&#67;UI", "&#x43;UI", "CUI\n===", "CUI\n---",
+             "| CUI |", "|CUI|", "C U I", "CUI // SP-PROPIN", "***CUI***", "1) CUI", "* * CUI", "[**CUI**]", "CUI<br>",
+             "CUI  ", "\\*CUI\\*", "CUI&nbsp;", "&#x200b;CUI", "Controlled Unclassified Information",
+             "CONTROLLED UNCLASSIFIED INFORMATION //SP-PROPIN",
+             "CUI – Controlled Unclassified Information per DoDI 5200.48", "CUI//SP-PROPIN//NOFORN", "(CUI)", "CUI.",
+             "**CUI:** SP-PROPIN", "<!-- --> CUI", "CUI <!-- x -->", "![CUI](x.png)", "[CUI]: http://x", "<CUI>",
+             "C&#85;I", "- [ ] CUI", "- [x] CUI", ":CUI:",
+             "| CUI |\n|---|\n| body |", "CUI |\n--- |", "[CUI][r]\n\n[r]: http://x", "<a href=x>CUI</a>", "&#x46;CI",
+             "\\CUI", "CUI\\*", "**C**UI", "C*U*I", "&amp;#67;UI"]
+
+
+@pytest.mark.parametrize("inner", MD_PROBES)
+def test_round3_md_probes_fail(tmp_path, inner):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{inner}\n\nBody\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    want = "an FCI banner" if inner == "&#x46;CI" else "a CUI banner"     # &#x46;CI is FCI: not wrong in an FCI file
+    if inner == "&#x46;CI":
+        g = tmp_path / "CUI_H_v1.0.md"
+        g.write_text(f"CUI\n\n{BLOCK_MD}{inner}\n\nBody\n\nCUI\n", encoding="utf-8")
+        r = M.check(g, True, VALUES)
+    assert not r.ok and any(want in p for p in r.problems), (inner, r.problems)
+
+
+@pytest.mark.parametrize("inner", ["[FCI](x)", "&#70;CI", "| FCI |\n|---|", "\\*FCI\\*", "(FCI)", "FCI.", "- [ ] FCI",
+                                   "FCI – Federal Contract Information per FAR 52.204-21"])
+def test_round3_md_probes_fail_the_other_way(tmp_path, inner):
+    g = tmp_path / "CUI_H_v1.0.md"
+    g.write_text(f"CUI\n\n{BLOCK_MD}{inner}\n\nBody\n\nCUI\n", encoding="utf-8")
+    r = M.check(g, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (inner, r.problems)
+
+
+LONG = ["CUI – Controlled Unclassified Information per DoDI 5200.48",
+        "CUI - Controlled Unclassified Information - handle per policy",
+        "FCI – Federal Contract Information per FAR 52.204-21",
+        "CUI: this document contains controlled technical information",
+        "Controlled Unclassified Information per DoDI 5200.48 and 32 CFR 2002"]
+
+
+@pytest.mark.parametrize("banner", LONG)
+@pytest.mark.parametrize("where", ["first", "last", "both"])
+def test_round3_non_cui_first_and_last_lines_are_banner_positions(tmp_path, banner, where):
+    """Ruling (c): in the non-CUI area the first and last non-blank lines use the wide forms (fail closed)."""
+    text = {"first": f"{banner}\n\nBody text.\n\nEnd\n", "last": f"Notes\n\nBody text.\n\n{banner}\n",
+            "both": f"{banner}\n\nBody text.\n\n{banner}\n"}[where]
+    f = tmp_path / "Policy_v1.0.md"
+    f.write_text(text, encoding="utf-8")
+    r = M.check(f, False, NO_VALUES)
+    assert not r.ok and any("non-CUI area" in p for p in r.problems), (banner, where, r.problems)
+
+
+@pytest.mark.parametrize("name,banner,values", [
+    ("FCI_D_v0.1-DRAFT.md", "CUI – Controlled Unclassified Information per DoDI 5200.48", NO_VALUES),
+    ("CUI_D_v0.1-DRAFT.md", "FCI – Federal Contract Information per FAR 52.204-21", VALUES),
+    ("FCI_D_v0.1-DRAFT.md", "[CUI](x)", NO_VALUES), ("FCI_D_v0.1-DRAFT.md", "&#67;UI", NO_VALUES),
+    ("FCI_D_v0.1-DRAFT.md", "| CUI |\n|---|", NO_VALUES),
+    ("FCI_D_v0.1-DRAFT.md", "CUI: this document contains controlled technical information", NO_VALUES)])
+def test_round3_insert_refuses_long_and_disguised_wrong_banners(tmp_path, name, banner, values):
+    """Insert never wraps a wrong banner (CUI under-marked as FCI is the worst direction)."""
+    f = tmp_path / name
+    f.write_text(f"{banner}\n\nBody\n\n{banner}\n", encoding="utf-8")
+    before = f.read_bytes()
+    with pytest.raises(M.MarkingError, match="an FCI banner" if name.startswith("CUI_") else "a CUI banner"):
+        M.insert(f, values, dry_run=False)
+    assert f.read_bytes() == before
+
+
+@pytest.mark.parametrize("text", ["CUl - SP-PROPIN", "CU1 – Controlled Unclassified Information", "CUl: PROPIN",
+                                  "CUl (SP-PROPIN)", "ControIIed UncIassified Information",
+                                  "Contro11ed Unc1assified Information", "CUl//SP-PROPIN"])
+def test_round3_l1_fold_in_docx_and_xlsx_headers(tmp_path, text):
+    """Ruling (d): the wide forms read l and 1 as i again, separator and phrase forms included."""
+    mk = _make()
+    f = tmp_path / "FCI_Hdr_v1.0.docx"
+    f.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FCI", True) + mk.p(text, True)), mk.FCI_FTR],
+                          mk.REFS))
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+    g = tmp_path / "FCI_Hdr_v1.0.xlsx"
+    hf = dict(mk.FCI_HF, oddHeader="&CFCI\n" + text.replace("&", "&&"))
+    g.write_bytes(mk.xlsx([("Items", mk.sheet([["A"]], hf))]))
+    r = M.check(g, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+
+
+@pytest.mark.parametrize("text", ["FCl - Federal Contract Information", "FederaI Contract Information",
+                                  "Federa1 Contract Information (FAR 52.204-21)"])
+def test_round3_l1_fold_fci_forms_in_docx_headers(tmp_path, text):
+    mk = _make()
+    f = tmp_path / "CUI_Hdr_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", mk.p("CUI", True) + mk.p(text, True)),
+                                         mk.BANNER_FTR], mk.REFS))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (text, r.problems)
+
+
+# prose forms that are now REFUSED in a Markdown body (to tell authors; recorded in the report and the guide)
+REFUSED_PROSE = ["## Controlled Unclassified Information", "CUI: see section 3.", "CUI - what it is", "# CUI", "- CUI",
+                 "| CUI | yes |", "CUI | FCI | none of them apply here",
+                 "CUI (Controlled Unclassified Information) with the banner."]
+
+
+@pytest.mark.parametrize("line", REFUSED_PROSE)
+def test_round3_banner_shaped_prose_is_refused_in_a_body(tmp_path, line):
+    f = tmp_path / "Policy_v1.0.md"
+    f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
+    r = M.check(f, False, NO_VALUES)
+    assert not r.ok, line
+
+
+def test_round3_prose_that_still_passes(tmp_path):
+    for line in ["**CUI** documents go in the CUI area.", "Controlled Unclassified Information (CUI) is defined in 32 "
+                 "CFR 2002.", "Cuisine - a note", "Fcilities: map", "Cul-de-sac at the end of the road.",
+                 "FCl: field in the form."]:
+        f = tmp_path / "Policy_v1.0.md"
+        f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (line, r.problems)

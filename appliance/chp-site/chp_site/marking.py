@@ -57,6 +57,7 @@ Report.warnings; it never changes `ok`. Citations inside PDFs are not checked (t
 Defensive: documents come from users. Size caps on the file, the members and the total uncompressed size; a part
 named twice (any case) is refused; XML with a DTD is refused (no entity expansion); anything malformed is a plain
 problem, never a traceback."""
+import html
 import os
 import posixpath
 import re
@@ -196,43 +197,77 @@ def _fold(s):
 _WMAP = str.maketrans({"l": "i", "1": "i"})
 
 
+_CAPS_L1 = re.compile(r"(?<![^\W\d_])(CU|FC)[l1](?![^\W\d_])")
+
+
 def _wfold(s, li=True):
-    """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms,
-    format characters (zero-width, soft hyphen: Unicode Cf) dropped, cross-script lookalikes, case, and (li) l / 1
-    read as i; runs of white space become one space."""
+    """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms, NBSP
+    and format characters (zero-width, soft hyphen: Unicode Cf) dropped, cross-script lookalikes, case. li=True: l / 1
+    read as i everywhere (the wide forms); li=False: only in a capitals context (CUl, CU1, FCl, FC1: the Markdown body,
+    so "Cul-de-sac" stays a word). Runs of white space become one space."""
     s = "".join(c for c in unicodedata.normalize("NFKC", s) if unicodedata.category(c) != "Cf")
-    s = s.translate(_LOOKALIKE).casefold()
+    s = s.replace("\u00a0", " ").translate(_LOOKALIKE)
+    if not li:
+        s = _CAPS_L1.sub(lambda m: m.group(1) + "I", s)
+    s = s.casefold()
     return " ".join((s.translate(_WMAP) if li else s).split())
 
 
 def _phrase(text):
-    return r"\s*".join(re.escape(_wfold(w, li=False)) for w in text.split())
+    """The spelled-out phrase, casefolded, with l, i and 1 interchangeable (either fold)."""
+    return r"\s*".join("".join("[li1]" if c in "li" else re.escape(c) for c in w.casefold()) for w in text.split())
 
 
-_SEP = r"(?://|[-:|(\[‐-―])"          # what may follow the word in a banner line: //, - – — : | ( [
-SHORT_TAIL = 4                                  # Markdown: a banner's tail after a separator has at most 4 words
+_SEP = r"(?://|[-:|(\[\u2010-\u2015])"          # what may follow the word in a banner line: //, - – — : | ( [
+SHORT_TAIL = 3                                  # Markdown body: a banner's tail after a separator has at most 3 words
 # kind -> (the banner text, the exact pattern a required banner must match, (the word, the spelled-out phrase))
 _KINDS = {"cui": (BANNER, _BANNER_RE, ("cui", _phrase("Controlled Unclassified Information"))),
           "fci": (FCI_BANNER, _FCI_RE, ("fci", _phrase("Federal Contract Information")))}
 _CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
-_MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>\s?|[-*+]\s+|\d{1,9}[.)]\s+)")
+_MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>\s?|[-*+]\s+|\d{1,9}[.)]\s+|\[[ xX]\]\s*)")
 _MD_TAG = re.compile(r"<[^<>]{0,200}>")
+_MD_TAG_TEXT = re.compile(r"<\s*/?\s*([^<>]{0,200}?)\s*/?\s*>")
+_MD_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+_MD_STRIP = " \t()[]{}<>\"'.,;:!?\\"
 
 
-def _md_plain(line):
-    """A Markdown line without its block and inline markup (Task 12 fix round 2): heading #s (and closing #s), quote
-    >s, list markers, HTML tags, the * _ ` ~ wrappers and a trailing hard-break backslash. For the wrong-banner and
-    block-label searches only."""
-    s = line.strip()
+def _md_plain(cell):
+    """A Markdown line (or table cell) without its block and inline markup: heading #s (and closing #s), quote >s,
+    list and task-list markers, the * _ ` ~ wrappers, and surrounding brackets, parentheses and punctuation."""
+    s = cell.strip()
     while True:
         m = _MD_LEAD.match(s)
         if not m or not m.group(0):
             break
         s = s[m.end():].lstrip()
-    s = _MD_TAG.sub(" ", s)
     s = re.sub(r"[*_`~]", "", s)
-    s = re.sub(r"\s+#+\s*$", "", s).rstrip().rstrip("\\").strip()
-    return s
+    s = re.sub(r"\s+#+\s*$", "", s)
+    return s.strip(_MD_STRIP)
+
+
+def _md_cells(line):
+    """Every reading of one Markdown line the wrong-banner search judges (Task 12 fix round 3, controller design):
+    HTML entities decoded (repeatedly, bounded), NBSP and comments removed, HTML tags removed (and, as a second reading,
+    replaced by their text, so <CUI> counts), link, image and reference syntax reduced to the link text, backslash
+    escapes removed, a table row split into its cells, then each cell without its markup (_md_plain)."""
+    s = line
+    for _ in range(5):
+        u = html.unescape(s)
+        if u == s:
+            break
+        s = u
+    s = s.replace("\u00a0", " ")
+    s = re.sub(r"<!--.*?-->", " ", s).replace("<!--", " ").replace("-->", " ")
+    out = []
+    for v in (_MD_TAG.sub(" ", s), _MD_TAG_TEXT.sub(r" \1 ", s)):
+        v = re.sub(r"^(\s*(?:[-*+]|\d{1,9}[.)])\s+)\[[ xX]\]\s*", r"\1", v)  # a task-list box
+        v = re.sub(r"^\s*\[([^\]]+)\]:\s*\S.*$", r"\1", v)                  # a reference definition: its label
+        v = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", v)                    # [text](url), ![alt](url)
+        v = re.sub(r"!?\[([^\]]*)\]\[[^\]]*\]", r"\1", v)                   # [text][ref]
+        v = re.sub(r"(?<!\])\[([^\]]*)\](?![(\[:])", r"\1", v)              # [text]
+        v = _MD_ESCAPE.sub(r"\1", v)
+        out += [_md_plain(c) for c in (v.split("|") if "|" in v else [v])]
+    return [c for c in out if c]
 
 
 def _series_key(s):
@@ -292,32 +327,49 @@ def _has_banner(lines, kind="cui"):
     return any(_is_banner(x, kind) for x in lines)
 
 
-def _looks_like(line, kind, short=False):
+def _looks_like(line, kind, wide=True):
     """The folded search for a banner that must NOT be there (see the module notes). A banner line is:
-      - the word alone (also l/1 read as i, and spaced out: "C U I"), or the word with //markings;
-      - the word or the spelled-out phrase followed by a separator (- – — : | ( [) and a tail; with `short` (Markdown,
-        where lines are prose) the tail has at most SHORT_TAIL words, so a sentence about CUI is not a banner;
-      - the spelled-out phrase alone (without `short`: also followed by anything, as in a header line).
-    The separator and phrase forms use the fold without l/1 -> i, so "Cul-de-sac" or "FCl: field" are words."""
+      - the word alone (also spaced out: "C U I"), or the word with //markings;
+      - the word or the spelled-out phrase followed by a separator (- – — : | ( [) and a tail;
+      - the spelled-out phrase alone, or (wide) followed by anything.
+    wide (docx/xlsx/pdf banner positions, the first and last Markdown lines): any tail counts, and l/1 read as i
+    everywhere. Not wide (the Markdown body, where lines are prose): a separator tail counts only when it starts with
+    the spelled-out phrase, holds //, or has at most SHORT_TAIL words; l/1 read as i only in CUl/FCl capitals."""
     word, phrase = _KINDS[kind][2]
-    a = _wfold(line)
-    if a == word or a.replace(" ", "") == word or re.fullmatch(rf"{word}\s*//.*", a):
+    s = _wfold(line, li=wide)
+    if s == word or s.replace(" ", "") == word:
         return True
-    b = _wfold(line, li=False)
-    m = re.fullmatch(rf"(?:{word}|{phrase})\s*{_SEP}(.*)", b)
-    if m:
-        return not short or len(re.findall(r"[^\W_]+", m.group(1))) <= SHORT_TAIL
-    return bool(re.fullmatch(phrase if short else rf"{phrase}.*", b))
+    m = re.fullmatch(rf"({word}|{phrase})\s*(.*)", s)
+    if not m:
+        return False
+    head, rest = m.group(1), m.group(2)
+    if not rest or rest.startswith("//"):
+        return True
+    if head != word and wide:
+        return True                                        # the phrase followed by anything, in a banner position
+    sep = re.match(rf"{_SEP}\s*(.*)", rest)
+    if not sep:
+        return False
+    tail = sep.group(1)
+    if wide or "//" in tail or re.match(phrase, tail):
+        return True
+    return len(re.findall(r"[^\W_]+", tail)) <= SHORT_TAIL
 
 
-def _wrong(lines, mode, short=False):
+def _wrong(lines, mode, wide=True):
     """The banner kinds among `lines` that do not belong to a document of this mode ('cui', 'fci' or 'none')."""
-    return {k for k in _KINDS if k != mode and any(_looks_like(x, k, short) for x in lines)}
+    return {k for k in _KINDS if k != mode and any(_looks_like(x, k, wide) for x in lines)}
 
 
 def _md_wrong(lines, mode):
-    """Markdown: every line outside code fences, without its markup, judged with the short-tail rule."""
-    return _wrong([_md_plain(x) for x in _md_unfenced(lines)], mode, short=True)
+    """Markdown: every line outside code fences, in every reading of _md_cells. The first and the last non-blank
+    lines are banner positions (the wide forms, fail closed); the body is judged as prose."""
+    idx = [i for i, x in enumerate(lines) if x.strip()]
+    ends = {idx[0], idx[-1]} if idx else set()
+    found = set()
+    for i, x in _md_unfenced_idx(lines):
+        found |= _wrong(_md_cells(x), mode, wide=i in ends)
+    return found
 
 
 def _mode(cui, parts):
@@ -896,20 +948,25 @@ def _md_block_ok(lines, block):
 _FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})")
 
 
-def _md_unfenced(lines):
-    """The lines outside fenced code blocks (``` or ~~~): every one is searched for a wrong banner (Task 12 fix round
-    1: insert must not be able to push a wrong banner inward, and a hand-written one inside must be seen)."""
+def _md_unfenced_idx(lines):
+    """(index, line) for the lines outside fenced code blocks (``` or ~~~): every one is searched for a wrong banner
+    (Task 12 fix round 1: insert must not be able to push a wrong banner inward, and a hand-written one inside must be
+    seen)."""
     out, fence = [], None
-    for x in lines:
+    for i, x in enumerate(lines):
         m = _FENCE.match(x)
         if fence is None:
             if m:
                 fence = m.group(1)[0] * 3
                 continue
-            out.append(x)
+            out.append((i, x))
         elif m and m.group(1).startswith(fence) and not x.strip().strip(fence[0]):
             fence = None
-    return out if fence is None else list(lines)      # a fence that never closes hides nothing
+    return out if fence is None else list(enumerate(lines))     # a fence that never closes hides nothing
+
+
+def _md_unfenced(lines):
+    return [x for _, x in _md_unfenced_idx(lines)]
 
 
 class _Md:
@@ -937,7 +994,7 @@ class _Md:
             problems.append(f"the last line must be the {word} banner ({word})")
         if mode == "fci":
             head = [x for x in lines if x.strip()][:BLOCK_ROWS]
-            _fci_block_problems([_md_plain(x) for x in head], "page one (the first lines)", problems)
+            _fci_block_problems([c for x in head for c in _md_cells(x)], "page one (the first lines)", problems)
             return
         if first_ok and not _md_block_ok(lines, block[0]):
             problems.append("the designation block must follow the first banner line, one line each: "

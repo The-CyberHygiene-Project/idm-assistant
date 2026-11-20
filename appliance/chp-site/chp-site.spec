@@ -70,6 +70,13 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   (the word alone or spaced out, the word with //markings, the word or the spelled-out phrase with a separator and
   at most 4 words after it), so prose about CUI and FCI is no false alarm; the separator and phrase forms no longer
   read l/1 as i. The server's chrony also binds IPv6 to loopback only (bindaddress ::1).
+- Review fix round 3 (controller design): each Markdown line is normalised before banner matching (HTML entities
+  decoded, NBSP/Cf/comments/tags removed, link, image and reference syntax reduced to the text, backslash escapes
+  removed, table rows split into cells, markers and surrounding brackets/punctuation stripped). A tail that starts
+  with the spelled-out phrase or holds // counts at any length, in every format. The first and last non-blank
+  Markdown lines use the wide forms (fail closed), and insert refuses on them. l/1 read as i again in the wide forms
+  (all headers/footers, Markdown first/last); in the Markdown body only in CUl/FCl capitals; the phrase accepts l, i
+  and 1 alike. The Markdown body's short tail is at most 3 words.
 
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-7.chp
 - ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):
