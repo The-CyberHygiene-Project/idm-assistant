@@ -40,6 +40,8 @@ Source30:       chp-docs-ledger.service
 Source31:       chp-docs-ledger-alert.service
 Requires:       nextcloud-chp >= 35.0.3-5, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
 Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-4
+# poppler-utils: pdftotext/pdfinfo for the marking check of reader PDFs at publish (chp_site.marking, Plan 3 Task 5)
+Requires:       poppler-utils
 Requires(post): policycoreutils-python-utils
 BuildRequires:  systemd-rpm-macros
 

@@ -1,0 +1,63 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 330 >>
+stream
+BT /F1 11 Tf 72 760 Td (CUI) Tj ET
+BT /F1 11 Tf 72 742 Td (Controlled by: Example Office \(made-up\)) Tj ET
+BT /F1 11 Tf 72 724 Td (CUI Category: PROPIN \(made-up\)) Tj ET
+BT /F1 11 Tf 72 706 Td (POC: A. Example, 555-0100 \(made-up\)) Tj ET
+BT /F1 11 Tf 72 688 Td (Report text \(made-up\).) Tj ET
+BT /F1 11 Tf 72 40 Td (CUI) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 114 >>
+stream
+BT /F1 11 Tf 72 760 Td (CUI) Tj ET
+BT /F1 11 Tf 72 742 Td (Page two text.) Tj ET
+BT /F1 11 Tf 72 40 Td (CUI) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 115 >>
+stream
+BT /F1 11 Tf 72 760 Td (CUI) Tj ET
+BT /F1 11 Tf 72 742 Td (Last page text.) Tj ET
+BT /F1 11 Tf 72 40 Td (CUI) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000578 00000 n 
+0000000704 00000 n 
+0000000869 00000 n 
+0000000995 00000 n 
+0000001161 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1287
+%%EOF
