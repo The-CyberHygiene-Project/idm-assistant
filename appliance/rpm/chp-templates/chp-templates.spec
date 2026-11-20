@@ -2,9 +2,9 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-templates
-Version:        1.3.1
+Version:        1.4.0
 Release:        1.chp%{?dist}
-Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2) and their renderer
+Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2), their renderer and document templates
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
 URL:            https://github.com/The-CyberHygiene-Project/chp-templates
@@ -15,6 +15,8 @@ Requires:       python3
 %description
 The signed chp-templates release, the same library Automated_Compliance pins: placeholder-only SSP and POA&M
 templates, the vocabulary, the site.conf mapping and the renderer. `chp-site docs` renders a site's documents from it.
+It also carries the marked controlled-document templates that `chp-site doc new` starts from, as
+doc/{cui,noncui}/Template.{docx,xlsx,md}.
 
 %prep
 %setup -q -n chp-templates-%{version}
@@ -23,6 +25,13 @@ templates, the vocabulary, the site.conf mapping and the renderer. `chp-site doc
 install -d -m 0755 %{buildroot}%{_datadir}/chp-templates
 cp -a rev2 %{buildroot}%{_datadir}/chp-templates/
 install -m 0644 chpfill.pyz vocabulary.md site-conf-mapping.csv README.md %{buildroot}%{_datadir}/chp-templates/
+# the document templates under their plain names (the repo names follow the document name rule)
+install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.docx %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.docx
+install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.xlsx %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.xlsx
+install -Dm0644 doc/cui/CUI_Template_v0.1-DRAFT.md %{buildroot}%{_datadir}/chp-templates/doc/cui/Template.md
+install -Dm0644 doc/noncui/Template_v0.1-DRAFT.docx %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.docx
+install -Dm0644 doc/noncui/Template_v0.1-DRAFT.xlsx %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.xlsx
+install -Dm0644 doc/noncui/Template_v0.1-DRAFT.md %{buildroot}%{_datadir}/chp-templates/doc/noncui/Template.md
 install -Dm0644 LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 find %{buildroot}%{_datadir}/chp-templates -type d -exec chmod 0755 {} +
 find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
@@ -31,12 +40,19 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 %license %{_datadir}/licenses/%{name}/LICENSE
 %dir %{_datadir}/chp-templates
 %{_datadir}/chp-templates/rev2
+%{_datadir}/chp-templates/doc
 %{_datadir}/chp-templates/chpfill.pyz
 %{_datadir}/chp-templates/vocabulary.md
 %{_datadir}/chp-templates/site-conf-mapping.csv
 %{_datadir}/chp-templates/README.md
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 1.4.0-1.chp
+- chp-templates 1.4.0 (sha256 pinned in build-rpm.sh): the marked controlled-document templates (doc/cui and
+  doc/noncui, installed as Template.{docx,xlsx,md}), five new site.conf mappings (DOC_ISSO_ACCOUNT,
+  DOC_APPROVER_ACCOUNTS, CUI_CONTROLLED_BY, CUI_CATEGORY, CUI_POC), and Rev 2 content 1.2.5: narratives for the
+  document workflow (3.1.3, 3.1.22, 3.3.1, 3.4.3, 3.8.4, 3.8.9, 3.13.8).
+
 * Fri Nov 06 2026 The CyberHygiene Project - 1.3.1-1.chp
 - chp-templates 1.3.1 from the signed tarball (sha256 73682cfc17b1707e…): Rev 2 content 1.2.3, narratives for the
   security add-on (YARA 3.14.2/4/5, Suricata 3.14.6/7 and 3.13.1). Placeholders unchanged. Rev 2 library only.

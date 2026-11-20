@@ -592,6 +592,48 @@ def cmd_checkout(env, a, say):
     return 0
 
 
+TEMPLATE_PLACEHOLDERS = (("{{CUI_CONTROLLED_BY}}", "controlled_by"), ("{{CUI_CATEGORY}}", "category"),
+                         ("{{CUI_POC}}", "poc"))
+
+
+def fill_template(data, ext, values):
+    """A marked template (chp-templates 1.4.0 doc/cui/) with its {{CUI_CONTROLLED_BY}}, {{CUI_CATEGORY}} and {{CUI_POC}}
+    placeholders filled from the site's marking values (the values as marking.check compares them). docx/xlsx: in the
+    XML text of every part, XML-escaped, in a package rebuilt with the same order, dates and compression (the same
+    template and values always give the same bytes); md: as text. The templates hold the placeholders only in body
+    text, footer paragraphs and cells, never inside an Excel header/footer code string. A placeholder left over
+    afterwards is refused (DocError)."""
+    from . import marking
+    subs = [(ph, marking._norm(getattr(values, attr, "") or "")) for ph, attr in TEMPLATE_PLACEHOLDERS]
+
+    def fill(text, xml):
+        for ph, v in subs:
+            text = text.replace(ph, escape(v, {'"': "&quot;"}) if xml else v)
+        if re.search(r"\{\{[A-Z0-9_]+\}\}", text):
+            raise DocError("refused: the template holds a placeholder that chp-site does not fill; install the "
+                           f"template from {TEMPLATES_PKG}")
+        return text
+
+    if ext == "md":
+        try:
+            return fill(data.decode("utf-8"), False).encode("utf-8")
+        except UnicodeDecodeError:
+            raise DocError("refused: the template is not UTF-8 text") from None
+    try:
+        z = marking._Zip(data)
+    except marking._Bad as e:
+        raise DocError(f"refused: the template {e}") from None
+    out = {}
+    for name in z.data:
+        b = z.data[name]
+        if b"{{" in b:
+            try:
+                out[name] = fill(b.decode("utf-8"), True).encode("utf-8")
+            except UnicodeDecodeError:
+                raise DocError(f"refused: the template's part {name} is not UTF-8") from None
+    return marking._rezip(z, out, []) if out else data
+
+
 def cmd_new(env, a, say):
     from . import marking
     cui = bool(a.cui)
@@ -614,7 +656,7 @@ def cmd_new(env, a, say):
     tmp = Path(tempfile.mkdtemp(dir=_private_dir(Records(w).dir), prefix="new-"))
     try:
         f = tmp / name
-        _write_new(f, tpl.read_bytes())
+        _write_new(f, fill_template(tpl.read_bytes(), ext, values) if cui else tpl.read_bytes())
         if cui:
             try:
                 marking.insert(f, values, dry_run=False)
