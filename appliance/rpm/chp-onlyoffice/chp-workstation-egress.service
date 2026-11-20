@@ -15,6 +15,8 @@ RemainAfterExit=yes
 # the addresses are written from the site files before every load (a re-IP of the server needs only a restart).
 # "-": a render failure (damaged site file, bad address) is logged but not fatal: the LAST GOOD file (enable wrote
 # it; a failed render never overwrites it) is loaded; with no file at all, nft fails and OnFailure= locks down.
+# a failed render is one line "EGRESS RENDER FAILED: ..." under this tag (Wazuh 100632, level 7)
+SyslogIdentifier=chp-workstation-egress
 ExecStartPre=-/usr/bin/chp-site onlyoffice egress-render
 ExecStart=/usr/sbin/nft -f /etc/nftables/chp-workstation-egress.nft
 ExecReload=-/usr/bin/chp-site onlyoffice egress-render

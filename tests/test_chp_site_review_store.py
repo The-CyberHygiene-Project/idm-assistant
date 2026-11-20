@@ -261,3 +261,41 @@ def test_monitor_alert_text_cannot_inject_lines(tmp_path):                  # fi
     assert all(l.startswith(("ALERT", "OK")) for l in text.split("\n"))
     assert len(lines) == 2                       # one attention line + one 7-day line; nothing extra from the text
     assert not any(c in text for c in "\r \x9b")
+
+
+def test_nightly_passes_the_document_ledger_and_the_signed_days(tmp_path, monkeypatch):     # Plan 3 Task 9
+    import ipaddress
+    from chp_site.hosts import Host
+    from chp_site import review_report as rr
+    site = {"SUBNET": ipaddress.IPv4Network("192.0.2.0/24"), "TIMEZONE": "America/Denver"}
+    hosts = [Host("aa:01", "srv1", "192.0.2.10", "server", "vda")]
+    st.write_day(TODAY - timedelta(days=2), *day_files(TODAY - timedelta(days=2)), root=tmp_path)
+    led = tmp_path / "var/lib/chp/review/ledger.jsonl"
+    led.write_text(json.dumps({"date": (TODAY - timedelta(days=2)).isoformat()}) + "\n")
+    seen = []
+    real = rr.build
+    monkeypatch.setattr(rr, "build", lambda *a, **k: seen.append(k) or real(*a, **k))
+    dl = {"entries": []}
+    st.nightly(root=tmp_path, today=TODAY, site=site, hosts=hosts, alerts=[], now=0, doc_ledger=dl)
+    assert seen and seen[0]["doc_ledger"] is dl and (TODAY - timedelta(days=2)).isoformat() in seen[0]["signed"]
+
+
+def test_cli_build_reads_the_document_ledger(monkeypatch, capsys, tmp_path):           # Plan 3 Task 9
+    from chp_site import cli
+    from chp_site import doc_ledger as dl
+    seen = {}
+    monkeypatch.setattr(st, "nightly", lambda **kw: seen.update(kw) or [])
+    monkeypatch.setattr(cli, "_load", lambda site: ({"SUBNET": None, "TIMEZONE": "UTC"}, []))
+    monkeypatch.setattr("chp_site.wazuh_alerts.load_alerts", lambda base, since: [])
+    monkeypatch.setattr(dl, "BASE", tmp_path / "chp-docs")
+    monkeypatch.setattr(cli, "DOCS_CONF", str(tmp_path / "documents.conf"))
+    assert cli.main(["review", "build"]) == 0
+    assert seen["doc_ledger"] is None                                  # documents off: no rows
+    (tmp_path / "documents.conf").write_text("ENABLED=yes\n")
+    assert cli.main(["review", "build"]) == 0
+    assert seen["doc_ledger"] == {"entries": []}                       # on, nothing ledgered yet
+    led = tmp_path / "chp-docs" / "ledger"
+    led.mkdir(parents=True)
+    (led / "ledger.jsonl").write_text("not json\n")
+    assert cli.main(["review", "build"]) == 0
+    assert "line 1" in seen["doc_ledger"]["error"]

@@ -577,10 +577,10 @@ def test_vendor_rpm_sha_pinned(tmp_path):
 
 
 def test_spec_requires_and_pins():
-    for r in ("onlyoffice-desktopeditors = 10.0.0", "poppler-utils", "chp-site >= 0.14.0-5", "nftables"):
+    for r in ("onlyoffice-desktopeditors = 10.0.0", "poppler-utils", "chp-site >= 0.14.0-6", "nftables", "chp-base"):
         assert re.search(rf"^Requires:.*{re.escape(r)}", SPEC, re.M), r
     cs = (TOP / "appliance/chp-site/chp-site.spec").read_text()
-    assert re.search(r"^Release:\s+5\.chp", cs, re.M) and "0.14.0-5.chp" in cs
+    assert re.search(r"^Release:\s+6\.chp", cs, re.M) and "0.14.0-6.chp" in cs
     assert "Vendor:         The CyberHygiene Project" in SPEC and re.search(r"^Release:\s+\d+\.chp%\{\?dist\}", SPEC, re.M)
     b = t("build-rpm.sh")
     for f in ("chp-onlyoffice.spec", "onlyoffice-ai-off.sh", "DesktopEditors.conf", "nft/chp-workstation-egress.nft",
@@ -588,7 +588,7 @@ def test_spec_requires_and_pins():
               "logind-chp-docs.conf", "50-chp-no-linger.rules", "README.md"):
         assert f in b, f
     for src in re.findall(r"^Source\d+:\s+(\S+)", SPEC, re.M):
-        assert src == "LICENSE" or (D / src).exists() or any((D / d / src).exists() for d in ("nft",)), src
+        assert src == "LICENSE" or (D / src).exists() or any((D / d / src).exists() for d in ("nft", "monitor.d")), src
 
 
 def test_readme_records_the_poam_items():
@@ -820,3 +820,105 @@ def test_a_second_failure_in_the_same_boot_locks_down_again(tmp_path):
         if line.startswith("/usr/sbin/nft -f /etc/nftables/chp-workstation-egress") else orig(line)
     assert h.start("chp-workstation-egress.service", restart=True) == "failed"
     assert "chp_workstation_lockdown" in h.tables
+
+
+# ---------- Plan 3 Task 9: monitor check 83 on the workstation (carry 9) ----------
+LIVE = ("table inet chp_workstation_egress {\n\tchain output {\n\t\ttype filter hook output priority filter; policy drop;\n"
+        "\t\toifname \"lo\" accept\n\t\tlimit rate 6/minute log prefix \"CHP-WS-EGRESS \" counter packets %d bytes %d\n"
+        "\t\treject with icmpx admin-prohibited\n\t}\n}\n")
+
+
+def run83(tmp, *, addr=True, enabled="enabled", unit="active", timer="active", live=LIVE % (3, 99),
+          expected=LIVE % (0, 0), lockdown=False):
+    b = tmp / "bin"; b.mkdir(exist_ok=True)
+    (b / "systemctl").write_text("#!/bin/bash\n"
+                                 f'[ "$1 $2" = "is-enabled chp-workstation-egress.service" ] && {{ echo {enabled}; exit 0; }}\n'
+                                 f'[ "$1 $2" = "is-active chp-workstation-egress.service" ] && {{ echo {unit}; exit 0; }}\n'
+                                 f'[ "$1 $2" = "is-active chp-onlyoffice-sweep.timer" ] && {{ echo {timer}; exit 0; }}\n'
+                                 "exit 3\n")
+    nft = "#!/bin/bash\n"
+    nft += ('[ "$4" = chp_workstation_lockdown ] && { echo "table inet chp_workstation_lockdown {}"; exit 0; }\n'
+            if lockdown else '[ "$4" = chp_workstation_lockdown ] && exit 1\n')
+    nft += (f"cat <<'EOF'\n{live}EOF\n" if live is not None else "exit 1\n")
+    (b / "nft").write_text(nft)
+    (b / "unshare").write_text("#!/bin/bash\n" + (f"cat <<'EOF'\n{expected}EOF\n" if expected is not None
+                                                 else "echo 'nft: syntax error' >&2; exit 1\n"))
+    for x in b.iterdir():
+        x.chmod(0o755)
+    a = tmp / "addr.nft"
+    if addr:
+        a.write_text("define CHP_WS_SERVER_IP = 192.0.2.10\n")
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_WS_ADDR=str(a), CHP_WS_NFT="/unused")
+    r = subprocess.run(["bash", str(D / "monitor.d/83-workstation-editor.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_check83_ok_when_the_gates_hold(tmp_path):
+    out = run83(tmp_path)
+    assert out.startswith("OK workstation editor") and "ALERT" not in out
+
+
+def test_check83_silent_where_the_editor_was_never_enabled(tmp_path):
+    out = run83(tmp_path, addr=False, enabled="disabled", unit="inactive", timer="inactive", live=None)
+    assert out.startswith("OK editor not enabled") and "ALERT" not in out
+    assert "ALERT" in run83(fresh83(tmp_path), addr=False, unit="failed")     # unit enabled, file gone: checked
+
+
+def fresh83(tmp_path, n=[0]):
+    n[0] += 1
+    d = tmp_path / f"r{n[0]}"; d.mkdir(); return d
+
+
+def test_check83_flags_each_broken_gate(tmp_path):
+    cases = [({"unit": "failed"}, "is failed"),
+             ({"live": None}, "MISSING"),                                     # nftables.service stop: flush ruleset
+             ({"live": LIVE.replace("policy drop", "policy accept") % (0, 0)}, "policy drop"),
+             ({"live": LIVE.replace("reject with", "accept\n\t\treject with") % (0, 0)}, "differs from the shipped"),
+             ({"expected": None}, "could not be built"),
+             ({"lockdown": True}, "EGRESS LOCKDOWN"),
+             ({"timer": "inactive"}, "chp-onlyoffice-sweep.timer is inactive")]
+    for kw, words in cases:
+        out = run83(fresh83(tmp_path), **kw)
+        assert "ALERT" in out and words in out and not out.startswith("OK workstation editor"), (kw, out)
+
+
+def test_check83_counters_moving_is_not_drift(tmp_path):
+    assert "ALERT" not in run83(tmp_path, live=LIVE % (12345, 999999))
+
+
+def test_check83_is_packaged():
+    assert re.search(r"^Source\d+:\s+83-workstation-editor\.sh$", SPEC, re.M)
+    assert "/usr/lib/chp/monitor.d/83-workstation-editor.sh" in SPEC.replace("%{_prefix}", "/usr")
+    assert "monitor.d/83-workstation-editor.sh" in t("build-rpm.sh")
+    assert (D / "monitor.d/83-workstation-editor.sh").stat().st_mode & 0o111
+
+
+# ---------- Plan 3 Task 9: egress-render at start says when it failed (carry 3) and labels the file (carry 10) -----
+
+def test_egress_render_failure_is_one_alertable_line(tmp_path, capsys):
+    site, hosts = _site()
+    calls = []
+    run = lambda argv, **kw: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", "")
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0
+    assert calls == [["restorecon", str(tmp_path / OO.EGRESS_ADDR)]]             # replaced by rename: relabelled
+    good = (tmp_path / OO.EGRESS_ADDR).read_text()
+    calls.clear()
+    assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0 and calls == []   # unchanged: untouched
+    bad = lambda: (site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
+
+    def broken():
+        raise SiteError("/etc/chp/site.conf: SERVER line unreadable")
+    for load in (bad, broken):
+        capsys.readouterr()
+        assert OO.egress_render(tmp_path, load, run=run) == 1
+        err = capsys.readouterr().err.strip().splitlines()
+        assert len(err) == 1 and err[0].startswith("EGRESS RENDER FAILED: ") and "last good" in err[0]
+        assert (tmp_path / OO.EGRESS_ADDR).read_text() == good and calls == []
+    ev = {"decoder": "x", "location": "journald", "program_name": "chp-workstation-egress", "log": err[0]}
+    assert _level(w.NEXTCLOUD_RULES, ev) == (w.WS_RENDER_RULE, 7)
+
+
+def test_egress_unit_logs_under_the_rules_program_name():
+    u = t("chp-workstation-egress.service")
+    assert re.search(r"^SyslogIdentifier=chp-workstation-egress$", u, re.M)

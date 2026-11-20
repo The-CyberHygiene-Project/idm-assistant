@@ -528,7 +528,7 @@ def _aide_files(d):
     return ["/etc/hosts", f"/var/named/{d}.zone", "/" + LAN_INC, "/" + EGRESS_ADDR, "/" + CONF,
             f"/{PGDATA}/postgresql.conf", f"/{PGDATA}/pg_hba.conf", CONFIG_PHP, "/etc/fapolicyd/trust.d/nextcloud",
             OIDC_SECRET, "/var/ossec/etc/ossec.conf",
-            f"/var/ossec/etc/rules/{w.NC_RULES_FILE}"]
+            f"/var/ossec/etc/rules/{w.NC_RULES_FILE}", f"/var/ossec/etc/decoders/{w.DOCS_DECODERS_FILE}"]
 
 
 def _enable_now(run, units, acts):
@@ -1064,20 +1064,25 @@ def _wazuh(root, run, chown):
     grp = _owner(chown, "root", "wazuh")
     conf = _p(root, "var/ossec/etc/ossec.conf")
     rules = _p(root, f"var/ossec/etc/rules/{w.NC_RULES_FILE}")
-    try:
-        old_rules = rules.read_text() if rules.exists() else None
-    except OSError as e:
-        raise SiteError(f"could not read {rules} ({e.strerror or e})") from None
+    decoders = _p(root, f"var/ossec/etc/decoders/{w.DOCS_DECODERS_FILE}")     # Plan 3 Task 9: the ledger's lines
+    files = ((rules, w.NEXTCLOUD_RULES, "rules file"), (decoders, w.DOCS_DECODERS, "decoders file"))
+    old = {}
+    for f, _text, _what in files:
+        try:
+            old[f] = f.read_text() if f.exists() else None
+        except OSError as e:
+            raise SiteError(f"could not read {f} ({e.strerror or e})") from None
     try:
         old_conf = conf.read_text()
     except OSError as e:
         raise SiteError(f"could not read {conf} ({e.strerror or e})") from None
     new_conf = w.documents_manager(old_conf)
-    changed = _differs(rules, w.NEXTCLOUD_RULES, 0o640) or _differs(conf, new_conf, 0o640)
+    changed = any(_differs(f, text, 0o640) for f, text, _what in files) or _differs(conf, new_conf, 0o640)
     marked_before = "wazuh-manager" in _restart_marks(root)
     if changed:
         _mark(root, ["wazuh-manager"])
-        _put(rules, w.NEXTCLOUD_RULES, 0o640, grp)
+        for f, text, _what in files:
+            _put(f, text, 0o640, grp)
         _put(conf, new_conf, 0o640, grp)
     marked = "wazuh-manager" in _restart_marks(root)
     active = _out(run, ["systemctl", "is-active", "wazuh-manager"]).strip() == "active"
@@ -1090,20 +1095,21 @@ def _wazuh(root, run, chown):
             # Roll back each piece on its own: a failure on one never stops the others (ossec.conf is restored and
             # the restart mark handled even when the rules file cannot be put back).
             done_, notdone = [], []
-            try:
-                if old_rules is None:
-                    try:
-                        rules.unlink()
-                    except FileNotFoundError:
-                        pass
-                    done_.append(f"the new rules file {rules} is removed")
-                else:
-                    _put(rules, old_rules, 0o640, grp)
-                    done_.append(f"the previous {rules} is back")
-            except OSError as e:
-                notdone.append(f"the new rules file {rules} could not be removed ({e.strerror or e})")
-            except SiteError as e:
-                notdone.append(f"the previous {rules} could not be restored ({e})")
+            for f, _text, what in files:
+                try:
+                    if old[f] is None:
+                        try:
+                            f.unlink()
+                        except FileNotFoundError:
+                            pass
+                        done_.append(f"the new {what} {f} is removed")
+                    else:
+                        _put(f, old[f], 0o640, grp)
+                        done_.append(f"the previous {f} is back")
+                except OSError as e:
+                    notdone.append(f"the new {what} {f} could not be removed ({e.strerror or e})")
+                except SiteError as e:
+                    notdone.append(f"the previous {f} could not be restored ({e})")
             try:
                 _put(conf, old_conf, 0o640, grp)
                 done_.append(f"the previous {conf} is back")
@@ -1221,6 +1227,7 @@ Q_CUI_LOCAL = (f"SELECT g.uid FROM oc_group_user g WHERE g.gid = 'cui-users' AND
                f"'{PUBLISH_USER}') AND NOT EXISTS "
                f"(SELECT 1 FROM oc_user_oidc o WHERE o.user_id = g.uid) ORDER BY g.uid LIMIT {LIST_MAX + 1}")
 Q_ADMINS = "SELECT uid FROM oc_group_user WHERE gid = 'admin' ORDER BY uid"
+Q_LEDGER_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_ledger'"
 
 
 def q_acl(storages):
@@ -1733,6 +1740,82 @@ def _access(sql, folders, ids, storages, alert):
                   + f": remove them (occ groupfolders:permissions {i} --group <group> -- <path> clear)")
 
 
+def _workflow(sql, c, folders, ids, groups, alert):
+    """The controlled-document workflow (Plan 3 Task 9; Task 2 and Task 3 review carries), on a site whose enable set
+    it up (documents.conf has the area ids): (1) chp_ledger is enabled and its config lists exactly the areas of
+    documents.conf; (2) on each of the four areas, EVERY group that reaches its team folder (AREA_GROUPS, and any
+    group mapped there by hand) has the read-only rule, so nobody but the appender writes there; (3) Internal (an
+    open folder, not covered by _access) has advanced permissions on, and no other rule on its areas than those."""
+    if not any(c.get(k) for k, _t, _r in AREAS):
+        return
+    app = {str(r.get("configkey")): r.get("configvalue") for r in sql(Q_LEDGER_APP)}
+    fix = "; re-run chp-site documents enable"
+    if app.get("enabled") != "yes":
+        alert("ledger-app:enabled", "the NextCloud app chp_ledger is not enabled: no document request reaches the "
+                                    "appender (occ app:enable chp_ledger, then find out who switched it off)")
+    for key, names in LEDGER_AREAS.items():
+        want = sorted(int(c[n]) for n in names if re.fullmatch(r"[1-9][0-9]*", c.get(n, "")))
+        v = _json_or(app.get(key))
+        try:
+            got = sorted(int(_scalar(x)) for x in v) if isinstance(v, list) else None
+        except (TypeError, ValueError):
+            got = None
+        if got != want or len(want) != len(names):
+            alert(f"ledger-app:{key}", f"chp_ledger's {key} ids are {_clean(app.get(key), 80) if app.get(key) else 'not set'}; "
+                                       f"documents.conf says {want} ({', '.join(names)}): requests would be checked "
+                                       "against the wrong areas" + fix)
+    st = {}
+    for team in sorted({t for _k, t, _r in AREAS}):
+        i = ids.get(team)
+        f = folders.get(i) if i else None
+        if f is None:
+            continue                                   # missing folder: alerted by _policy
+        if team not in CONTROLLED and _int(f.get("acl"), 0) != 1:
+            alert(f"advperm:{i}", f"advanced permissions are OFF on team folder {team} (id {i}): its Compliance areas' "
+                                  "read-only rules do not apply, so every member can WRITE controlled documents there: "
+                                  f"occ groupfolders:permissions {i} --enable (or re-run chp-site documents enable)")
+        sid = _int(f.get("storage_id"))
+        if sid is not None:
+            st[team] = sid
+    rows = sql(q_acl(st.values())) if st else []
+    mapped = {}
+    for g in groups:
+        if g.get("group_id"):
+            mapped.setdefault(str(g.get("folder_id")), set()).add(str(g.get("group_id")))
+    ro = lambda r: _int(r.get("mask")) == REVIEWER_MASK and _int(r.get("permissions")) == REVIEWER_PERMS  # noqa: E731
+    need = {}
+    for _key, team, rel in AREAS:
+        if team not in st:
+            continue
+        need[team] = set(AREA_GROUPS[team]) | mapped.get(ids.get(team), set())
+        on = [r for r in rows if _int(r.get("storage")) == st[team] and r.get("path") == "files/" + rel]
+        have = {r.get("mapping_id") for r in on if r.get("mapping_type") == "group" and ro(r)}
+        for g in sorted(need[team] - have):
+            how = "" if g in AREA_GROUPS[team] else f" (mapped to {team} by hand)"
+            alert(f"area-ro:{team}/{rel}:{_clean(g, 40)}",
+                  f"group {_clean(g, 40)}{how} has no read-only rule on {team}/{rel}: its members can WRITE the "
+                  "controlled-document area (only the root appender may): "
+                  f"occ groupfolders:permissions {ids.get(team)} --group {_clean(g, 40)} -- /{rel} {' '.join(AREA_ACL)}"
+                  + ("" if how else " (or re-run chp-site documents enable)"))
+    if "Internal" in st:                               # CUI and Archive: every other rule is flagged by _access
+        top = [rel for _k, t, rel in AREAS if t == "Internal"]
+        paths = {"files/" + rel for rel in top}
+        inside = [r for r in rows if _int(r.get("storage")) == st["Internal"] and any(
+            str(r.get("path") or "") == "files/" + rel or str(r.get("path") or "").startswith("files/" + rel + "/")
+            for rel in top)]
+        other = [r for r in inside if not (r.get("path") in paths and (
+            (r.get("mapping_type") == "group" and r.get("mapping_id") in need.get("Internal", ()) and ro(r)) or
+            (r.get("mapping_type") == "user" and r.get("mapping_id") == PUBLISH_USER
+             and _int(r.get("mask")) == PUBLISH_MASK and _int(r.get("permissions")) == PUBLISH_PERMS)))]
+        if other:
+            alert("area-other:Internal", "Internal's Compliance areas have ACL rules other than the read-only ones and "
+                                         "the appender's: " + _clean("; ".join(
+                                             f"{r.get('mapping_type')} {r.get('mapping_id')} on /{str(r.get('path') or '')[6:]} "
+                                             f"(mask {r.get('mask')}, permissions {r.get('permissions')})"
+                                             for r in other[:5]), 240)
+                  + f": remove them (occ groupfolders:permissions {ids.get('Internal')} --group <group> -- <path> clear)")
+
+
 def _where(row, folders_by_storage):
     path = str(row.get("path") or "")
     rel = path[6:] if path.startswith("files/") else path
@@ -1925,6 +2008,11 @@ def _check(root, c, run, sql, api, occ, t, chown):
         except (SiteError, ValueError, TypeError, AttributeError) as e:
             alert("check:access", f"the access check (cui-users, admin, reviewer rules) could not read NextCloud's "
                                   f"database: {_clean(e, 200)}")
+        try:
+            _workflow(sql, c, folders, ids, db["groups"], alert)
+        except (SiteError, ValueError, TypeError, AttributeError) as e:
+            alert("check:workflow", f"the document-workflow check (Compliance areas, chp_ledger) could not read "
+                                    f"NextCloud's database: {_clean(e, 200)}")
     try:                                              # runtime drift: NextCloud rewrote config.php after enable
         tf = _p(root, "etc/fapolicyd/trust.d/nextcloud")
         entry, have = _trust_entry(tf, CONFIG_PHP), _size_sha(_p(root, CONFIG_PHP))

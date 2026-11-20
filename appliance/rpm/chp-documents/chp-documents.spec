@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        6.chp%{?dist}
+Release:        7.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -38,8 +38,9 @@ Source28:       nextcloud-login-rewrite.conf
 Source29:       chp-docs-ledger.path
 Source30:       chp-docs-ledger.service
 Source31:       chp-docs-ledger-alert.service
-Requires:       nextcloud-chp >= 35.0.3-5, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-4
+Source32:       82-docs-ledger.sh
+Requires:       nextcloud-chp >= 35.0.3-6, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-6
 # poppler-utils: pdftotext/pdfinfo for the marking check of reader PDFs at publish (chp_site.marking, Plan 3 Task 5)
 Requires:       poppler-utils
 Requires(post): policycoreutils-python-utils
@@ -49,7 +50,8 @@ BuildRequires:  systemd-rpm-macros
 The documents role (ISO 0.7.0 Plan 2). SITE-INDEPENDENT: it ships web/PHP configuration, the egress table, units,
 timers, backup, certificate renewal, a fapolicyd rule, the nightly tag check and share canary
 (chp-documents-check.timer runs `chp-site documents check`) and monitor checks 77 (services), 78 (certificate),
-79 (egress table) and 81 (the nightly check's result). Nothing is enabled by installing it; `chp-site documents enable` renders the site-specific pieces
+79 (egress table), 81 (the nightly check's result) and 82 (the document ledger: appender, chain, quarantine,
+unfinished publishes). Nothing is enabled by installing it; `chp-site documents enable` renders the site-specific pieces
 and starts the units. Until then everything FAILS CLOSED: httpd denies all, the egress unit refuses to start.
 
 Files that `chp-site documents enable` must render (see /usr/share/doc/chp-documents/README.md):
@@ -99,6 +101,7 @@ install -dm0700 %{buildroot}%{_sharedstatedir}/chp/documents
 install -Dm0644 %{SOURCE29} %{buildroot}%{_unitdir}/chp-docs-ledger.path
 install -Dm0644 %{SOURCE30} %{buildroot}%{_unitdir}/chp-docs-ledger.service
 install -Dm0644 %{SOURCE31} %{buildroot}%{_unitdir}/chp-docs-ledger-alert.service
+install -Dm0755 %{SOURCE32} %{buildroot}%{_prefix}/lib/chp/monitor.d/82-docs-ledger.sh
 install -dm0700 %{buildroot}%{_localstatedir}/lib/chp-docs/ledger %{buildroot}%{_localstatedir}/lib/chp-docs/quarantine \
   %{buildroot}%{_localstatedir}/lib/chp-docs/work
 
@@ -158,6 +161,7 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %{_prefix}/lib/chp/monitor.d/78-nextcloud-cert.sh
 %{_prefix}/lib/chp/monitor.d/79-nextcloud-egress.sh
 %{_prefix}/lib/chp/monitor.d/81-documents-tags.sh
+%{_prefix}/lib/chp/monitor.d/82-docs-ledger.sh
 %{_unitdir}/chp-documents-check.service
 %{_unitdir}/chp-documents-check.timer
 %dir %attr(0700,root,root) %{_sysconfdir}/pki/nextcloud
@@ -170,6 +174,12 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/work
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-7.chp
+- ISO 0.7.0 Plan 3 (one release for the plan): the root appender's units (chp-docs-ledger.path/.service and the
+  OnFailure alert) and its root-only folders (Task 4); monitor check 82 (Task 9): chp-docs-ledger.path active,
+  chp-site doc-ledger verify, quarantine empty, no unfinished publish (doc-ledger pending; the ISSO resolves).
+  Requires chp-site >= 0.14.0-6, nextcloud-chp >= 35.0.3-6 (chp_ledger).
+
 * Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-6.chp
 - nextcloud-cron.service (lab round 3, D11): ExecStartPre=+/usr/sbin/nft ... runs as root (as apache it failed, "you
   must be root", and no background job ever ran); the job itself still runs as apache.

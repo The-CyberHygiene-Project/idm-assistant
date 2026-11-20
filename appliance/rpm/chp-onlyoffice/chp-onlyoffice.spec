@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-onlyoffice
 Version:        0.1.0
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene workstation editor: ONLYOFFICE without AI Tools or vendor calls, the workstation egress table, the autosave sweep, linger off
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -21,13 +21,15 @@ Source8:        README.md
 Source9:        LICENSE
 Source10:       chp-workstation-lockdown.nft
 Source11:       chp-workstation-egress-lockdown.service
+Source12:       83-workstation-editor.sh
 # the vendor RPM, re-signed with the project key (appliance/release/VENDOR.txt pins it); x2t makes the reader PDFs
 Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
 Requires:       poppler-utils
 # chp-site onlyoffice (enable, sweep, egress-render) and the doc commands of Plan 3
-Requires:       chp-site >= 0.14.0-5
-Requires:       nftables, systemd, polkit, chrony, python3, util-linux
+Requires:       chp-site >= 0.14.0-6
+# monitor check 83 runs under chp-base's monitor (/usr/lib/chp/monitor.d)
+Requires:       nftables, systemd, polkit, chrony, python3, util-linux, chp-base
 BuildRequires:  systemd-rpm-macros
 
 %description
@@ -39,7 +41,8 @@ The workstation half of the document workflow's editor (ISO 0.7.0 Plan 3 Task 8,
 - G2: an hourly sweep of ONLYOFFICE's auto-recovery copies (CUI) of sessions closed or abandoned for 12 h.
 - Ruling F3: logout ends the user's processes, and linger stays off (polkit refuses enabling it).
 Nothing is enabled by installing it: `chp-site onlyoffice enable` (client enrolment's "docs" step when
-DOCUMENTS=yes) renders the addresses and starts the units. See /usr/share/doc/chp-onlyoffice/README.md (POA&M items).
+DOCUMENTS=yes) renders the addresses and starts the units. Monitor check 83 (chp-base's monitor) alerts when the
+egress table, its unit, the lock-down state or the sweep timer is not as shipped. See /usr/share/doc/chp-onlyoffice/README.md (POA&M items).
 
 %install
 install -Dm0755 %{SOURCE0} %{buildroot}%{_libexecdir}/chp/onlyoffice-ai-off
@@ -54,6 +57,7 @@ install -Dm0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/systemd/logind.conf.d/50-c
 install -Dm0644 %{SOURCE7} %{buildroot}%{_sysconfdir}/polkit-1/rules.d/50-chp-no-linger.rules
 install -Dm0644 %{SOURCE8} %{buildroot}%{_docdir}/%{name}/README.md
 install -Dm0644 %{SOURCE9} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
+install -Dm0755 %{SOURCE12} %{buildroot}%{_prefix}/lib/chp/monitor.d/83-workstation-editor.sh
 
 %post
 %systemd_post chp-workstation-egress.service chp-onlyoffice-sweep.timer
@@ -93,8 +97,14 @@ fi
 %{_unitdir}/chp-onlyoffice-sweep.timer
 %{_sysconfdir}/systemd/logind.conf.d/50-chp-docs.conf
 %{_sysconfdir}/polkit-1/rules.d/50-chp-no-linger.rules
+%{_prefix}/lib/chp/monitor.d/83-workstation-editor.sh
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-2.chp
+- Monitor check 83 (Plan 3 Task 9): the egress unit active, the egress table as shipped with policy drop, no
+  lock-down table, the sweep timer active. The egress unit logs as chp-workstation-egress (a failed render is one
+  "EGRESS RENDER FAILED" line, Wazuh 100632). Requires chp-site >= 0.14.0-6, chp-base.
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-1.chp
 - Egress fails closed at boot: a render failure loads the last good addresses; no file or a failed load starts
   chp-workstation-egress-lockdown.service (loopback only, before network-pre.target, re-runnable in the same boot;

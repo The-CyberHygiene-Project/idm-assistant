@@ -398,6 +398,24 @@ def _site_today(site, now):
     return datetime.fromtimestamp(now, ZoneInfo(site.get("TIMEZONE") or "UTC")).date()
 
 
+DOCS_CONF = "/etc/chp/documents.conf"
+
+
+def _doc_ledger_rows():
+    """The daily review's view of the document ledger (Plan 3 Task 9): None when documents are off on this host,
+    else its verified entries, or the reason it does not verify (a row then says so; check 82 alerts it)."""
+    from . import doc_ledger as dl
+    ledger = dl.BASE / "ledger" / "ledger.jsonl"
+    if not (os.path.exists(DOCS_CONF) or ledger.exists()):
+        return None
+    try:
+        return {"entries": dl.read(ledger, dl.BASE / "ledger" / "ledger.head")}
+    except dl.LedgerError as e:
+        return {"error": str(e)[:300]}
+    except OSError as e:
+        return {"error": f"could not read {ledger} ({e.strerror or e})"}
+
+
 def _review(a):
     import json
     import socket
@@ -435,7 +453,7 @@ def _review(a):
             alerts = wa.load_alerts("/var/ossec/logs/alerts", first - 86400)
         else:
             alerts = []
-        built = st.nightly(today=today, site=site, hosts=hosts, alerts=alerts, now=now)
+        built = st.nightly(today=today, site=site, hosts=hosts, alerts=alerts, now=now, doc_ledger=_doc_ledger_rows())
         if built is None:
             print("another review build is running; nothing written by this one")
             return 0
@@ -548,6 +566,28 @@ def _doc_ledger(a):
     if a.action == "purge-quarantine":
         print(f"removed {L.purge_quarantine(ctx)} quarantine record(s)")
         return 0
+    if a.action == "pending":                       # monitor check 82: 0 none, 1 some (PENDING lines), 2 cannot tell
+        try:
+            entries = L.read(ctx.ledger, ctx.head)
+        except L.LedgerError as err:
+            print(f"PROBLEM: {err}")
+            return 2
+        ps = L.unresolved(L.journal_records(), entries, L.time.time())
+        for p in ps:
+            print("PENDING " + L.pending_text(p))
+        if not ps:
+            print("OK no unfinished publish")
+        return 1 if ps else 0
+    if a.action == "resolve":
+        from . import audit
+        if L.os.geteuid() != 0:
+            raise SiteError("doc-ledger resolve must run as root (sudo)")
+        if not a.request_id or not (a.reason or "").strip():
+            raise SiteError("doc-ledger resolve needs the request id and --reason \"what was checked and done\"")
+        e = L.resolve(ctx, a.request_id, a.reason, operator=audit.operator(), records=L.journal_records())
+        audit.record("doc-ledger-resolve", {"request_id": a.request_id, "reason": a.reason, "entry": e["seq"]})
+        print(f"resolved {a.request_id} (ledger entry {e['seq']})")
+        return 0
     stick = a.stick if isinstance(a.stick, str) else None
     if a.action == "export":
         with usbstick.site_stick(stick) as s:
@@ -581,11 +621,9 @@ def _onlyoffice(a):
     if a.action == "sweep":
         oo.sweep(run=subprocess.run)
         return 0
+    if a.action == "egress-render":                      # a failure is one alertable stderr line, exit 1
+        return oo.egress_render(Path("/"), lambda: _load(a.site), run=subprocess.run)
     site, hosts = _load(a.site)
-    if a.action == "egress-render":
-        changed = oo.render_egress(Path("/"), site, hosts)
-        print(f"/{oo.EGRESS_ADDR}: {'written' if changed else 'unchanged'}")
-        return 0
     me = next((h for h in hosts if h.hostname == _host()), None)
     if me is None:
         raise SiteError(f"this host ({_host()}) is not in the hosts table")
@@ -671,8 +709,11 @@ def main(argv=None):
     ys_.add_argument("--recent", action="store_true", help="(every 5 min) files changed in the watched folders")
     dl = sub.add_parser("doc-ledger", help="(documents server; root) the controlled-document ledger: process the spool "
                                            "(chp-docs-ledger.service), verify it (--stick: against the site stick's "
-                                           "heads), export it to the site stick, or purge the quarantine")
-    dl.add_argument("action", choices=("process", "verify", "export", "purge-quarantine"))
+                                           "heads), export it to the site stick, purge the quarantine, list "
+                                           "unfinished publishes (pending), or resolve one after checking the area")
+    dl.add_argument("action", choices=("process", "verify", "export", "purge-quarantine", "pending", "resolve"))
+    dl.add_argument("request_id", nargs="?", help="resolve: the request id that doc-ledger pending printed")
+    dl.add_argument("--reason", help="resolve: what the ISSO checked and did (one line)")
     dl.add_argument("--stick", nargs="?", const=True, help="verify/export: the pinned site stick (or a folder, for tests)")
     from . import doc as _docmod
     _docmod.add_parser(sub)

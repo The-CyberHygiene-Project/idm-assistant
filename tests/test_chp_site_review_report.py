@@ -376,7 +376,7 @@ def test_old_check_makes_canary_and_degraded_stale_and_future_times_attention():
 
 
 def test_only_listed_nextcloud_rules_are_nextcloud_intrusions():
-    a = [alert("100650", 12, "srv1", START + 3600, {"remoteAddr": "192.0.2.50"}, desc="other", groups=("nextcloud",)),
+    a = [alert("100699", 12, "srv1", START + 3600, {"remoteAddr": "192.0.2.50"}, desc="other", groups=("nextcloud",)),
          alert("100609", 12, "srv1", START + 3700, {"remoteAddr": "192.0.2.51"}, desc="canary enabled")]
     d = build(healthy(a))
     assert {i["source"]: i["kind"] for i in d["intrusions"] if i["target"] == "srv1"} == {None: "wazuh", "192.0.2.51": "nextcloud"}
@@ -394,3 +394,96 @@ def test_egress_100620_is_a_nextcloud_intrusion():
     assert [i["kind"] for i in d["intrusions"]] == ["nextcloud"]
     a = alert("100630", 12, "srv1", START + 3600, {}, desc="Kanidm totp")
     assert [i["kind"] for i in build(healthy([a]))["intrusions"]] == ["wazuh"]
+
+
+# ---- Plan 3 Task 9: the controlled-document workflow's rows (read from the document ledger itself, carry 11) ----
+import calendar as _cal
+import time as _time
+
+
+def _iso(epoch):
+    return _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(epoch))
+
+
+def led(kind, at, user="alice", seq=1, **f):
+    e = {"seq": seq, "ts": _iso(at), "kind": kind, "user": user, "auth": "bearer", "kanidm_sub": "s", "session_id": "x",
+         "request_id": f"{seq:032x}", "doc": "100/CUI_SSP.docx", "file_id": 44, "path": "CUI/Compliance/CUI_SSP_v1.1.docx",
+         "sha256": "a" * 64, "cycle": 1, "prev": "0" * 64}
+    e.update(f)
+    return e
+
+
+def build_docs(entries, signed=(), error=None, alerts=None):
+    dl = {"entries": entries} if error is None else {"error": error}
+    return rr.build(DAY, alerts=healthy() if alerts is None else alerts, hosts=HOSTS, site=SITE, now=END + 1200,
+                    previous=[], doc_ledger=dl, signed=list(signed))
+
+
+def doc_rows(d):
+    return [s for s in d["status"] if s["item"].startswith("document")]
+
+
+def test_review_shows_publications():
+    ents = [led("checkout", START + 100, seq=1), led("approve", START + 200, user="bob", seq=2),
+            led("publish", START + 300, seq=3, cr="CR-2026-0007"),
+            led("publish", START - 600, seq=4, cr="CR-2026-0006", path="CUI/Compliance/CUI_Old_v2.0.docx"),  # day before
+            led("publish", END + 60, seq=5, cr="CR-2026-0008")]                                             # day after
+    d = build_docs(ents)
+    rows = doc_rows(d)
+    pub = [r for r in rows if r["item"].startswith("document published")]
+    assert [r["item"] for r in pub] == ["document published CR-2026-0007"]
+    r = pub[0]
+    assert r["state"] == "OK" and r["host"] == "srv1" and r["owner"]
+    assert "CUI/Compliance/CUI_SSP_v1.1.docx" in r["detail"] and "alice" in r["detail"] and "approved by bob" in r["detail"]
+    assert not [a for a in d["attention"] if a["item"].startswith("document")]
+    md = rr.render_md(d)
+    assert "document published CR-2026-0007" in md and "CR-2026-0006" not in md and "CR-2026-0008" not in md
+    none = doc_rows(build_docs([led("checkout", START + 100)]))
+    assert [(r["item"], r["state"], r["detail"]) for r in none] == [("document publications", "OK", "none this day")]
+
+
+def test_review_shows_overrides_since_last():
+    from datetime import timedelta
+    day = lambda n: rr.day_bounds(DAY - timedelta(days=n), TZ)[0] + 3600     # 01:00 local, n days before DAY
+    ents = [led("override", day(5), user="dana", seq=1, reason="before the last sign-off"),
+            led("override", day(2), user="dana", seq=2, reason="one-person site, two days ago"),
+            led("override", START + 500, user="dana", seq=3, reason="one-person site, today"),
+            led("publish", START + 600, seq=4, cr="CR-2026-0009", sha256="a" * 64)]
+    signed = [(DAY - timedelta(days=3)).isoformat(), (DAY - timedelta(days=9)).isoformat()]
+    d = build_docs(ents, signed=signed)
+    ov = [r for r in doc_rows(d) if r["item"].startswith("document override")]
+    assert len(ov) == 2 and all(r["state"] == "ATTENTION" and r["owner"] is None for r in ov)
+    assert "two days ago" in ov[0]["detail"] and "not yet signed off" in ov[0]["detail"]
+    assert "today" in ov[1]["detail"] and "dana" in ov[1]["detail"]
+    assert all("before the last sign-off" not in r["detail"] for r in ov)
+    # flagged "Needs attention" (the sign-off clears them: the next review starts after the signed day)
+    att = [a for a in d["attention"] if a["item"].startswith("document override")]
+    assert len(att) == 2
+    assert f"Needs attention: {len(d['attention'])}" in rr.render_md(d)
+    # the publication that the override allowed says so
+    pub = next(r for r in doc_rows(d) if r["item"] == "document published CR-2026-0009")
+    assert "ISSO override by dana" in pub["detail"]
+    # once DAY-1 is signed, only today's override is still waiting
+    d2 = build_docs(ents, signed=signed + [(DAY - timedelta(days=1)).isoformat()])
+    assert [r["detail"] for r in doc_rows(d2) if r["item"].startswith("document override")] == [ov[1]["detail"]]
+    # never signed at all: every override up to the end of the day is shown
+    assert len([r for r in doc_rows(build_docs(ents)) if r["item"].startswith("document override")]) == 3
+
+
+def test_review_document_ledger_that_does_not_verify():
+    d = build_docs([], error="ledger x: entry 4 does not follow entry 3")
+    r = doc_rows(d)
+    assert [(x["item"], x["state"], x["owner"]) for x in r] == [("document ledger", "ATTENTION", "82-docs-ledger")]
+    assert "entry 4" in r[0]["detail"]
+
+
+def test_review_has_no_document_rows_without_the_ledger():
+    d = build(healthy())
+    assert not doc_rows(d)
+
+
+def test_review_document_text_goes_through_cell():
+    d = build_docs([led("override", START + 5, user="dana", reason="x`|\nboom"),
+                    led("publish", START + 6, seq=2, cr="CR-1`\n", path="a|b`c")])
+    md = rr.render_md(d)
+    assert "`" not in md and "x`|\nboom" not in md

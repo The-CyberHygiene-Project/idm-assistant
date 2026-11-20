@@ -32,6 +32,8 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
   reported and skipped.
 - Every removal is one line `removed <path> (user …, uid …; no live session; older than 12 h)` under the journal tag
   **`chp-doc-sweep`**. Wazuh rule 100626 stores it (level 3), and also `linger turned off for …`.
+- A home it could not sweep (`could not sweep …`) or a linger it could not turn off (`could not turn linger off …`)
+  is Wazuh rule 100631 (level 7, the daily summary).
 
 ### The egress table (G3)
 
@@ -48,6 +50,11 @@ Nothing runs until `chp-site onlyoffice enable` (root; client enrolment's `docs`
   lets only loopback out, and the journal line `EGRESS LOCKDOWN` (tag `chp-egress-lockdown`) is Wazuh rule 100628,
   level 12. The agent cannot send until the link is back, so the manager's disconnected-agent check (71) is the first
   signal. Fix the cause, then `systemctl restart chp-workstation-egress`: a good load removes the lock-down table.
+- A failed render is one journal line `EGRESS RENDER FAILED: …` (tag `chp-workstation-egress`): Wazuh rule 100632,
+  level 7 (the table holds, with the last good addresses). A replaced address file is restorecon'd.
+- **Monitor check 83** (run by chp-base's monitor every 15 min): the unit active, the live table equal to the one
+  built from the shipped files (policy drop), no lock-down table, `chp-onlyoffice-sweep.timer` active. Stopping
+  `nftables.service` runs `flush ruleset`: the table is gone and check 83 alerts.
 - NTP leaves only from chronyd, and only to the `NTP_UPSTREAM` addresses when every entry is an address; when any
   entry is a host name, to any address.
 - Refused packets are logged with the prefix `CHP-WS-EGRESS` (DNS: `CHP-WS-EGRESS-DNS`), at most 6 a minute. Wazuh
@@ -92,6 +99,7 @@ do **not** load the table into a kernel. The following still need a live check o
 - `KillUserProcesses=yes` after a reboot;
 - the polkit rule refuses `loginctl enable-linger` for a user;
 - the sweep's privilege drop under SELinux and fapolicyd;
-- Wazuh rules 100626, 100627 and 100628, with `wazuh-logtest`;
+- Wazuh rules 100626, 100627 and 100628 (100631 and 100632: logtest on a copy, Plan 3 Task 9, logs/99), live;
+- check 83 on a live workstation (stop nftables.service: alert; restart the egress unit: OK);
 - the lock-down: break the site files with no address file present, reboot, and see the lock-down table and the
   alert after recovery.

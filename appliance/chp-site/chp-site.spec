@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,21 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-6.chp
+- ISO 0.7.0 Plan 3 Task 9: the document ledger's journal lines decoded (Wazuh decoder chp-docs-ledger, written by
+  documents enable with the rules and rolled back with them) and alerted: approve and override 100642/100643 level 12,
+  publish 100644 level 7, checkout/new level 3, quarantine, appender failure, publish-undo-failed and
+  ledger-partial-line level 12, publish-undone and the ISSO's resolve level 7. 100629: a Kanidm sign-in adding an
+  account to admin or cui-users pages. 100631: the workstation sweep's failures (level 7); 100632: a failed egress
+  render at start (level 7, one line "EGRESS RENDER FAILED", the address file restorecon'd when replaced).
+- doc-ledger pending|resolve: unfinished publishes (started and never ended, or undo incomplete) for monitor check 82;
+  the ISSO's resolve is a chained ledger entry (kind resolve, cycle 0).
+- The daily review: each publication of the day, and each ISSO override since the last signed review as "Needs
+  attention" (read from the verified document ledger).
+- documents check: every group reaching a Compliance/Superseded area has the read-only rule (Internal included, and
+  groups mapped there by hand); Internal's advanced permissions and other area rules; chp_ledger enabled with the
+  documents.conf area ids.
+
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-5.chp
 - ISO 0.7.0 Plan 3 (Tasks 1-8, one release for the plan's chp-site changes so far): documents enable's doc-workflow
   steps; doc-ledger (the root appender); doc (the workstation's controlled-document commands); marking; the template

@@ -310,3 +310,92 @@ def test_77_postgresql_down_is_one_alert(tmp_path):
     out = run(tmp_path, "77-nextcloud-services.sh", active="httpd php-fpm nextcloud-cron.timer", lastcron="ERR")
     assert out.count("ALERT") == 1 and "ALERT NextCloud: postgresql is not active" in out
     assert not (tmp_path / "runuser.calls").exists()
+
+
+# ---------- 82-docs-ledger (Plan 3 Task 9): the document ledger's appender, chain, quarantine, unfinished publishes ----
+
+def run82(tmp, path_state="active", verify=(0, "OK: chain and head match, 3 entries; stick anchor NOT checked"),
+          pending=(0, "OK no unfinished publish"), quarantine=(), conf=CONF, now=NOW):
+    b = tmp / "bin"; b.mkdir(exist_ok=True)
+    (b / "systemctl").write_text("#!/bin/bash\n" + f'echo "$*" >> {tmp}/systemctl.calls\n'
+                                 + f'[ "$1 $2" = "is-active chp-docs-ledger.path" ] && {{ echo "{path_state}"; '
+                                 + ('exit 0; }' if path_state == "active" else 'exit 3; }') + "\nexit 3\n")
+    (b / "chp-site").write_text("#!/bin/bash\n" + f'echo "$*" >> {tmp}/chp-site.calls\n'
+                                + f"if [ \"$1 $2\" = 'doc-ledger verify' ]; then cat <<'EOF'\n{verify[1]}\nEOF\n"
+                                  f"exit {verify[0]}; fi\n"
+                                + f"if [ \"$1 $2\" = 'doc-ledger pending' ]; then cat <<'EOF'\n{pending[1]}\nEOF\n"
+                                  f"exit {pending[0]}; fi\nexit 9\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    c = tmp / "documents.conf"
+    if conf is not None:
+        c.write_text(conf)
+    q = tmp / "quarantine"; q.mkdir(exist_ok=True)
+    for f in q.iterdir():
+        f.unlink()
+    for n in quarantine:
+        (q / n).write_text("{}")
+    st = tmp / "state"; st.mkdir(exist_ok=True)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_DOCUMENTS_CONF=str(c), CHP_DOCS_STATE=str(st),
+               CHP_NOW=str(now), CHP_DOCS_LIB=str(D / "chp-documents-lib.sh"), CHP_DOCS_QUARANTINE=str(q))
+    r = subprocess.run(["bash", str(M / "82-docs-ledger.sh")], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_check82_ok_when_all_is_well(tmp_path):
+    out = run82(tmp_path)
+    assert out.startswith("OK") and "ALERT" not in out
+    assert "doc-ledger verify" in (tmp_path / "chp-site.calls").read_text()
+
+
+def test_check82_silent_ok_when_documents_off(tmp_path):
+    out = run82(tmp_path, conf=None)
+    assert out.startswith("OK") and "ALERT" not in out
+    assert not (tmp_path / "chp-site.calls").exists()
+
+
+def test_check82_flags_inactive_path_unit(tmp_path):
+    for st in ("failed", "inactive"):
+        d = fresh(tmp_path, st)
+        out = run82(d, path_state=st)
+        assert "ALERT" in out and "chp-docs-ledger.path" in out and st in out, out
+        assert "reset-failed" in out
+
+
+def test_check82_flags_broken_chain(tmp_path):
+    out = run82(tmp_path, verify=(1, "PROBLEM: ledger /var/lib/chp-docs/ledger/ledger.jsonl: entry 4 does not "
+                                     "follow entry 3 (the chain is broken there)"))
+    assert "ALERT" in out and "entry 4 does not follow entry 3" in out
+    # alerted once, then shown (never a false all-clear) until 24 h have passed
+    again = run82(tmp_path, verify=(1, "PROBLEM: ledger x: entry 4 does not follow entry 3"))
+    assert "ALERT" not in again and "still failing" in again
+    assert "ALERT" in run82(tmp_path, verify=(1, "PROBLEM: x"), now=NOW + DAY)
+
+
+def test_check82_flags_a_verify_that_cannot_run(tmp_path):
+    out = run82(tmp_path, verify=(2, "chp-site: something odd"))
+    assert "ALERT" in out and "does not verify" in out
+
+
+def test_check82_flags_quarantine_not_empty(tmp_path):
+    out = run82(tmp_path, quarantine=("20261119T100000Z-" + "a" * 32 + "-0.json", "x.json"))
+    assert "ALERT" in out and "2 request(s)" in out and "purge-quarantine" in out
+
+
+def test_check82_flags_each_unfinished_publish(tmp_path):
+    lines = ("PENDING publish " + "a" * 32 + " (100/CUI_SSP.docx) started at 2026-11-19 10:00:00Z and never finished\n"
+             "PENDING publish " + "b" * 32 + " (100/CUI_X.docx) failed at 2026-11-19 11:00:00Z and its UNDO INCOMPLETE")
+    out = run82(tmp_path, pending=(1, lines))
+    al = [x for x in out.splitlines() if x.startswith("ALERT")]
+    assert len(al) == 2 and "a" * 32 in al[0] and "UNDO INCOMPLETE" in al[1]
+
+
+def test_check82_flags_pending_that_cannot_be_read(tmp_path):
+    out = run82(tmp_path, pending=(2, "chp-site: journalctl failed (exit 1)"))
+    assert "ALERT" in out and "journalctl failed" in out
+
+
+def test_check82_text_is_cleaned(tmp_path):
+    out = run82(tmp_path, verify=(1, "PROBLEM: bad `x`\x1b[31m"))
+    assert "`" not in out and "\x1b" not in out

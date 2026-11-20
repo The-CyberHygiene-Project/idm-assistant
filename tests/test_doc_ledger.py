@@ -1454,3 +1454,161 @@ def test_occ_store_timeout_kills_the_group_and_raises_occtimeout(tmp_path, monke
 def test_run_group_returns_output_and_exit_code():
     r = L._run_group(["sh", "-c", "cat; echo err >&2; exit 3"], b"in", 10)
     assert (r.returncode, r.stdout, r.stderr) == (3, b"in", b"err\n")
+
+
+# ---------- Plan 3 Task 9: unfinished publishes (check 82) and the ISSO's resolve entry ----------
+
+def _recs(env, t0=NOW):
+    """env.journal as journal records (epoch, line), one second apart, in order."""
+    return [(t0 + i, j) for i, j in enumerate(env.journal)]
+
+
+def test_pending_lists_a_publish_started_and_never_finished(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    rid = "f" * 32                                       # the service killed mid-publish: only the intent was journalled
+    recs = _recs(env) + [(NOW + 100, {"event": "publish-started", "request_id": rid, "user": "alice",
+                                      "doc": "100/CUI_SSP.docx", "name": "CUI_SSP_v1.1.docx", "supersedes": env.doc})]
+    led = env.ledger()
+    assert L.unresolved(recs, led, now=NOW + 100 + L.PENDING_GRACE - 1) == []          # may still be running
+    out = L.unresolved(recs, led, now=NOW + 100 + L.PENDING_GRACE + 1)
+    assert [(p["request_id"], p["state"], p["doc"]) for p in out] == [(rid, "unfinished", "100/CUI_SSP.docx")]
+    assert "chp-site doc-ledger resolve" in L.pending_text(out[0])
+
+
+def test_pending_closed_by_its_entry_or_its_undo(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    env.store.move_error = L.Degraded("SQLSTATE: function md5 is not available")
+    refused(env.publish("alice", V11))                    # started, then undone
+    env.store.move_error = None
+    ok(env.publish("alice", V11))                         # started, then its ledger entry
+    assert [j["event"] for j in env.journal].count("publish-started") == 2
+    assert L.unresolved(_recs(env), env.ledger(), now=NOW + 10 * 86400) == []
+    # the entry closes a start even when its journal line was lost (the ledger is the record)
+    recs = [r for r in _recs(env) if r[1].get("event") != "ledger"]
+    assert L.unresolved(recs, env.ledger(), now=NOW + 10 * 86400) == []
+
+
+def test_pending_undo_failed_never_counts_as_resolved_until_the_isso_resolves(env):
+    _ready_to_publish(env)
+    _timeout_put(env, "CUI_SSP_v1.1.docx", False)
+    refused(env.publish("alice", V11), "UNDO INCOMPLETE")
+    bad = next(j for j in env.journal if j["event"] == "publish-undo-failed")
+    rid = bad["request_id"]
+    recs = _recs(env, NOW - 1000)                         # all of it before the ISSO's resolve (at NOW)
+    # even a later start + entry for the same request id does not clear it (parts may still be in the area)
+    recs += [(NOW - 500, {"event": "publish-started", "request_id": rid}), (NOW - 499, {"event": "publish-undone",
+                                                                                       "request_id": rid})]
+    out = L.unresolved(recs, env.ledger(), now=NOW + 1)
+    assert [(p["request_id"], p["state"]) for p in out] == [(rid, "undo-failed")]
+    assert "UNDO INCOMPLETE" in L.pending_text(out[0]) and "files:put" in L.pending_text(out[0])
+    for bad_reason in ("", "   ", "x" * (L.MAX_TEXT + 1), "two\nlines"):
+        with pytest.raises(SiteError, match="reason"):
+            L.resolve(env.ctx, rid, bad_reason, operator="isso", records=recs)
+    with pytest.raises(SiteError, match="not an unfinished publish"):
+        L.resolve(env.ctx, "e" * 32, "checked the area", operator="isso", records=recs)
+    with pytest.raises(SiteError, match="request id"):
+        L.resolve(env.ctx, "not-hex", "checked the area", operator="isso", records=recs)
+    n = len(env.ledger())
+    e = L.resolve(env.ctx, rid, "checked the area; removed the stray copy", operator="dana (sudo by root)",
+                  records=recs)
+    led = env.ledger()
+    assert len(led) == n + 1 and led[-1] == e
+    assert e["kind"] == "resolve" and e["resolves"] == rid and e["user"] == "dana (sudo by root)"
+    assert e["cycle"] == 0 and e["request_id"] != rid and len(e["request_id"]) == 32
+    assert L.read(env.base / "ledger" / "ledger.jsonl", env.base / "ledger" / "ledger.head")[-1] == e
+    assert env.journal[-1] == {"event": "ledger", **e}
+    assert L.unresolved(recs, led, now=NOW + 1) == []
+    with pytest.raises(SiteError, match="not an unfinished publish"):
+        L.resolve(env.ctx, rid, "again", operator="isso", records=recs)
+
+
+def test_a_resolve_entry_never_joins_a_cycle(env):
+    rid = "f" * 32
+    recs = [(NOW, {"event": "publish-started", "request_id": rid, "doc": f"100/CUI_SSP.docx"})]
+    ok(env.checkout("alice"))
+    L.resolve(env.ctx, rid, "the service was killed; area checked", operator="isso", records=recs,
+              now=NOW + L.PENDING_GRACE + 1)
+    ok(env.approve("bob", V11))
+    p = ok(env.publish("alice", V11))                     # authors, approval order and CR numbering unchanged
+    assert p["cycle"] == 1 and p["cr"].endswith("-0001")
+
+
+def test_journal_records_reads_journalctl_json():
+    calls = []
+
+    def run(argv, **kw):
+        calls.append(argv)
+        lines = [json.dumps({"MESSAGE": json.dumps({"event": "publish-started", "request_id": "a" * 32}),
+                             "__REALTIME_TIMESTAMP": "1795000000123456"}),
+                 json.dumps({"MESSAGE": list(json.dumps({"event": "quarantine"}).encode()),
+                             "__REALTIME_TIMESTAMP": "1795000001000000"}),
+                 json.dumps({"MESSAGE": "not json", "__REALTIME_TIMESTAMP": "1795000002000000"}),
+                 json.dumps({"MESSAGE": "[1, 2]", "__REALTIME_TIMESTAMP": "1795000002000000"}),
+                 "garbage", ""]
+        return subprocess.CompletedProcess(argv, 0, "\n".join(lines), "")
+    out = L.journal_records(run)
+    assert calls[0][:2] == ["journalctl", "-q"] and f"SYSLOG_IDENTIFIER={L.IDENT}" in calls[0]
+    assert "-o" in calls[0] and "json" in calls[0]
+    assert out == [(1795000000.123456, {"event": "publish-started", "request_id": "a" * 32}),
+                   (1795000001.0, {"event": "quarantine"})]
+
+
+def test_journal_records_failure_is_an_error():
+    run = lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "No journal files were found.")
+    with pytest.raises(SiteError, match="journalctl"):
+        L.journal_records(run)
+
+
+def test_a_resolve_covers_only_what_came_before_it(env):
+    rid = "f" * 32
+    recs = [(NOW - 10, {"event": "publish-undo-failed", "request_id": rid, "doc": "100/CUI_SSP.docx", "failed": ["x"]})]
+    L.resolve(env.ctx, rid, "area checked", operator="isso", records=recs)
+    assert L.unresolved(recs, env.ledger(), now=NOW) == []
+    recs.append((NOW + 3600, {"event": "publish-undo-failed", "request_id": rid, "doc": "100/CUI_SSP.docx",
+                              "failed": ["y"]}))
+    assert [p["failed"] for p in L.unresolved(recs, env.ledger(), now=NOW + 3600)] == [["y"]]
+
+
+def test_cli_doc_ledger_pending_and_resolve(env, monkeypatch, capsys):
+    from chp_site import cli
+    from chp_site import audit
+    monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
+    rid = "f" * 32
+    recs = [(NOW - 7200, {"event": "publish-started", "request_id": rid, "doc": "100/CUI_SSP.docx"})]
+    monkeypatch.setattr(L, "journal_records", lambda run=None: recs)
+    monkeypatch.setattr(L.time, "time", lambda: NOW)
+    assert cli.main(["doc-ledger", "pending"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("PENDING publish " + rid) and "never finished" in out
+    monkeypatch.setattr(L.os, "geteuid", lambda: 1000)
+    assert cli.main(["doc-ledger", "resolve", rid, "--reason", "checked"]) == 2
+    assert "root" in capsys.readouterr().err
+    monkeypatch.setattr(L.os, "geteuid", lambda: 0)
+    assert cli.main(["doc-ledger", "resolve", rid]) == 2                  # no reason
+    assert "--reason" in capsys.readouterr().err
+    seen = []
+    monkeypatch.setattr(audit, "record", lambda action, fields, **kw: seen.append((action, fields)))
+    monkeypatch.setattr(audit, "operator", lambda: "dana")
+    assert cli.main(["doc-ledger", "resolve", rid, "--reason", "area checked, nothing left"]) == 0
+    assert env.ledger()[-1]["kind"] == "resolve" and env.ledger()[-1]["user"] == "dana"
+    assert seen and seen[0][0] == "doc-ledger-resolve" and seen[0][1]["request_id"] == rid
+    capsys.readouterr()
+    assert cli.main(["doc-ledger", "pending"]) == 0
+    assert capsys.readouterr().out.startswith("OK")
+
+
+def test_cli_doc_ledger_pending_when_the_ledger_or_journal_is_broken(env, monkeypatch, capsys):
+    from chp_site import cli
+    monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
+    def boom(run=None):
+        raise SiteError("journalctl failed (exit 1): No journal files were found.")
+    monkeypatch.setattr(L, "journal_records", boom)
+    assert cli.main(["doc-ledger", "pending"]) == 2
+    monkeypatch.setattr(L, "journal_records", lambda run=None: [])
+    led = env.base / "ledger"
+    led.mkdir(parents=True, exist_ok=True)
+    (led / "ledger.jsonl").write_text("not json\n")
+    assert cli.main(["doc-ledger", "pending"]) == 2
+    assert "PROBLEM" in capsys.readouterr().out

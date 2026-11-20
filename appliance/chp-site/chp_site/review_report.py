@@ -4,9 +4,11 @@
 """The daily review report (review spec §4): intrusions by source, every host's security status, resources. Pure:
 build() turns one local calendar day of Wazuh alerts (including the hosts' records, rule 100520) into the report data;
 render_md/render_html format it. Nothing here reads files or runs commands."""
+import calendar
 import html
 import ipaddress
 import json
+import time as _time
 from datetime import date, datetime, time as dtime, timedelta
 
 from . import review_rules as rr
@@ -305,6 +307,59 @@ def _documents_items(hosts, recs, end):
     return out
 
 
+# ---- the controlled-document workflow (ISO 0.7.0 Plan 3 Task 9), read from the document ledger itself (not from
+# Wazuh alerts, which can be lost): the build runs on the server as root and passes the verified entries in ----
+LEDGER_OWNER = "82-docs-ledger"
+
+
+def _ledger_time(e):
+    try:
+        return calendar.timegm(_time.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ"))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _local(epoch, tz):
+    return datetime.fromtimestamp(epoch, tz).strftime("%Y-%m-%d %H:%M")
+
+
+def _ledger_items(doc_ledger, signed, day, zone, hosts):
+    """Rows for the day: each publication of the day (OK: Wazuh 100644 already summarised it), and each ISSO override
+    since the last SIGNED review, as "Needs attention" (no owner) until a review covering it is signed (spec §4:
+    an override is flagged in the next daily review; owner decision 9 alerted it at once, 100643)."""
+    if doc_ledger is None:
+        return []
+    server = next((_short(h.hostname) for h in hosts if h.role == "server"), "server")
+    if doc_ledger.get("error"):
+        return [_item(server, "document ledger", rr.ATTENTION, f"does not verify: {doc_ledger['error']}", LEDGER_OWNER)]
+    entries = [e for e in doc_ledger.get("entries") or [] if isinstance(e, dict) and _ledger_time(e) is not None]
+    start, end = day_bounds(day, zone)
+    before = [d for d in signed or () if isinstance(d, str) and d < day.isoformat()]
+    since = day_bounds(date.fromisoformat(max(before)), zone)[1] if before else float("-inf")
+    out = []
+    pubs = [e for e in entries if e.get("kind") == "publish" and start <= _ledger_time(e) < end]
+    for e in pubs:
+        ok = [x for x in entries if x.get("doc") == e.get("doc") and x.get("cycle") == e.get("cycle")
+              and x.get("kind") in ("approve", "override") and x.get("sha256") == e.get("sha256")
+              and _ledger_time(x) <= _ledger_time(e)]
+        how = ("" if not ok else f"; ISSO override by {ok[-1].get('user')}" if ok[-1]["kind"] == "override"
+               else f"; approved by {ok[-1].get('user')}")
+        out.append(_item(server, f"document published {e.get('cr', '?')}", rr.OK,
+                         f"{e.get('path', '?')} by {e.get('user', '?')} at {_local(_ledger_time(e), zone)}{how}",
+                         "docs ledger (100644)"))
+    if not pubs:
+        out.append(_item(server, "document publications", rr.OK, "none this day", "docs ledger (100644)"))
+    for e in entries:
+        t = _ledger_time(e)
+        if e.get("kind") != "override" or not (since <= t < end):
+            continue
+        old = "" if t >= start else " (from an earlier day, not yet signed off)"
+        out.append(_item(server, f"document override {str(e.get('request_id', '?'))[:8]}", rr.ATTENTION,
+                         f"ISSO override by {e.get('user', '?')} at {_local(t, zone)}{old} on {e.get('path', '?')}: "
+                         f"reason: {e.get('reason', '?')}; review it, then sign this review (chp-site review sign)"))
+    return out
+
+
 def _resources(hosts, recs):
     out = {}
     for h in hosts:
@@ -333,7 +388,9 @@ def _trend(resources, previous):
     return out
 
 
-def build(day, *, alerts, hosts, site, now, previous):
+def build(day, *, alerts, hosts, site, now, previous, doc_ledger=None, signed=()):
+    """doc_ledger (server, documents on): {"entries": [...]} (verified) or {"error": text}; None = no document rows.
+    signed: the ISO dates already signed off (the overrides since the last of them stay "Needs attention")."""
     from zoneinfo import ZoneInfo
     zone = ZoneInfo(site.get("TIMEZONE") or "UTC")
     start, end = day_bounds(day, zone)
@@ -341,7 +398,7 @@ def build(day, *, alerts, hosts, site, now, previous):
     recs, bad = _records(day_alerts)
     ip_host = {h.ip: _short(h.hostname) for h in hosts}
     intrusions, routine = _intrusions(day_alerts, site, ip_host)
-    status = _status(hosts, recs, end, zone)
+    status = _status(hosts, recs, end, zone) + _ledger_items(doc_ledger, signed, day, zone, hosts)
     resources = _resources(hosts, recs)
     feeders = ("record", "suricata_stats", "yara_recent")
     stale = sorted({s["host"] for s in status if s["item"] in feeders and s["state"] == rr.STALE})

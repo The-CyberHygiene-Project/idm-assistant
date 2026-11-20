@@ -230,6 +230,26 @@ ACCOUNT_RULE, OIDC_PROVISION_RULE, CANARY_SETUP_RULE = "100623", "100624", "1006
 DOC_SWEEP_RULE = "100626"                                # Plan 3 Task 8 (G2): a workstation's ONLYOFFICE autosave sweep
 WS_EGRESS_RULE = "100627"                                # Plan 3 Task 8 (G3): a workstation's egress table refused a packet
 WS_LOCKDOWN_RULE = "100628"                              # Plan 3 Task 8 fix 1: the egress table failed; loopback-only lockdown
+OIDC_PRIVILEGED_RULE = "100629"                          # Plan 3 Task 9 (Task 1 minor): the sign-in adds admin/cui-users
+DOC_SWEEP_FAILED_RULE = "100631"                         # Plan 3 Task 9 (Task 8 carry): the sweep could not sweep / unlinger
+WS_RENDER_RULE = "100632"                                # Plan 3 Task 9 (Task 8 carry): egress addresses not rendered at start
+# the document ledger's journal lines (Plan 3 Task 9; ruling F4: doc_ledger.journal(), SYSLOG_IDENTIFIER chp-docs-ledger)
+DOC_BASE_RULE, DOC_ROUTINE_RULE, DOC_STARTS_RULE = "100640", "100641", "100649"
+DOC_APPROVE_RULE, DOC_OVERRIDE_RULE, DOC_PUBLISH_RULE = "100642", "100643", "100644"
+DOC_QUARANTINE_RULE, DOC_FAILURE_RULE, DOC_UNDO_FAILED_RULE, DOC_PARTIAL_RULE = "100645", "100646", "100647", "100648"
+DOC_UNDONE_RULE, DOC_RESOLVE_RULE, DOC_PROBLEM_RULE, DOC_ENTRY_RULE = "100650", "100651", "100652", "100653"
+DOC_OTHER_RULE = "100654"
+DOCS_DECODER = "chp-docs-ledger"                         # = doc_ledger.IDENT (not imported: keep this module light)
+DOCS_DECODERS_FILE = "chp_docs_decoders.xml"
+# Wazuh's stock JSON decoder does not take a JSON body behind a syslog header (wazuh-logtest 4.14.7 on aero, Plan 3
+# Task 9: "No decoder matched"); a decoder named after the program hands the body to JSON_Decoder. The JSON key
+# "user" lands in Wazuh's static user field (rules: <user>; descriptions: $(dstuser), as logtest prints it).
+DOCS_DECODERS = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 Plan 3 Task 9): the document ledger's journal lines -->
+<decoder name="{DOCS_DECODER}">
+  <program_name>^{DOCS_DECODER}$</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+"""
 BREAKGLASS_USER = "ncadmin"                              # = documents.ADMIN (not imported: documents imports this module)
 _CTRL = "(CUI|FCI|Archive)"                              # the controlled team folders (share off, contained)
 
@@ -329,6 +349,14 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <if_sid>{ACCOUNT_RULE}</if_sid>
     <url type="pcre2">^/(index\\.php/)?apps/user_oidc/code</url>
     <description>NextCloud: account or group set by the Kanidm sign-in (user_oidc): $(message)</description>
+  </rule>
+  <!-- ...but a sign-in that ADDS the account to admin or cui-users pages all the same: those grants are made in
+       Kanidm, yet each one is a new administrator or a new CUI reader, so the ISSO sees it at once (Task 1 review) -->
+  <rule id="{OIDC_PRIVILEGED_RULE}" level="12">
+    <if_sid>{OIDC_PROVISION_RULE}</if_sid>
+    <field name="message" type="pcre2">^User "[^"]+" added to group "(admin|cui-users)"$</field>
+    <description>NextCloud: the Kanidm sign-in added an account to a privileged group: $(message)</description>
+    <group>chp_access_granted,</group>
   </rule>
   <rule id="{CANARY_SETUP_RULE}" level="3">
     <if_sid>{ACCOUNT_RULE}</if_sid>
@@ -440,6 +468,114 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>Workstation egress table failed to load: the workstation is locked down to loopback</description>
     <group>chp_egress,</group>
   </rule>
+  <!-- G2/F3 not done on a workstation: a home the hourly sweep could not sweep (its CUI recovery copies stay), or a
+       linger that is still on (Plan 3 Task 9: the sweep's own failure lines) -->
+  <rule id="{DOC_SWEEP_FAILED_RULE}" level="7">
+    <program_name>^chp-doc-sweep$</program_name>
+    <regex type="pcre2">could not (sweep \\S+ \\(|turn linger off for \\S+ \\()</regex>
+    <description>Workstation sweep FAILED: recovery copies (CUI) not removed, or linger still on</description>
+    <group>chp_doc_sweep,</group>
+  </rule>
+  <!-- G3 at start: the egress addresses could not be rendered from the site files, so the LAST GOOD address file was
+       loaded (still confined, but stale if the server or resolver moved; a damaged site file on the workstation).
+       Level 7: the table holds; no address file at all fails the load and pages through {WS_LOCKDOWN_RULE} -->
+  <rule id="{WS_RENDER_RULE}" level="7">
+    <program_name>^chp-workstation-egress$</program_name>
+    <match>EGRESS RENDER FAILED</match>
+    <description>Workstation egress addresses not rendered: the last good address file was loaded</description>
+    <group>chp_egress,</group>
+  </rule>
+
+  <!-- the document ledger (Plan 3 Task 9; owner decision 9: every approval and override at once, level 12;
+       publications 7; checkout and new 3). Every line of the appender is stored at least at level 3 (100653, 100641)
+       except none: an unknown event is stored too. A forged line (logger -t chp-docs-ledger) can only ADD an alert;
+       the ledger itself (chp-site doc-ledger verify) and the daily review's rows read the ledger, not these alerts -->
+  <rule id="{DOC_BASE_RULE}" level="15">
+    <decoded_as>{DOCS_DECODER}</decoded_as>
+    <field name="event">\\.+</field>
+    <description>CHP document ledger: $(event)</description>
+  </rule>
+  <rule id="{DOC_ENTRY_RULE}" level="3">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^ledger$</field>
+    <description>CHP document ledger entry: $(kind) by $(dstuser): $(path)</description>
+  </rule>
+  <rule id="{DOC_ROUTINE_RULE}" level="3">
+    <if_sid>{DOC_ENTRY_RULE}</if_sid>
+    <field name="kind" type="pcre2">^(checkout|new)$</field>
+    <description>Controlled document $(kind) by $(dstuser): $(path)</description>
+  </rule>
+  <rule id="{DOC_APPROVE_RULE}" level="12">
+    <if_sid>{DOC_ENTRY_RULE}</if_sid>
+    <field name="kind">^approve$</field>
+    <description>Controlled document APPROVED by $(dstuser): $(path) (sha256 $(sha256))</description>
+    <group>chp_doc_approval,</group>
+  </rule>
+  <rule id="{DOC_OVERRIDE_RULE}" level="12">
+    <if_sid>{DOC_ENTRY_RULE}</if_sid>
+    <field name="kind">^override$</field>
+    <description>Controlled document ISSO OVERRIDE (no independent approver) by $(dstuser): $(path); reason: $(reason)</description>
+    <group>chp_doc_override,</group>
+  </rule>
+  <rule id="{DOC_PUBLISH_RULE}" level="7">
+    <if_sid>{DOC_ENTRY_RULE}</if_sid>
+    <field name="kind">^publish$</field>
+    <description>Controlled document published by $(dstuser): $(path) as $(cr)</description>
+    <group>chp_doc_publish,</group>
+  </rule>
+  <rule id="{DOC_RESOLVE_RULE}" level="7">
+    <if_sid>{DOC_ENTRY_RULE}</if_sid>
+    <field name="kind">^resolve$</field>
+    <description>Document ledger: unfinished publish $(resolves) resolved by $(dstuser): $(reason)</description>
+  </rule>
+  <rule id="{DOC_QUARANTINE_RULE}" level="12">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^quarantine$</field>
+    <description>Document request QUARANTINED (malformed; set aside for the ISSO): $(why)</description>
+    <group>chp_doc_quarantine,</group>
+  </rule>
+  <rule id="{DOC_FAILURE_RULE}" level="12">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event" type="pcre2">^(appender-failed|ledger-broken)$</field>
+    <description>Document ledger appender FAILED ($(event)): requests are not being recorded: $(message)$(error)</description>
+    <group>chp_doc_appender,</group>
+  </rule>
+  <rule id="{DOC_UNDO_FAILED_RULE}" level="12">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^publish-undo-failed$</field>
+    <description>Document publish UNDO INCOMPLETE: parts may be in the area ($(doc)): $(failed)</description>
+    <group>chp_doc_appender,</group>
+  </rule>
+  <rule id="{DOC_PARTIAL_RULE}" level="12">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^ledger-partial-line$</field>
+    <description>Document ledger may end in a PARTIAL line (chp-site doc-ledger verify): $(error)</description>
+    <group>chp_doc_appender,</group>
+  </rule>
+  <rule id="{DOC_STARTS_RULE}" level="3">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^publish-started$</field>
+    <description>Document publish started by $(dstuser): $(name)</description>
+  </rule>
+  <rule id="{DOC_UNDONE_RULE}" level="7">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^publish-undone$</field>
+    <description>Document publish failed and was undone (nothing left in the area): $(doc)</description>
+  </rule>
+  <rule id="{DOC_PROBLEM_RULE}" level="7">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event" type="pcre2">^(head-write-failed|result-write-failed|result-not-written|spool-unlink-failed|quarantine-record-failed)$</field>
+    <description>Document ledger appender problem: $(event): $(error)</description>
+  </rule>
+  <!-- last: every other event of the appender (refused, retry, budget-reached, quarantine-purged, an unknown one) is
+       stored at 3. The base is level 15 only so that it is tried before Wazuh's stock syslog rules (logtest 4.14.7:
+       an error text "No space left on device" was taken by stock rule 1007, level 7, ahead of a level-3 base; a line
+       over 1 KiB would be taken by 1003); every line ends in one of its children, never at 15 -->
+  <rule id="{DOC_OTHER_RULE}" level="3">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event" type="pcre2">^(?!ledger$).</field>
+    <description>CHP document ledger: $(event)</description>
+  </rule>
 </group>
 """
 
@@ -448,8 +584,9 @@ CANARY_RULE = "100608"
 KANIDM_TOTP_RULE = "100630"                      # in the same rules file, but Kanidm's, not NextCloud's
 # the review's NextCloud rows: not the Kanidm rule nor the workstation rules that share the file
 NEXTCLOUD_RULE_IDS = frozenset(_re.findall(r'<rule id="(\d+)"', NEXTCLOUD_RULES)) - {KANIDM_TOTP_RULE, DOC_SWEEP_RULE,
-                                                                                    WS_EGRESS_RULE,
-                                                                                    WS_LOCKDOWN_RULE} | {CANARY_RULE}
+                                                                                    WS_EGRESS_RULE, WS_LOCKDOWN_RULE,
+                                                                                    DOC_SWEEP_FAILED_RULE,
+                                                                                    WS_RENDER_RULE} | {CANARY_RULE}
 
 
 def canary_rules(fileid):

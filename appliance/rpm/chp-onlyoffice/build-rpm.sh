@@ -10,7 +10,8 @@ here="$(cd "$(dirname "$0")" && pwd)"; top="$(cd "$here/../../.." && pwd)"
 ssh aero 'rm -rf /tmp/chpoo && mkdir -p /tmp/chpoo/SOURCES /tmp/chpoo/SPECS /data/chp-release/built'
 scp -q "$here"/onlyoffice-ai-off.sh "$here"/DesktopEditors.conf "$here"/nft/chp-workstation-egress.nft "$here"/nft/chp-workstation-lockdown.nft \
   "$here"/chp-workstation-egress.service "$here"/chp-workstation-egress-lockdown.service "$here"/chp-onlyoffice-sweep.service "$here"/chp-onlyoffice-sweep.timer \
-  "$here"/logind-chp-docs.conf "$here"/50-chp-no-linger.rules "$here"/README.md "$top/LICENSE" aero:/tmp/chpoo/SOURCES/
+  "$here"/logind-chp-docs.conf "$here"/50-chp-no-linger.rules "$here"/README.md "$top/LICENSE" \
+  "$here"/monitor.d/83-workstation-editor.sh aero:/tmp/chpoo/SOURCES/
 scp -q "$here/chp-onlyoffice.spec" aero:/tmp/chpoo/SPECS/
 ssh aero 'rpmbuild -bb --define "_topdir /tmp/chpoo" /tmp/chpoo/SPECS/chp-onlyoffice.spec >/tmp/chpoo/build.log 2>&1 || { tail -20 /tmp/chpoo/build.log; exit 1; }
           cp /tmp/chpoo/RPMS/noarch/chp-onlyoffice-*.rpm /data/chp-release/built/ && rpm -qlp /data/chp-release/built/chp-onlyoffice-*.rpm

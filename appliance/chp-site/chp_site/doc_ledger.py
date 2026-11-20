@@ -30,6 +30,7 @@ last publish of that document (or its creation) to now; Authors(cycle) = whoever
 who checked it out in the cycle (+ the publisher, who must be one of them)."""
 import base64
 import binascii
+import calendar
 import errno
 import fcntl
 import hashlib
@@ -72,7 +73,7 @@ BUDGET = 600                      # process() starts no new request after this m
                                   # never cut off by the unit's TimeoutStartSec (45 min > BUDGET + one worst case)
 FIELDS = ("seq", "ts", "kind", "user", "auth", "kanidm_sub", "session_id", "request_id", "doc", "file_id", "path",
           "sha256", "cycle", "prev")
-OPTIONAL = ("reason", "notes", "cr", "pdf_sha256", "supersedes")
+OPTIONAL = ("reason", "notes", "cr", "pdf_sha256", "supersedes", "resolves")
 CUI_TAG = "CUI"
 DEGRADED = ("the document server is in DEGRADED mode (the database cannot compute MD5, so NextCloud refuses moves of "
             "files with old versions; design §12)")
@@ -596,6 +597,120 @@ def purge_quarantine(ctx=None):
     ctx.journal({"event": "quarantine-purged", "count": n})
     return n
 
+
+
+# ---------- unfinished publishes (monitor check 82) and the ISSO's resolve entry (Plan 3 Task 9) ----------
+# A publish journals "publish-started" before its first write and ends with its ledger entry or "publish-undone".
+# A start with neither (the service killed, the power lost) may have left a half publish in the area; a
+# "publish-undo-failed" did leave parts there. Both stay on check 82 until the ISSO has looked at the area and runs
+# chp-site doc-ledger resolve: a hash-chained ledger entry (kind "resolve", cycle 0: it never joins a document's
+# cycle, so the author/approver rules and CR numbering are unchanged).
+PENDING_GRACE = 1800              # a start younger than this may still be running (at most 7 occ calls of 120 s)
+RESOLVE_KIND = "resolve"          # a ledger kind only the root CLI writes: never accepted from the spool (KINDS)
+
+
+def journal_records(run=subprocess.run):
+    """Every retained journal line of the appender, as (epoch, record) in order; lines that are not a JSON object are
+    skipped. SiteError when journalctl itself fails (check 82 then alerts: unknown is never OK)."""
+    try:
+        r = run(["journalctl", "-q", "--no-pager", "-o", "json", f"SYSLOG_IDENTIFIER={IDENT}"],
+                capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise SiteError(f"journalctl could not be run ({e})") from None
+    if r.returncode != 0:
+        raise SiteError(f"journalctl failed (exit {r.returncode}): {(r.stderr or '').strip()[:200]}")
+    out = []
+    for ln in (r.stdout or "").splitlines():
+        try:
+            j = json.loads(ln)
+            msg = j["MESSAGE"]
+            if isinstance(msg, list):                     # journalctl writes a non-UTF-8 message as a byte array
+                msg = bytes(msg).decode("utf-8", "replace")
+            rec = json.loads(msg)
+            t = int(j["__REALTIME_TIMESTAMP"]) / 1e6
+        except (ValueError, KeyError, TypeError):
+            continue
+        if isinstance(rec, dict):
+            out.append((t, rec))
+    return out
+
+
+def unresolved(records, entries, now, grace=PENDING_GRACE):
+    """The publishes the ISSO must look at: [{request_id, state ("unfinished" | "undo-failed"), at, doc, failed}].
+    An undo that failed is never closed by a later end event of the same request (parts may still be in the area);
+    only a resolve entry closes it. A start is closed by its ledger entry (read from the ledger, so a lost journal
+    line cannot make a published request look unfinished) or by publish-undone."""
+    published = {e.get("request_id") for e in entries if e.get("kind") == "publish"}
+    resolved = {}                                         # request id -> when the ISSO resolved it
+    for e in entries:
+        if e.get("kind") == RESOLVE_KIND:
+            try:
+                resolved[e.get("resolves")] = calendar.timegm(time.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ"))
+            except (KeyError, TypeError, ValueError):
+                continue
+    state = {}
+    for t, r in sorted(records, key=lambda x: x[0]):
+        rid, ev = r.get("request_id"), r.get("event")
+        if not isinstance(rid, str):
+            continue
+        cur = state.get(rid)
+        if ev == "publish-undo-failed":
+            state[rid] = {"request_id": rid, "state": "undo-failed", "at": t, "doc": r.get("doc"),
+                          "failed": r.get("failed") if isinstance(r.get("failed"), list) else []}
+        elif cur is not None and cur["state"] == "undo-failed":
+            continue
+        elif ev == "publish-started":
+            state[rid] = {"request_id": rid, "state": "unfinished", "at": t, "doc": r.get("doc"), "failed": []}
+        elif cur is not None and (ev == "publish-undone" or (ev == "ledger" and r.get("kind") == "publish")):
+            del state[rid]
+    # a resolve covers what happened before it: the same request failing again later is listed again
+    out = [p for rid, p in state.items() if not (rid in resolved and p["at"] <= resolved[rid] + 1)
+           and (p["state"] == "undo-failed" or (rid not in published and p["at"] <= now - grace))]
+    return sorted(out, key=lambda p: p["at"])
+
+
+def _clean(x, n=300):
+    return "".join(" " if ord(c) < 32 or 127 <= ord(c) <= 159 else c for c in str(x))[:n]
+
+
+def pending_text(p):
+    when = time.strftime("%Y-%m-%d %H:%M:%SZ", time.gmtime(p["at"]))
+    if p["state"] == "undo-failed":
+        what = (f"publish {p['request_id']} ({_clean(p['doc'])}) failed at {when} and its UNDO INCOMPLETE "
+                f"({_clean('; '.join(map(str, p['failed'])) or 'steps unknown')}): parts may be in the area")
+    else:
+        what = (f"publish {p['request_id']} ({_clean(p['doc'])}) started at {when} and never finished (the appender "
+                "was stopped?): the area may hold half of it")
+    return (what + f"; check the area, then: chp-site doc-ledger resolve {p['request_id']} --reason \"...\"")
+
+
+def resolve(ctx, request_id, reason, *, operator, records, now=None):
+    """Append the ISSO's resolve entry for one unfinished publish (after checking the area by hand). Root (the CLI
+    checks). The entry is chained like every other and journalled (Wazuh 100651, level 7)."""
+    if not isinstance(request_id, str) or not re.fullmatch(r"[0-9a-f]{32}", request_id):
+        raise SiteError("resolve needs the request id (32 hex) that chp-site doc-ledger pending prints")
+    reason = (reason or "").strip()
+    if not reason or len(reason.encode()) > MAX_TEXT or any(ord(c) < 32 or ord(c) == 127 for c in reason):
+        raise SiteError(f"resolve needs a --reason: what was checked and done (one line, at most {MAX_TEXT} bytes)")
+    now = ctx.now() if now is None else now
+    with _Ledger(ctx) as led:
+        open_ = {p["request_id"]: p for p in unresolved(records, led.entries, now)}
+        p = open_.get(request_id)
+        if p is None:
+            raise SiteError(f"{request_id} is not an unfinished publish (chp-site doc-ledger pending lists them; one "
+                            "already resolved is not listed)")
+        e = {"ts": _ts(now), "kind": RESOLVE_KIND, "user": str(operator)[:200], "auth": "root", "kanidm_sub": None,
+             "session_id": None, "request_id": os.urandom(16).hex(), "doc": p["doc"] if isinstance(p["doc"], str)
+             else "", "file_id": None, "path": "", "sha256": "", "cycle": 0, "resolves": request_id,
+             "reason": reason}
+        try:
+            e = led.append(e, ctx.journal)
+        except _NotAppended as err:
+            raise SiteError(f"the ledger could not be written ({str(err)[:200]}); nothing was recorded"
+                            + ("" if err.cut else "; the ledger may end in a partial line: chp-site doc-ledger "
+                                                  "verify")) from None
+    _safe(ctx.journal, {"event": "ledger", **e})
+    return e
 
 # ---------- one request ----------
 

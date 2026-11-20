@@ -298,3 +298,102 @@ def test_template_has_the_new_keys_empty_and_commented():
         assert t[:t.index(f"\n{k}=\n")].rstrip().splitlines()[-1].startswith("#"), k
     parse_site(GOOD + "".join(f"{k}=\n" for k in ("DOC_ISSO_ACCOUNT", "DOC_APPROVER_ACCOUNTS", "CUI_CONTROLLED_BY",
                                                   "CUI_CATEGORY", "CUI_POC")))
+
+
+# ---------- Plan 3 Task 9: the nightly check watches the workflow's areas and chp_ledger (carries 7, 8) ----------
+from tests.test_chp_site_documents import check_root as _check_root
+
+
+def wf_db(app=None, rules=True):
+    """The database of a site enable set up for the workflow: the four areas, their read-only rules for every group
+    of AREA_GROUPS, the appender's write rule, and chp_ledger's config."""
+    db = DB()
+    areas = {}
+    for key, team, rel in D.AREAS:
+        areas[key] = db.file(team, "files/" + rel, directory=True)
+        if rules:
+            for g in D.AREA_GROUPS[team]:
+                db.c.execute("INSERT INTO oc_group_folders_acl VALUES (?, ?, 'group', ?, 31, 1)",
+                             (db.next_id + 1000 + len(g), areas[key], g))
+            db.c.execute("INSERT INTO oc_group_folders_acl VALUES (?, ?, 'user', ?, ?, ?)",
+                         (areas[key] + 2000, areas[key], D.PUBLISH_USER, D.PUBLISH_MASK, D.PUBLISH_PERMS))
+    good = {"enabled": "yes", "compliance": f"[{areas['CUI_COMPLIANCE_ID']},{areas['INTERNAL_COMPLIANCE_ID']}]",
+            "superseded": f"[{areas['CUI_SUPERSEDED_ID']},{areas['INTERNAL_SUPERSEDED_ID']}]"}
+    for k, v in (good if app is None else app(good)).items():
+        if v is not None:
+            db.c.execute("INSERT INTO oc_appconfig VALUES ('chp_ledger', ?, ?)", (k, v))
+    return db, areas
+
+
+def wf_check(tmp_path, db, areas):
+    r = _check_root(tmp_path)
+    conf = r / "etc/chp/documents.conf"
+    conf.write_text(conf.read_text() + "".join(f"{k}={v}\n" for k, v in areas.items()))
+    return do_check(tmp_path, db=db, root=r)
+
+
+def test_nightly_check_clean_workflow_site(tmp_path):
+    db, areas = wf_db()
+    _, res, _ = wf_check(tmp_path, db, areas)
+    assert res["alerts"] == [], res["alerts"]
+
+
+def test_nightly_check_flags_a_missing_area_read_only_rule(tmp_path):
+    for n, (key, team, rel) in enumerate(D.AREAS):
+        for g in D.AREA_GROUPS[team]:
+            db, areas = wf_db()
+            db.c.execute("DELETE FROM oc_group_folders_acl WHERE fileid = ? AND mapping_id = ?", (areas[key], g))
+            _, res, _ = wf_check(tmp_path / f"{n}-{g}", db, areas)
+            assert keys(res) == {f"area-ro:{team}/{rel}:{g}"}, (team, rel, g, res["alerts"])
+            assert "read-only" in res["alerts"][0]["text"] and "WRITE" in res["alerts"][0]["text"]
+
+
+def test_nightly_check_flags_a_group_mapped_to_internal_by_hand(tmp_path):
+    db, areas = wf_db()
+    db.c.execute("INSERT INTO oc_group_folders_groups VALUES (?, 'contractors', 31, NULL)", (IDS["Internal"],))
+    _, res, _ = wf_check(tmp_path, db, areas)
+    assert keys(res) == {"area-ro:Internal/Compliance:contractors", "area-ro:Internal/Compliance/Superseded:contractors"}
+    assert "by hand" in res["alerts"][0]["text"]
+    # once it has the read-only rule on both areas, it is accepted
+    for key in ("INTERNAL_COMPLIANCE_ID", "INTERNAL_SUPERSEDED_ID"):
+        db.c.execute("INSERT INTO oc_group_folders_acl VALUES (?, ?, 'group', 'contractors', 31, 1)",
+                     (areas[key] + 3000, areas[key]))
+    _, res, _ = wf_check(tmp_path / "b", db, areas)
+    assert res["alerts"] == [], res["alerts"]
+
+
+def test_nightly_check_flags_internal_area_rules_widened_or_extra(tmp_path):
+    db, areas = wf_db()
+    a = areas["INTERNAL_COMPLIANCE_ID"]
+    db.c.execute("UPDATE oc_group_folders_acl SET permissions = 7 WHERE fileid = ? AND mapping_id = 'chp-users'", (a,))
+    _, res, _ = wf_check(tmp_path, db, areas)
+    assert keys(res) == {"area-ro:Internal/Compliance:chp-users", "area-other:Internal"}, res["alerts"]
+    db, areas = wf_db()
+    sub = db.file("Internal", "files/Compliance/policies", directory=True)
+    db.c.execute("INSERT INTO oc_group_folders_acl VALUES (9001, ?, 'group', 'chp-users', 31, 31)", (sub,))
+    _, res, _ = wf_check(tmp_path / "b", db, areas)
+    assert keys(res) == {"area-other:Internal"} and "Compliance/policies" in res["alerts"][0]["text"]
+
+
+def test_nightly_check_flags_internal_without_advanced_permissions(tmp_path):
+    db, areas = wf_db()
+    db.c.execute("UPDATE oc_group_folders SET acl = 0 WHERE folder_id = ?", (IDS["Internal"],))
+    _, res, _ = wf_check(tmp_path, db, areas)
+    assert keys(res) == {f"advperm:{IDS['Internal']}"} and "Internal" in res["alerts"][0]["text"]
+
+
+def test_nightly_check_flags_chp_ledger_off_or_its_ids_wrong(tmp_path):
+    cases = [(lambda g: dict(g, enabled="no"), {"ledger-app:enabled"}),
+             (lambda g: dict(g, enabled=None), {"ledger-app:enabled"}),
+             (lambda g: dict(g, compliance="[1,2]"), {"ledger-app:compliance"}),
+             (lambda g: dict(g, superseded=None), {"ledger-app:superseded"}),
+             (lambda g: dict(g, compliance="not json"), {"ledger-app:compliance"})]
+    for n, (app, want) in enumerate(cases):
+        db, areas = wf_db(app=app)
+        _, res, _ = wf_check(tmp_path / str(n), db, areas)
+        assert keys(res) == want, (n, res["alerts"])
+
+
+def test_nightly_check_skips_the_workflow_on_a_site_without_it(tmp_path):
+    _, res, _ = do_check(tmp_path)                       # documents.conf without the area ids (before Plan 3's enable)
+    assert res["alerts"] == []

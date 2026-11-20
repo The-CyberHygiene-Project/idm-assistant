@@ -118,13 +118,15 @@ def show(*, root=Path("/"), day=None):
     return p.read_text()
 
 
-def nightly(*, root=Path("/"), today, site, hosts, alerts, now):
+def nightly(*, root=Path("/"), today, site, hosts, alerts, now, doc_ledger=None):
     """The timer's job: build every missing day (frozen), then remove reports older than a year. Only one build runs at
-    a time (flock on .build.lock); a second caller returns None without writing."""
+    a time (flock on .build.lock); a second caller returns None without writing. doc_ledger: the document ledger's
+    verified entries (or its error), for the publications and overrides rows (Plan 3 Task 9)."""
     from . import review_report as rr
 
     def make(day):
-        data = rr.build(day, alerts=alerts, hosts=hosts, site=site, now=now, previous=previous(root=root, day=day))
+        data = rr.build(day, alerts=alerts, hosts=hosts, site=site, now=now, previous=previous(root=root, day=day),
+                        doc_ledger=doc_ledger, signed=sorted(_signed(root)))
         return data, rr.render_md(data), rr.render_html(data)
 
     base = _dir(root)

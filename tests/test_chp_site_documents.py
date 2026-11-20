@@ -720,6 +720,36 @@ def test_bad_wazuh_rules_are_rolled_back(tmp_path):
     assert ["systemctl", "restart", "wazuh-manager"] not in e.run.calls
 
 
+
+def test_wazuh_gets_the_document_ledger_decoder(tmp_path):              # Plan 3 Task 9: ledger lines are JSON
+    from chp_site import wazuh as w
+    e = Env(tmp_path)
+    e.enable()
+    dec = e.root / "var/ossec/etc/decoders" / w.DOCS_DECODERS_FILE
+    assert dec.read_text() == w.DOCS_DECODERS and (dec.stat().st_mode & 0o777) == 0o640
+    assert f"/var/ossec/etc/decoders/{w.DOCS_DECODERS_FILE}" in D._aide_files("lab.test")
+    t = _index(e.run.calls, lambda c: c[:1] == ["/var/ossec/bin/wazuh-analysisd"] and "-t" in c, "rule test")
+    assert _index(e.run.calls, lambda c: c == ["systemctl", "restart", "wazuh-manager"], "restart") > t
+
+
+def test_bad_wazuh_check_rolls_the_decoder_back_too(tmp_path):
+    from chp_site import wazuh as w
+    e = Env(tmp_path)
+    dec = e.root / "var/ossec/etc/decoders" / w.DOCS_DECODERS_FILE
+    assert not dec.exists()
+    _bad_wazuh_check(e)
+    with pytest.raises(SiteError, match="Wazuh"):
+        e.enable()
+    assert not dec.exists()                                       # none before: the new one is removed
+    e2 = Env(tmp_path / "two")
+    dec2 = e2.root / "var/ossec/etc/decoders" / w.DOCS_DECODERS_FILE
+    dec2.parent.mkdir(parents=True, exist_ok=True)
+    dec2.write_text("<!-- old -->\n")
+    _bad_wazuh_check(e2)
+    with pytest.raises(SiteError, match="Wazuh"):
+        e2.enable()
+    assert dec2.read_text() == "<!-- old -->\n"                  # the previous one is put back
+
 # ---------- status ----------
 
 def test_status_not_enabled(tmp_path):
@@ -1244,7 +1274,9 @@ def test_wazuh_rollback_when_old_rules_cannot_be_put_back(tmp_path, monkeypatch)
         e.enable()
     msg = str(ex.value)
     assert conf.read_text() == old_conf                         # ossec.conf is restored anyway
+    dec = e.root / "var/ossec/etc/decoders/chp_docs_decoders.xml"            # Plan 3 Task 9: rolled back too
     assert msg == ("the Wazuh rule check (wazuh-analysisd -t) failed on the new NextCloud rules; "
+                   f"the new decoders file {dec} is removed; "
                    f"the previous {conf} is back; NOT rolled back: the previous {rules} could not be restored "
                    f"(could not write {rules} (Read-only file system); fix it, then re-run chp-site documents enable); "
                    "the manager was not restarted; fix that by hand before restarting Wazuh: rule error")

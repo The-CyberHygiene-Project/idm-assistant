@@ -501,7 +501,9 @@ def test_account_and_group_changes_outside_oidc_page():
               'User created: "mallory"', 'User "lab01" removed from group "doc-reviewers"'):
         assert _level(x, {**_nc(m, user="ncadmin", url=web), "hhmm": "14:00"})[1] == 12, m
         assert _level(x, {**_nc(m, user="--", url="--"), "hhmm": "14:00"})[1] == 12, m        # occ on the server
-        assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "14:00"})[1] == 3, m     # Kanidm sign-in sync
+        # Kanidm sign-in sync: stored; but adding admin or cui-users pages even then (Plan 3 Task 9, carry 2)
+        priv = " added to group \"admin\"" in m or " added to group \"cui-users\"" in m
+        assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "14:00"})[1] == (12 if priv else 3), m
     # the real first-sign-in lines (logs/72) through the OIDC callback: stored, not paged
     for m in ('User "lab06" added to group "chp-users"', 'User created: "lab06"'):
         assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "20:41"}) == (w.OIDC_PROVISION_RULE, 3)
@@ -511,3 +513,129 @@ def test_account_and_group_changes_outside_oidc_page():
         assert _level(x, {**_nc(m, user="--", url="--"), "hhmm": "14:00"})[1] == 12, m
         assert _level(x, {**_nc(m, user="ncadmin", url=web), "hhmm": "03:10"})[1] == 12, m
     assert _level(x, {**_nc('User "chp-canary" added to group "admin"', user="--", url="--"), "hhmm": "03:10"})[1] == 12
+
+
+# ---------- Plan 3 Task 9: the document ledger's journal lines (ruling F4), and carries from Tasks 1 and 8 ----------
+# doc_ledger.journal() writes one compact JSON object per line with logger -t chp-docs-ledger. Wazuh's stock JSON
+# decoder does not take a JSON body behind a syslog header (wazuh-logtest 4.14.7 on aero: "No decoder matched"), so a
+# decoder named after the program hands the body to JSON_Decoder (w.DOCS_DECODERS).
+
+def _dl(event, **f):
+    return {"decoder": w.DOCS_DECODER, "program_name": "chp-docs-ledger", "location": "journald",
+            "json": {"event": event, **f}}
+
+
+def _entry(kind, **f):
+    e = {"seq": 3, "ts": "2026-11-19T10:00:00Z", "kind": kind, "user": "lab02", "auth": "bearer", "kanidm_sub": "s",
+         "session_id": "x", "request_id": "0" * 32, "doc": "12/CUI_SSP.docx", "file_id": 44,
+         "path": "CUI/Compliance/CUI_SSP_v1.1.docx", "sha256": "a" * 64, "cycle": 1, "prev": "b" * 64}
+    e.update(f)
+    return _dl("ledger", **e)
+
+
+def test_docs_decoder_takes_the_json_body_of_the_ledgers_lines():
+    import xml.etree.ElementTree as ET
+    d = ET.fromstring("<x>" + _re.sub(r"<!--.*?-->", "", w.DOCS_DECODERS, flags=_re.S) + "</x>").find("decoder")
+    assert d.get("name") == w.DOCS_DECODER == "chp-docs-ledger"
+    assert d.findtext("program_name") == "^chp-docs-ledger$"
+    assert d.findtext("plugin_decoder") == "JSON_Decoder"
+    from chp_site import doc_ledger as dl
+    assert dl.IDENT == "chp-docs-ledger"
+
+
+def test_approval_rule_level_12():
+    assert _level(w.NEXTCLOUD_RULES, _entry("approve")) == (w.DOC_APPROVE_RULE, 12)
+
+
+def test_override_rule_level_12():
+    assert _level(w.NEXTCLOUD_RULES, _entry("override", reason="one-person site")) == (w.DOC_OVERRIDE_RULE, 12)
+
+
+def test_publication_rule_level_7():
+    assert _level(w.NEXTCLOUD_RULES, _entry("publish", cr="CR-2026-0001")) == (w.DOC_PUBLISH_RULE, 7)
+
+
+def test_ledger_rules_levels():
+    x = w.NEXTCLOUD_RULES
+    cases = [(_entry("checkout"), 3), (_entry("new"), 3), (_entry("resolve", resolves="1" * 32, reason="r"), 7),
+             (_dl("quarantine", request_id="0" * 32, user=None, why="unknown kind"), 12),
+             (_dl("appender-failed", message="chp-docs-ledger stopped"), 12),
+             (_dl("ledger-broken", request_id="0" * 32, error="x"), 12),
+             (_dl("publish-undo-failed", request_id="0" * 32, doc="12/x", failed=["unknown put 12/x"]), 12),
+             (_dl("ledger-partial-line", request_id="0" * 32, error="x"), 12),
+             (_dl("publish-started", request_id="0" * 32, user="lab01", doc="12/x", name="x", supersedes=None), 3),
+             (_dl("publish-undone", request_id="0" * 32, doc="12/x"), 7),
+             (_dl("head-write-failed", seq=4, error="x"), 7), (_dl("spool-unlink-failed", file="a.json", error="x"), 7),
+             (_dl("result-write-failed", request_id="0" * 32, error="x"), 7),
+             (_dl("refused", request_id="0" * 32, user="lab01", kind="approve", file_id=4, message="m"), 3),
+             (_dl("retry", request_id="0" * 32, user="lab01", kind="approve", why="w"), 3)]
+    for ev, want in cases:
+        assert _level(x, ev)[1] == want, ev
+    # a ledger line of a kind nobody defined is stored, never silently dropped
+    assert _level(x, _entry("something-new"))[1] == 3
+    # the same JSON from any other program is not the ledger's
+    assert _level(x, {**_entry("approve"), "decoder": "json", "program_name": "logger"})[0] is None
+
+
+def test_ledger_rule_ids_are_nextcloud_rows_in_the_review():
+    ids = {w.DOC_APPROVE_RULE, w.DOC_OVERRIDE_RULE, w.DOC_PUBLISH_RULE, w.DOC_QUARANTINE_RULE, w.DOC_FAILURE_RULE,
+           w.DOC_UNDO_FAILED_RULE, w.DOC_PARTIAL_RULE}
+    assert ids <= w.NEXTCLOUD_RULE_IDS
+    assert all(100600 <= int(i) < 100700 for i in ids)
+    found = _re.findall(r'<rule id="(\d+)"', w.NEXTCLOUD_RULES)
+    assert len(found) == len(set(found))                            # no id used twice
+
+
+def test_ledger_rules_match_the_user_by_the_static_element():
+    r = _rule(w.DOC_APPROVE_RULE)
+    assert r.find("user") is None or r.findtext("user")              # never <field name="user">
+    assert "$(dstuser)" in r.findtext("description")                 # logtest: the static user prints as dstuser
+
+
+def test_oidc_callback_adding_admin_or_cui_users_pages():               # Task 1 review minor (carry 2)
+    x = w.NEXTCLOUD_RULES
+    oidc = "/index.php/apps/user_oidc/code?state=abc&code=<REDACTED>"
+    for g in ("admin", "cui-users"):
+        assert _level(x, {**_nc(f'User "lab06" added to group "{g}"', user="lab06", url=oidc), "hhmm": "14:00"}) \
+            == (w.OIDC_PRIVILEGED_RULE, 12), g
+    for m in ('User "lab06" added to group "chp-users"', 'User created: "lab06"',
+              'User "lab06" removed from group "admin"', 'User "lab06" added to group "admins"'):
+        assert _level(x, {**_nc(m, user="lab06", url=oidc), "hhmm": "14:00"}) == (w.OIDC_PROVISION_RULE, 3), m
+
+
+def test_sweep_failures_reach_the_daily_summary():                       # Task 8 carry 3
+    x = w.NEXTCLOUD_RULES
+    ev = lambda log: {"decoder": "x", "location": "journald", "program_name": "chp-doc-sweep", "log": log}
+    for log in ("could not sweep /home/lab01 (lab01): [Errno 13] Permission denied",
+                "could not turn linger off for lab01 (loginctl exit 1: boom; still on)"):
+        assert _level(x, ev(log)) == (w.DOC_SWEEP_FAILED_RULE, 7), log
+    assert _level(x, ev("linger turned off for lab01 (ruling F3: no lingering user manager keeps sign-in tokens "
+                        "after logout)"))[0] == w.DOC_SWEEP_RULE
+    assert _level(x, {**ev("could not sweep /home/x (x): y"), "program_name": "logger"})[0] is None
+
+
+def test_egress_render_failure_is_alerted():                             # Task 8 carry 3: stale addresses loaded
+    x = w.NEXTCLOUD_RULES
+    ev = {"decoder": "x", "location": "journald", "program_name": "chp-workstation-egress",
+          "log": "EGRESS RENDER FAILED: site.conf: SERVER_IP missing; the last good address file is loaded"}
+    assert _level(x, ev) == (w.WS_RENDER_RULE, 7)
+    assert _level(x, {**ev, "program_name": "chp-wazuh"})[0] is None
+
+
+def test_workstation_rules_are_not_nextcloud_rows():
+    for r in (w.DOC_SWEEP_FAILED_RULE, w.WS_RENDER_RULE):
+        assert r not in w.NEXTCLOUD_RULE_IDS
+
+
+def test_no_ledger_line_ends_at_the_level_15_base():
+    # the base is level 15 only to be tried before Wazuh's stock syslog rules (logtest 4.14.7: stock 1007 took an
+    # ENOSPC error line ahead of a level-3 base; lab/docs-proof/logs/99); a line must always end in a child
+    x = w.NEXTCLOUD_RULES
+    assert _rule(w.DOC_BASE_RULE).get("level") == "15"
+    for ev in (_dl("refused"), _dl("retry"), _dl("budget-reached"), _dl("quarantine-purged", count=2), _dl("x-new"),
+               _entry("approve"), _entry("brand-new-kind"), _dl("ledger-partial-line", error="No space left on device")):
+        rid, lvl = _level(x, ev)
+        assert rid != w.DOC_BASE_RULE and lvl <= 12, ev
+    assert _level(x, _dl("budget-reached")) == (w.DOC_OTHER_RULE, 3)
+    # the catch-all is the last rule of the file (Wazuh tries a parent's children in order; it must come last)
+    assert _re.findall(r'<rule id="(\d+)"', x)[-1] == w.DOC_OTHER_RULE

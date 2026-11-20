@@ -1,0 +1,336 @@
+# Plan 3 Task 9 (the document ledger's journal lines, carries 1-3): wazuh-logtest-legacy on aero (wazuh-manager
+# 4.14.7, live install UNTOUCHED, still active after): a throwaway copy of /var/ossec bind-mounted over /var/ossec
+# inside 'sudo unshare -m --propagation private', the generated chp rule files in its etc/rules and the new
+# chp_docs_decoders.xml in its etc/decoders (lt.sh below; the method of logs/66 and logs/98). MODE=real = the files
+# exactly as chp-site writes them (analysisd -t). MODE=stdin = the same, but chp_nextcloud_rules.xml's <location>
+# set to "stdin" (only for the admin_audit lines 25-27; the journal lines carry no location rule).
+# Findings on the way (earlier runs this day, same method; not kept): (1) Wazuh's stock "json" decoder does NOT take
+# a JSON body behind a syslog header ("No decoder matched") -> the program-named decoder chp-docs-ledger with
+# JSON_Decoder; (2) with a level-3 base rule, stock rule 1007 (level 7, "File system full") took the lines whose
+# error was "No space left on device" (ledger-partial-line, head-write-failed) ahead of it -> the base is level 15
+# (tried first) and every line ends in a child (100654 last catches the rest at 3); (3) the static user field
+# prints as $(dstuser) (logtest: $(user) empty), and <user> matches it.
+# Lines (journal lines as the journald reader passes them: "<date> <host> <tag>[pid]: <message>", the JSON exactly as
+# doc_ledger.journal() writes it, sort_keys + compact): 1 approve 12; 2 override 12; 3 publish 7; 4 checkout 3;
+# 5 new 3; 6 resolve 7; 7 quarantine 12; 8 the alert unit's appender-failed line (its ExecStart text) 12;
+# 9 ledger-broken 12; 10 publish-undo-failed with its failed list 12; 11 ledger-partial-line (ENOSPC) 12;
+# 12 publish-started 3; 13 publish-undone 7; 14 head-write-failed (ENOSPC) 7; 15 refused 3; 16 an unknown ledger
+# kind 3; 17 the same JSON from another program: not ours; 18 approve over 1 KiB (2046 bytes) 12; 19 publish whose
+# notes hold stock-rule bait words 7; 20 retry 3; 21-22 the workstation sweep's failure lines 7 (100631);
+# 23 linger turned off 3 (100626, unchanged); 24 EGRESS RENDER FAILED 7 (100632); 25-26 the Kanidm sign-in adding
+# admin / cui-users 12 (100629); 27 adding chp-users 3 (100624, unchanged). Copy removed after (0 /var/tmp/wz-lt.*).
+
+e5da82b59c46fc9a41b0e601a9b3cbb8faf1d2c2affac7170f0bc7734414e1c3  /var/tmp/chp-lt-t9/chp_docs_decoders.xml
+3ccc204337e548cbb8cd3a6e7c770418b916fec33c0e3742369b231d5b63e2b5  /var/tmp/chp-lt-t9/chp_nextcloud_rules_canary.xml
+e84c9ece816a672bdc058a57091e8c5c68620f52839bb991e92eb122b65ffffc  /var/tmp/chp-lt-t9/chp_nextcloud_rules.xml
+8e0d5983c3a6c8a3f9da9bcc5cba9193b9e13220377af4dd085761c4f17bfaa2  /var/tmp/chp-lt-t9/chp_review_rules.xml
+e0781be27c5f8448963da7e0fe3c41af052aa4efca43d16db6b8b3e3d2a58a50  /var/tmp/chp-lt-t9/chp_suricata_rules.xml
+f66d7c208a81dbd92b6cb91af358be8405966d889a06515aa07a5a7541172a17  /var/tmp/chp-lt-t9/chp_yara_rules.xml
+9915e26bdff5660b3c288429f1e9b8fa9e6a17f287ef4576b3e063086047e790  /var/tmp/chp-lt-t9/stdin_nc.xml
+db30836420e69ae970c786a621447f5df821d0719e1cba0545abd9eac42bb74f  /var/tmp/chp-lt-t9/lines.txt
+02165f38cba1e149f1d22ba40ef0fc3a5bd551cb4ea9ed75ed9e34d46b315114  /var/tmp/chp-lt.sh
+MODE=real analysisd -t rc=0
+MODE=stdin analysisd -t rc=0
+== MODE=stdin line 1: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"approve","notes":"read it","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdc
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'approve'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100642'
+          Level: '12'
+          Description: 'Controlled document APPROVED by lab02: CUI/Compliance/CUI_SSP_v1.1.docx (sha256 abababababababababababababababababababababababababababababababab)'
+   **Alert to be generated.
+== MODE=stdin line 2: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"override","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcd
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'override'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100643'
+          Level: '12'
+          Description: 'Controlled document ISSO OVERRIDE (no independent approver) by isso1: CUI/Compliance/CUI_SSP_v1.1.docx; reason: one-person site: no other approver'
+   **Alert to be generated.
+== MODE=stdin line 3: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cr":"CR-2026-0001","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"publish","path":"CUI/Compliance/CUI_SSP_v1.1.docx","pdf_sha2
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'publish'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100644'
+          Level: '7'
+          Description: 'Controlled document published by lab01: CUI/Compliance/CUI_SSP_v1.1.docx as CR-2026-0001'
+   **Alert to be generated.
+== MODE=stdin line 4: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"checkout","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcd
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'checkout'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100641'
+          Level: '3'
+          Description: 'Controlled document checkout by lab01: CUI/Compliance/CUI_SSP_v1.1.docx'
+   **Alert to be generated.
+== MODE=stdin line 5: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"new","path":"Internal/Compliance/Policy_v0.1-DRAFT.md","prev":"cdcdcdcdcdcdcdcdc
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'new'
+          path: 'Internal/Compliance/Policy_v0.1-DRAFT.md'
+          Rule id: '100641'
+          Level: '3'
+          Description: 'Controlled document new by lab01: Internal/Compliance/Policy_v0.1-DRAFT.md'
+   **Alert to be generated.
+== MODE=stdin line 6: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"root","cycle":0,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":null,"kind":"resolve","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'resolve'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100651'
+          Level: '7'
+          Description: 'Document ledger: unfinished publish ffffffffffffffffffffffffffffffff resolved by isso1 (sudo): area checked'
+   **Alert to be generated.
+== MODE=stdin line 7: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"quarantine","request_id":"0123456789abcdef0123456789abcdef","user":null,"why":"unknown kind"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'quarantine'
+          Rule id: '100645'
+          Level: '12'
+          Description: 'Document request QUARANTINED (malformed; set aside for the ISSO): unknown kind'
+   **Alert to be generated.
+== MODE=stdin line 8: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[1]: {"event":"appender-failed","message":"chp-docs-ledger stopped (start or trigger limit, or a crash): document requests are not being processed"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'appender-failed'
+          Rule id: '100646'
+          Level: '12'
+          Description: 'Document ledger appender FAILED (appender-failed): requests are not being recorded: chp-docs-ledger stopped (start or trigger limit, or a crash): document requests are not being processed'
+   **Alert to be generated.
+== MODE=stdin line 9: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"ledger /var/lib/chp-docs/ledger/ledger.jsonl: entry 4 does not follow entry 3","event":"ledger-broken","request_id":"0123456789abcdef0123456789abcdef"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'ledger-broken'
+          Rule id: '100646'
+          Level: '12'
+          Description: 'Document ledger appender FAILED (ledger-broken): requests are not being recorded: ledger /var/lib/chp-docs/ledger/ledger.jsonl: entry 4 does not follow entry 3'
+   **Alert to be generated.
+== MODE=stdin line 10: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-undo-failed","failed":["files:put CUI_SSP_v1.1.docx: unknown (occ killed at 120 s)","move 4711: boom"],"request_id":"0123456789abcdef0123456789abcdef"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'publish-undo-failed'
+          failed: '["files:put CUI_SSP_v1.1.docx: unknown (occ killed at 120 s)", "move 4711: boom"]'
+          Rule id: '100647'
+          Level: '12'
+          Description: 'Document publish UNDO INCOMPLETE: parts may be in the area (4711/CUI_SSP.docx): ["files:put CUI_SSP_v1.1.docx: unknown (occ killed at 120 s)", "move 4711: boom"]'
+   **Alert to be generated.
+== MODE=stdin line 11: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"[Errno 28] No space left on device","event":"ledger-partial-line","request_id":"0123456789abcdef0123456789abcdef"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'ledger-partial-line'
+          Rule id: '100648'
+          Level: '12'
+          Description: 'Document ledger may end in a PARTIAL line (chp-site doc-ledger verify): [Errno 28] No space left on device'
+   **Alert to be generated.
+== MODE=stdin line 12: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-started","name":"CUI_SSP_v1.1.docx","request_id":"0123456789abcdef0123456789abcdef","supersedes":4711,"user":"lab01"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'publish-started'
+          Rule id: '100649'
+          Level: '3'
+          Description: 'Document publish started by lab01: CUI_SSP_v1.1.docx'
+   **Alert to be generated.
+== MODE=stdin line 13: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-undone","request_id":"0123456789abcdef0123456789abcdef"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'publish-undone'
+          Rule id: '100650'
+          Level: '7'
+          Description: 'Document publish failed and was undone (nothing left in the area): 4711/CUI_SSP.docx'
+   **Alert to be generated.
+== MODE=stdin line 14: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"[Errno 28] No space left on device","event":"head-write-failed","seq":4}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'head-write-failed'
+          Rule id: '100652'
+          Level: '7'
+          Description: 'Document ledger appender problem: head-write-failed: [Errno 28] No space left on device'
+   **Alert to be generated.
+== MODE=stdin line 15: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"refused","file_id":4800,"kind":"approve","message":"refused: lab01 is not an approver","request_id":"0123456789abcdef0123456789abcdef","user":"lab01"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'refused'
+          kind: 'approve'
+          Rule id: '100654'
+          Level: '3'
+          Description: 'CHP document ledger: refused'
+   **Alert to be generated.
+== MODE=stdin line 16: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"something-new","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdc
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'something-new'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100653'
+          Level: '3'
+          Description: 'CHP document ledger entry: something-new by lab02: CUI/Compliance/CUI_SSP_v1.1.docx'
+   **Alert to be generated.
+== MODE=stdin line 17: Nov 19 10:00:00 iso5-srv.iso5.lab.test logger[99]: {"event":"ledger","kind":"approve","user":"x"}
+          program_name: 'logger'
+          No decoder matched.
+== MODE=stdin line 18: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"approve","notes":"long review note long review note long review note long review
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'approve'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100642'
+          Level: '12'
+          Description: 'Controlled document APPROVED by lab02: CUI/Compliance/CUI_SSP_v1.1.docx (sha256 abababababababababababababababababababababababababababababababab)'
+   **Alert to be generated.
+== MODE=stdin line 19: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cr":"CR-2026-0002","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"publish","notes":"authentication failure segfault killed by 
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          doc: '4711/CUI_SSP.docx'
+          event: 'ledger'
+          kind: 'publish'
+          path: 'CUI/Compliance/CUI_SSP_v1.1.docx'
+          Rule id: '100644'
+          Level: '7'
+          Description: 'Controlled document published by lab01: CUI/Compliance/CUI_SSP_v1.1.docx as CR-2026-0002'
+   **Alert to be generated.
+== MODE=stdin line 20: Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"retry","kind":"approve","request_id":"0123456789abcdef0123456789abcdef","user":"lab01","why":"Kanidm unreachable: [Errno 111] Connection refused"}
+          program_name: 'chp-docs-ledger'
+          decoder: 'chp-docs-ledger'
+          event: 'retry'
+          kind: 'approve'
+          Rule id: '100654'
+          Level: '3'
+          Description: 'CHP document ledger: retry'
+   **Alert to be generated.
+== MODE=stdin line 21: Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: could not sweep /home/lab01 (lab01): [Errno 13] Permission denied
+          program_name: 'chp-doc-sweep'
+          No decoder matched.
+          Rule id: '100631'
+          Level: '7'
+          Description: 'Workstation sweep FAILED: recovery copies (CUI) not removed, or linger still on'
+   **Alert to be generated.
+== MODE=stdin line 22: Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: could not turn linger off for lab01 (loginctl exit 1: Access denied; still on)
+          program_name: 'chp-doc-sweep'
+          No decoder matched.
+          Rule id: '100631'
+          Level: '7'
+          Description: 'Workstation sweep FAILED: recovery copies (CUI) not removed, or linger still on'
+   **Alert to be generated.
+== MODE=stdin line 23: Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: linger turned off for lab01 (ruling F3: no lingering user manager keeps sign-in tokens after logout)
+          program_name: 'chp-doc-sweep'
+          No decoder matched.
+          Rule id: '100626'
+          Level: '3'
+          Description: 'Workstation sweep: an ONLYOFFICE recovery copy (CUI) removed, or linger turned off'
+   **Alert to be generated.
+== MODE=stdin line 24: Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-workstation-egress[640]: EGRESS RENDER FAILED: /etc/chp/site.conf: SERVER line unreadable; the last good address file /etc/chp/workstation-egress-addr.nft is loaded if there is one (stale if the server or resolver mo
+          program_name: 'chp-workstation-egress'
+          No decoder matched.
+          Rule id: '100632'
+          Level: '7'
+          Description: 'Workstation egress addresses not rendered: the last good address file was loaded'
+   **Alert to be generated.
+== MODE=stdin line 25: {"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"admin\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url":"/
+          program_name: '(null)'
+          decoder: 'json'
+          Rule id: '100629'
+          Level: '12'
+          Description: 'NextCloud: the Kanidm sign-in added an account to a privileged group: User "lab06" added to group "admin"'
+   **Alert to be generated.
+== MODE=stdin line 26: {"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"cui-users\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url
+          program_name: '(null)'
+          decoder: 'json'
+          Rule id: '100629'
+          Level: '12'
+          Description: 'NextCloud: the Kanidm sign-in added an account to a privileged group: User "lab06" added to group "cui-users"'
+   **Alert to be generated.
+== MODE=stdin line 27: {"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"chp-users\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url
+          program_name: '(null)'
+          decoder: 'json'
+          Rule id: '100624'
+          Level: '3'
+          Description: 'NextCloud: account or group set by the Kanidm sign-in (user_oidc): User "lab06" added to group "chp-users"'
+   **Alert to be generated.
+wazuh-manager after: active; copies left: 0
+
+---- lt.sh ----
+#!/bin/bash
+# wazuh-logtest-legacy on a throwaway copy of /var/ossec in a private mount namespace (Plan 2 Task 9d method).
+# usage: sudo unshare -m --propagation private bash lt.sh SRC MODE ; SRC holds chp_*.xml + lines.txt
+set -u
+W=/var/tmp/wz-lt.$$; SRC=$1; MODE=$2
+mkdir -p $W
+for d in /var/ossec/*; do b=$(basename $d)
+  case $b in logs|queue|stats|backup|framework|tmp|var|api|wodles) mkdir -p $W/$b; chown --reference=$d $W/$b; chmod --reference=$d $W/$b ;;
+  *) cp -a $d $W/ ;; esac
+done
+cp -a /var/ossec/logs/. $W/logs/ 2>/dev/null; : > $W/logs/ossec.log 2>/dev/null
+for q in sockets alerts db diff fts rids; do mkdir -p $W/queue/$q; chown root:wazuh $W/queue/$q; chmod 770 $W/queue/$q; done
+mkdir -p $W/var/run; chown root:wazuh $W/var/run; chmod 770 $W/var/run
+for f in $SRC/chp_*rules*.xml; do install -m 640 -o root -g wazuh $f $W/etc/rules/$(basename $f); done
+for f in $SRC/chp_*decoders*.xml; do [ -e "$f" ] && install -m 640 -o root -g wazuh $f $W/etc/decoders/$(basename $f); done
+mount --bind $W /var/ossec
+/var/ossec/bin/wazuh-analysisd -t; echo "MODE=$MODE analysisd -t rc=$?"
+n=0
+while IFS= read -r line; do n=$((n+1))
+  echo "== MODE=$MODE line $n: ${line:0:260}"
+  printf '%s\n' "$line" | timeout 60 /var/ossec/bin/wazuh-logtest-legacy 2>&1 | grep -E "Rule id|Level|Description|decoder|program_name|^ *(user|event|kind|failed|doc|path):|^\*\*Alert|No decoder" | sed 's/^/   /'
+done < $SRC/lines.txt
+umount /var/ossec; rm -rf $W
+---- run.sh ----
+#!/bin/bash
+# run on aero: MODE=real (files as chp-site writes them, analysisd -t) then MODE=stdin (NC rules' location = stdin)
+set -u
+S=/var/tmp/chp-lt-t9
+sha256sum $S/*.xml $S/lines.txt /var/tmp/chp-lt.sh
+mkdir -p $S/real $S/stdin
+cp $S/chp_*.xml $S/real/; : > $S/real/lines.txt
+cp $S/chp_*.xml $S/stdin/; cp $S/stdin_nc.xml $S/stdin/chp_nextcloud_rules.xml; cp $S/lines.txt $S/stdin/
+unshare -m --propagation private bash /var/tmp/chp-lt.sh $S/real real
+unshare -m --propagation private bash /var/tmp/chp-lt.sh $S/stdin stdin
+echo "wazuh-manager after: $(systemctl is-active wazuh-manager); copies left: $(ls -d /var/tmp/wz-lt.* 2>/dev/null | wc -l)"
+---- lines.txt ----
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"approve","notes":"read it","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab02"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"override","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","reason":"one-person site: no other approver","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"isso1"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cr":"CR-2026-0001","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"publish","path":"CUI/Compliance/CUI_SSP_v1.1.docx","pdf_sha256":"efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","supersedes":4711,"ts":"2026-11-19T10:00:00Z","user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"checkout","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"new","path":"Internal/Compliance/Policy_v0.1-DRAFT.md","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"root","cycle":0,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":null,"kind":"resolve","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","reason":"area checked","request_id":"0123456789abcdef0123456789abcdef","resolves":"ffffffffffffffffffffffffffffffff","seq":3,"session_id":null,"sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"isso1 (sudo)"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"quarantine","request_id":"0123456789abcdef0123456789abcdef","user":null,"why":"unknown kind"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[1]: {"event":"appender-failed","message":"chp-docs-ledger stopped (start or trigger limit, or a crash): document requests are not being processed"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"ledger /var/lib/chp-docs/ledger/ledger.jsonl: entry 4 does not follow entry 3","event":"ledger-broken","request_id":"0123456789abcdef0123456789abcdef"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-undo-failed","failed":["files:put CUI_SSP_v1.1.docx: unknown (occ killed at 120 s)","move 4711: boom"],"request_id":"0123456789abcdef0123456789abcdef"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"[Errno 28] No space left on device","event":"ledger-partial-line","request_id":"0123456789abcdef0123456789abcdef"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-started","name":"CUI_SSP_v1.1.docx","request_id":"0123456789abcdef0123456789abcdef","supersedes":4711,"user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"doc":"4711/CUI_SSP.docx","event":"publish-undone","request_id":"0123456789abcdef0123456789abcdef"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"error":"[Errno 28] No space left on device","event":"head-write-failed","seq":4}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"refused","file_id":4800,"kind":"approve","message":"refused: lab01 is not an approver","request_id":"0123456789abcdef0123456789abcdef","user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"something-new","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab02"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test logger[99]: {"event":"ledger","kind":"approve","user":"x"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"approve","notes":"long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note long review note ","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab02"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"auth":"bearer","cr":"CR-2026-0002","cycle":1,"doc":"4711/CUI_SSP.docx","event":"ledger","file_id":4802,"kanidm_sub":"sub-lab02","kind":"publish","notes":"authentication failure segfault killed by SIGKILL No space left on device","path":"CUI/Compliance/CUI_SSP_v1.1.docx","prev":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","request_id":"0123456789abcdef0123456789abcdef","seq":3,"session_id":"sid-lab02","sha256":"abababababababababababababababababababababababababababababababab","ts":"2026-11-19T10:00:00Z","user":"lab01"}
+Nov 19 10:00:00 iso5-srv.iso5.lab.test chp-docs-ledger[2301]: {"event":"retry","kind":"approve","request_id":"0123456789abcdef0123456789abcdef","user":"lab01","why":"Kanidm unreachable: [Errno 111] Connection refused"}
+Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: could not sweep /home/lab01 (lab01): [Errno 13] Permission denied
+Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: could not turn linger off for lab01 (loginctl exit 1: Access denied; still on)
+Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-doc-sweep[812]: linger turned off for lab01 (ruling F3: no lingering user manager keeps sign-in tokens after logout)
+Nov 19 10:00:00 iso5-cli1.iso5.lab.test chp-workstation-egress[640]: EGRESS RENDER FAILED: /etc/chp/site.conf: SERVER line unreadable; the last good address file /etc/chp/workstation-egress-addr.nft is loaded if there is one (stale if the server or resolver moved; none: the unit fails and the workstation locks down)
+{"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"admin\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","user":"lab06","userAgent":"CHP plan3 task9 logtest","version":"35.0.3.2"}
+{"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"cui-users\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","user":"lab06","userAgent":"CHP plan3 task9 logtest","version":"35.0.3.2"}
+{"app":"admin_audit","data":{"app":"admin_audit"},"level":1,"message":"User \"lab06\" added to group \"chp-users\"","method":"GET","remoteAddr":"192.168.100.1","reqId":"chpPlan3T9logtest00000AA","scriptName":"/index.php","time":"2026-11-19T17:00:00+00:00","url":"/index.php/apps/user_oidc/code?state=<REDACTED>&code=<REDACTED>","user":"lab06","userAgent":"CHP plan3 task9 logtest","version":"35.0.3.2"}

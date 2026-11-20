@@ -22,6 +22,8 @@ import os
 import pwd
 import shutil
 import stat
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -97,6 +99,26 @@ def _write(path, text, mode):
 
 def render_egress(root, site, hosts):
     return _write(_p(root, EGRESS_ADDR), egress_defines(site, hosts), 0o644)
+
+
+def egress_render(root, load, run=subprocess.run):
+    """`chp-site onlyoffice egress-render` (chp-workstation-egress.service's ExecStartPre, "-": never fatal). A
+    failure is ONE stderr line, "EGRESS RENDER FAILED: ..." (journal tag chp-workstation-egress: Wazuh 100632,
+    level 7), and the last good file is left as it is (nft then loads it). A replaced file is relabelled (temp +
+    rename leaves the temp file's label: Task 8 out-of-scope item, carry 10)."""
+    try:
+        site, hosts = load()
+        changed = render_egress(root, site, hosts)
+    except Exception as e:                                # noqa: BLE001 - any cause: one line, the unit carries on
+        why = " ".join(str(e).split())[:300] or type(e).__name__
+        print(f"EGRESS RENDER FAILED: {why}; the last good address file /{EGRESS_ADDR} is loaded if there is one "
+              "(stale if the server or resolver moved; none: the unit fails and the workstation locks down)",
+              file=sys.stderr)
+        return 1
+    if changed:
+        _restorecon(run, _p(root, EGRESS_ADDR))
+    print(f"/{EGRESS_ADDR}: {'written' if changed else 'unchanged'}")
+    return 0
 
 
 def hosts_text(text):

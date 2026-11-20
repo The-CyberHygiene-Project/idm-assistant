@@ -2,7 +2,7 @@
 
 The documents role of the CyberHygiene appliance: web and PHP configuration for NextCloud (shipped by `nextcloud-chp`),
 the egress table that keeps NextCloud off the internet, units and timers, backup, certificate renewal, a fapolicyd
-rule and monitor checks 77-79 and 81. The package is **site-independent**; `chp-site documents enable` renders the
+rule and monitor checks 77-79, 81 and 82. The package is **site-independent**; `chp-site documents enable` renders the
 site-specific pieces. Installing the package starts and enables nothing, and everything fails closed until rendered.
 
 ## What `chp-site documents enable` must write
@@ -66,7 +66,19 @@ restart. A stray group on CUI, FCI or Archive is removed together with its ACL r
   one older than 26 h alerts, except "pending first run" (OK) while there is no result yet and documents.conf is
   younger than 26 h (final review M1); DEGRADED (database MD5, design §12) is shown, not alerted; a psql failure is
   "UNKNOWN" and alerts (M3). The check reads the database
-  with SQL as apache over the socket, so it runs while `chp_foldertag` is off.
+  with SQL as apache over the socket, so it runs while `chp_foldertag` is off. On a site whose enable set up the
+  document workflow (Plan 3), it also checks that every group reaching a Compliance or Superseded area (Internal
+  included, and any group mapped to a team folder by hand) has the read-only rule there, that Internal has advanced
+  permissions on and no other rule on its areas, and that `chp_ledger` is enabled with exactly the area ids of
+  documents.conf.
+  82 (Plan 3 Task 9): the document ledger: `chp-docs-ledger.path` active; `chp-site doc-ledger verify` exits 0; the
+  quarantine is empty (look, then `chp-site doc-ledger purge-quarantine`); and no unfinished publish
+  (`chp-site doc-ledger pending`: a `publish-started` with neither its ledger entry nor `publish-undone`, and every
+  `publish-undo-failed`), until the ISSO has checked the area and run
+  `chp-site doc-ledger resolve <request id> --reason "..."` (a chained ledger entry, Wazuh 100651). The journal lines
+  of the appender are Wazuh rules 100640-100654 (decoder `chp-docs-ledger`): approvals and overrides level 12 (at
+  once), publications 7, checkout and new 3, quarantine and appender failures 12. Check 82 reads the journal: keep
+  it persistent (`/var/log/journal`), or a publish cut short by a power loss is not found.
   `ExecStopPost=chp-site documents canary-off` switches the canary account off after any end of the run (failure,
   timeout, kill). The timer has no `Persistent=`: Wazuh rule 100609 pages (12) when `chp-canary` is enabled other
   than by occ inside 03:05-03:45 (100618, level 3), and 100619 pages when its password is set or changed. The
