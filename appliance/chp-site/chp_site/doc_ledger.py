@@ -1474,8 +1474,9 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
                 _move_step(s, undo, old, sup_folder, t.folder)
             except Degraded as err:
                 raise _Refuse(f"refused: the old version {old.name} could not be moved to Superseded: {DEGRADED} "
-                              f"({str(err)[:160]}). Nothing was published (the new copy was removed). An administrator "
-                              "moves the old version by hand (see the guide), then run publish again") from None
+                              f"({str(err)[:160]}). Nothing was published (the new copy was removed). The old version "
+                              "cannot be moved by hand either: keep the approved file, tell the administrator, and run "
+                              "publish again once chp-site documents status no longer says DEGRADED (see the guide)") from None
             if old_pdf is not None:
                 try:
                     _move_step(s, undo, old_pdf, sup_folder, t.folder)

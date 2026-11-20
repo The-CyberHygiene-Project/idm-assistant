@@ -46,7 +46,8 @@ def test_guide_states_the_requirements_and_rules():
               "DOC_ISSO_ACCOUNT", "DOC_APPROVER_ACCOUNTS", "never uploaded outside the CUI folders",
               "DEGRADED", "AllFonts", "ALERT_HOOK", "KillUserProcesses", "chp-publisher", "chp-canary",
               "doc-ledger resolve", "doc-ledger pending", "rpmnew", "new installs only", "under review",
-              "logger -t", "100629", "100628", "check 83", "check 82", "chrony"):
+              "logger -t", "ncadmin", "100622", "SECURITY_ALERT_LEVEL", "not yet proven in the lab", "Not supported in 0.7.0", "100606", "escrow/",
+              "100629", "100628", "check 83", "check 82", "chrony"):
         assert s.lower() in c.lower(), s
 
 
@@ -119,6 +120,6 @@ def test_seed_text_is_public_safe():
 def test_known_issues_file_covers_the_open_issues():
     k = KNOWN.read_text()
     for s in ("# ISO 0.7.0 known issues", "MD5", "fapolicyd", "recvmesg failed", "FSMARK=0", "BoringSSL", "--no-sandbox",
-              "PHP 8.3", "NextCloud 37", "OIDC", "forge", "DNS", "chp-publisher", "banner", "FCI", "8 GiB",
+              "PHP 8.3", "NextCloud 37", "OIDC", "forge", "DNS", "chp-publisher", "ncadmin", "SECURITY_ALERT_LEVEL", "banner", "FCI", "8 GiB",
               "new installs only", "download"):
         assert s.lower() in k.lower(), s

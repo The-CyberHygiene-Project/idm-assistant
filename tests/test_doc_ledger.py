@@ -523,6 +523,7 @@ def test_publish_move_degraded_is_reported_and_undone(env):
     env.store.move_error = L.Degraded("SQLSTATE: function md5 is not available")
     m = refused(env.publish("alice", V11), "DEGRADED", "Superseded")
     assert "md5" in m.lower()
+    assert "by hand either" in m and "by hand (see the guide)" not in m   # no impossible instruction (Task 10 I3)
     assert env.store.names(100) == ["CUI_SSP_v1.0.docx", "CUI_SSP_v1.0.pdf"]  # the new file was removed again
     assert [x["kind"] for x in env.ledger()] == ["checkout", "approve"]
 

@@ -139,8 +139,8 @@ FCI folders with the browser. Everything in those folders is tagged and audited.
   `DOC_APPROVER_ACCOUNTS`, `CUI_CONTROLLED_BY`, `CUI_CATEGORY` and `CUI_POC` (the template has them). The ISSO's
   account is listed in `DOC_ISSO_ACCOUNT` only, never also in the approver list. Until at least one of the two is set,
   every approval is refused.
-- **Server memory: at least 8 GiB.** The lab server that passed its proofs had 8 GiB. Do not install the document
-  server on less.
+- **Server memory: at least 8 GiB.** The lab server that passed its proofs had 8 GiB. Nothing checks it when you turn
+  the document server on, so do not install it on less.
 - **Turn it on:** on the server, as an administrator, with the site stick plugged in and a Kanidm admin session:
   `chp-site documents enable`. Look at it any time with `chp-site documents status`.
 - **Workstations:** client enrolment sets up the editor and the document commands when the site has `DOCUMENTS=yes`.
@@ -167,8 +167,11 @@ encrypted disk, or the commands refuse. Run `chp-site doc` as yourself, never as
 5. If marks are missing, see what would be added: `chp-site doc mark CUI_MyPolicy_v1.1-DRAFT.docx`. To add them,
    run the same command with `--apply`. Marks are added only to a `-DRAFT` file with a `CUI_` or `FCI_` name.
 6. Hand the draft to an approver (next part). Wait for the approval.
-7. Rename the approved file, **changing nothing else**: remove `-DRAFT` (`mv CUI_MyPolicy_v1.1-DRAFT.docx
-   CUI_MyPolicy_v1.1.docx`). The approval covers the file's bytes (its sha256), not its name. Do not open the file
+7. Rename the approved file, **changing nothing else**: remove `-DRAFT`:
+
+       mv CUI_MyPolicy_v1.1-DRAFT.docx CUI_MyPolicy_v1.1.docx
+
+   The approval covers the file's bytes (its sha256), not its name. Do not open the file
    in ONLYOFFICE again: saving changes the bytes and the approval no longer counts.
 8. Publish: `chp-site doc publish CUI_MyPolicy_v1.1.docx`. It makes the reader PDF, checks the marks on both files,
    and sends them. The server then writes the new version and its PDF to the Compliance area, moves the old version
@@ -198,7 +201,8 @@ the approval does not match and `publish` refuses.
 The approver must **not** run `chp-site doc checkout` on it. That makes the approver an author of this change (see
 the next part).
 
-The upload is an ordinary work file, tagged and audited. Remove it when the document is published.
+The upload is an ordinary work file, tagged and audited. The approver removes the downloaded copy afterwards with
+`chp-site doc close <file>`. Deleting the shared upload raises a level-7 alert (Wazuh 100606).
 
 #### The approver's rules
 
@@ -228,7 +232,8 @@ The override is refused when:
 - any approver account other than the authors of this change exists (ask one of them to approve instead);
 - there is no `--reason`.
 
-Every override raises a level-12 alert at once (Wazuh 100643, sent to `ALERT_HOOK`) and is listed under
+Every override raises a level-12 alert at once (Wazuh 100643, sent to `ALERT_HOOK`; this needs
+`SECURITY_ALERT_LEVEL` of 12 or lower, see "Alerts you will see") and is listed under
 "Needs attention" in the daily review until a signed review covers it.
 
 #### Answers and exit codes
@@ -238,7 +243,7 @@ Every `chp-site doc` command ends with one of these:
 | Exit | Meaning |
 |---|---|
 | 0 | Done. |
-| 1 | The server said no (it tells you why), or `check` found problems. |
+| 1 | The server said no (it tells you why), a local check refused (the marking check in `approve`, `publish` or `mark`), or `check` found problems. |
 | 2 | Refused before anything was sent: not signed in, name rule, working folder, a missing file. A plain message. |
 | 3 | **Pending.** The server has not answered. Wait a minute and run **the same command again**. |
 
@@ -247,7 +252,7 @@ run `chp-site doc logout`. They are lost only when your last session ends and yo
 
 If the sign-in ends, the command says so. Run `chp-site doc login` and then the same command again.
 
-The sign-in is refreshed 60 seconds before it ends. That assumes the workstation clock is right. chrony keeps it
+The 15-minute access token is refreshed 60 seconds before it ends (the sign-in itself lasts about 8 hours). That assumes the workstation clock is right. chrony keeps it
 right, and it is the only program allowed to reach the time servers (`NTP_UPSTREAM`).
 
 #### The ISSO's duties
@@ -299,19 +304,28 @@ What is refused:
 Copying or moving out of CUI, FCI or Archive to any other place is refused in any case. The only exceptions are CUI
 to Archive and Archive to CUI.
 
-To change a folder with files in it, an administrator does it one file at a time:
+To change a folder with files in it, an administrator can do it one file at a time. **These steps are not yet
+proven in the lab.** Read all of them first.
 
-1. Make the new, empty folder.
-2. Move the files into it one by one. A single file moved inside its own team folder works.
-3. Delete the old folder when it is empty. Do the same for any folder inside it, starting at the bottom.
+- Never use them on a Compliance or Superseded area, or on a team folder's root.
+- Folder access rules (groupfolders advanced permissions) belong to the old folder. A new folder takes its parent's
+  rules, not the old folder's. If the old folder has any rule of its own, copy the same rules to the new folder
+  before you move a single file, or stop and ask the administrator.
+- Every delete in CUI, FCI or Archive raises a level-7 alert (Wazuh 100606). Tell the ISSO first.
 
-To move a file with old versions between CUI and Archive: copy it, check the copy, then delete the original.
-Check the copy's versions first. Do not rely on a copy to carry the old versions.
+1. Check the old folder for access rules of its own, as above.
+2. Make the new folder, then any folder that goes inside it, from the top down. Give them the old folder's rules.
+3. Move the files into the new folders one by one. A single file moved inside its own team folder works.
+4. Check that the old folders hold nothing any more.
+5. Delete the empty old folders from the bottom up. A folder with files in it is refused.
+
+**Not supported in 0.7.0:** moving a file that has old versions to another team folder. A copy is a new file and
+the old versions are not carried. If they must be kept, leave the file where it is until DEGRADED ends.
 
 If `publish` says the old version could not be moved to Superseded (DEGRADED), nothing was changed. The new copy was
 removed. This happens only when the published file has old versions, which a normal publish never creates. Keep the
-approved file. Tell the ISSO and an administrator. There is no tested way around it, and nobody moves files on the
-disk by hand. Run `publish` again once `documents status` no longer says DEGRADED.
+approved file. Tell the ISSO and an administrator. There is no way around it and nobody moves files on the disk by
+hand. Run `publish` again once `chp-site documents status` no longer says DEGRADED.
 
 #### Site rules
 
@@ -334,14 +348,15 @@ disk by hand. Run `publish` again once `documents status` no longer says DEGRADE
   person on each workstation, not once per file. Until then `publish` refuses and says so.
 - **AI and start-page features are off.** The AI Tools plugin is removed at install and again after every ONLYOFFICE
   upgrade. A settings file hides the AI entries on the start page, turns off update checks, plugins and cloud
-  portals. Treat the plugin removal, the egress table and the hosts block as the controls you can rely on.
+  portals. The plugin removal is best effort and nothing watches it: after each ONLYOFFICE upgrade, check that the AI Tools
+  plugin folder is gone. The egress table and the hosts block are the controls that hold either way.
 - **Recovery copies are CUI.** ONLYOFFICE keeps autosave copies. `chp-site doc close` removes them. An hourly sweep
   removes the rest, but only for a person who has no process running at all, and only copies older than 12 hours.
 - **The whole workstation is confined, Firefox included.** Outgoing connections go only to the site server
   (ports 22, 443, 8443, 1514 and 9000, and ping) and to the site resolver for DNS. Time comes only from chrony, to the
   `NTP_UPSTREAM` addresses when every entry is an address, otherwise to any address. The workstation has no
   internet. This is by design.
-- **Sessions end at logout.** `KillUserProcesses=yes` and an hourly `disable-linger` apply to **all** accounts, not
+- **Sessions end at logout.** `KillUserProcesses=yes` (from the next boot) and an hourly `disable-linger` apply to **all** accounts, not
   only ordinary users (only root is left out of the kill). An administrator's `tmux` or `screen` session ends when
   the administrator logs out. A rule refuses `loginctl enable-linger` for everyone but root. If linger is on anyway,
   `chp-site doc login` refuses and says how to turn it off (`loginctl disable-linger <account>`).
@@ -349,7 +364,7 @@ disk by hand. Run `publish` again once `documents status` no longer says DEGRADE
   good one), the workstation falls to loopback only. Nothing leaves it, not even replies to ssh. The journal line is
   `EGRESS LOCKDOWN` (Wazuh 100628, level 12). It arrives only after the link is back. The first live sign is the
   server's "agent disconnected" check (71). Monitor check 83 on the workstation alerts every 15 minutes while it
-  lasts. To recover, at the console:
+  lasts, but that alert cannot leave the workstation either: it is seen at the console, or after recovery. To recover, at the console:
   1. Read `journalctl -u chp-workstation-egress` and fix the cause.
   2. Run `systemctl restart chp-workstation-egress`. A good load removes the lock-down.
   3. Check 83 turns to OK at its next run.
@@ -375,6 +390,9 @@ disk by hand. Run `publish` again once `documents status` no longer says DEGRADE
 | 100631, 100632, 100627 | 7 | The sweep failed, the egress addresses did not render, a packet was refused. |
 | 100628 | 12 | Egress lock-down. |
 
+**Keep `SECURITY_ALERT_LEVEL` at 12 or lower while `DOCUMENTS=yes`.** Approvals and overrides are level 12. Above
+that, they reach only the daily summary, and the detection that T-13 relies on is gone.
+
 The ledger forgery residual (POA&M item T-13): anyone with a shell on the server can write false
 `chp-docs-ledger` lines to the journal (`logger -t chp-docs-ledger`). That can raise a false level-12 alert. It never
 hides a real event: check 82 and the daily review trust only the ledger and root's own journal lines.
@@ -385,13 +403,17 @@ syslog rules. A line that comes out as a stock rule means the family needs fixin
 
 #### Accounts outside Kanidm
 
-Two NextCloud accounts are local and are not in Kanidm. Record both in the SSP's account types and name an owner
-for each (POA&M item T-15).
+Three NextCloud accounts are local and are not in Kanidm. Record all three in the SSP's account types and name an
+owner for each (POA&M item T-15).
 
 - **`chp-publisher`** is the ledger appender's account. It alone writes the Compliance and Superseded areas. It has
   no usable password: a random one is set at every `chp-site documents enable` and thrown away.
 - **`chp-canary`** is the nightly share test. It is switched off between runs. The nightly check (03:10) switches it
   on for a few minutes inside 03:05-03:45.
+- **`ncadmin`** is the break-glass NextCloud administrator, made by `chp-site documents enable`. It is the one of the
+  three that has a usable password. It signs in at `/login?direct=1`, and every sign-in pages at level 12 (Wazuh
+  100622). Its password is written to the site stick, in `escrow/` (a file named `<host>-nextcloud-admin.secret`),
+  and shredded on the server. Keep the stick safe; use the account only in an emergency.
 
 #### New installs, and the upgrade notes
 
