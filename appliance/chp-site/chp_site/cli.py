@@ -575,6 +575,9 @@ def _doc_ledger(a):
         except L.LedgerError as err:
             print(f"PROBLEM: {err}")
             return 2
+        except OSError as err:                       # never a traceback: exit 1 would read as "some pending" (round 2)
+            print(f"PROBLEM: the unfinished-publish check could not read its files ({err})")
+            return 2
         for p in ps:
             print("PENDING " + L.pending_text(p))
         if not ps:
@@ -586,7 +589,12 @@ def _doc_ledger(a):
             raise SiteError("doc-ledger resolve must run as root (sudo)")
         if not a.request_id or not (a.reason or "").strip():
             raise SiteError("doc-ledger resolve needs the request id and --reason \"what was checked and done\"")
-        e = L.resolve(ctx, a.request_id, a.reason, operator=audit.operator(), records=L.journal_records())
+        try:
+            e = L.resolve(ctx, a.request_id, a.reason, operator=audit.operator(), records=L.journal_records())
+        except OSError as err:
+            print(f"chp-site: doc-ledger resolve could not read or write its files ({err}); nothing was resolved",
+                  file=sys.stderr)
+            return 2
         audit.record("doc-ledger-resolve", {"request_id": a.request_id, "reason": a.reason, "entry": e["seq"]})
         print(f"resolved {a.request_id} (ledger entry {e['seq']})")
         return 0
@@ -611,7 +619,11 @@ def _doc_ledger(a):
             L.verify(ctx.ledger, ctx.head, None)
             print("PROBLEM: the stick has no docs-ledger/heads.txt yet (export once to anchor the ledger)")
             return 1
-    return L.verify(ctx.ledger, ctx.head, heads)
+    try:
+        return L.verify(ctx.ledger, ctx.head, heads)
+    except OSError as err:                           # e.g. the ledger replaced by a symlink (O_NOFOLLOW: ELOOP)
+        print(f"PROBLEM: the document ledger could not be read ({err})")
+        return 2
 
 
 def _onlyoffice(a):

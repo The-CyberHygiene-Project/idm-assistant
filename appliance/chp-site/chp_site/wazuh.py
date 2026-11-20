@@ -239,6 +239,7 @@ DOC_APPROVE_RULE, DOC_OVERRIDE_RULE, DOC_PUBLISH_RULE = "100642", "100643", "100
 DOC_QUARANTINE_RULE, DOC_FAILURE_RULE, DOC_UNDO_FAILED_RULE, DOC_PARTIAL_RULE = "100645", "100646", "100647", "100648"
 DOC_UNDONE_RULE, DOC_RESOLVE_RULE, DOC_PROBLEM_RULE, DOC_ENTRY_RULE = "100650", "100651", "100652", "100653"
 DOC_OTHER_RULE = "100654"
+DOC_RECORD_FAILED_RULE = "100655"                        # round 2 (c): the durable unfinished record
 DOCS_DECODER = "chp-docs-ledger"                         # = doc_ledger.IDENT (not imported: keep this module light)
 DOCS_DECODERS_FILE = "chp_docs_decoders.xml"
 # Wazuh's stock JSON decoder does not take a JSON body behind a syslog header (wazuh-logtest 4.14.7 on aero, Plan 3
@@ -564,8 +565,19 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
   </rule>
   <rule id="{DOC_PROBLEM_RULE}" level="7">
     <if_sid>{DOC_BASE_RULE}</if_sid>
-    <field name="event" type="pcre2">^(head-write-failed|result-write-failed|result-not-written|spool-unlink-failed|quarantine-record-failed)$</field>
+    <field name="event" type="pcre2">^(head-write-failed|result-write-failed|result-not-written|spool-unlink-failed|quarantine-record-failed|unfinished-clear-failed)$</field>
     <description>Document ledger appender problem: $(event): $(error)</description>
+  </rule>
+  <!-- level 12: the durable unfinished-publish record (/var/lib/chp-docs/unfinished) could not be written. At the start
+       of a publish (stage start) every publish is refused until root fixes the folder: the workflow is down, as for
+       appender-failed. After an incomplete undo (stage undo-failed) the parts left in the area rest on the journal
+       alone, which rotates: check 82's durable safety net is gone. (unfinished-clear-failed above is level 7: a
+       stale record stays, so check 82 shows it and the ISSO resolves it.) -->
+  <rule id="{DOC_RECORD_FAILED_RULE}" level="12">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^unfinished-record-failed$</field>
+    <description>Document ledger: the unfinished-publish record could NOT be written ($(stage)): $(error)</description>
+    <group>chp_doc_appender,</group>
   </rule>
   <!-- last: every other event of the appender (refused, retry, budget-reached, quarantine-purged, an unknown one) is
        stored at 3. The base is level 15 only so that it is tried before Wazuh's stock syslog rules (logtest 4.14.7:

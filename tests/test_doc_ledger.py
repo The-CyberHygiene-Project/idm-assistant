@@ -1048,9 +1048,13 @@ def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkey
     monkeypatch.setenv("CHP_DOCS_LEDGER", str(led))
     rc, out, calls = S._backup(tmp_path, 10**9, ["20260101T000000Z"])
     assert rc == 0, out and any(str(led) in ln for ln in calls.splitlines() if ln.startswith("rsync"))
+    # round 2 (d): the shared lock comes BEFORE maintenance mode on, and is released only after it is off
+    seq = [ln for ln in calls.splitlines() if ln.startswith(("flock -s", "occ maintenance", "rsync"))]
+    on, off = seq.index("occ maintenance:mode --on"), seq.index("occ maintenance:mode --off")
+    assert seq.index("flock -s -w 900 8") < on
+    assert on < [i for i, ln in enumerate(seq) if str(led) in ln and ln.startswith("rsync")][0] < off
     script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
-    i, j = script.index('exec 8<"$LEDGER/ledger.jsonl"'), script.index('rsync -aHAX --numeric-ids "$LEDGER/"')
-    assert i < script.index("flock -s -w 900 8") < j and script.index("exec 8<&-") > j
+    assert script.index("occ maintenance:mode --off >/dev/null\n    exec 8<&-") > script.index('exec 8<"$LEDGER/ledger.jsonl"')
 
 
 def test_occ_store_undo_delete_is_forced_and_skips_the_trash():
@@ -1761,3 +1765,52 @@ def test_a_reader_gives_up_as_busy_and_verify_says_so(env):
         assert L.verify(led, head, None, say=said.append, wait=0.2) == 3 and said[0].startswith("BUSY")
     finally:
         os.close(fd)
+
+
+# ---------- Task 9 fix round 2 ----------
+
+def test_a_reused_request_id_never_wipes_an_unfinished_record(env):        # round 2 (a)
+    _ready_to_publish(env)
+    rid = "c" * 32
+    _timeout_put(env, "CUI_SSP_v1.1.docx", False)
+    refused(env.publish("alice", V11, rid=rid), "UNDO INCOMPLETE")
+    rec = env.base / "unfinished" / rid
+    before = rec.read_text()
+    env.store.put = FakeStore.put.__get__(env.store)                     # the server works again
+    m = refused(env.publish("alice", V11, rid=rid), "earlier attempt", f"resolve {rid}", "nothing was written")
+    assert rec.read_text() == before and json.loads(before)["state"] == "undo-failed"
+    assert [p["request_id"] for p in L.pending(env.ctx, lambda: [])] == [rid]
+    L.resolve(env.ctx, rid, "checked the area", operator="isso", records=[])
+    ok(env.publish("alice", V11, rid=rid))                              # after the ISSO: the same request goes through
+
+
+def test_record_failures_are_journalled(env):                            # round 2 (c)
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11))
+    (env.base / "unfinished").write_text("not a folder")
+    refused(env.publish("alice", V11), "could not be recorded")
+    ev = [j for j in env.journal if j.get("event") == "unfinished-record-failed"]
+    assert ev and ev[0]["stage"] == "start"
+
+
+def test_cli_pending_verify_resolve_turn_os_errors_into_exit_2(env, monkeypatch, capsys):   # round 2 IMPORTANT
+    from chp_site import cli
+    monkeypatch.setattr(L.Ctx, "system", classmethod(lambda cls: env.ctx))
+    monkeypatch.setattr(L, "journal_records", lambda run=None: [])
+    ok(env.checkout("alice"))
+    (env.base / "unfinished").write_text("a file where the folder should be")      # listdir: NotADirectoryError
+    assert cli.main(["doc-ledger", "pending"]) == 2
+    assert "PROBLEM" in capsys.readouterr().out
+    monkeypatch.setattr(L.os, "geteuid", lambda: 0)
+    assert cli.main(["doc-ledger", "resolve", "a" * 32, "--reason", "x"]) == 2
+    assert "Traceback" not in capsys.readouterr().err
+    real = L.os.open
+
+    def eloop(path, flags, *a):
+        if str(path).endswith("ledger.jsonl") and not flags & os.O_WRONLY and not flags & os.O_RDWR:
+            raise OSError(40, "Too many levels of symbolic links")
+        return real(path, flags, *a)
+    monkeypatch.setattr(L.os, "open", eloop)
+    assert cli.main(["doc-ledger", "verify"]) == 2
+    out = capsys.readouterr().out
+    assert "PROBLEM" in out and "symbolic links" in out

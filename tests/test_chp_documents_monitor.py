@@ -405,3 +405,30 @@ def test_check82_busy_ledger_is_not_an_alert(tmp_path):                 # Task 9
     out = run82(tmp_path, verify=(3, "BUSY: locked"), pending=(3, "BUSY: locked"))
     assert "ALERT" not in out and out.count("busy") == 2
     assert "chain and head verify" not in out                          # no all-clear for a run that did not check
+
+
+# ---------- Task 9 fix round 2 ----------
+
+def test_check82_exit_1_without_pending_lines_is_not_an_all_clear(tmp_path):     # a traceback exits 1 too
+    out = run82(tmp_path, pending=(1, "Traceback (most recent call last):\n  ...\nNotADirectoryError: [Errno 20]"))
+    assert "ALERT" in out and "without a PENDING line" in out and "NotADirectoryError" in out
+    assert "no unfinished publish" not in out
+
+
+def test_check82_busy_runs_keep_state_and_escalate(tmp_path):
+    bad = (1, "PROBLEM: entry 4 does not follow entry 3")
+    pend = (1, "PENDING publish " + "a" * 32 + " (100/x) started at 2026-11-19 10:00:00Z and never finished")
+    first = run82(tmp_path, verify=bad, pending=pend)
+    assert first.count("ALERT") == 2
+    busy = (3, "BUSY: locked")
+    for n in range(1, 4):                                       # busy runs 1-3: no alert, earlier keys kept
+        out = run82(tmp_path, verify=busy, pending=busy, now=NOW + n * 900)
+        assert "ALERT" not in out, (n, out)
+    st = (tmp_path / "state" / "82-ledger.state").read_text()
+    assert "verify " in st and "pending:" + "a" * 32 in st
+    out = run82(tmp_path, verify=busy, pending=busy, now=NOW + 4 * 900)
+    assert "ALERT" in out and "4 monitor runs in a row" in out
+    # back to normal: the old failures are still known (not re-alerted as new), the busy count is reset
+    again = run82(tmp_path, verify=bad, pending=pend, now=NOW + 5 * 900)
+    assert "ALERT" not in again and again.count("still failing") == 2
+    assert not (tmp_path / "state" / "82-ledger.busy").exists()

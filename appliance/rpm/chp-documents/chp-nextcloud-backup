@@ -59,6 +59,15 @@ case ${1:-backup} in
     t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t
     trap 'rc=$?; occ maintenance:mode --off >/dev/null 2>&1 || true; if [ $rc -ne 0 ]; then rm -rf "$o"; status FAILED "backup $t exited $rc"; fi' EXIT
     install -d -m 0700 "$o"
+    # the document ledger's shared lock BEFORE maintenance mode (Task 9 review, round 2 d): a publish in flight finishes
+    # (and its undo can still run occ) first, and no new one starts while NextCloud is in maintenance mode (the
+    # appender waits for its exclusive lock); held until maintenance mode is off. The ledger copy below is consistent.
+    if [ -e "$LEDGER/ledger.jsonl" ]; then
+      exec 8<"$LEDGER/ledger.jsonl"
+      if ! flock -s -w 900 8; then
+        log "backup FAILED: the document ledger stayed locked by the appender for 15 min"; exit 75
+      fi
+    fi
     occ maintenance:mode --on >/dev/null
     runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
     link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
@@ -66,18 +75,10 @@ case ${1:-backup} in
     rsync -aHAX --numeric-ids /etc/nextcloud/ "$o/etc-nextcloud/"
     # rsync copies ledger.head before ledger.jsonl and the appender writes the line before the head, so the copy's
     # head is never ahead of its ledger
-    # ... and under the ledger's shared lock (Task 9 review M1), so a line the appender is still writing is not copied
-    if [ -d "$LEDGER" ]; then
-      if [ -e "$LEDGER/ledger.jsonl" ]; then
-        exec 8<"$LEDGER/ledger.jsonl"
-        if ! flock -s -w 900 8; then
-          log "backup FAILED: the document ledger stayed locked by the appender for 15 min"; exit 75
-        fi
-      fi
-      rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"
-      exec 8<&-
-    fi
+    # ... and under the ledger's shared lock (taken above, Task 9 review M1), so no half-written line is copied
+    if [ -d "$LEDGER" ]; then rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"; fi
     occ maintenance:mode --off >/dev/null
+    exec 8<&- 2>/dev/null || true                         # the appender may run again
     (cd "$o" && find . -type f ! -name MANIFEST ! -name MANIFEST.tmp -print0 | sort -z | xargs -0 sha256sum > MANIFEST.tmp && mv MANIFEST.tmp MANIFEST)
     # retention: older than KEEP days go, but never below MIN_KEEP copies
     n=$(stamps | wc -l)

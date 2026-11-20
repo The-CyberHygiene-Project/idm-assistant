@@ -180,7 +180,8 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
   OnFailure alert) and its root-only folders (Task 4); monitor check 82 (Task 9): chp-docs-ledger.path active,
   chp-site doc-ledger verify, quarantine empty, no unfinished publish (doc-ledger pending: the durable records in
   /var/lib/chp-docs/unfinished, root 0700, var_lib_t; the ISSO resolves). The nightly backup copies the ledger
-  under its shared lock.
+  under its shared lock, taken before maintenance mode and held until it is off (no publish runs in maintenance
+  mode). Check 82: exit 1 without a PENDING line alerts; busy runs keep the state and alert after 4 in a row.
   Requires chp-site >= 0.14.0-6, nextcloud-chp >= 35.0.3-6 (chp_ledger).
 
 * Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-6.chp

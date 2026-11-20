@@ -55,6 +55,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   first write; journal rotation or a forged line cannot clear them); only root's journal lines are read (_UID=0);
   every ledger reader takes the shared lock (BUSY = exit 3); a review built while the ledger did not verify
   (ledger_ok false) never moves the overrides' "since" past its day, and its row is in Needs attention.
+- Review fix 2: an existing unfinished record refuses a re-sent publish (only resolve removes it); doc-ledger
+  pending/verify/resolve turn OS errors into exit 2; Wazuh 100655 (unfinished-record-failed, level 12) and
+  unfinished-clear-failed in 100652 (level 7).
 - The daily review: each publication of the day, and each ISSO override since the last signed review as "Needs
   attention" (read from the verified document ledger).
 - documents check: every group reaching a Compliance/Superseded area has the read-only rule (Internal included, and

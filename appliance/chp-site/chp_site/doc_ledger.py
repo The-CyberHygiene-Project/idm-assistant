@@ -1055,7 +1055,8 @@ def _journal_undo(ctx, r, doc, failed):
     try:                                                  # parts may be in the area: the record stays, with the steps
         _mark_unfinished(ctx, rid, {"state": "undo-failed", "at": ctx.now(), "doc": doc, "failed": failed})
     except OSError as e:
-        _safe(ctx.journal, {"event": "unfinished-record-failed", "request_id": rid, "error": str(e)[:200]})
+        _safe(ctx.journal, {"event": "unfinished-record-failed", "request_id": rid, "stage": "undo-failed",
+                            "error": str(e)[:200]})
 
 
 def _done_text(e):
@@ -1441,11 +1442,19 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo):
 
     # 5-8. compare-and-write, supersede, tag, reader PDF; undone on any failure (also when step 9 fails: the caller
     # holds `undo`). The intent is journalled first, so a publish cut short (the service killed) can be found.
-    # the durable record first (Task 9 review I2): no write to the area without it
+    # the durable record first (Task 9 review I2): no write to the area without it. A record already there is an
+    # earlier attempt of this very request that never ended cleanly (killed, or its undo failed): it is never
+    # overwritten (a clean retry would then clear it without the ISSO; round 2, a); only resolve removes it
+    rid = r["request_id"]
+    if os.path.lexists(ctx.unfinished / rid):
+        raise _Refuse(f"refused: an earlier attempt of this request left an unfinished publish (killed, or an "
+                      f"incomplete undo); the ISSO must check the area and resolve {rid} first (chp-site doc-ledger "
+                      "pending / resolve); nothing was written")
     try:
-        _mark_unfinished(ctx, r["request_id"], {"state": "unfinished", "at": ctx.now(), "doc": t.doc, "name": name,
-                                                "user": user})
+        _mark_unfinished(ctx, rid, {"state": "unfinished", "at": ctx.now(), "doc": t.doc, "name": name, "user": user})
     except OSError as err:
+        _safe(ctx.journal, {"event": "unfinished-record-failed", "request_id": rid, "stage": "start",
+                            "error": str(err)[:200]})
         raise _Refuse(f"refused: the publish could not be recorded as started ({str(err)[:160]}); nothing was "
                       "written; run the command again") from None
     _safe(ctx.journal, {"event": "publish-started", "request_id": r["request_id"], "user": user, "doc": t.doc,

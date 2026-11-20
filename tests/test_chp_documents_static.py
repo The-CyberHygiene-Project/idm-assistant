@@ -136,7 +136,7 @@ def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0, partial=(), flock_r
     (b / "rsync").write_text("#!/bin/bash\necho rsync \"$@\" >> " + str(calls) + "\nfor a; do last=$a; done; mkdir -p \"$last\"; echo f > \"$last/f\"\nexit " + str(rsync_rc) + "\n")
     (b / "df").write_text(f"#!/bin/bash\necho Filesystem; echo x 1 1 {free_kb} 1% /backup\n")
     (b / "logger").write_text("#!/bin/bash\nexit 0\n")
-    (b / "flock").write_text(f"#!/bin/bash\nexit {flock_rc}\n")
+    (b / "flock").write_text("#!/bin/bash\necho flock \"$@\" >> " + str(calls) + f"\nexit {flock_rc}\n")
     for x in b.iterdir():
         x.chmod(0o755)
     B = tmp / "backup"; B.mkdir(exist_ok=True)
@@ -205,7 +205,7 @@ def test_backup_manifest_written_last_by_rename_and_single_run_lock(tmp_path):
     assert "> MANIFEST.tmp && mv MANIFEST.tmp MANIFEST" in b
     assert b.index('flock -n 9') < b.index('for d in $(partials)')
     rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"], partial=["20260102T000000Z"], flock_rc=1)
-    assert rc == 75 and "another backup is running" in out and calls == ""
+    assert rc == 75 and "another backup is running" in out and calls == "flock -n 9\n"   # nothing but its own lock
     assert (tmp_path / "backup/20260102T000000Z").is_dir()   # a running backup's dir is never deleted
 
 

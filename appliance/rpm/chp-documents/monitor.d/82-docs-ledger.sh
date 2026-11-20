@@ -22,6 +22,15 @@ SITE=${CHP_SITE:-chp-site}
 # one line of untrusted text (ledger paths, journal fields): control characters and backticks out, at most 400 chars
 clean() { tr -d '`' | tr '\000-\037\177' ' ' | cut -c1-400; }
 docs_begin 82-ledger
+# a busy run (the appender held the lock past the readers' 120 s wait) checks nothing: the state of the keys it did
+# not check is carried over, so nothing re-alerts as new or is forgotten (round 2, b)
+keep_prior() {
+  local x
+  x=$(awk -v re="$1" '{ k = $0; sub(/ [^ ]*$/, "", k); if (k ~ re) print }' "$docs_sf" 2>/dev/null)
+  if [ -n "$x" ]; then docs_new="$docs_new$x"$'\n'; fi
+}
+BUSY_RUNS=${CHP_DOCS_BUSY_RUNS:-4}                   # 4 runs of the 15-min monitor = about an hour (see below)
+busy=0
 
 st=$(systemctl is-active chp-docs-ledger.path 2>/dev/null); st=${st:-unknown}
 if [ "$st" != active ]; then
@@ -31,6 +40,7 @@ fi
 out=$("$SITE" doc-ledger verify 2>&1); rc=$?
 if [ "$rc" -eq 3 ]; then
   echo "OK document ledger busy (a request held the lock): chain not checked this run"; docs_emitted=$((docs_emitted + 1))
+  busy=1; keep_prior '^verify$'
 elif [ "$rc" -ne 0 ]; then
   why=$(printf '%s\n' "$out" | grep -m1 '^PROBLEM' || printf '%s\n' "$out" | head -1)
   docs_flag verify "document ledger does not verify (exit $rc): $(printf '%s' "$why" | clean) (chp-site doc-ledger verify --stick; restore from the site stick's docs-ledger copy)"
@@ -46,15 +56,34 @@ out=$("$SITE" doc-ledger pending 2>&1); rc=$?
 case $rc in
   0) ;;
   3) echo "OK document ledger busy (a request held the lock): unfinished publishes not checked this run"
-     docs_emitted=$((docs_emitted + 1)) ;;                # never the all-clear below for a run that did not check
-  1) while IFS= read -r ln; do
+     docs_emitted=$((docs_emitted + 1))                   # never the all-clear below for a run that did not check
+     busy=1; keep_prior '^(pending:.*|pendingerr)$' ;;
+  1) found=0
+     while IFS= read -r ln; do
        case $ln in
-         PENDING\ *) rid=$(printf '%s' "$ln" | awk '{print $3}' | tr -cd '0-9a-f' | cut -c1-32)
+         PENDING\ *) found=$((found + 1))
+                     rid=$(printf '%s' "$ln" | awk '{print $3}' | tr -cd '0-9a-f' | cut -c1-32)
                      docs_flag "pending:${rid:-?}" "document ledger: $(printf '%s' "${ln#PENDING }" | clean)" ;;
        esac
-     done <<< "$out" ;;
+     done <<< "$out"
+     # exit 1 is also what a crash (a Python traceback) returns: no PENDING line is never an all-clear (round 2)
+     [ "$found" -gt 0 ] || docs_flag pendingerr "document ledger: unfinished publishes could not be checked (exit 1 without a PENDING line: the command failed?): $(printf '%s\n' "$out" | tail -1 | clean)" ;;
   *) docs_flag pendingerr "document ledger: unfinished publishes could not be checked (exit $rc): $(printf '%s\n' "$out" | head -1 | clean)" ;;
 esac
+
+# The longest a single request holds the lock is about 15 min (a publish: at most 7 occ calls of 120 s); with the
+# readers' 120 s wait one busy run is normal, BUSY_RUNS in a row (about an hour) means the appender holds it nearly
+# all the time (a flood of requests, or a hang): that is alerted, and again every 24 h while it lasts.
+bf=$docs_sd/82-ledger.busy
+if [ "$busy" -eq 1 ]; then
+  nb=$(cat "$bf" 2>/dev/null); case $nb in ''|*[!0-9]*) nb=0 ;; esac; nb=$((nb + 1))
+  printf '%s\n' "$nb" > "$bf" 2>/dev/null
+  if [ "$nb" -ge "$BUSY_RUNS" ]; then
+    docs_flag busy "document ledger: the appender has held the ledger lock on $nb monitor runs in a row: the chain and the unfinished publishes are NOT being checked (a flood of requests or a hung appender? systemctl status chp-docs-ledger; journalctl -u chp-docs-ledger)"
+  fi
+else
+  rm -f "$bf" 2>/dev/null
+fi
 
 docs_end "document ledger: path unit active, chain and head verify, quarantine empty, no unfinished publish"
 exit 0

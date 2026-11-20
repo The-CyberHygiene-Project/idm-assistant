@@ -639,3 +639,13 @@ def test_no_ledger_line_ends_at_the_level_15_base():
     assert _level(x, _dl("budget-reached")) == (w.DOC_OTHER_RULE, 3)
     # the catch-all is the last rule of the file (Wazuh tries a parent's children in order; it must come last)
     assert _re.findall(r'<rule id="(\d+)"', x)[-1] == w.DOC_OTHER_RULE
+
+
+
+def test_unfinished_record_events_are_alerted():                         # Task 9 fix round 2 (c)
+    x = w.NEXTCLOUD_RULES
+    for stage in ("start", "undo-failed"):
+        assert _level(x, _dl("unfinished-record-failed", request_id="0" * 32, stage=stage, error="EIO")) == \
+            (w.DOC_RECORD_FAILED_RULE, 12)
+    assert _level(x, _dl("unfinished-clear-failed", request_id="0" * 32, error="EACCES")) == (w.DOC_PROBLEM_RULE, 7)
+    assert w.DOC_RECORD_FAILED_RULE in w.NEXTCLOUD_RULE_IDS
