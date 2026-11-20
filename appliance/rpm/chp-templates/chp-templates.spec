@@ -52,6 +52,8 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
   doc/noncui, installed as Template.{docx,xlsx,md}), five new site.conf mappings (DOC_ISSO_ACCOUNT,
   DOC_APPROVER_ACCOUNTS, CUI_CONTROLLED_BY, CUI_CATEGORY, CUI_POC), and Rev 2 content 1.2.5: narratives for the
   document workflow (3.1.3, 3.1.22, 3.3.1, 3.4.3, 3.8.4, 3.8.9, 3.13.8).
+- PRE-RELEASE LAB CANDIDATE: built from the UNSIGNED local tag templates-1.4.0 (build-rpm.sh CHP_TEMPLATES_TAG,
+  sha256 pin only, no signature provenance); the signed release follows as a new Release.
 
 * Fri Nov 06 2026 The CyberHygiene Project - 1.3.1-1.chp
 - chp-templates 1.3.1 from the signed tarball (sha256 73682cfc17b1707e…): Rev 2 content 1.2.3, narratives for the
