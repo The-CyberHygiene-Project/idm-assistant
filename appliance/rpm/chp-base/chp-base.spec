@@ -1,6 +1,6 @@
 Name:           chp-base
 Version:        0.1.0
-Release:        12.chp%{?dist}
+Release:        13.chp%{?dist}
 Summary:        CyberHygiene common first boot (TPM binding) and monitor framework
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -80,6 +80,11 @@ CHP_NO_RESTART=1 /bin/bash %{_libexecdir}/chp/fapolicyd-fsmark || :
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/monitor
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-13.chp
+- fapolicyd-fsmark (ISO 0.7.0 final review M7): the run inside an rpm transaction (CHP_NO_RESTART=1, chp-base
+  %posttrans) never clears the failure record; only an operator's run with FSMARK=0 does, so a package update cannot
+  silently end check 80's alert.
+
 * Sat Nov 14 2026 The CyberHygiene Project - 0.1.0-12.chp
 - fapolicyd-fsmark (lab round 3, D6: the "recvmesg failed" exit also happens with allow_filesystem_mark = 0, 3 of
   about 18 restarts): fapolicyd must be active at three samples over the settle time (not one check); with no change

@@ -1,6 +1,6 @@
 Name:           chp-integrity
 Version:        0.1.7
-Release:        1.chp%{?dist}
+Release:        2.chp%{?dist}
 Summary:        CyberHygiene file integrity: AIDE baseline, daily check, monitor alerts
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -77,6 +77,10 @@ fi
 %dir %attr(0700,root,root) %{_localstatedir}/log/aide
 
 %changelog
+* Thu Nov 19 2026 The CyberHygiene Project - 0.1.7-2.chp
+- AIDE excludes /etc/pki/nextcloud (ISO 0.7.0 Plan 2 round 4, D15): the NextCloud TLS certificate is re-issued every
+  24 h by chp-nextcloud-cert-renew.timer, a daily AIDE change; covered by check 78 + the renew timer.
+
 * Thu Oct 29 2026 The CyberHygiene Project - 0.1.7-1.chp
 - W2 lab: /var/ossec/etc/shared checked by content and permissions, not timestamps (the manager rewrites it
   unchanged at each start and pushes it to agents at first connection).
