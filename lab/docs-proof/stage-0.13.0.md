@@ -4,15 +4,15 @@
 · **Not signed:** the owner signs it (YubiKey) with `sign-repo.sh`. Logs: `stage-0.13.0-logs/`. `0.12.0/` was not touched
 (its stage and its signed repo pass `sha256sum -c`, and the repo's timestamp is unchanged).
 
-> **OPEN (blocks signing):** the stage carries **chp-templates 1.3.1**, not 1.4.0. `chp-templates/build-rpm.sh` builds
-> only from a release folder whose `SHA256SUMS.asc` is signed by the project key. templates-1.4.0 is a local tag
-> that has not been released, and the Plan 3 release gate says it must not be signed until after Task 11's lab proof.
-> chp-site 0.14.0-7 (`doc.py`, `TEMPLATES_PKG = "chp-templates 1.4.0"`) needs the 1.4.0 `doc/cui/` templates. The
-> controller decides; see task-11b-report.md. `~/go.sh` refuses to sign until the stage holds chp-templates 1.4.0.
+> **Option A (owner decision 2026-11-20):** chp-templates **1.4.0-1** is a PRE-RELEASE LAB CANDIDATE. It was built
+> with `CHP_TEMPLATES_TAG=~/chp-templates` from `git archive` of the **unsigned local tag** templates-1.4.0 (commit
+> 0a18aca). The archive sha256 `73964274…c34f` equals the pin, and that pin is its only input check: there is no signature
+> provenance. The RPM's %changelog says so. After the lab proof the tag moves, so a new templates Release and a repo
+> re-sign follow. The first 0.13.0 stage (chp-templates 1.3.1) is kept as `0.13.0/stage-superseded-templates-1.3.1`.
 
 ## What is in it
 
-Repo 0.13.0 = the 0.12.0 stage (61) with 7 of our packages replaced and 11 added (`stage-diff.log`, `stage-sha256.txt`):
+Repo 0.13.0 = the 0.12.0 stage (61) with 8 of our packages replaced and 11 added (`stage-diff.log` = vs 0.12.0 before the templates swap; `stage-sha256-before-optionA.txt` → `stage-sha256.txt` differ only in chp-templates):
 
 | | Package | sha256 |
 |---|---|---|
@@ -25,7 +25,8 @@ Repo 0.13.0 = the 0.12.0 stage (61) with 7 of our packages replaced and 11 added
 | Added (ours) | chp-onlyoffice 0.1.0-3 | `2dad97f1b52aa9d82c47e4628ae64961ff9170ea7c7d40cd4f844a23c880a9a6` |
 | Added (vendor, re-signed at signing) | onlyoffice-desktopeditors 10.0.0-169.el7 (unsigned copy; header `64189290…dc785`) | `872e4aef467490cf6d21e8020941650e0e543c3158b80a094f0a14f7ce0cdb05` |
 | Added (Rocky 9.8 DVD, key `350d275d`) | boost-filesystem, boost-system, libXScrnSaver, liberation-narrow-fonts, xcb-util-image, -keysyms, -renderutil, -wm, poppler-utils | `dvdcopy.log` |
-| Unchanged | the other 54, including chp-templates **1.3.1** (see OPEN) | |
+| Replaced | chp-templates 1.3.1 → **1.4.0-1** (lab candidate, local tag; see above) | `ecd22ee9182187ca901952b451063cc4351d442a83bc5a6aabcf5f39755d3523` |
+| Unchanged | the other 53 | |
 
 - **The build.** nextcloud-chp was built on the build VM chp-build, which was started for the build and then shut down
   again. The other packages were built with each package's `build-rpm.sh` on aero (rpmbuild).
@@ -60,7 +61,7 @@ host's module state was copied into a namespace tmpfs; dnf history, cache and lo
 
 | Host (role) | `upgrade` | Editor / documents | `rpm -U --test` |
 |---|---|---|---|
-| iso5-srv (server; php 8.3 [e], postgresql 16 [e]) | **Upgrade 6**: chp-base 0.1.0-13, chp-documents 0.1.0-8, chp-identity-client 0.2.4-2, chp-integrity 0.1.7-2, chp-site 0.14.0-7, nextcloud-chp 35.0.3-6 (212 MB); nothing else | `install nextcloud-chp chp-documents` = upgrade 3; `install chp-templates` = 1.3.1 (OPEN) | rc 0 (6) |
+| iso5-srv (server; php 8.3 [e], postgresql 16 [e]) | **Upgrade 6**: chp-base 0.1.0-13, chp-documents 0.1.0-8, chp-identity-client 0.2.4-2, chp-integrity 0.1.7-2, chp-site 0.14.0-7, nextcloud-chp 35.0.3-6 (212 MB); nothing else | `install nextcloud-chp chp-documents` = upgrade 3; `install chp-templates` = 1.4.0-1 | rc 0 (6) |
 | iso5-cli1 (workstation) | **Upgrade 4**: chp-base, chp-identity-client, chp-integrity, chp-site | `install chp-onlyoffice` = **Install 10** (chp-onlyoffice, onlyoffice-desktopeditors, 8 extras) + upgrade chp-site, 278 MB; with upgrade = Install 10, Upgrade 4. The editor does not pull chp-documents. | rc 0 (14): no conflicts, no unmet deps |
 | iso5-cli2 (workstation) | same as cli1 | same as cli1 | rc 0 (14) |
 
@@ -82,8 +83,17 @@ on a desktop). Those are Task 11c.
   `REPO OK: 72 packages`. onlyoffice was re-signed by the rehearsal key with header `64189290…` unchanged, and the
   Rocky signatures were kept (`702d426d350d275d`). The output was deleted; the stage was unchanged (`sha256sum -c`).
 
-## For the owner (after the chp-templates decision)
+## For the owner
+
+All the checks were run again on the stage with 1.4.0 (`assemble-optionA.log`, `templates-build-optionA.log`, and the
+dry-*, test_sign_repo and rehearse logs):
+
+- the dry-run: srv upgrade 6, and `install chp-templates` = 1.4.0-1; cli1/cli2 upgrade 4, and the editor installs 10;
+  `rpm -U --test` rc 0; no host changed;
+- test_sign_repo: 59/0;
+- tools == repo (22 files);
+- the throwaway-key rehearsal: `REPO OK: 72 packages`.
 
 `~/go.sh` = `sign-session.sh "sign-repo.sh /data/chp-release/0.13.0/stage /data/chp-release/0.13.0/repo 2DE0…8F8E
-/data/chp-release/tools"`. It holds while the stage has no chp-templates 1.4.0. Expect `REPO OK: 72 packages` (chp-templates
-1.4.0 replaces 1.3.1: the count stays the same). verify-repo also checks the modules record.
+/data/chp-release/tools"`. It refuses unless the stage holds chp-templates-1.4.0-1 and exactly 72 RPMs. Expect
+`REPO OK: 72 packages`.

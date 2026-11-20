@@ -1,5 +1,5 @@
 == before
--rw-r--r-- root root 380928 2026-11-19 06:09:37.167502970 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 380928 2026-11-20 06:42:37.164604849 -0700 /var/lib/dnf/history.sqlite
 -rw-r--r-- root root 68038656 2026-11-14 13:36:05.366490442 -0700 /var/lib/rpm/rpmdb.sqlite
 total 0
 drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .
@@ -27,7 +27,7 @@ package chp-templates is not installed
 poppler-utils-21.01.0-24.el9.x86_64
 == 1. module list (repo s013 only)
 Added s013 repo from file:///var/tmp/s013/repo
-s013                                            100 MB/s | 425 kB     00:00    
+s013                                            226 MB/s | 425 kB     00:00    
 s013
 Name       Stream Profiles                   Summary                            
 php        8.3    common [d], devel, minimal PHP scripting language             
@@ -54,13 +54,13 @@ Total size: 264 k
 Operation aborted.
 rc=1
 == 3. check-update
-Last metadata expiration check: 0:00:01 ago on Thu 19 Nov 2026 09:58:43 PM MST.
+Last metadata expiration check: 0:00:01 ago on Fri 20 Nov 2026 08:27:20 AM MST.
 
 chp-base.noarch                            0.1.0-13.chp.el9                 s013
 chp-identity-client.noarch                 0.2.4-2.chp.el9                  s013
 chp-integrity.noarch                       0.1.7-2.chp.el9                  s013
 chp-site.noarch                            0.14.0-7.chp.el9                 s013
-rc=0 (100 = updates available)
+rc=100 (100 = updates available)
 == 4. install --assumeno chp-onlyoffice (the workstation editor; streams not needed)
 Dependencies resolved.
 ================================================================================
@@ -102,18 +102,18 @@ rc=0
 Added s013 repo from file:///var/tmp/s013/repo
 chp-base-0:0.1.0-13.chp.el9.noarch
 chp-site-0:0.14.0-7.chp.el9.noarch
-Last metadata expiration check: 0:00:03 ago on Thu 19 Nov 2026 09:58:43 PM MST.
+Last metadata expiration check: 0:00:02 ago on Fri 20 Nov 2026 08:27:20 AM MST.
 onlyoffice-desktopeditors-0:10.0.0-169.el7.x86_64
 poppler-utils-0:21.01.0-24.el9.x86_64
 == 7. rpm -U --test of the upgrades + the editor set against a COPY of this host's rpm database
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./.rpm.lock': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite-wal': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/./rpmdb.sqlite-shm': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.ECSf/.': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.b5Eo/./rpmdb.sqlite': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.b5Eo/./.rpm.lock': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.b5Eo/./rpmdb.sqlite-wal': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.b5Eo/./rpmdb.sqlite-shm': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.b5Eo/.': Invalid argument
 rc=0 (14 packages)
 == after
--rw-r--r-- root root 380928 2026-11-19 06:09:37.167502970 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 380928 2026-11-20 06:42:37.164604849 -0700 /var/lib/dnf/history.sqlite
 -rw-r--r-- root root 68038656 2026-11-14 13:36:05.366490442 -0700 /var/lib/rpm/rpmdb.sqlite
 total 0
 drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .

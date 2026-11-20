@@ -1,29 +1,18 @@
-gpg: out of core handler ignored in FIPS mode
+
 gpg: checking the trustdb
 gpg: marginals needed: 3  completes needed: 1  trust model: pgp
 gpg: depth: 0  valid:   1  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 1u
 gpg: next trustdb check due at 2026-11-21
-throwaway key: 5910C5A8B40F90404D6CEC4DA012DF4D1FC1CD36
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
-gpg: out of core handler ignored in FIPS mode
-gpg: out of core handler ignored in FIPS mode
-REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by 5910C5A8B40F90404D6CEC4DA012DF4D1FC1CD36
+throwaway key: 51A7A0201B46CCC41B85B0052EB1C7639DC7A6C2
+REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by 51A7A0201B46CCC41B85B0052EB1C7639DC7A6C2
 SIGNED REPO: /data/chp-release/tmp-c013/rehearsal/out
 rc=0
 rpms: 72
-REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by 5910C5A8B40F90404D6CEC4DA012DF4D1FC1CD36
+REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by 51A7A0201B46CCC41B85B0052EB1C7639DC7A6C2
 verify rc=0
-onlyoffice: Signature, key ID 1fc1cd36: OK  header 64189290d93e8e85debbd276e3c0cb2c236bed54c3267dc54e67af4cce5dc785
+onlyoffice: Signature, key ID 9dc7a6c2: OK  header 64189290d93e8e85debbd276e3c0cb2c236bed54c3267dc54e67af4cce5dc785
 boost-system (Rocky, kept): RSA/SHA256, Thu 18 Dec 2025 08:42:32 PM MST, Key ID 702d426d350d275d
 stage
+stage-superseded-templates-1.3.1
+stage
+stage-superseded-templates-1.3.1

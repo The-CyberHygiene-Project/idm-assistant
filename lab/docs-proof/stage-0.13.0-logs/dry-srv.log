@@ -1,5 +1,5 @@
 == before
--rw-r--r-- root root 393216 2026-11-19 06:46:24.857691562 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 393216 2026-11-20 06:53:44.624528569 -0700 /var/lib/dnf/history.sqlite
 -rw-r--r-- root root 89985024 2026-11-14 13:35:37.890108572 -0700 /var/lib/rpm/rpmdb.sqlite
 total 8
 drwxr-xr-x. 2 root root  49 2026-11-13 17:44:06.417329924 -0700 .
@@ -41,8 +41,7 @@ package chp-templates is not installed
 poppler-utils-21.01.0-24.el9.x86_64
 == 1. module list (repo s013 only)
 Added s013 repo from file:///var/tmp/s013/repo
-s013                                            175 MB/s | 425 kB     00:00    
-Last metadata expiration check: 0:00:01 ago on Thu 19 Nov 2026 09:58:33 PM MST.
+s013                                            154 MB/s | 425 kB     00:00    
 s013
 Name       Stream  Profiles                   Summary                            
 php        8.3 [e] common [d], devel, minimal PHP scripting language             
@@ -51,7 +50,7 @@ postgresql 16 [e]  client, server [d]         PostgreSQL server and client modul
 Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
 == 2. upgrade --assumeno (vs the applied 0.12.0)
 Added s013 repo from file:///var/tmp/s013/repo
-Last metadata expiration check: 0:00:01 ago on Thu 19 Nov 2026 09:58:33 PM MST.
+Last metadata expiration check: 0:00:01 ago on Fri 20 Nov 2026 08:27:13 AM MST.
 Dependencies resolved.
 ================================================================================
  Package                   Architecture Version                Repository  Size
@@ -72,7 +71,7 @@ Total size: 212 M
 Operation aborted.
 rc=1
 == 3. check-update
-Last metadata expiration check: 0:00:02 ago on Thu 19 Nov 2026 09:58:33 PM MST.
+Last metadata expiration check: 0:00:01 ago on Fri 20 Nov 2026 08:27:13 AM MST.
 
 chp-base.noarch                            0.1.0-13.chp.el9                 s013
 chp-documents.noarch                       0.1.0-8.chp.el9                  s013
@@ -80,7 +79,7 @@ chp-identity-client.noarch                 0.2.4-2.chp.el9                  s013
 chp-integrity.noarch                       0.1.7-2.chp.el9                  s013
 chp-site.noarch                            0.14.0-7.chp.el9                 s013
 nextcloud-chp.noarch                       35.0.3-6.chp.el9                 s013
-rc=0 (100 = updates available)
+rc=100 (100 = updates available)
 == 4. install --assumeno nextcloud-chp chp-documents (installed: upgrade only)
 Dependencies resolved.
 ================================================================================
@@ -104,25 +103,25 @@ Dependencies resolved.
  Package              Architecture  Version                   Repository   Size
 ================================================================================
 Installing:
- chp-templates        noarch        1.3.1-1.chp.el9           s013         62 k
+ chp-templates        noarch        1.4.0-1.chp.el9           s013         69 k
 
 Transaction Summary
 ================================================================================
 Install  1 Package
 
-Total size: 62 k
-Installed size: 152 k
+Total size: 69 k
+Installed size: 182 k
 Operation aborted.
 rc=0
 == 7. rpm -U --test of the upgrades against a COPY of this host's rpm database
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.2UsB/./rpmdb.sqlite': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.2UsB/./.rpm.lock': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.2UsB/./rpmdb.sqlite-wal': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.2UsB/./rpmdb.sqlite-shm': Invalid argument
-cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.2UsB/.': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.BTGQ/./rpmdb.sqlite': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.BTGQ/./.rpm.lock': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.BTGQ/./rpmdb.sqlite-wal': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.BTGQ/./rpmdb.sqlite-shm': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s013/rpmdb.BTGQ/.': Invalid argument
 rc=0 (6 packages)
 == after
--rw-r--r-- root root 393216 2026-11-19 06:46:24.857691562 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 393216 2026-11-20 06:53:44.624528569 -0700 /var/lib/dnf/history.sqlite
 -rw-r--r-- root root 89985024 2026-11-14 13:35:37.890108572 -0700 /var/lib/rpm/rpmdb.sqlite
 total 8
 drwxr-xr-x. 2 root root  49 2026-11-13 17:44:06.417329924 -0700 .

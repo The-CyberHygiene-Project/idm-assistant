@@ -13,7 +13,7 @@ mount -t tmpfs none /etc/dnf/modules.d && cp -a "$m"/. /etc/dnf/modules.d/ && mo
 echo "== installed (ours + editor):"; rpm -q chp-site chp-base chp-integrity chp-identity-server chp-identity-client chp-documents nextcloud-chp chp-onlyoffice onlyoffice-desktopeditors chp-templates poppler-utils
 echo "== 1. module list (repo s013 only)"; $D --refresh module list 2>&1
 echo "== 2. upgrade --assumeno (vs the applied 0.12.0)"; $D upgrade --assumeno 2>&1; echo "rc=$?"
-echo "== 3. check-update"; $D check-update 2>&1 | tail -n +2; echo "rc=$? (100 = updates available)"
+echo "== 3. check-update"; cu=$($D check-update 2>&1); r=$?; tail -n +2 <<<"$cu"; echo "rc=$r (100 = updates available)"
 if [ "$ROLE" = server ]; then
   echo "== 4. install --assumeno nextcloud-chp chp-documents (installed: upgrade only)"; $D install --assumeno nextcloud-chp chp-documents 2>&1 | sed -n '/^Dependencies resolved/,$p'; echo "rc=$?"
   echo "== 5. install --assumeno chp-templates"; $D install --assumeno chp-templates 2>&1 | sed -n '/^Dependencies resolved/,$p'; echo "rc=$?"
