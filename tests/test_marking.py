@@ -253,7 +253,19 @@ def test_name_rule_edge_cases(tmp_path):
     refused("CUI_" + "a" * 300 + "_v1.0.md", "long")
     with pytest.raises(M.NameRuleError):
         M.parse_name(None)
-
+    # fix round 1: version digits are ASCII only (no lookalike versions); a non-ASCII digit after _v in the title is
+    # refused too
+    refused("CUI_SSP_v1.1\u0660.docx", "_vX.Y")          # Arabic-Indic zero: not v1.10
+    refused("CUI_SSP_v\u0661.0.docx", "_vX.Y")
+    refused("CUI_SSP_v\uff11.\uff10.docx", "_vX.Y")     # fullwidth digits
+    refused("CUI_SSP_v\u0662_v1.0.docx", "second _v")
+    # fix round 1: lookalike prefixes (fullwidth, compatibility forms, Cyrillic/Greek letters) are refused in both
+    # areas with the rule's message
+    refused("\uff23\uff35\uff29_SSP_v1.0.docx", "prefix")      # fullwidth CUI
+    refused("CUI\uff3fSSP_v1.0.docx", "prefix")                  # fullwidth low line
+    refused("\u0421UI_SSP_v1.0.docx", "prefix")                   # Cyrillic Es
+    refused("FC\u0399_SSP_v1.0.docx", "prefix")                   # Greek Iota
+    assert M.parse_name("Cuisine_v1.0.docx").prefix == ""
     # the prefix per area: check reports it as a problem (not a traceback)
     f = copy(tmp_path, "CUI_Access-Policy_v1.0.docx", "Access-Policy_v1.0.docx")
     r = M.check(f, True, VALUES)
@@ -348,6 +360,89 @@ def test_insert_onlyoffice_docx(tmp_path):
         assert z.namelist() == o.namelist()
         assert z.read("word/styles.xml") == o.read("word/styles.xml")
         assert 'mc:Ignorable="w14 w15 wp14"' in z.read("word/footer1.xml").decode()
+
+
+def test_banner_hidden_by_style_is_missing(tmp_path):
+    """Fix round 1 (m1, m2): a banner run hidden directly, or through its character style or its paragraph style
+    (basedOn chains, docDefaults), does not count; an explicit direct 'not hidden' wins; style cycles do not hang."""
+    mk = _make()
+    hid_r = '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rStyle w:val="Hid"/></w:rPr><w:t>CUI</w:t>' \
+            '</w:r></w:p>'
+    hid_p = '<w:p><w:pPr><w:pStyle w:val="HidP"/></w:pPr><w:r><w:t>CUI</w:t></w:r></w:p>'
+    direct = '<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>CUI</w:t></w:r></w:p>'
+    shown = '<w:p><w:r><w:rPr><w:rStyle w:val="Hid"/><w:vanish w:val="0"/></w:rPr><w:t>CUI</w:t></w:r></w:p>'
+    styles = ('<w:style w:type="character" w:styleId="HidBase"><w:rPr><w:vanish/></w:rPr></w:style>'
+              '<w:style w:type="character" w:styleId="Hid"><w:basedOn w:val="HidBase"/></w:style>'
+              '<w:style w:type="paragraph" w:styleId="Base"><w:basedOn w:val="Base2"/><w:rPr><w:vanish/></w:rPr>'
+              '</w:style><w:style w:type="paragraph" w:styleId="Base2"><w:basedOn w:val="HidP"/></w:style>'
+              '<w:style w:type="paragraph" w:styleId="HidP"><w:basedOn w:val="Base"/></w:style>')
+    ftr = ("ftr", "footer1.xml", mk.p("CUI", True))
+    cases = {"rstyle": hid_r, "pstyle": hid_p, "direct": direct}
+    for label, hdr in cases.items():
+        f = tmp_path / f"CUI_Hidden-{label}_v1.0.docx"
+        f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", hdr), ftr], mk.REFS, styles=styles))
+        r = M.check(f, True, VALUES)
+        assert not r.ok and len(r.problems) == 1 and "header" in r.problems[0], (label, r.problems)
+    f = tmp_path / "CUI_Shown_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", shown), ftr], mk.REFS, styles=styles))
+    assert M.check(f, True, VALUES).ok
+    # docDefaults hiding everything: nothing counts (and the block is hidden too)
+    f = tmp_path / "CUI_Defaults_v1.0.docx"
+    f.write_bytes(mk.docx(mk.BLOCK_XML, [mk.BANNER_HDR, ftr], mk.REFS,
+                          styles="<w:docDefaults><w:rPrDefault><w:rPr><w:vanish/></w:rPr></w:rPrDefault>"
+                                 "</w:docDefaults>"))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("header" in p for p in r.problems) and any("designation block" in p for p in r.problems)
+    # insert sees the same hiding: it adds a visible banner, and the result passes
+    d = tmp_path / "CUI_Hidden_v0.1-DRAFT.docx"
+    d.write_bytes(mk.docx(mk.BLOCK_XML, [("hdr", "header1.xml", hid_r), ftr], mk.REFS, styles=styles))
+    assert M.insert(d, VALUES, dry_run=False) == ["word/header1.xml: add the CUI banner to the default header"]
+    assert M.check(d, True, VALUES).ok
+
+
+def test_xlsx_even_and_first_parts_required(tmp_path):
+    """Fix round 1 (m2): differentOddEven / differentFirst switched on without the even / first header or footer."""
+    mk = _make()
+    rows = [[x] for x in mk.BLOCK]
+    f = tmp_path / "CUI_Even_v1.0.xlsx"
+    f.write_bytes(mk.xlsx([("Items", mk.sheet(rows, dict(mk.HF, differentOddEven="1", evenHeader="&CCUI")))]))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and len(r.problems) == 1 and "even-page footer" in r.problems[0]
+    f = tmp_path / "CUI_First_v1.0.xlsx"
+    f.write_bytes(mk.xlsx([("Items", mk.sheet(rows, dict(mk.HF, differentFirst="1", firstFooter="&CCUI")))]))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and len(r.problems) == 1 and "first-page header" in r.problems[0]
+
+
+@pytest.mark.parametrize("enc", ["utf-16", "utf-16-le", "utf-16-be"])
+def test_non_utf8_part_refused(tmp_path, enc):
+    """Fix round 1: a UTF-16 part (with or without BOM) cannot carry a DTD past the byte search; any part that is
+    not UTF-8 is refused."""
+    with zipfile.ZipFile(FX / "CUI_Access-Policy_v1.0.docx") as z:
+        hdr = z.read("word/header1.xml").decode()
+    body = hdr.split("?>", 1)[1].replace(">CUI<", ">&b;<", 1)
+    new = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY b "CUI">]>' + body
+    f = tmp_path / "CUI_U16_v1.0.docx"
+    with zipfile.ZipFile(FX / "CUI_Access-Policy_v1.0.docx") as s, zipfile.ZipFile(f, "w") as d:
+        for n in s.namelist():
+            d.writestr(n, new.encode(enc) if n == "word/header1.xml" else s.read(n))
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("UTF-8" in p for p in r.problems), r.problems
+    # a UTF-8 part that declares another encoding is refused as well
+    with zipfile.ZipFile(FX / "CUI_Access-Policy_v1.0.docx") as s, zipfile.ZipFile(f, "w") as d:
+        for n in s.namelist():
+            b = s.read(n)
+            d.writestr(n, b.replace(b'encoding="UTF-8"', b'encoding="ISO-8859-1"') if n == "word/header1.xml" else b)
+    r = M.check(f, True, VALUES)
+    assert not r.ok and any("UTF-8" in p for p in r.problems), r.problems
+
+
+def test_citation_ascii_digits_only(tmp_path):
+    f = tmp_path / "CUI_Note_v1.0.md"
+    f.write_text("CUI\n\nCites CUI_SSP_v1.\u0660 and CUI_SSP_v1.1.\n")
+    r = M.check(f, True, VALUES, current={"CUI_SSP": "1.2"})
+    assert r.warnings == ["CUI_SSP_v1.1 is cited, but the current version in the Compliance area is v1.2 "
+                          "(a superseded citation)"]
 
 
 # ---------- defensive parsing ----------

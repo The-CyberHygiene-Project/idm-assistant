@@ -59,8 +59,9 @@ def textbox(text):
             '</mc:Fallback></mc:AlternateContent></w:r></w:p>')
 
 
-def docx(body, parts=(), refs=(), even=False, title_pg=False):
-    """body: paragraph XML; parts: [(kind 'hdr'|'ftr', file name, inner XML)]; refs: [(kind, type, file name)]."""
+def docx(body, parts=(), refs=(), even=False, title_pg=False, styles=None):
+    """body: paragraph XML; parts: [(kind 'hdr'|'ftr', file name, inner XML)]; refs: [(kind, type, file name)];
+    styles: the inner XML of word/styles.xml (None: no styles part)."""
     ct = [f'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.'
           'wordprocessingml.document.main+xml"/>',
           '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.'
@@ -74,6 +75,11 @@ def docx(body, parts=(), refs=(), even=False, title_pg=False):
         rels.append(f'<Relationship Id="rId{i}" Type="{OD}{what}" Target="{fname}"/>')
         rid[fname] = f"rId{i}"
         members.append((f"word/{fname}", f"{XML}<w:{kind} {WNS}>{inner}</w:{kind}>"))
+    if styles is not None:
+        ct.append('<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.'
+                  'wordprocessingml.styles+xml"/>')
+        rels.append(f'<Relationship Id="rId99" Type="{OD}styles" Target="styles.xml"/>')
+        members.append(("word/styles.xml", f"{XML}<w:styles {WNS}>{styles}</w:styles>"))
     sect = "".join(f'<w:{"headerReference" if k == "hdr" else "footerReference"} w:type="{t}" r:id="{rid[f]}"/>'
                    for k, t, f in refs)
     sect += ('<w:titlePg/>' if title_pg else "") + '<w:pgSz w:w="12240" w:h="15840"/>'

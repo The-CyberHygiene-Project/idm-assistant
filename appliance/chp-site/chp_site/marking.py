@@ -114,7 +114,7 @@ class NameParts:
         return tuple(int(x) for x in self.version.split("."))
 
 
-_NAME = re.compile(r"(?P<stem>.+)_v(?P<ver>(?:0|[1-9]\d{0,3})\.(?:0|[1-9]\d{0,3}))(?P<draft>-DRAFT)?"
+_NAME = re.compile(r"(?P<stem>.+)_v(?P<ver>(?:0|[1-9][0-9]{0,3})\.(?:0|[1-9][0-9]{0,3}))(?P<draft>-DRAFT)?"
                    r"\.(?P<ext>[A-Za-z0-9]{1,10})")
 
 
@@ -142,14 +142,14 @@ def parse_name(name) -> NameParts:
             "(no leading zeros in X or Y)")
     stem = m["stem"]
     prefix = ""
-    if stem[:4].upper() in ("CUI_", "FCI_"):
-        if stem[:4] not in ("CUI_", "FCI_"):
-            bad("the prefix is CUI_ or FCI_, in capitals")
+    if stem.startswith(("CUI_", "FCI_")):
         prefix, stem = stem[:4], stem[4:]
+    elif _fold(stem[:8]).startswith(("cui_", "fci_")):
+        bad("the prefix is CUI_ or FCI_, in capitals and plain letters (not lower case, fullwidth or lookalike letters)")
     title = stem
     if not title:
         bad("the title is empty")
-    if re.search(r"_[vV]\d", title):
+    if re.search(r"_[vV]\d", title):                     # \d is any script's digit on purpose: refuse lookalikes
         bad("the title has a second _v<number>; only the version at the end may look like _vX.Y")
     if re.search(r"-draft$", title, re.I):
         bad("-DRAFT goes after the version, not before it")
@@ -159,6 +159,19 @@ def parse_name(name) -> NameParts:
         if not (c.isalnum() or c in "-_" or unicodedata.category(c).startswith("M")):
             bad(f"the title holds letters, digits, - and _ only (not {c!r})")
     return NameParts(prefix=prefix, title=title, version=m["ver"], draft=bool(m["draft"]), ext=m["ext"])
+
+
+# Latin lookalikes from other scripts for the letters of the prefixes (NFKC does not fold these)
+_LOOKALIKE = str.maketrans({"\u0421": "C", "\u0441": "c", "\u03f9": "C", "\u03f2": "c", "\u216d": "C",
+                            "\u217d": "c", "\u0406": "I", "\u0456": "i", "\u0399": "I", "\u03b9": "i",
+                            "\u04c0": "I", "\u2160": "I", "\u2170": "i", "\u0545": "U", "\u054d": "U",
+                            "\u057d": "u", "\u03c5": "u", "\u0423": "U", "\u15c5": "F", "\u0191": "F",
+                            "\u03dc": "F", "\u2131": "F"})
+
+
+def _fold(s):
+    """For the prefix test only: compatibility forms (fullwidth etc.), cross-script lookalikes and case folded."""
+    return unicodedata.normalize("NFKC", s).translate(_LOOKALIKE).casefold()
 
 
 def _series_key(s):
@@ -267,7 +280,8 @@ class _Zip:
 
     def xml(self, name):
         b = self.read(name)
-        if re.search(rb"<!DOCTYPE", b[:65536] + b[-65536:], re.I) or b"<!ENTITY" in b:
+        _utf8_xml(b, name)
+        if re.search(rb"<!DOCTYPE", b, re.I) or re.search(rb"<!ENTITY", b, re.I):
             raise _Bad(f"part {name} has a DTD; refused (no entities in Office XML)")
         try:
             return ET.fromstring(b)
@@ -300,14 +314,105 @@ class _Zip:
         raise _Bad("has no main document part")
 
 
+_DECL = re.compile(rb"<\?xml[^>]*?encoding\s*=\s*[\"']([^\"']*)[\"']")
+
+
+def _utf8_xml(b, name):
+    """Only UTF-8 XML is read (with or without a UTF-8 BOM, encoding absent or UTF-8): a UTF-16/32 part could hide
+    a DTD from the byte search above, and Office writes UTF-8."""
+    if b[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" in b:
+        raise _Bad(f"part {name} is not UTF-8 XML (UTF-16 or UTF-32); refused")
+    try:
+        b.decode("utf-8")
+    except UnicodeDecodeError:
+        raise _Bad(f"part {name} is not UTF-8 XML; refused") from None
+    m = _DECL.match(b[3:] if b.startswith(b"\xef\xbb\xbf") else b)
+    if m and m.group(1).strip().lower() not in (b"utf-8", b"utf8"):
+        raise _Bad(f"part {name} declares the encoding {m.group(1).decode('ascii', 'replace')!r}, not UTF-8; "
+                   "refused")
+
+
 def _on(el, attr=W + "val"):
     return el is not None and (el.get(attr) or "true").lower() not in ("false", "0", "off")
 
 
 # ---------- docx ----------
 
-def _p_lines(p):
+def _vanish(rpr):
+    """True/False when the run properties set hidden text explicitly, None when they do not say."""
+    if rpr is None:
+        return None
+    for tag in ("vanish", "specVanish"):
+        el = rpr.find(W + tag)
+        if el is not None:
+            if _on(el):
+                return True
+            return False if tag == "vanish" else None
+    return None
+
+
+class _Styles:
+    """Hidden text through styles (styles.xml): a style is hidden when it or any style it is basedOn (at most 32
+    deep, cycle-safe) sets vanish. Conservative: Word's toggle-property rules could un-hide in rare chains; here any
+    hidden level hides, unless the run itself says vanish off (direct formatting wins)."""
+    DEPTH = 32
+
+    def __init__(self, root=None):
+        self.by_id, self.default_p, self.default_r, self.docdef, self._memo = {}, None, None, False, {}
+        if root is None:
+            return
+        for st in root.findall(W + "style"):
+            sid = st.get(W + "styleId")
+            if not sid:
+                continue
+            based = st.find(W + "basedOn")
+            self.by_id[sid] = (based.get(W + "val") if based is not None else None,
+                               _vanish(st.find(W + "rPr")) is True)
+            if _on(st, W + "default") and st.get(W + "default") is not None:
+                if st.get(W + "type") == "paragraph":
+                    self.default_p = sid
+                elif st.get(W + "type") == "character":
+                    self.default_r = sid
+        dd = root.find(W + "docDefaults")
+        rd = dd.find(W + "rPrDefault") if dd is not None else None
+        self.docdef = rd is not None and _vanish(rd.find(W + "rPr")) is True
+
+    def hidden(self, sid):
+        if not sid:
+            return False
+        if sid in self._memo:
+            return self._memo[sid]
+        seen, cur, out = set(), sid, False
+        for _ in range(self.DEPTH):
+            if cur is None or cur in seen or cur not in self.by_id:
+                break
+            seen.add(cur)
+            based, hid = self.by_id[cur]
+            if hid:
+                out = True
+                break
+            cur = based
+        self._memo[sid] = out
+        return out
+
+    def run_hidden(self, rpr, pstyle):
+        direct = _vanish(rpr)
+        if direct is not None:
+            return direct
+        rs = rpr.find(W + "rStyle") if rpr is not None else None
+        return bool(self.docdef or self.hidden(rs.get(W + "val") if rs is not None else self.default_r)
+                    or self.hidden(pstyle or self.default_p))
+
+
+_NO_STYLES = _Styles()
+
+
+def _p_lines(p, styles=None):
+    styles = styles or _NO_STYLES
     buf = []
+    ppr = p.find(W + "pPr")
+    ps = ppr.find(W + "pStyle") if ppr is not None else None
+    pstyle = ps.get(W + "val") if ps is not None else None
 
     def walk(e):
         for c in e:
@@ -315,8 +420,7 @@ def _p_lines(p):
             if t in _SKIP:
                 continue
             if t == W + "r":
-                rpr = c.find(W + "rPr")
-                if rpr is not None and (_on(rpr.find(W + "vanish")) or _on(rpr.find(W + "specVanish"))):
+                if styles.run_hidden(c.find(W + "rPr"), pstyle):
                     continue
             if t == W + "t":
                 buf.append(c.text or "")
@@ -340,8 +444,8 @@ def _paras(e):
             yield from _paras(c)
 
 
-def _part_lines(root):
-    return [x for p in _paras(root) for x in _p_lines(p) if x]
+def _part_lines(root, styles=None):
+    return [x for p in _paras(root) for x in _p_lines(p, styles) if x]
 
 
 def _boxed_lines(root):
@@ -363,9 +467,12 @@ class _Docx:
             raise _Bad("is not a Word document (no body)")
         self.rels = self.z.rels(self.main)
         self.even = False
+        self.styles = _NO_STYLES
         for typ, tgt in self.rels.values():
             if typ == "settings" and tgt and self.z.has(tgt):
                 self.even = _on(self.z.xml(tgt).find(W + "evenAndOddHeaders"))
+            elif typ == "styles" and tgt and self.z.has(tgt):
+                self.styles = _Styles(self.z.xml(tgt))
         nested = set()
         for ch in self.doc.iter(W + "sectPrChange"):
             nested.update(id(x) for x in ch.iter(W + "sectPr"))
@@ -411,7 +518,7 @@ class _Docx:
             ppr = p.find(W + "pPr")
             if n and ppr is not None and _on(ppr.find(W + "pageBreakBefore")):
                 break
-            lines += [x for x in _p_lines(p) if x]
+            lines += [x for x in _p_lines(p, self.styles) if x]
             n += 1
             brk = any(b.get(W + "type") == "page" for b in p.iter(W + "br")) or \
                 any(True for _ in p.iter(W + "lastRenderedPageBreak"))
@@ -442,7 +549,7 @@ class _Docx:
                     problems.append(f"{where} part {part} is missing from the file")
                     continue
                 root = self.part(part)
-                ok = _has_banner(_part_lines(root))
+                ok = _has_banner(_part_lines(root, self.styles))
                 any_banner = any_banner or ok
                 if cui and not ok:
                     hint = ""
@@ -458,7 +565,7 @@ class _Docx:
         have = set(self.body_page_one())
         for part in self.page_one_parts():
             if self.z.has(part):
-                have.update(_part_lines(self.part(part)))
+                have.update(_part_lines(self.part(part), self.styles))
         _block_problems(block, have, "page one", problems)
 
     def text(self):
@@ -816,7 +923,8 @@ def _stat_ok(path):
     return b""
 
 
-_CITE = re.compile(r"(?<![\w-])((?:CUI_|FCI_)?)([^\W_][\w-]*?)_v(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})(?!\d|\.\d)")
+_CITE = re.compile(r"(?<![\w-])((?:CUI_|FCI_)?)([^\W_][\w-]*?)_v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})"
+                   r"(?![0-9]|\.[0-9])")
 
 
 def _ver(v):
@@ -979,7 +1087,7 @@ def _ins_docx(data, values):
                 changes.append(f"new {pn}: a {typ} {kind} with the CUI banner")
             elif part not in done and z.has(part):
                 done.add(part)
-                if not _has_banner(_part_lines(d.part(part))):
+                if not _has_banner(_part_lines(d.part(part), d.styles)):
                     edits[part] = kind
                     changes.append(f"{part}: add the CUI banner to the {typ} {kind}")
         if add_refs:
@@ -1010,7 +1118,7 @@ def _ins_docx(data, values):
     have = set(d.body_page_one())
     for part in d.page_one_parts():
         if z.has(part):
-            have.update(_part_lines(d.part(part)))
+            have.update(_part_lines(d.part(part), d.styles))
     if any(x not in {_norm(h) for h in have} for x in lines):
         bt = _starts(doc_text, w, "body")
         if len(bt) != 1 or bt[0].group(1) == "/":
