@@ -196,27 +196,43 @@ def _fold(s):
 _WMAP = str.maketrans({"l": "i", "1": "i"})
 
 
-def _wfold(s):
+def _wfold(s, li=True):
     """For the WRONG-banner search only (never the prefix test, never the required banner): compatibility forms,
-    format characters (zero-width, soft hyphen: Unicode Cf) dropped, cross-script lookalikes, case, and l / 1 read as
-    i; runs of white space become one space."""
+    format characters (zero-width, soft hyphen: Unicode Cf) dropped, cross-script lookalikes, case, and (li) l / 1
+    read as i; runs of white space become one space."""
     s = "".join(c for c in unicodedata.normalize("NFKC", s) if unicodedata.category(c) != "Cf")
-    return " ".join(s.translate(_LOOKALIKE).casefold().translate(_WMAP).split())
+    s = s.translate(_LOOKALIKE).casefold()
+    return " ".join((s.translate(_WMAP) if li else s).split())
 
 
 def _phrase(text):
-    return r"\s*".join(re.escape(_wfold(w)) for w in text.split())
+    return r"\s*".join(re.escape(_wfold(w, li=False)) for w in text.split())
 
 
-# what follows the word in a banner-shaped line: //markings, or a separator (- – — : | or a bracket) and more text
-_BANNER_TAIL = r"(?:\s*(?://|[-:|(\[‐-―]).*)?"
-# kind -> (the banner text, the exact pattern a required banner must match, the folded (_wfold) pattern a banner
-# that must NOT be there is found by: the word alone, with //markings or a separator after it, or spelled out)
-_KINDS = {"cui": (BANNER, _BANNER_RE,
-                  re.compile(rf"cui{_BANNER_TAIL}|{_phrase('Controlled Unclassified Information')}.*")),
-          "fci": (FCI_BANNER, _FCI_RE,
-                  re.compile(rf"fci{_BANNER_TAIL}|{_phrase('Federal Contract Information')}.*"))}
+_SEP = r"(?://|[-:|(\[‐-―])"          # what may follow the word in a banner line: //, - – — : | ( [
+SHORT_TAIL = 4                                  # Markdown: a banner's tail after a separator has at most 4 words
+# kind -> (the banner text, the exact pattern a required banner must match, (the word, the spelled-out phrase))
+_KINDS = {"cui": (BANNER, _BANNER_RE, ("cui", _phrase("Controlled Unclassified Information"))),
+          "fci": (FCI_BANNER, _FCI_RE, ("fci", _phrase("Federal Contract Information")))}
 _CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
+_MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>\s?|[-*+]\s+|\d{1,9}[.)]\s+)")
+_MD_TAG = re.compile(r"<[^<>]{0,200}>")
+
+
+def _md_plain(line):
+    """A Markdown line without its block and inline markup (Task 12 fix round 2): heading #s (and closing #s), quote
+    >s, list markers, HTML tags, the * _ ` ~ wrappers and a trailing hard-break backslash. For the wrong-banner and
+    block-label searches only."""
+    s = line.strip()
+    while True:
+        m = _MD_LEAD.match(s)
+        if not m or not m.group(0):
+            break
+        s = s[m.end():].lstrip()
+    s = _MD_TAG.sub(" ", s)
+    s = re.sub(r"[*_`~]", "", s)
+    s = re.sub(r"\s+#+\s*$", "", s).rstrip().rstrip("\\").strip()
+    return s
 
 
 def _series_key(s):
@@ -276,14 +292,32 @@ def _has_banner(lines, kind="cui"):
     return any(_is_banner(x, kind) for x in lines)
 
 
-def _looks_like(line, kind):
-    """The folded search for a banner that must NOT be there (see the module notes)."""
-    return bool(_KINDS[kind][2].fullmatch(_wfold(line)))
+def _looks_like(line, kind, short=False):
+    """The folded search for a banner that must NOT be there (see the module notes). A banner line is:
+      - the word alone (also l/1 read as i, and spaced out: "C U I"), or the word with //markings;
+      - the word or the spelled-out phrase followed by a separator (- – — : | ( [) and a tail; with `short` (Markdown,
+        where lines are prose) the tail has at most SHORT_TAIL words, so a sentence about CUI is not a banner;
+      - the spelled-out phrase alone (without `short`: also followed by anything, as in a header line).
+    The separator and phrase forms use the fold without l/1 -> i, so "Cul-de-sac" or "FCl: field" are words."""
+    word, phrase = _KINDS[kind][2]
+    a = _wfold(line)
+    if a == word or a.replace(" ", "") == word or re.fullmatch(rf"{word}\s*//.*", a):
+        return True
+    b = _wfold(line, li=False)
+    m = re.fullmatch(rf"(?:{word}|{phrase})\s*{_SEP}(.*)", b)
+    if m:
+        return not short or len(re.findall(r"[^\W_]+", m.group(1))) <= SHORT_TAIL
+    return bool(re.fullmatch(phrase if short else rf"{phrase}.*", b))
 
 
-def _wrong(lines, mode):
+def _wrong(lines, mode, short=False):
     """The banner kinds among `lines` that do not belong to a document of this mode ('cui', 'fci' or 'none')."""
-    return {k for k in _KINDS if k != mode and any(_looks_like(x, k) for x in lines)}
+    return {k for k in _KINDS if k != mode and any(_looks_like(x, k, short) for x in lines)}
+
+
+def _md_wrong(lines, mode):
+    """Markdown: every line outside code fences, without its markup, judged with the short-tail rule."""
+    return _wrong([_md_plain(x) for x in _md_unfenced(lines)], mode, short=True)
 
 
 def _mode(cui, parts):
@@ -891,7 +925,7 @@ class _Md:
     def check(self, mode, block, problems):
         lines = self.lines
         last = max((i for i, x in enumerate(lines) if x.strip()), default=-1)
-        _wrong_problems(_wrong(_md_unfenced(lines), mode), mode, "a line of the document", problems)
+        _wrong_problems(_md_wrong(lines, mode), mode, "a line of the document", problems)
         if mode == "none":
             return
         word = _KINDS[mode][0]
@@ -903,7 +937,7 @@ class _Md:
             problems.append(f"the last line must be the {word} banner ({word})")
         if mode == "fci":
             head = [x for x in lines if x.strip()][:BLOCK_ROWS]
-            _fci_block_problems(head, "page one (the first lines)", problems)
+            _fci_block_problems([_md_plain(x) for x in head], "page one (the first lines)", problems)
             return
         if first_ok and not _md_block_ok(lines, block[0]):
             problems.append("the designation block must follow the first banner line, one line each: "
@@ -1420,7 +1454,7 @@ def _ins_md(data, values, mode="cui"):
     bom = data.startswith(b"\xef\xbb\xbf")
     nl = "\r\n" if "\r\n" in m.text_ else "\n"
     lines = list(m.lines)
-    found = _wrong(_md_unfenced(lines), mode)
+    found = _md_wrong(lines, mode)
     if found:                                                # never wrap the right banner around a wrong one
         raise MarkingError("refused: the file carries " + " and ".join(f"{_ART[k]} banner" for k in sorted(found))
                            + "; insert never removes a mark: fix it in the editor")

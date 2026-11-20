@@ -7,7 +7,8 @@ enrol's `time` step), and it can be run again at any time.
 
   server  keeps its own sources (NTP_UPSTREAM, written by Anaconda's timesource), and serves time to the site subnet
           only: `allow <SUBNET>` (every other allow line is switched off, so never 0.0.0.0/0 or a bare `allow`),
-          `bindaddress <SERVER_IP>` (it serves on its site address only; defence in depth),
+          `bindaddress <SERVER_IP>` and `bindaddress ::1` (it serves on its site address only, and its IPv6 socket
+          is loopback only: an IPv4 bindaddress alone leaves [::]:123 open; defence in depth),
           `local stratum 10` (the LAN keeps one clock if the upstream fails; the monitor's clock check still alerts on
           the server's own offset), and the CUI profile's client-only `port 0` switched off (chronyd must listen on
           123). firewalld gets ONE rich rule: 123/udp from the site subnet only. This is the owner-approved exception
@@ -91,7 +92,8 @@ def chrony_text(text, role, site, hosts):
     while out and not out[-1].strip():
         out.pop()
     if role == "server":
-        block = [f"allow {_cidr(site)}", f"bindaddress {server_of(hosts).ip}", LOCAL_STRATUM]
+        # IPv4: the site address only; IPv6: loopback only (an IPv4 bindaddress alone leaves [::]:123 open)
+        block = [f"allow {_cidr(site)}", f"bindaddress {server_of(hosts).ip}", "bindaddress ::1", LOCAL_STRATUM]
     else:
         o = (opts if opts is not None else kept) or "iburst"
         if "maxpoll" not in o.split():

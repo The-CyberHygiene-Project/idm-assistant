@@ -85,7 +85,9 @@ def test_client_uses_the_server_only():
 def test_server_binds_ntp_to_its_own_address():
     """m8: chronyd serves on the server's site address only (defence in depth beside allow and firewalld)."""
     got = live(T.chrony_text(HARDENED + "bindaddress 0.0.0.0\n", "server", SITE, HOSTS))
-    assert [x for x in got if x.split()[0] == "bindaddress"] == ["bindaddress 192.168.100.30"]
+    # round 2 item 4: an IPv4 bindaddress alone leaves chronyd's IPv6 socket on [::]:123; the IPv6 one is bound to
+    # loopback (the site files carry no IPv6 address, and the installer sets --noipv6)
+    assert [x for x in got if x.split()[0] == "bindaddress"] == ["bindaddress 192.168.100.30", "bindaddress ::1"]
 
 
 def test_client_keeps_maxpoll_16_from_pool_lines_or_adds_it():

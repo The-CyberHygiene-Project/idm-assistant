@@ -65,6 +65,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   any spacing. time-sync: the server's chrony serves on SERVER_IP only (bindaddress); a workstation keeps maxpoll 16
   (taken from a pool line too, or added) and waits up to about a minute for sync (warning only). doc check labels
   the marks from the checker's reading of the name.
+- Review fix round 2: in Markdown the wrong-banner search reads each line without its markup (headings, quotes,
+  lists, HTML tags, emphasis/code wrappers, a hard-break backslash), and judges the body with the banner forms only
+  (the word alone or spaced out, the word with //markings, the word or the spelled-out phrase with a separator and
+  at most 4 words after it), so prose about CUI and FCI is no false alarm; the separator and phrase forms no longer
+  read l/1 as i. The server's chrony also binds IPv6 to loopback only (bindaddress ::1).
 
 * Thu Nov 19 2026 The CyberHygiene Project - 0.14.0-7.chp
 - ISO 0.7.0 Plan 3 Task 11a (pre-sign fold of the Tasks 2-10 reviews):

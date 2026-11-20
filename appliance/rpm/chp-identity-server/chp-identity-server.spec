@@ -69,9 +69,10 @@ install -Dm0644 %{SOURCE11} %{buildroot}%{_datadir}/chp/scap/chp-server-cui-tail
 - First boot step `time` (Task 12, owner decision 2026-11-20), after bind: `chp-site time-sync --role server` (the
   server serves NTP to the site subnet only; firewalld 123/udp from SUBNET only, the owner-approved exception to
   "no new network port"). Requires chp-site >= 0.14.0-8 and chp-identity-client >= 0.2.4-3.
-- /usr/share/chp/scap/chp-server-cui-tailoring.xml (owner decision 2026-11-20): the server's CUI profile, tailored to
-  unselect exactly chronyd_client_only (the server serves NTP to the site LAN); for scans with --tailoring-file.
-  Workstations keep the stock profile.
+- /usr/share/chp/scap/chp-server-cui-tailoring.xml (owner decisions 2026-11-20): the server's CUI profile, tailored
+  to unselect exactly chronyd_client_only (the server serves NTP to the site LAN) and sysctl_user_max_user_namespaces
+  (the existing ISO deviation, its reason quoted from docs/dc2-planning/dc2-cui-tailoring.xml), each with its own
+  reason; for scans with --tailoring-file. Workstations keep the stock profile.
 
 * Fri Nov 13 2026 The CyberHygiene Project - 0.1.2-3.chp
 - cert-renew-kanidm.sh takes the shared ACME lock /run/chp-acme.lock (flock, up to 300 s) around opening port 80,

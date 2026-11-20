@@ -8,22 +8,32 @@
 <xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2"
                      id="xccdf_org.cyberhygiene_tailoring_chp_server">
   <xccdf-1.2:benchmark href="/usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml" version="0.1.82"/>
-  <xccdf-1.2:version time="2026-11-20T00:00:00">1</xccdf-1.2:version>
+  <xccdf-1.2:version time="2026-11-20T00:00:00">2</xccdf-1.2:version>
   <xccdf-1.2:Profile id="xccdf_org.cyberhygiene_profile_cui_chp_server" extends="xccdf_org.ssgproject.content_profile_cui">
     <xccdf-1.2:title xml:lang="en-US" override="true">CUI, tailored for the CHP server</xccdf-1.2:title>
     <xccdf-1.2:description xml:lang="en-US" override="true">
-      Extends xccdf_org.ssgproject.content_profile_cui with one documented deviation, on the CHP server only:
-      the rule chronyd_client_only is unselected.
+      Extends xccdf_org.ssgproject.content_profile_cui with two documented deviations, on the CHP server (owner
+      decisions 2026-11-20). Each unselected rule carries its own reason below.
 
-      Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow &lt;site subnet&gt;,
-      bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and never from
-      outside sources.
+      1. chronyd_client_only. Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow
+      &lt;site subnet&gt;, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it
+      and never from outside sources. The server's chrony therefore does not keep the profile's client-only setting
+      (port 0). Workstations keep the stock profile, where this rule stays selected and passes.
 
-      The server's chrony therefore does not keep the profile's client-only setting (port 0). Workstations keep the
-      stock profile, where the rule stays selected and passes.
+      2. sysctl_user_max_user_namespaces. The reason, quoted from the deviation's record
+      (docs/dc2-planning/dc2-cui-tailoring.xml, the tailoring the ISO proofs scan with, lab/iso5/DEVIATIONS.md):
+      "The base "cui" profile sets user.max_user_namespaces = 0. On dc2 this conflicts with systemd's own
+      unit-level sandboxing (PrivateUsers=true/yes, used by stock RHEL 9 irqbalance.service and upower.service, plus
+      GNOME session helper units), which requires the ability to create at least one user namespace per sandboxed
+      service and fails with ENOSPC when the kernel-wide limit is 0." The CHP installer carries the same deviation on
+      every host: the kickstart's %post removes the profile's user.max_user_namespaces setting and rebuilds the
+      initramfs (appliance/kickstart/chp.ks.in).
     </xccdf-1.2:description>
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_chronyd_client_only" selected="false">
       <xccdf-1.2:remark xml:lang="en-US">Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow &lt;site subnet&gt;, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and never from outside sources.</xccdf-1.2:remark>
+    </xccdf-1.2:select>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_sysctl_user_max_user_namespaces" selected="false">
+      <xccdf-1.2:remark xml:lang="en-US">Quoted from docs/dc2-planning/dc2-cui-tailoring.xml: "The base "cui" profile sets user.max_user_namespaces = 0. On dc2 this conflicts with systemd's own unit-level sandboxing (PrivateUsers=true/yes, used by stock RHEL 9 irqbalance.service and upower.service, plus GNOME session helper units), which requires the ability to create at least one user namespace per sandboxed service and fails with ENOSPC when the kernel-wide limit is 0." The CHP kickstart's %post removes the profile's setting on every host (appliance/kickstart/chp.ks.in).</xccdf-1.2:remark>
     </xccdf-1.2:select>
   </xccdf-1.2:Profile>
 </xccdf-1.2:Tailoring>

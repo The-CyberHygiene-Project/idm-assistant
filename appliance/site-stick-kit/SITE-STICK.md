@@ -137,18 +137,28 @@ Workstations take their time from the CHP server only, never from an outside sou
   `rule family="ipv4" source address="<SUBNET>" port port="123" protocol="udp" accept`. chrony on the server also
   answers only on the server's own address (`bindaddress`). It is the one exception to 0.7.0's "no new network port"
   rule.
-- **The server's OpenSCAP profile is tailored.** The server's chrony leaves the CUI profile's client-only setting
-  (`port 0`) off, so the server is scanned with a tailored profile that unselects that one rule
-  (`chronyd_client_only`). The tailoring file is `/usr/share/chp/scap/chp-server-cui-tailoring.xml` (the server role
-  only), and its reason reads: "Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony
-  allow <site subnet>, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and
-  never from outside sources." Workstations keep the stock profile, where the rule stays selected. Scan the server
-  with:
+- **The server's OpenSCAP profile is tailored** (owner decisions, 2026-11-20). The tailoring file is
+  `/usr/share/chp/scap/chp-server-cui-tailoring.xml` (the server role only). It unselects exactly two rules, each
+  with its reason:
+  1. `chronyd_client_only`. The server's chrony leaves the CUI profile's client-only setting (`port 0`) off. The
+     reason: "Owner decision 2026-11-20: the CHP server serves time to the site LAN only (chrony allow <site
+     subnet>, bindaddress SERVER_IP, firewalld 123/udp from the site subnet); workstations sync from it and never
+     from outside sources." Workstations keep this rule.
+  2. `sysctl_user_max_user_namespaces`. Every CHP install removes the profile's setting in the kickstart's `%post`.
+     The reason, quoted from the deviation's record (`docs/dc2-planning/dc2-cui-tailoring.xml`): "The base "cui"
+     profile sets user.max_user_namespaces = 0. On dc2 this conflicts with systemd's own unit-level sandboxing
+     (PrivateUsers=true/yes, used by stock RHEL 9 irqbalance.service and upower.service, plus GNOME session helper
+     units), which requires the ability to create at least one user namespace per sandboxed service and fails with
+     ENOSPC when the kernel-wide limit is 0."
+
+  Workstations keep the stock profile. Their stock scan reports `sysctl_user_max_user_namespaces` as failed, because
+  the same `%post` change is on every host; that is the existing ISO deviation. Scan the server with:
 
       oscap xccdf eval --tailoring-file /usr/share/chp/scap/chp-server-cui-tailoring.xml \
         --profile xccdf_org.cyberhygiene_profile_cui_chp_server /usr/share/xml/scap/ssg/content/ssg-rl9-ds.xml
 
-  A scan of the server with the stock profile still reports `chronyd_client_only` as failed; that is expected.
+  A scan of the server with the stock profile still reports both rules as failed; that is expected. chrony on the
+  server listens on the server's site address and, for IPv6, on loopback only (`bindaddress ::1`).
 - **New installs:** the server's first boot sets this up (step `time`); each workstation's enrolment then points it
   at the server and waits up to about a minute for it to synchronise (a warning only if it does not).
 - **An installed site, or to set it up again:** run `chp-site time-sync --role server` on the server **first**, then

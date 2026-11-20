@@ -829,3 +829,74 @@ def test_wrong_banner_in_a_docx_text_box_and_spelled_out(tmp_path):
     # the existing marks still pass
     assert M.check(FX / "CUI_Access-Policy_v1.0.docx", True, VALUES).ok
     assert M.check(FX / "FCI_Notice_v1.0.docx", True, NO_VALUES).ok
+
+
+# ---------- fix round 2 (Task 12 re-review) ----------
+
+MD_WRAPS = ["# {}", "## {} ##", "**{}**", "*{}*", "_{}_", "> {}", "> > {}", "{}\\", "<p>{}</p>", "`{}`",
+            "- {}", "1. {}", "<b>{}</b>", "{} //SP-PROPIN", "C U I"]
+
+
+@pytest.mark.parametrize("wrap", MD_WRAPS)
+def test_md_wrong_banner_in_markdown_markup_is_seen(tmp_path, wrap):
+    """Round 2 IMPORTANT 1: a wrong banner wrapped in Markdown markup still shows as a banner: it is seen."""
+    inner = wrap.format("CUI") if "{}" in wrap else wrap
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{inner}\n\nBody\n\nFCI\n")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+    if "{}" in wrap:
+        g = tmp_path / "CUI_H_v1.0.md"
+        block = "".join(f"{x}\n\n" for x in VALUES.block()[0])
+        g.write_text(f"CUI\n\n{block}{wrap.format('FCI')}\n\nBody\n\nCUI\n")
+        r = M.check(g, True, VALUES)
+        assert not r.ok and any("an FCI banner" in p for p in r.problems), (wrap, r.problems)
+
+
+@pytest.mark.parametrize("inner", ["# FCI", "**FCI**", "> FCI", "<p>FCI</p>"])
+def test_md_insert_refuses_a_markup_wrapped_wrong_banner(tmp_path, inner):
+    f = tmp_path / "CUI_D_v0.1-DRAFT.md"
+    f.write_text(f"{inner}\n\nBody\n\n{inner}\n")
+    before = f.read_bytes()
+    with pytest.raises(M.MarkingError, match="an FCI banner"):
+        M.insert(f, VALUES, dry_run=False)
+    assert f.read_bytes() == before
+
+
+BLOCK_MD = "".join(f"{x}\n\n" for x in VALUES.block()[0])
+PROSE = [
+    ("CUI_P_v1.0.md", True, "CUI\n\n" + BLOCK_MD + "Federal Contract Information (FCI) is defined in FAR 52.204-21 and "
+                                                   "is\nhandled in the FCI folder.\n\nCUI\n"),
+    ("CUI_P_v1.0.md", True, "CUI\n\n" + BLOCK_MD + "Our documents mark FCI as follows, per the owner decision:\nFCI: the "
+                                                   "banner line at top and bottom.\n\nCUI\n"),
+    ("CUI_P_v1.0.md", True, "CUI\n\n" + BLOCK_MD + "An FCI document carries the banner\nFCI (no designation block) at "
+                                                   "top and bottom.\n\nCUI\n"),
+    ("Policy_v1.0.md", False, "# CUI handling policy\n\nControlled Unclassified Information (CUI) is information the "
+                              "government\ncreates or possesses.\n"),
+    ("Policy_v1.0.md", False, "Staff must mark documents that hold\nCUI (Controlled Unclassified Information) with the "
+                              "banner.\n"),
+    ("Policy_v1.0.md", False, "Staff must mark documents that hold\nCUI - see the CUI handling procedure.\n"),
+    ("Policy_v1.0.md", False, "Directions: turn into the\nCul-de-sac at the end of the road.\n"),
+    ("Policy_v1.0.md", False, "Our tooling uses the\nFCl: field in the form.\n"),
+    ("Policy_v1.0.md", False, "See the CUI policy. The word CUI appears mid-line, fine.\n"),
+    ("Policy_v1.0.md", False, "# Federal Contract Information handling\n\nThe rules for FCI at this site.\n"),
+]
+
+
+@pytest.mark.parametrize("name,cui,text", PROSE)
+def test_md_prose_about_cui_and_fci_is_not_a_banner(tmp_path, name, cui, text):
+    """Round 2 NEW IMPORTANT: ordinary sentences about CUI and FCI are not banners (no false alarm)."""
+    f = tmp_path / name
+    f.write_text(text)
+    r = M.check(f, cui, VALUES if name.startswith("CUI_") else NO_VALUES)
+    assert r.ok, r.problems
+
+
+@pytest.mark.parametrize("line", ["FCI - Federal Contract Information", "Federal Contract Information",
+                                  "FCI (Federal Contract Information)", "**Federal Contract Information**"])
+def test_md_short_banner_forms_still_seen(tmp_path, line):
+    """The spelled-out banner forms with a short tail stay wrong banners in a Markdown body."""
+    g = tmp_path / "CUI_Short_v1.0.md"
+    g.write_text("CUI\n\n" + BLOCK_MD + f"{line}\n\nBody\n\nCUI\n")
+    r = M.check(g, True, VALUES)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (line, r.problems)
