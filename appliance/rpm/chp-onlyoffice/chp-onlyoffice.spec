@@ -27,7 +27,7 @@ Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
 Requires:       poppler-utils
 # chp-site onlyoffice (enable, sweep, egress-render) and the doc commands of Plan 3
-Requires:       chp-site >= 0.14.0-8
+Requires:       chp-site >= 0.14.0-9
 # monitor check 83 runs under chp-base's monitor (/usr/lib/chp/monitor.d)
 Requires:       nftables, systemd, polkit, chrony, python3, util-linux, chp-base
 BuildRequires:  systemd-rpm-macros
@@ -103,7 +103,8 @@ fi
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-4.chp
 - Time from the CHP server only (Task 12, owner decision 2026-11-20): the egress table lets chronyd reach the site
   server's 123/udp and nothing else (the NTP_UPSTREAM sets and the any-address path for host names are gone).
-  Requires chp-site >= 0.14.0-8 (egress-render: CHP_WS_NTP4/6 now name the server only, kept for an older table).
+  Requires chp-site >= 0.14.0-9 (egress-render: CHP_WS_NTP4/6 now name the server only, kept for an older table;
+  Task 12b: the doc commands' hardened marking check).
 
 * Thu Nov 19 2026 The CyberHygiene Project - 0.1.0-3.chp
 - Requires chp-site >= 0.14.0-7 (Plan 3 Task 11a): the doc commands' send fixes (a lasting 400/403/413 on a kept

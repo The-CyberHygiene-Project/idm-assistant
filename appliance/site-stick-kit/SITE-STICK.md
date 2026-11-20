@@ -401,7 +401,11 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
      - a table cell that is just `CUI` or `FCI`;
      - a short line that starts with the word, a dash or colon, and at most three words, such as
        `CUI: see section 3.` or `CUI - what it is`;
-     - the word followed by the full name, such as `CUI (Controlled Unclassified Information)`.
+     - the word followed by the full name, such as `CUI (Controlled Unclassified Information)`;
+     - any of these in quotes, spelled out letter by letter (`C.U.I.`, `C-U-I`), with accents, or split by `<br>`.
+
+     Code is not checked: a fenced block (```` ``` ````) or an indented code block (four spaces, after a blank line,
+     not inside a list). A Markdown line longer than 8192 characters cannot be checked and is refused; break it up.
 
      In a non-CUI Markdown file the first and last lines are checked strictly: never start or end it with a line that
      begins with the word and a dash, colon or bracket, or with the full name. Sentences in the body such as

@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        8.chp%{?dist}
+Release:        9.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,17 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-9.chp
+- ISO 0.7.0 Plan 3 Task 12b (marking check hardening, round-3 re-review): the wrong-banner search drops combining
+  marks (accents, underlines, enclosing circles) in every format; in every format it also trims quotes, brackets and
+  ellipses from both ends, reads "/ /" as "//", the word spelled out letter by letter (C-U-I, C.U.I.) as the word,
+  and the phrase with hyphens or underscores between its words. Markdown: <br> and block tags split a line into
+  the lines it renders as; footnote references and trailing {#id} attribute blocks are removed; an indented code
+  block (4 columns after a blank line, outside a list) is exempt like a fenced one (the first and last lines stay
+  banner positions). Every Markdown reading is linear in the line, and a judged line over 8192 characters is
+  refused ("cannot be checked"), so a crafted file cannot stall the check or the publish. The required banner stays
+  the exact ASCII text.
+
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-8.chp
 - ISO 0.7.0 Plan 3 Task 12 (owner decisions 2026-11-20):
 - FCI is marked "FCI": in the CUI area an FCI_ document needs the banner FCI (top and bottom, the same places and

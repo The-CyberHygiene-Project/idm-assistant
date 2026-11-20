@@ -1026,3 +1026,183 @@ def test_round3_prose_that_still_passes(tmp_path):
         f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
         r = M.check(f, False, NO_VALUES)
         assert r.ok, (line, r.problems)
+
+
+# ---------- Task 12b (round-3 re-review: combining marks, <br>, minor disguises, DoS, indented code) ----------
+
+def _fci_md(tmp_path, inner):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{inner}\n\nBody\n\nFCI\n", encoding="utf-8")
+    return M.check(f, True, NO_VALUES)
+
+
+def _cui_md(tmp_path, inner):
+    g = tmp_path / "CUI_H_v1.0.md"
+    g.write_text(f"CUI\n\n{BLOCK_MD}{inner}\n\nBody\n\nCUI\n", encoding="utf-8")
+    return M.check(g, True, VALUES)
+
+
+def _fci_docx_header(tmp_path, text):
+    mk = _make()
+    f = tmp_path / "FCI_Hdr_v1.0.docx"
+    f.write_bytes(mk.docx(mk.FILLER, [("hdr", "header1.xml", mk.p("FCI", True) + mk.p(text, True)), mk.FCI_FTR],
+                          mk.REFS))
+    return M.check(f, True, NO_VALUES)
+
+
+COMBINING = ["C̲U̲I̲", "ĆUI", "CUÍ", "CÜI", "CÚI", "C⃝U⃝I⃝",
+             "Controlled Unclassified Informatión", "ĆUI//SP-PROPIN"]
+
+
+@pytest.mark.parametrize("inner", COMBINING)
+def test_12b_combining_marks_are_folded(tmp_path, inner):
+    """12b item 1: a wrong banner with combining marks (accents, underline, enclosing circles) is still seen, in a
+    Markdown body and in a docx header (the wide forms)."""
+    r = _fci_md(tmp_path, inner)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+    assert M._looks_like(inner, "cui", True) and M._looks_like(inner, "cui", False), inner
+    r = _fci_docx_header(tmp_path, inner)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+
+
+@pytest.mark.parametrize("inner", ["F̲C̲I̲", "F́CI", "Federal Contract Informatión"])
+def test_12b_combining_marks_fci_forms(tmp_path, inner):
+    r = _cui_md(tmp_path, inner)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (inner, r.problems)
+
+
+@pytest.mark.parametrize("first", ["C̲U̲I̲", "ĆUI", "CÚI"])
+def test_12b_required_banner_stays_exact_ascii(tmp_path, first):
+    """The required banner is never folded: a CUI_ file whose banner lines carry marks is not marked."""
+    f = tmp_path / "CUI_X_v1.0.md"
+    f.write_text(f"{first}\n\n{BLOCK_MD}Body\n\n{first}\n", encoding="utf-8")
+    r = M.check(f, True, VALUES)
+    assert not r.ok
+    assert any("the first line must be the CUI banner" in p for p in r.problems), r.problems
+    assert any("the last line must be the CUI banner" in p for p in r.problems), r.problems
+
+
+BR = ["CUI<br/>SP-PROPIN", "CUI<br>SP-PROPIN", "CUI<BR class=x />SP-PROPIN", "CUI< br >SP-PROPIN",
+      "Intro text<br>CUI<br>more words follow here", "CUI</p><p>SP-PROPIN", "<div>CUI</div>SP-PROPIN",
+      "<td>CUI</td><td>yes</td>"]
+
+
+@pytest.mark.parametrize("inner", BR)
+def test_12b_html_line_breaks_split_the_line(tmp_path, inner):
+    """12b item 2: <br> (any case, attributes, self-closing) and block tags render as a line break: each piece is
+    judged as a line."""
+    r = _fci_md(tmp_path, inner)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+
+
+MINOR = ["“CUI”", "«CUI»", "‹CUI›", "„CUI“", "CUI…", "CUI[^1]",
+         "# CUI {#id}", "## CUI {.cls}", "C-U-I", "C.U.I.", "C_U_I", "C/U/I", "C-U-I: SP-PROPIN",
+         "C.U.I. - SP-PROPIN", "CUI / / SP-PROPIN", "CUI / /SP-PROPIN", "CUI ∕∕ SP-PROPIN",
+         "Controlled-Unclassified-Information", "Controlled_Unclassified_Information",
+         "Controlled-Unclassified-Information - SP-PROPIN", "#CUI", "★CUI★"]
+
+
+@pytest.mark.parametrize("inner", MINOR)
+def test_12b_minor_disguises_are_seen(tmp_path, inner):
+    """12b item 3: curly and angle quotes, ellipsis, footnote references, heading attributes, spelled-out letters,
+    a spaced //, a hyphenated phrase."""
+    r = _fci_md(tmp_path, inner)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (inner, r.problems)
+
+
+@pytest.mark.parametrize("inner", ["“FCI”", "F.C.I.", "F-C-I", "Federal-Contract-Information", "FCI[^1]",
+                                   "# FCI {#x}", "FCI / / X", "FCI…"])
+def test_12b_minor_disguises_fci_forms(tmp_path, inner):
+    r = _cui_md(tmp_path, inner)
+    assert not r.ok and any("an FCI banner" in p for p in r.problems), (inner, r.problems)
+
+
+@pytest.mark.parametrize("text", ["“CUI”", "C.U.I.", "C-U-I", "CUI / / SP-PROPIN",
+                                  "Controlled-Unclassified-Information", "CUI…"])
+def test_12b_minor_disguises_in_docx_headers(tmp_path, text):
+    r = _fci_docx_header(tmp_path, text)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (text, r.problems)
+
+
+def test_12b_prose_still_passes(tmp_path):
+    for line in ["The “CUI” label is defined in 32 CFR 2002.", "See the footnote[^1] about the CUI area.",
+                 "Line one<br>more words about the CUI area here", "Cu, I think, is copper.",
+                 "**CUI** documents go in the CUI area.", "Cul-de-sac at the end of the road.",
+                 "<b>CUI</b> documents go in the CUI area.", "# Handling {#handling}"]:
+        f = tmp_path / "Policy_v1.0.md"
+        f.write_text(f"Policy\n\n{line}\n\nmore text here\n", encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (line, r.problems)
+
+
+# 12b item 4: no Markdown reading is quadratic; a line over the cap is refused, not scanned
+ADVERSARIAL = ["![", "[", "<!--", "[a](", "](", "<", "&amp;", "\\", "* ", "  ", "|", "{", "C", "Controlled ", "/ ",
+               "<br>", "[^", "``", "- "]
+
+
+def test_12b_long_markdown_line_is_refused(tmp_path):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text("FCI\n\n" + "a" * (M.MD_MAX_LINE + 1) + "\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any(f"longer than {M.MD_MAX_LINE} characters" in p and "cannot be checked" in p
+                            for p in r.problems), r.problems
+    d = tmp_path / "FCI_D_v0.1-DRAFT.md"
+    d.write_text("Body\n\n" + "a" * (M.MD_MAX_LINE + 1) + "\n", encoding="utf-8")
+    before = d.read_bytes()
+    with pytest.raises(M.MarkingError, match="cannot be checked"):
+        M.insert(d, NO_VALUES, dry_run=False)
+    assert d.read_bytes() == before
+    # a long line inside a code fence is not judged, so it is no problem
+    f.write_text("FCI\n\n```\n" + "a" * (M.MD_MAX_LINE + 1) + "\n```\n\nFCI\n", encoding="utf-8")
+    assert M.check(f, True, NO_VALUES).ok
+
+
+def test_12b_adversarial_lines_check_quickly(tmp_path):
+    import time
+    f = tmp_path / "FCI_H_v1.0.md"
+    t = time.monotonic()
+    f.write_text("FCI\n\n" + "![" * (32 << 10) + "\n\nFCI\n", encoding="utf-8")            # 64 KiB line: refused
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("cannot be checked" in p for p in r.problems)
+    assert time.monotonic() - t < 2, "a 64 KiB line took too long"
+    for unit in ADVERSARIAL:
+        line = (unit * (M.MD_MAX_LINE // len(unit)))[:M.MD_MAX_LINE]                         # just under the cap
+        t = time.monotonic()
+        f.write_text(f"FCI\n\n{line}\n\n{line}CUI\n\nFCI\n", encoding="utf-8")
+        M.check(f, True, NO_VALUES)
+        assert time.monotonic() - t < 2, (unit, time.monotonic() - t)
+
+
+# 12b item 5: an indented code block (CommonMark: 4 spaces or a tab, after a blank line, not inside a list) renders
+# as code, so it is exempt like a fenced block; anything that renders as text stays judged
+@pytest.mark.parametrize("body", ["Para\n\n    CUI\n\nBody", "Para\n\n\tCUI\n\nBody",
+                                  "Para\n\n    code line\n\n    CUI\n    more code\n\nBody",
+                                  "- item\n\ntext after the list\n\n    CUI\n\nBody",
+                                  "> quoted\n\n    CUI\n\nBody", "  \t  CUI\n\nBody"])
+def test_12b_indented_code_is_exempt(tmp_path, body):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{body}\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert r.ok, (body, r.problems)
+
+
+@pytest.mark.parametrize("body", ["Para\n    CUI\n\nBody",                     # a paragraph continuation, not code
+                                  "- item\n\n    CUI\n\nBody",                  # a paragraph in the list item
+                                  "1. item\n\n    CUI\n\nBody",
+                                  "- item\nlazy continuation\n\n    CUI\n\nBody",
+                                  "- item\n\n  - nested\n\n    CUI\n\nBody",
+                                  "   CUI\n\nBody"])                            # 3 spaces: not code
+def test_12b_indented_text_that_renders_as_text_is_judged(tmp_path, body):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{body}\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (body, r.problems)
+
+
+def test_12b_indented_code_at_the_ends_is_still_a_banner_position(tmp_path):
+    """The first and last non-blank lines stay banner positions (fail closed) even when they are indented code."""
+    for text in ["    CUI\n\nBody text.\n\nEnd\n", "Notes\n\nBody text.\n\n    CUI\n"]:
+        f = tmp_path / "Policy_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert not r.ok and any("non-CUI area" in p for p in r.problems), (text, r.problems)
