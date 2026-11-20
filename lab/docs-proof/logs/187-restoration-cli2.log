@@ -1,0 +1,40 @@
+host iso5-cli2; selinux Enforcing; fapolicyd active Denied accesses: 0; firewalld active
+egress active policy-drop 1 lockdown absent
+check 83: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown
+addr sha256 133fd4be23ee11699792c18da83612ed14bba1046405b521eb57bfdf7d419bf7
+lab units: lab-anchor-lab01.service lab-anchor-lab04.service 
+/tmp lab files:
+-rw-r--r--.  1 root     root          2678 Nov 20 12:36 doc_api.py
+drwx------.  2 root     root            44 Nov 20 10:15 .gnupg
+-rw-r--r--.  1 root     root     101711903 Nov 20 12:36 huge.json
+-rwx------.  1 root     root           500 Nov 20 10:17 ks-script-22exuh6e
+-rwx------.  1 root     root           954 Nov 20 10:17 ks-script-3z0dc3b0
+-rwx------.  1 root     root           906 Nov 20 10:17 ks-script-m2ecy1c0
+-rw-r--r--.  1 root     root      89478713 Nov 20 12:36 max.json
+-rw-r--r--.  1 lab01    lab01         1273 Nov 20 13:08 m-lab01.log
+-rw-r--r--.  1 lab06    lab06         1273 Nov 20 13:07 m-lab06.log
+-rw-r--r--.  1 lab01    lab01         1167 Nov 20 12:15 mutter-lab01.log
+-rw-r--r--.  1 lab06    lab06         1167 Nov 20 12:30 mutter-lab06.log
+-rw-r--r--.  1 root     root            87 Nov 20 12:36 nl.json
+-rw-r--r--.  1 lab01    lab01           97 Nov 20 12:08 oo-first-run-lab01.log
+-rw-r--r--.  1 lab01    lab01          176 Nov 20 13:08 oo-lab01.log
+-rw-r--r--.  1 lab06    lab06          176 Nov 20 13:07 oo-lab06.log
+-rw-r--r--.  1 lab01    lab01           76 Nov 20 12:11 oo-offscreen-lab01.log
+-rw-r--r--.  1 lab01    lab01          770 Nov 20 12:15 oo-x-lab01.log
+-rw-r--r--.  1 lab06    lab06          771 Nov 20 12:30 oo-x-lab06.log
+-rw-r--r--.  1 root     root      89478717 Nov 20 12:36 over1.json
+-rw-r--r--.  1 chpadmin chpadmin         2 Nov 20 12:42 own.txt
+-rw-r--r--.  1 lab01    lab01        57677 Nov 20 12:33 ref.pdf
+-rw-r--r--.  1 lab01    lab01            2 Nov 20 12:36 ro-lab01.txt
+-rwxr-xr-x.  1 root     root          1961 Nov 20 12:36 ro.sh
+-rw-r--r--.  1 lab01    lab01         7832 Nov 20 12:33 stripped.docx
+-rw-------.  1 root     root           532 Nov 20 10:15 .viminfo
+-rw-------.  1 lab01    lab01         7879 Nov 20 12:33 x-DRAFT.docx
+xfs
+linger 0
+.font-unix .gnupg .ICE-unix ks-script-22exuh6e ks-script-3z0dc3b0 ks-script-m2ecy1c0 .viminfo .X11-unix .XIM-unix 
+lab units: 0
+lab01 runtime dir: /run/user/2104078988
+lab04 runtime dir: /run/user/1884485617
+lab01: procs 0; sessions 0; runtime gone
+lab04: procs 0; sessions 0; runtime gone

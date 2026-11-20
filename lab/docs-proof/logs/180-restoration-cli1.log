@@ -1,0 +1,16 @@
+# cli1 after the fault-injection proofs (H13/H14 site.conf + address file, H9 early-boot lock-down with a lab boot timer, G3 IPv6 route)
+host iso5-cli1
+selinux: Enforcing
+fapolicyd: active Denied accesses: 0
+firewalld: active
+egress unit: active policy-drop: 1 lockdown-table: absent
+check 83: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep ti
+site.conf sha256: 3fbdd8c012b5164b309a86484b573c7b8da0138927eed9f0697dbe3854b4ef0e DOMAIN=iso5.lab.test
+  sorted content sha256 c4415733b2658731c30f7f8f1cd19a6ccf15c827bef81dd6722d6435dd2e0415 = cli2's (golden) sorted site.conf (same keys; only the order the lab added them differs)
+addr file sha256: 133fd4be23ee11699792c18da83612ed14bba1046405b521eb57bfdf7d419bf7 = cli2's (golden) address file, byte-identical
+ipv6 default routes: 0; 2001:db8 addrs: 0
+*.good copies in /root: 0
+linger: 0; KillUserProcesses: true
+lab units: unit files 0; lab-egress-restore.timer was still loaded "not-found active elapsed" after its files were removed -> stopped, reset-failed, daemon-reload:
+lab units loaded: 0, timers: 0
+lab scripts removed from /root (aj.*, h13.*, h9*.sh, h9b.*, restore.sh, wrb.*, ws.*, ver.*); left: install logs + lab-aide-accept.log lab-repo-upgrade.log oo-enable-1.log (logs only)
