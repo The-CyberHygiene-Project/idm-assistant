@@ -2,7 +2,8 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 """chp-site command line: validate | pre | verify-repo | get | render | export-client | onboard | revoke | unexpire |
-aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | documents | alerts | wazuh-forward."""
+aide-accept | aide-pin | aide-verify-pin | stick-pin-hash | docs | security | documents | alerts | wazuh-forward |
+doc-ledger | doc (the workstation's controlled-document commands)."""
 import argparse
 import os
 import sys
@@ -571,6 +572,13 @@ def _doc_ledger(a):
     return L.verify(ctx.ledger, ctx.head, heads)
 
 
+def _doc(a):
+    """chp-site doc ... (Plan 3 Task 6): the workstation's controlled-document commands (exit 0 done, 1 refused or
+    problems found, 2 a plain refusal before anything was sent, 3 pending: run the same command again)."""
+    from . import doc
+    return doc.run(a)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chp-site")
     ap.add_argument("--version", action="version", version=f"chp-site {VERSION}")
@@ -645,6 +653,8 @@ def main(argv=None):
                                            "heads), export it to the site stick, or purge the quarantine")
     dl.add_argument("action", choices=("process", "verify", "export", "purge-quarantine"))
     dl.add_argument("--stick", nargs="?", const=True, help="verify/export: the pinned site stick (or a folder, for tests)")
+    from . import doc as _docmod
+    _docmod.add_parser(sub)
     rv = sub.add_parser("review", help="(security add-on) the ISSO's daily security review")
     rv.add_argument("action", nargs="?", default="show", choices=("show", "build", "sign", "export", "verify", "now", "monitor", "host-record"))
     rv.add_argument("--date", dest="date_list", action="append", help="YYYY-MM-DD; show: one (default the latest); "
@@ -665,7 +675,7 @@ def main(argv=None):
          "aide-accept": _aide_accept, "aide-pin": _aide_pin, "aide-verify-pin": _aide_verify_pin,
          "stick-pin-hash": _stick_pin_hash, "docs": _docs,
          "security": _security, "documents": _documents, "alerts": _alerts, "wazuh-forward": _wazuh_forward, "yara-scan": _yara_scan, "review": _review,
-         "doc-ledger": _doc_ledger}[a.cmd](a)
+         "doc-ledger": _doc_ledger, "doc": _doc}[a.cmd](a)
         if isinstance(rc, int):
             return rc                      # a handler's own exit status (pam-test: 0 ok, 1 refused)
     except SiteError as err:
