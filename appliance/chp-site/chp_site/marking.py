@@ -231,6 +231,11 @@ _KINDS = {"cui": (BANNER, _BANNER_RE, ("cui", _phrase("Controlled Unclassified I
 _SPELLED = {k: re.compile("^" + r"[\W_]{1,3}".join(v[2][0]) + r"(?![^\W_])\.?") for k, v in _KINDS.items()}
 _SLASHES = re.compile(r"/(?: ?/)+")             # "/ /" is "//"
 _CUI_BLOCK_LABEL = re.compile(r"cui\s*category\s*:")
+# a document name after its prefix: <title>_vX.Y (ASCII digits; shared with the citation check, _CITE). In a banner
+# position, the word, _ and this is a citation of a controlled document, not a banner (review fix round 2)
+_CITE_TAIL = r"([^\W_][\w-]*?)_v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})(?![0-9]|\.[0-9])"
+_FOLDED_CITE = re.compile("_" + _CITE_TAIL.replace("_v(", "_[vV]("))
+_ANY_CITE = re.compile(r"(?<![\w-])" + _CITE_TAIL.replace("_v(", "_[vV]("))
 _MD_LEAD = re.compile(r"(?:#{1,6}\s+|#{1,6}$|>|[-*+]\s+|\d{1,9}[.)]\s+|\[[ xX]\])\s*")
 _MD_TAG = re.compile(r"<[^<>]{0,200}>")
 # tags that render as a line break or a new block: each piece around them is judged as a line (Task 12b)
@@ -356,6 +361,8 @@ def _md_cells(line):
             cells = v.split("|") if "|" in v else [v]
             out += [_md_plain(c) for c in cells]
             # an intraword _ renders as itself (CUI_SP-PROPIN): a second reading keeps it as a separator (review I2)
+            # (a document name such as CUI_SSP_v1.2 is a citation: it is left out of this reading, review round 2)
+            cells = [_ANY_CITE.sub(" ", c) for c in cells if "_" in c]
             out += [_md_plain(c.replace("_", " ")) for c in cells if "_" in c]
     return [c for c in out if c]
 
@@ -427,6 +434,13 @@ def _trim(s):
     return s[i:j]
 
 
+def _cites(line, word):
+    """The line (folded without the l/1 reading, which would turn digits into letters) starts with the word, _ and a
+    document name: a citation such as CUI_SSP_v1.2."""
+    s = _trim(_wfold(line, li=False))
+    return s[:len(word)] == word and bool(_FOLDED_CITE.match(s, len(word)))
+
+
 def _looks_like(line, kind, wide=True):
     """The folded search for a banner that must NOT be there (see the module notes). One normalisation for every
     format first (Task 12b): _wfold, "/ /" read as "//", everything but letters and digits trimmed from both ends
@@ -453,7 +467,7 @@ def _looks_like(line, kind, wide=True):
         return True
     if head != word and wide:
         return True                                        # the phrase followed by anything, in a banner position
-    if wide and not s[len(word)].isalnum():
+    if wide and not s[len(word)].isalnum() and not (s[len(word)] == "_" and _cites(line, word)):
         return True                    # the word, then white space or any non-alphanumeric and anything (rulings)
     sep = re.match(rf"{_SEP}\s*(.*)", rest)
     if not sep:
@@ -1059,8 +1073,9 @@ def _md_block_ok(lines, block):
 
 _FENCE = re.compile(r"\s{0,3}(`{3,}|~{3,})")
 # a line that opens a container whose indented continuation renders as text: a list item, a footnote definition, a
-# definition (": ..."), an admonition head (!!! / ???) (review I1: fail closed)
-_LIST_ITEM = re.compile(r" {0,3}(?:(?:[-*+]|\d{1,9}[.)]|:)(?:[ \t]|$)|\[\^[^\]]+\]:|!!!|\?\?\?)")
+# definition (": ..." or pandoc's "~ ..."), an admonition head (!!! / ???), a tab head (=== "Tab") (review I1 and fix
+# round 2: fail closed)
+_LIST_ITEM = re.compile(r" {0,3}(?:(?:[-*+]|\d{1,9}[.)]|[:~])(?:[ \t]|$)|\[\^[^\]]+\]:|!!!|\?\?\?|===[ \t])")
 
 
 def _indent(x):
@@ -1081,7 +1096,7 @@ def _md_unfenced_idx(lines):
     insert must not be able to push a wrong banner inward, and a hand-written one inside must be seen).
     Code blocks: fenced (``` or ~~~; a fence that never closes hides nothing), and indented (Task 12b: indented 4
     columns or more, after a blank line, the start of the file or another code line, and not after a list item, a
-    footnote definition, a definition line or an admonition head: _LIST_ITEM).
+    footnote definition, a definition line, an admonition or a tab head: _LIST_ITEM).
     Indented text that renders as text stays judged (fail closed): a paragraph continuation (no blank line before),
     and anything after a list item until a blank line and a line at column 0 that is not a list item end the list
     (indented text there is the item's paragraph; lazy continuation lines keep the list open)."""
@@ -1280,8 +1295,7 @@ def _stat_ok(path):
     return b""
 
 
-_CITE = re.compile(r"(?<![\w-])((?:CUI_|FCI_)?)([^\W_][\w-]*?)_v(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})"
-                   r"(?![0-9]|\.[0-9])")
+_CITE = re.compile(r"(?<![\w-])((?:CUI_|FCI_)?)" + _CITE_TAIL)
 
 
 def _ver(v):

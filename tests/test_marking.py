@@ -1139,7 +1139,7 @@ def test_12b_prose_still_passes(tmp_path):
 
 # 12b item 4: no Markdown reading is quadratic; a line over the cap is refused, not scanned
 ADVERSARIAL = ["![", "[", "<!--", "[a](", "](", "<", "&amp;", "\\", "* ", "  ", "|", "{", "C", "Controlled ", "/ ",
-               "<br>", "[^", "``", "- "]
+               "<br>", "[^", "``", "- ", "a_", "CUI_a_", "x_v1.2"]
 
 
 def test_12b_long_markdown_line_is_refused(tmp_path):
@@ -1352,3 +1352,49 @@ def test_12b_r1_md_body_prose_with_a_slash_still_passes(tmp_path):
         r = M.check(f, False, NO_VALUES)
         assert r.ok, (line, r.problems)
     assert not M._looks_like("Cuisine Ltd", "cui", True) and not M._looks_like("CUI2 Ltd", "cui", True)
+
+
+# ---------- Task 12b fix round 2 (re-review: pandoc/tab containers; citations in banner positions) ----------
+
+@pytest.mark.parametrize("body", ["Term\n~ definition\n\n    CUI\n\nBody", "Term\n  ~ def\n\n    CUI\n\nBody",
+                                  "Term\n:   def\n\n    CUI\n\nBody", "=== \"Tab\"\n\n    CUI\n\nBody"])
+def test_12b_r2_pandoc_definitions_and_tabs_open_a_container(tmp_path, body):
+    f = tmp_path / "FCI_H_v1.0.md"
+    f.write_text(f"FCI\n\n{body}\n\nFCI\n", encoding="utf-8")
+    r = M.check(f, True, NO_VALUES)
+    assert not r.ok and any("a CUI banner" in p for p in r.problems), (body, r.problems)
+
+
+CITE_LINES = ["- CUI_SSP_v1.2", "1. CUI_SSP_v1.2", "- [CUI_SSP_v1.2](CUI_SSP_v1.2.docx)",
+              "- CUI_SSP_v1.2 - System Security Plan", "[CUI_SSP_v1.2](x)", "| CUI_SSP_v1.2 | SSP |", "CUI_SSP_v1.2",
+              "- FCI_Contract_v1.0", "FCI_Contract_v1.0", "# CUI_SSP_v1.2 review notes", "CUI_SSP_v1.2 cross-reference",
+              "CUI_SSP_v1.2-DRAFT.docx", "CUI_POAM_v2.0.xlsx"]
+
+
+@pytest.mark.parametrize("line", CITE_LINES)
+def test_12b_r2_citations_in_banner_positions_pass(tmp_path, line):
+    """A document name (<prefix><title>_vX.Y[-DRAFT][.ext]) on the first or last line is a citation, not a banner."""
+    for text in (f"{line}\n\nIntro.\n\nMore.\n", f"Handbook\n\nIntro.\n\nReferences:\n\n{line}\n"):
+        f = tmp_path / "Handbook_v1.0.md"
+        f.write_text(text, encoding="utf-8")
+        r = M.check(f, False, NO_VALUES)
+        assert r.ok, (text, r.problems)
+
+
+@pytest.mark.parametrize("text", ["CUI_SSP_v1.2 — page 1", "CUI_SSP_v1.2", "Doc: CUI_SSP_v1.2"])
+def test_12b_r2_fci_docx_header_naming_a_cui_document(tmp_path, text):
+    r = _fci_docx_header(tmp_path, text)
+    assert r.ok, (text, r.problems)
+
+
+@pytest.mark.parametrize("line", ["CUI_SP-PROPIN", "CUI_X", "FCI_contract", "CUI_SSP_v1", "CUI_SSP_vX.Y",
+                                  "CUI_SSP_v١.٢"])
+def test_12b_r2_underscore_without_a_citation_is_still_a_banner(tmp_path, line):
+    kind = "fci" if line.startswith("FCI") else "cui"
+    assert M._looks_like(line, kind, True), line
+    f = tmp_path / "Handbook_v1.0.md"
+    f.write_text(f"Handbook\n\nIntro.\n\n{line}\n", encoding="utf-8")
+    assert not M.check(f, False, NO_VALUES).ok, line
+    if kind == "cui":
+        r = _fci_docx_header(tmp_path, line)
+        assert not r.ok and any("a CUI banner" in p for p in r.problems), (line, r.problems)
