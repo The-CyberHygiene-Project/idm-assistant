@@ -1,0 +1,92 @@
+## 01:40 backup
+Result=success
+ExecMainStatus=0
+Nov 21 01:40:08.588729 iso5-srv.iso5.lab.test runuser[38906]: pam_unix(runuser:session): session opened for user postgres(uid=26) by (uid=0)
+Nov 21 01:40:09.024762 iso5-srv.iso5.lab.test runuser[38906]: pam_unix(runuser:session): session closed for user postgres
+Nov 21 01:40:09.143416 iso5-srv.iso5.lab.test runuser[38915]: pam_unix(runuser:session): session opened for user apache(uid=48) by (uid=0)
+Nov 21 01:40:09.515889 iso5-srv.iso5.lab.test runuser[38915]: pam_unix(runuser:session): session closed for user apache
+Nov 21 01:40:09.580198 iso5-srv.iso5.lab.test chp-nextcloud-backup[38948]: backup 20261121T084007Z: 4.2M, 75 files, keeping 14 days (at least 2 copies)
+Nov 21 01:40:09.580503 iso5-srv.iso5.lab.test chp-nextcloud-backup[38864]: backup 20261121T084007Z: 4.2M, 75 files, keeping 14 days (at least 2 copies)
+Nov 21 01:40:09.580838 iso5-srv.iso5.lab.test systemd[1]: chp-nextcloud-backup.service: Deactivated successfully.
+Nov 21 01:40:09.580929 iso5-srv.iso5.lab.test systemd[1]: Finished CHP: nightly NextCloud backup into /backup.
+drwx------. 5 root root 102 Nov 20 13:02 20261120T200220Z
+drwx------. 5 root root 102 Nov 20 13:15 20261120T201535Z
+drwx------. 5 root root 102 Nov 21 01:40 20261121T084007Z
+chp-docs-ledger
+data
+etc-nextcloud
+MANIFEST
+nextcloud.pgdump
+-rw-------. 1 root root 2673571 01:40:09.022646921 /backup/nextcloud/20261121T084007Z/nextcloud.pgdump
+
+/backup/nextcloud/20261121T084007Z/chp-docs-ledger:
+total 28
+-rw-------. 1 root root    68 14:57:45.358336542 ledger.head
+-rw-------. 1 root root 24284 14:57:45.355336555 ledger.jsonl
+55ecea4238e673cbff460f5ba93fdff22d70ce5e5db66feca3c7289b30fe26dc  /bac
+55ecea4238e673cbff460f5ba93fdff22d70ce5e5db66feca3c7289b30fe26dc  /var
+## order in the 0.13.0 script
+6:#   backup     the document ledger (under its shared lock) -> maintenance mode on -> pg_dump (peer auth) + rsync of th
+72:        if ! flock -s -w 900 8; then
+76:      rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"
+78:    occ maintenance:mode --on >/dev/null
+79:    exec 8<&- 2>/dev/null || true                         # the appender may run again (occ refuses in maintenance mo
+80:    runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
+106:      else install -d -m 0700 "$LEDGER" && rsync -aHAX --numeric-ids "$o/chp-docs-ledger/" "$LEDGER/" && restorecon 
+## 03:10 nightly check + canary
+pam_unix(runuser:session): session opened for user apache(uid=48) by (uid=0)
+pam_unix(runuser:session): session closed for user apache
+OK canary-off: canary account disabled, its app tokens deleted
+chp-documents-check.service: Deactivated successfully.
+Finished CHP: nightly NextCloud tag check and share canary (chp-site documents check; result for check 81).
+chp-documents-check.service: Consumed 4.736s CPU time.
+canary account:   - enabled: false; app tokens: 0
+2026-11-21T03:10:12 100618 level 3 NextCloud: chp-canary enabled by the nightly check (occ, 03:05-03:45): User enabled: "chp-
+2026-11-21T03:10:14 100608 level 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Int
+2026-11-21T03:10:14 100608 level 3 NextCloud: nightly share canary refused as expected (canary file 106): Interaction OCP\Int
+check 81: OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (known, accepted; see the daily r
+OK NextCloud check OK (tags, policy, share canary; last run 2026-11-21T10:10:09Z)
+## 04:04 AIDE
+TIME=20261121T110333Z
+EPOCH=1795259013
+EXIT=7
+ADDED=22
+REMOVED=2
+CHANGED=15
+DB_MATCH=yes
+REPORT=/var/log/aide/check-20261121T110333Z.log
+report /var/log/aide/check-20261121T110333Z.log
+0
+  Added entries:		22
+  Removed entries:		2
+  Changed entries:		15
+Added entries:
+Removed entries:
+Changed entries:
+f+++++++++++++++++: /etc/sudoers.d/99-lab-adapter
+d+++++++++++++++++: /root/chp-scan
+f+++++++++++++++++: /root/chp-scan/iso5-srv.xml
+f+++++++++++++++++: /root/chp-scan/tailoring.xml
+f+++++++++++++++++: /root/docs-enable-3.log
+f+++++++++++++++++: /root/docs-enable-4.log
+f+++++++++++++++++: /root/docs-enable-5.log
+f+++++++++++++++++: /root/lab-check2.log
+f+++++++++++++++++: /root/lab-flood.log
+f+++++++++++++++++: /root/lab-flood2.log
+f+++++++++++++++++: /root/lab-flood3.log
+f+++++++++++++++++: /root/lab-i2.log
+f+++++++++++++++++: /root/lab-j11.log
+f+++++++++++++++++: /root/lab-nightly.log
+f+++++++++++++++++: /root/lab-restore.log
+f+++++++++++++++++: /root/lab-restore2.log
+f+++++++++++++++++: /root/lab-restore3.log
+f+++++++++++++++++: /usr/local/sbin/lab-hook
+f+++++++++++++++++: /var/lib/ssh-ca/keys/lab01.pub
+f+++++++++++++++++: /var/lib/ssh-ca/keys/lab02.pub
+total 8
+-rw-------. 1 root root 1547 2026-11-21_02:37:49 chain.pem
+-rw-------. 1 root root  288 2026-11-20_10:38:29 key.pem
+-rw-------. 1 root root 16539599 2026-11-20_11:10:51 /var/lib/aide/aide.db.gz
+Nov 21 04:07:50 iso5-srv.iso5.lab.test systemd[1]: Finished Renew the NextCloud TLS certificate (step-ca; ACME re-issue if it already expire
+Nov 21 04:22:50 iso5-srv.iso5.lab.test systemd[1]: chp-nextcloud-cert-renew.service: Deactivated successfully.
+Nov 21 04:22:50 iso5-srv.iso5.lab.test systemd[1]: Finished Renew the NextCloud TLS certificate (step-ca; ACME re-issue if it already expire
