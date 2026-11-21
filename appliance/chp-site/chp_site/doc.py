@@ -657,9 +657,9 @@ def cmd_checkout(env, a, say):
     s = auth.fresh(env)                                   # the poll may have taken minutes: not the token from before
     data = fetch(env, s, it["path"])
     if not e.get("sha256") or hashlib.sha256(data).hexdigest() != e["sha256"]:
-        say(f"refused: {name} changed between the server's checkout record and the download (an administrator's edit "
-            "or a publish); nothing was kept here; check it out again")
-        return 1
+        say(f"pending: {name} changed between the server's checkout record and the download (an administrator's edit "
+            f"or a publish); nothing was kept here. {CHECKOUT_RECORDED.format(doc=a.document)}")
+        return 3
     _write_new(w / local, data)
     Records(w).put(local, {"name": it["name"], "path": it["path"], "file_id": it["fileid"],
                            "folder_id": parent["fileid"], "folder_path": parent["path"], "cui": cui,

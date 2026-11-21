@@ -1169,3 +1169,16 @@ def test_13a_r1_check83_passes_the_reports_alerts_on(tmp_path):
     finally:
         del os.environ["CHP_SITE_BIN"]
     assert "ALERT workstation egress: a recovery report was held" in out and "OK workstation editor" not in out
+
+
+def test_13a_followup_check83_alerts_when_the_recovery_report_command_fails(tmp_path):
+    b = tmp_path / "cs"
+    b.write_text("#!/bin/bash\necho 'Traceback (most recent call last):'\nexit 7\n")
+    b.chmod(0o755)
+    os.environ["CHP_SITE_BIN"] = str(b)
+    try:
+        out = run83(tmp_path)
+    finally:
+        del os.environ["CHP_SITE_BIN"]
+    alerts = [ln for ln in out.splitlines() if ln.startswith("ALERT ")]
+    assert len(alerts) == 1 and "egress-recovered failed (exit 7)" in alerts[0] and "OK workstation editor" not in out

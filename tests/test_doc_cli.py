@@ -115,7 +115,8 @@ def test_checkout_records_server_sha_and_file_id(tmp_path, monkeypatch, capsys):
         return r
     env2.stub._result = changed
     rc, out = run(env2, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
-    assert rc == 1 and "changed" in out and "check it out again" in out
+    assert rc == 3 and "changed" in out and "refused" not in out and "WAS recorded" in out          # 13a follow-up
+    assert "author of this cycle" in out and "checkout CUI_SSP_v1.2.docx again" in out
     assert not (work(env2) / "CUI_SSP_v1.3-DRAFT.docx").exists()
     assert DOC.Records(work(env2)).get("CUI_SSP_v1.3-DRAFT.docx") is None
 

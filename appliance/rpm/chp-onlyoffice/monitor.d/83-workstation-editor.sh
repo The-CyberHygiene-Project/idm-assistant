@@ -51,9 +51,11 @@ ts=$(systemctl is-active "$T" 2>/dev/null); ts=${ts:-unknown}
 # lines (a report held past 60 min, or one that could not be logged) are this check's alerts
 cs=${CHP_SITE_BIN:-/usr/bin/chp-site}
 if [ -x "$cs" ]; then
+  rout=$("$cs" onlyoffice egress-recovered 2>&1); rrc=$?
   while IFS= read -r line; do
     case $line in ALERT\ *) alert "${line#ALERT }" ;; esac
-  done <<< "$("$cs" onlyoffice egress-recovered 2>&1)"
+  done <<< "$rout"
+  [ "$rrc" -eq 0 ] || alert "workstation egress: chp-site onlyoffice egress-recovered failed (exit $rrc): an ended lock-down or render failure may not be reported (run it by hand to see why)"
 fi
 [ "$bad" -eq 0 ] && echo "OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active"
 exit 0
