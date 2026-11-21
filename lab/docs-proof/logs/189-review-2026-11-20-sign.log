@@ -1,0 +1,46 @@
+## 2026-11-20 review (built 00:20 11-21): attention + documents rows
+Built 2026-11-21 00:20. Needs attention: 1. Sources: 12377 alerts, records iso5-cli1 72, iso5-cli2 70, iso5-srv 74.
+| nextcloud | ? | ? |  | iso5-srv | NextCloud: the share-canary account chp-canary was ENABLED outside the nightly check: User enabled: "chp-canary" | 10 | 12:59 | 13:26 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.1.docx as CR-2026-0001 | 1 | 12:25 | 12:25 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab06: CUI/Compliance/CUI_SecPolicy_v0.2.docx as CR-2026-0002 | 1 | 12:30 | 12:30 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.3.docx as CR-2026-0003 | 1 | 12:34 | 12:34 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: Internal/Compliance/Handbook_v0.1.docx as CR-2026-0004 | 1 | 12:39 | 12:39 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.4.docx as CR-2026-0005 | 1 | 13:03 | 13:03 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.5.docx as CR-2026-0006 | 1 | 13:04 | 13:04 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.6.docx as CR-2026-0007 | 1 | 13:05 | 13:05 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_Regxlsx_v0.1.xlsx as CR-2026-0008 | 1 | 13:06 | 13:06 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.7.docx as CR-2026-0009 | 1 | 13:12 | 13:12 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_SecPolicy_v0.8.docx as CR-2026-0010 | 1 | 13:22 | 13:22 |
+| nextcloud | ? | ? |  | iso5-srv | Controlled document published by lab01: CUI/Compliance/CUI_Plan_v0.1.docx as CR-2026-0011 | 1 | 14:57 | 14:57 |
+| iso5-srv | nextcloud backup | OK | last backup 10 h ago | 77-nextcloud-services |
+| iso5-srv | nextcloud nightly check | OK | no alerts, 10 h ago | 81-documents-tags |
+| iso5-srv | nextcloud share canary | OK | public link and internal share refused | 81-documents-tags |
+| iso5-srv | nextcloud refusals | OK | 0 contain refusals, 0 share attempts today; canary: 16 refused as expected | nextcloud rules |
+| iso5-srv | document published CR-2026-0001 | OK | CUI/Compliance/CUI_SecPolicy_v0.1.docx by lab01 at 2026-11-20 12:25; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0002 | OK | CUI/Compliance/CUI_SecPolicy_v0.2.docx by lab06 at 2026-11-20 12:30; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0003 | OK | CUI/Compliance/CUI_SecPolicy_v0.3.docx by lab01 at 2026-11-20 12:34; ISSO override by lab01 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0004 | OK | Internal/Compliance/Handbook_v0.1.docx by lab01 at 2026-11-20 12:39; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0005 | OK | CUI/Compliance/CUI_SecPolicy_v0.4.docx by lab01 at 2026-11-20 13:03; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0006 | OK | CUI/Compliance/CUI_SecPolicy_v0.5.docx by lab01 at 2026-11-20 13:03; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0007 | OK | CUI/Compliance/CUI_SecPolicy_v0.6.docx by lab01 at 2026-11-20 13:05; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0008 | OK | CUI/Compliance/CUI_Regxlsx_v0.1.xlsx by lab01 at 2026-11-20 13:06; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0009 | OK | CUI/Compliance/CUI_SecPolicy_v0.7.docx by lab01 at 2026-11-20 13:12; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0010 | OK | CUI/Compliance/CUI_SecPolicy_v0.8.docx by lab01 at 2026-11-20 13:22; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document published CR-2026-0011 | OK | CUI/Compliance/CUI_Plan_v0.1.docx by lab01 at 2026-11-20 14:57; approved by lab04 | docs ledger (100644) |
+| iso5-srv | document override 0e891f6a | ATTENTION | ISSO override by lab01 at 2026-11-20 12:34 on CUI/Compliance/CUI_SecPolicy_v0.3.docx: reason: lab 11c: one-person site, sole administrator; review it, then sign this review (ch
+## review sign (ISSO_NAME, as the 0.7.0 sign-off works)
+chp-site: review sign needs a terminal: the reviewer must read the summary and type yes
+sign-rc=0
+verify-rc=0
+# Daily security review 2026-11-20
+Built 2026-11-21 00:20. Needs attention: 1. Sources: 12377 alerts, records iso5-cli1 72, iso5-cli2 70, iso5-srv 74.
+## review sign through a pty (script -q)
+Needs attention:
+  - iso5-srv document override 0e891f6a ATTENTION: ISSO override by lab01 at 2026-11-20 12:34 on CUI/Compliance/CUI_SecPolicy_v0.3.docx: reason: lab 11c: one-person site, sole administrator; review it, then sign this review (chp-site review sign)
+sign 1 review(s) (2026-11-20) as D. Shannon? Type yes to sign: yes
+signed 1 review(s); recorded in the ledger and the audit log
+verify-rc=0
+{"approver":"D. Shannon","date":"2026-11-20","notes":"lab 11c: override 0e891f6a (CR-2026-0003) reviewed: deliberate one-person-site proof","operator":"chpadmin","prev":"000000000000000000000000000000
+2026-11-20
+ledger.head
+ledger.jsonl

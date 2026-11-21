@@ -1,5 +1,7 @@
 # Proof record: ISO 0.7.0 Plan 3 Task 11c (controlled-document workflow) on the iso5 lab
 
+**Round 1 final (2026-11-21):** the overnight items ran and passed (below, "Timed items"); B15 not run.
+
 Date: 2026-11-20. Repo: the owner-signed **0.13.0** (`aero:/data/chp-release/0.13.0/repo`, `verify-repo`: REPO OK 72,
 repomd signed by 2DE0D71BF37D8F5E4201A590521276F43C908F8E). Lab reset from **ISO 0.6.0-rc2** (sha256 `0cb27c14…cac0`
 verified). Raw logs: `lab/docs-proof/logs/101-…` onwards. Driver: `plan3.sh` (wraps `plan2.sh`) with the workstation
@@ -186,3 +188,14 @@ Kept on purpose: the lab alert hook (`ALERT_HOOK=/usr/local/sbin/lab-hook`) and 
 
 srv and cli2 at the final golden (188); cli1 restored (180). Overnight items pending: the 00:20 review (override under
 Needs attention, D14 counts), 01:40 backup, 03:10 check + canary, 04:04 AIDE (D15), and an 8 h sign-in end (B15).
+
+## Timed items (2026-11-21, round 1 final)
+
+| Item | Result | Log |
+|---|---|---|
+| Review 2026-11-20 (built 00:20 11-21) | "Needs attention: 1" = the ISSO override (CR-2026-0003, lab01, 12:34) with its reason; 11 publications each "approved by lab04" / "ISSO override by lab01"; refusals row "canary: 16 refused as expected" (D14 fixed) | 189 |
+| Review sign-off | signed as `ISSO_NAME` "D. Shannon" (typed name, unchanged in 0.7.0); needs a terminal (`script -q`); recorded; `review verify` OK. The 2026-11-22 build should no longer list the override (follow-up) | 189 |
+| Nightly backup 01:40 | OK, 4.2M, 75 files; ledger copy identical to the live ledger; 0.13.0 order: shared lock → ledger copy → maintenance on → lock released → pg_dump | 190 |
+| Nightly check + canary 03:10 | OK; 100618 level 3 inside the window; 100608 x2; canary disabled, 0 tokens; check 81 OK | 190 |
+| Daily AIDE 04:04 (D15) | no `/etc/pki/nextcloud` path although chain.pem was re-issued at 02:37 after the baseline (D15 fixed); lab residue listed (adapter, lab hook, /root lab logs) | 190 |
+| 8 h sign-in end (B15) | NOT RUN: no sign-in was kept alive overnight (sessions ended before the final golden) | — |
