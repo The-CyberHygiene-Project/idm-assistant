@@ -193,13 +193,16 @@ def egress_lockdown(root, now=time.time):
     return 0
 
 
-def _agent_connected(root):
-    """None: no Wazuh agent state file (nothing to wait for); else whether wazuh-agentd says it is connected."""
+def _agent_connected(root, after):
+    """None: no Wazuh agent state file (nothing to wait for); else whether wazuh-agentd says it is connected in a state
+    file written at or after `after` (it rewrites the file every few seconds; one left from before the failure, e.g.
+    from the previous boot, proves nothing)."""
+    f = _p(root, AGENT_STATE)
     try:
-        text = _p(root, AGENT_STATE).read_text()
+        text, mtime = f.read_text(), f.stat().st_mtime
     except OSError:
         return None
-    return re.search(r"^status='connected'\s*$", text, re.M) is not None
+    return re.search(r"^status='connected'\s*$", text, re.M) is not None and mtime >= after
 
 
 def egress_recovered(root, run=subprocess.run, now=time.time):
@@ -231,7 +234,8 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
     if not todo:
         print("OK egress: still in lock-down; nothing to report yet")
         return 0
-    if _agent_connected(root) is False:
+    after = max(x for x in ((lock or {}).get("since"), (rend or {}).get("ended"), 0) if isinstance(x, (int, float)))
+    if _agent_connected(root, after) is False:
         print("OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries)")
         return 0
     for name, prio, line in todo:

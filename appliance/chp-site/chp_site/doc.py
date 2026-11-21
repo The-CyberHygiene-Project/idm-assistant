@@ -333,17 +333,16 @@ def _nextcloud_said(env, st, what):
         try:
             kst, _, _ = auth._call(env, "GET", f"{env.idm}/status", {"Accept": "application/json"})
         except auth.Unreachable as e:
-            raise DocPending(f"pending: NextCloud could not check your sign-in because Kanidm cannot be reached ({e}); "
-                             "nothing was sent. Run the same command again when Kanidm is back (no new sign-in is "
-                             "needed)") from None
+            raise DocPending(f"pending: NextCloud could not check your sign-in because Kanidm cannot be reached ({e}). "
+                             "Run the same command again when Kanidm is back (no new sign-in is needed)") from None
         if kst != 200:
-            raise DocPending(f"pending: NextCloud could not check your sign-in: Kanidm answered HTTP {kst}; nothing was "
-                             "sent. Run the same command again when Kanidm is back (no new sign-in is needed)")
+            raise DocPending(f"pending: NextCloud could not check your sign-in: Kanidm answered HTTP {kst}. Run the "
+                             "same command again when Kanidm is back (no new sign-in is needed)")
         raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
     if st in UNAVAILABLE:
         why = "maintenance mode, e.g. the nightly backup" if st == 503 else "a proxy in front of it"
-        raise DocPending(f"pending: NextCloud is not available right now (HTTP {st}: {why}) for {what}; nothing was "
-                         "sent. Run the same command again in a few minutes")
+        raise DocPending(f"pending: NextCloud is not available right now (HTTP {st}: {why}) for {what}. Run the same "
+                         "command again in a few minutes")
 
 
 def propfind(env, s, path, depth="0"):
@@ -533,6 +532,7 @@ def send(env, kind, fields, say=print):
             return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
         try:
             known = True                                  # a POST is going out: the server may get it
+            env.posted = True                             # run(): a later "pending" must not say nothing was sent
             st, _, data = auth._call(env, "POST", f"{env.files}{LEDGER}/request?format=json",
                                      dict(_bearer(s), **{"OCS-APIRequest": "true", "Accept": "application/json",
                                                          "Content-Type": "application/json"}), body)
@@ -1173,11 +1173,11 @@ def run(a, env=None, say=print):
     env = env or system_env()
     try:
         return COMMANDS[a.doc_cmd](env, a, say)
-    except DocPending as e:                               # nothing sent; NextCloud or Kanidm not serving now
-        say(str(e))
-        return 3
-    except auth.Unreachable as e:                         # before send(): nothing was sent (send() keeps its own)
-        say(f"pending: {_plain(e)}; nothing was sent. Run the same command again in a few minutes")
+    except (DocPending, auth.Unreachable) as e:           # NextCloud or Kanidm not serving now (send() keeps its own)
+        what = ("the request itself was sent and recorded, but this command could not finish"
+                if getattr(env, "posted", False) else "nothing was sent")
+        msg = str(e) if isinstance(e, DocPending) else f"pending: {_plain(e)}. Run the same command again in a few minutes"
+        say(f"{msg} ({what})")
         return 3
     except OSError as e:                                  # a file of yours, a folder: a plain message, no traceback
         where = f": {e.filename}" if getattr(e, "filename", None) else ""

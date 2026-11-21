@@ -656,8 +656,7 @@ def _stuck(ctx, p, err, err2):
         if len(old) < 2 and ident:                        # an older marker (name only): add the identity
             _write_marker(ctx, m, p.name, ident, replace=True)
         return                                            # alerted already: the path unit re-triggers on it
-    if not _write_marker(ctx, m, p.name, ident, replace=old is not None):
-        pass                                              # no marker: alerted again next time (never silent)
+    _write_marker(ctx, m, p.name, ident, replace=old is not None)   # none written: alerted again next time
     _safe(ctx.journal, {"event": "appender-failed", "file": _clean(p.name, 80),
                         "message": f"the spool file {_clean(p.name, 80)} cannot be deleted or moved aside "
                                    f"({str(err)[:100]}; {str(err2)[:100]}): the path unit re-triggers on it until its "
@@ -1506,13 +1505,13 @@ def _cycle(entries, doc):
 
 
 def _won_race(entries, doc, cycle, user):
-    """The publish that ended the previous cycle of `doc` when `user` was one of ITS authors (a lost publish race:
-    P3-D4); else None."""
+    """The publish by someone else that ended the previous cycle of `doc` when `user` was one of ITS authors (a lost
+    publish race: P3-D4); else None."""
     if cycle < 2:
         return None
     prev = [x for x in entries if x["doc"] == doc and x["cycle"] == cycle - 1]
     pubs = [x for x in prev if x["kind"] == "publish"]
-    return pubs[-1] if pubs and user in _authors(prev) else None
+    return pubs[-1] if pubs and pubs[-1]["user"] != user and user in _authors(prev) else None
 
 
 def _authors(cyc):

@@ -989,10 +989,12 @@ class Net:
         return subprocess.CompletedProcess(argv, 0, "", "")
 
 
-def _agent(tmp_path, status):
+def _agent(tmp_path, status, mtime=None):
     p = tmp_path / OO.AGENT_STATE.lstrip("/")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(f"# State file for wazuh-agentd\nstatus='{status}'\nlast_keepalive='2026-11-20 19:54:00'\n")
+    if mtime is not None:
+        os.utime(p, (mtime, mtime))
 
 
 def test_13a_d7_recovery_after_a_lockdown_is_reported_once_when_the_agent_is_connected(tmp_path):
@@ -1013,7 +1015,11 @@ def test_13a_d7_recovery_after_a_lockdown_is_reported_once_when_the_agent_is_con
     n = Net()
     OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204401)
     assert n.logged == []
-    _agent(tmp_path, "connected")                              # check 83, 15 minutes later
+    _agent(tmp_path, "connected", mtime=1795204000)            # a state file from before the lock-down: not proof
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204402)
+    assert n.logged == []
+    _agent(tmp_path, "connected", mtime=1795205290)            # check 83, 15 minutes later
     n = Net()
     OO.egress_recovered(tmp_path, run=n, now=lambda: 1795205300)
     lines = {a[a.index("-t") + 1]: a[-1] for a in n.logged}

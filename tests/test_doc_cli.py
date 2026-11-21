@@ -877,3 +877,15 @@ def test_13a_d13_notes_and_reason_over_the_ledger_limit_are_refused_here(tmp_pat
     rc, out = run(env, monkeypatch, capsys, cmd, str(f), opt, "x" * 2000)
     assert rc in (0, 1) and posts(env), out
     assert len(posts(env)[-1]["notes" if opt == "--notes" else "reason"].encode()) == 2000
+
+
+
+def test_13a_d8_unavailable_after_the_request_was_recorded_says_so(tmp_path, monkeypatch, capsys):
+    """A checkout recorded by the server whose download then meets maintenance mode: pending, and it does not claim
+    that nothing was sent."""
+    env = setup(tmp_path)
+    stub = env.stub
+    env.transport = lambda method, url, headers=None, body=None: (503, {}, b"") \
+        if method == "GET" and "/remote.php/dav/" in url else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "pending" in out and "nothing was sent" not in out and "recorded" in out, out
