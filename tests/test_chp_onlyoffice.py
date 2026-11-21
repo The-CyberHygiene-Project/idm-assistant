@@ -1097,3 +1097,75 @@ def test_13a_o5_the_address_file_is_relabelled_on_every_render(tmp_path):
     assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0
     assert OO.egress_render(tmp_path, lambda: (site, hosts), run=run) == 0          # unchanged: relabelled too
     assert calls.count(["restorecon", str(tmp_path / OO.EGRESS_ADDR)]) == 2
+
+
+# ---------- Task 13a fix round 1 (I1): the end is the proof point; a bounded hold ----------
+
+def _locked_then_loaded(tmp_path, since=1795204202):
+    site, hosts = _site()
+    bad = lambda: (site, [hosts[0]._replace(ip="0.0.0.0"), hosts[1]])
+    OO.egress_render(tmp_path, bad, run=Net(), now=lambda: since - 1)
+    OO.egress_lockdown(tmp_path, now=lambda: since)
+    OO.egress_render(tmp_path, lambda: (site, hosts), run=Net(), now=lambda: since + 100)
+
+
+def test_13a_r1_a_connected_state_written_during_the_lockdown_is_no_proof(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    _agent(tmp_path, "connected", mtime=1795204250)            # during the lock-down, before the agent noticed
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400)          # the first run that sees the table: the end
+    assert n.logged == [] and OO._read_state(tmp_path, "lockdown")["ended"] == 1795204400
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204500)
+    assert n.logged == []
+    _agent(tmp_path, "connected", mtime=1795204400)            # written at/after the end: proof
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204600)
+    assert len(n.logged) == 2 and "ALERT" not in capsys.readouterr().out
+
+
+def test_13a_r1_a_report_held_past_60_min_goes_anyway_with_an_alert(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    _agent(tmp_path, "disconnected")                           # state format differs / agent never says connected
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400)
+    assert n.logged == [] and "ALERT" not in capsys.readouterr().out
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + OO.REPORT_HOLD_MAX - 1)
+    assert not [a for a in n.logged if "LOCKDOWN" in a[-1]]    # (the render failure ended earlier: its bound is past)
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + OO.REPORT_HOLD_MAX)
+    out = capsys.readouterr().out
+    assert len([a for a in n.logged if "LOCKDOWN" in a[-1]]) == 1
+    assert [ln for ln in out.splitlines() if ln.startswith("ALERT ") and "held" in ln]
+    n = Net()
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + 2 * OO.REPORT_HOLD_MAX)
+    assert n.logged == []                                      # sent once
+
+
+def test_13a_r1_a_report_that_cannot_be_logged_past_the_bound_alerts(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    OO.egress_recovered(tmp_path, run=Net(logger_rc=1), now=lambda: 1795204400)
+    assert "ALERT" not in capsys.readouterr().out
+    OO.egress_recovered(tmp_path, run=Net(logger_rc=1), now=lambda: 1795204400 + OO.REPORT_HOLD_MAX)
+    assert [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("ALERT ") and "logger" in ln]
+
+
+def test_13a_r1_a_state_file_without_its_times_is_reported_not_a_crash(tmp_path, capsys):
+    OO._write_state(tmp_path, "lockdown", {"why": "x"})
+    OO._write_state(tmp_path, "render-recovered", {})
+    n = Net()
+    assert OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400) == 0
+    assert len(n.logged) == 2 and "cause not recorded" in " ".join(a[-1] for a in n.logged)
+
+
+def test_13a_r1_check83_passes_the_reports_alerts_on(tmp_path):
+    b = tmp_path / "cs"
+    b.write_text("#!/bin/bash\necho 'OK egress: x'\necho 'ALERT workstation egress: a recovery report was held'\n")
+    b.chmod(0o755)
+    os.environ["CHP_SITE_BIN"] = str(b)
+    try:
+        out = run83(tmp_path)
+    finally:
+        del os.environ["CHP_SITE_BIN"]
+    assert "ALERT workstation egress: a recovery report was held" in out and "OK workstation editor" not in out

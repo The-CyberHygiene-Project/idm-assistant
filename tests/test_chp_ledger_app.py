@@ -347,3 +347,4 @@ def test_13a_d3_wazuh_pages_the_audit_line():
     assert "<decoded_as>json</decoded_as>" in base and "<field name=\"app\">^chp_ledger$</field>" in base
     kid = re.search(rf'<rule id="{W.LEDGER_NOGROUPS_RULE}" level="12">(.*?)</rule>', r, re.S).group(1)
     assert f"<if_sid>{W.LEDGER_AUDIT_RULE}</if_sid>" in kid and "chp.ledger.nogroups" in kid
+    assert "chp_access_granted" not in kid and "<group>chp_doc_refused,chp_account,</group>" in kid   # fix round 1

@@ -140,3 +140,10 @@ def test_13a_d7_the_guide_does_not_promise_the_lockdown_line_arrives():
     assert "may never reach the manager" in flat and "EGRESS RECOVERED after LOCKDOWN" in flat and "100635" in flat
     known = " ".join(KNOWN.read_text().split())
     assert "which arrives after recovery" not in known and "100635" in known
+
+
+def test_13a_r1_the_100634_row_names_the_nightly_check_as_the_detector():
+    flat = " ".join(GUIDE.read_text().split())
+    row = flat[flat.index("| 100634 |"):]
+    row = row[:row.index("|", row.index("deleted"))]
+    assert "doc login` refuses such an account first" in row and "nightly check" in row and "nogroups:" in row

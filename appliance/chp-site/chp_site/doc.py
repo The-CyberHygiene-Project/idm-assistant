@@ -327,7 +327,8 @@ def _dav_url(env, s, path):
 def _nextcloud_said(env, st, what):
     """A 401 or an unavailable answer from NextCloud BEFORE anything was sent. 401: NextCloud checks the Bearer at
     Kanidm (user_oidc userinfo), so a Kanidm outage reads as 401 too: Kanidm is asked itself (GET /status); not
-    reachable or not answering 200 -> pending (P3-D9); Kanidm up -> the sign-in really was refused. 502/503/504 ->
+    reachable, 5xx or 429 -> pending (P3-D9); any other answer (200, 404, other 4xx): Kanidm is up -> the sign-in
+    really was refused. 502/503/504 ->
     pending (P3-D8: maintenance mode during the nightly backup)."""
     if st == 401:
         try:
@@ -335,7 +336,7 @@ def _nextcloud_said(env, st, what):
         except auth.Unreachable as e:
             raise DocPending(f"pending: NextCloud could not check your sign-in because Kanidm cannot be reached ({e}). "
                              "Run the same command again when Kanidm is back (no new sign-in is needed)") from None
-        if kst != 200:
+        if kst >= 500 or kst == 429:                      # any other answer: Kanidm is up, the refusal is real
             raise DocPending(f"pending: NextCloud could not check your sign-in: Kanidm answered HTTP {kst}. Run the "
                              "same command again when Kanidm is back (no new sign-in is needed)")
         raise auth.AuthError("refused: NextCloud did not accept your sign-in; run chp-site doc login")
@@ -1169,15 +1170,30 @@ def add_parser(sub):
     return dp
 
 
+CHECKOUT_RECORDED = ("Your checkout WAS recorded by the server (you are an author of this cycle), but the download did "
+                     "not finish: run chp-site doc checkout {doc} again to download it")
+
+
 def run(a, env=None, say=print):
     env = env or system_env()
+    env.posted = False                                    # set by send() once a POST goes out (this command only)
     try:
         return COMMANDS[a.doc_cmd](env, a, say)
     except (DocPending, auth.Unreachable) as e:           # NextCloud or Kanidm not serving now (send() keeps its own)
-        what = ("the request itself was sent and recorded, but this command could not finish"
-                if getattr(env, "posted", False) else "nothing was sent")
+        posted = getattr(env, "posted", False)
+        if posted and a.doc_cmd == "checkout":
+            say(f"pending: {_plain(e)}. {CHECKOUT_RECORDED.format(doc=a.document)}")
+            return 3
+        what = "the request itself was sent and recorded, but this command could not finish" if posted \
+            else "nothing was sent"
         msg = str(e) if isinstance(e, DocPending) else f"pending: {_plain(e)}. Run the same command again in a few minutes"
         say(f"{msg} ({what})")
+        return 3
+    except (DocError, auth.AuthError) as e:
+        if not (getattr(env, "posted", False) and a.doc_cmd == "checkout"):
+            raise                                         # before anything was sent: the plain refusal, exit 2
+        # the server recorded the checkout; only the download (or the sign-in refresh before it) failed
+        say(f"{_plain(e)}. {CHECKOUT_RECORDED.format(doc=a.document)}")
         return 3
     except OSError as e:                                  # a file of yours, a folder: a plain message, no traceback
         where = f": {e.filename}" if getattr(e, "filename", None) else ""

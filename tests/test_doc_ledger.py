@@ -2108,3 +2108,22 @@ def test_13a_d11_an_undeletable_spool_file_is_set_aside_once(env, monkeypatch):
     p.write_text(json.dumps({"request_id": "another", "user": "alice", "x": 1}))
     L.process(env.ctx)
     assert [j.get("event") for j in env.journal].count("quarantine") == 2
+
+
+
+def test_13a_r1_d11_undeletable_strays_are_counted_once_in_the_aggregated_line(env, monkeypatch):
+    def nope(*a):
+        raise PermissionError("Operation not permitted")
+    monkeypatch.setattr(L, "_unlink_raw", nope)
+    monkeypatch.setattr(L, "_hold_raw", nope)
+    for i in range(L.STRAY_ALERT_MAX + 2):
+        (env.base / "spool" / f"stray{i}.json").write_text("{}")
+    for _ in range(4):
+        L.process(env.ctx)
+    q = [j for j in env.journal if j.get("event") == "quarantine"]
+    assert len(q) == 1 and f"{L.STRAY_ALERT_MAX + 2} files" in q[0]["why"], q
+    assert len([j for j in env.journal if j.get("event") == "appender-failed"]) == L.STRAY_ALERT_MAX + 2
+    (env.base / "spool" / "fresh.json").write_text("{}")         # a new stray: judged (alone: its own line)
+    L.process(env.ctx)
+    q = [j for j in env.journal if j.get("event") == "quarantine"]
+    assert len(q) == 2 and "fresh" not in q[0]["why"]

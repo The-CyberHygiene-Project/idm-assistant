@@ -369,9 +369,10 @@ def nc_user(env, access_token):
     except (TypeError, KeyError, AttributeError):
         raise AuthError(f"refused: NextCloud did not accept the sign-in (HTTP {st})") from None
     if isinstance(groups, list) and not groups:
-        raise AuthError(f"refused: your NextCloud account {who} has no groups yet (it was made by this sign-in, before "
-                        f"you ever signed in on the web): sign in once in the browser at {env.files}/ (NextCloud then "
-                        "takes your groups from Kanidm), then run chp-site doc login again")
+        raise AuthError(f"refused: your NextCloud account {who} has no groups (a chp-doc sign-in made it before you ever "
+                        "signed in on the web, or your groups were taken away): sign in once in the browser at "
+                        f"{env.files}/ (NextCloud then takes your groups from Kanidm), then run chp-site doc login "
+                        "again; if that does not help, ask the administrator")
     return who
 
 

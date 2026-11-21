@@ -59,6 +59,10 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
   line after a lock-down or render failure once the Wazuh agent is connected (D7); the address file is relabelled on
   every render (O5).
 - marking: a lower-case or split sp-<category> after a cited document name is a banner in wide positions (12b minor).
+- review fix round 1: Kanidm /status answers other than 5xx/429 mean Kanidm is up (the refusal stands); a checkout
+  recorded before its download failed says so (exit 3, never "refused"); a recovery report needs an agent state
+  written after the failure's END and goes anyway (with an ALERT) 60 min after it; undeletable strays are counted
+  once; the no-groups check leaves disabled accounts out; 100634 is in chp_doc_refused/chp_account.
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-9.chp
 - ISO 0.7.0 Plan 3 Task 12b (marking check hardening, round-3 re-review): the wrong-banner search drops combining

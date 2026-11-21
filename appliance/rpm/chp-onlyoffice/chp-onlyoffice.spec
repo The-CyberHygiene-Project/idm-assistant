@@ -108,7 +108,8 @@ fi
 - ISO 0.7.0 Plan 3 Task 13a: Requires chp-templates >= 1.4.0-2 (P3-D2: doc new refused on every workstation, no
   templates there). The egress unit runs `chp-site onlyoffice egress-recovered` after a good load and the lock-down
   unit `egress-lockdown` first (P3-D7: one recovery line, Wazuh 100635/100636, once the agent is connected; check 83
-  retries every 15 minutes); state in /var/lib/chp/workstation-egress (root 0700). Requires chp-site >= 0.14.0-10.
+  retries every 15 minutes and passes its ALERT lines on: a report held past 60 min, or one that cannot be logged);
+  state in /var/lib/chp/workstation-egress (root 0700). Requires chp-site >= 0.14.0-10.
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-4.chp
 - Time from the CHP server only (Task 12, owner decision 2026-11-20): the egress table lets chronyd reach the site

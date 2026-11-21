@@ -47,8 +47,13 @@ fi
 ts=$(systemctl is-active "$T" 2>/dev/null); ts=${ts:-unknown}
 [ "$ts" = active ] || alert "workstation sweep: $T is $ts: ONLYOFFICE recovery copies (CUI) are not being removed (systemctl enable --now $T)"
 # P3-D7: a lock-down or render failure that has ended is reported (one journal line, Wazuh 100635/100636) once the
-# agent is connected; the egress unit tries at its start, this check every 15 minutes until it is sent
+# agent is connected; the egress unit tries at its start, this check every 15 minutes until it is sent. Its ALERT
+# lines (a report held past 60 min, or one that could not be logged) are this check's alerts
 cs=${CHP_SITE_BIN:-/usr/bin/chp-site}
-[ -x "$cs" ] && "$cs" onlyoffice egress-recovered >/dev/null 2>&1
+if [ -x "$cs" ]; then
+  while IFS= read -r line; do
+    case $line in ALERT\ *) alert "${line#ALERT }" ;; esac
+  done <<< "$("$cs" onlyoffice egress-recovered 2>&1)"
+fi
 [ "$bad" -eq 0 ] && echo "OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active"
 exit 0

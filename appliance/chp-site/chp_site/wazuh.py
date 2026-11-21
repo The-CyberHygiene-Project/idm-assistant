@@ -427,7 +427,7 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <if_sid>{LEDGER_AUDIT_RULE}</if_sid>
     <field name="data.event">^chp.ledger.nogroups$</field>
     <description>NextCloud account with NO groups (made by a chp-doc Bearer, never signed in on the web) sent a doc request: $(message)</description>
-    <group>chp_access_granted,</group>
+    <group>chp_doc_refused,chp_account,</group>
   </rule>
   <!-- §12 DEGRADED (database MD5 unavailable): each refusal is level 3. The FIRST one is raised to 7 by 100616:
        Wazuh's rule option ignore="86400" makes the rule fire once and then fall back to its parent (100615) for a

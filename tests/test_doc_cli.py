@@ -888,4 +888,44 @@ def test_13a_d8_unavailable_after_the_request_was_recorded_says_so(tmp_path, mon
     env.transport = lambda method, url, headers=None, body=None: (503, {}, b"") \
         if method == "GET" and "/remote.php/dav/" in url else stub(method, url, headers, body)
     rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
-    assert rc == 3 and "pending" in out and "nothing was sent" not in out and "recorded" in out, out
+    assert rc == 3 and "pending" in out and "nothing was sent" not in out and "WAS recorded" in out, out
+    assert "author of this cycle" in out and "checkout CUI_SSP_v1.2.docx again" in out
+
+
+@pytest.mark.parametrize("kst,pending", [(500, True), (503, True), (429, True), (200, False), (404, False),
+                                         (403, False), (400, False)])
+def test_13a_r1_d9_only_unreachable_5xx_or_429_from_kanidm_is_pending(tmp_path, monkeypatch, capsys, kst, pending):
+    env = setup(tmp_path)
+    stub = env.stub
+    env.transport = lambda method, url, headers=None, body=None: (kst, {}, b"") if url.endswith("/status") \
+        else (401, {}, b"") if "files." in url else stub(method, url, headers, body)
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    if pending:
+        assert rc == 3 and "pending" in out and "doc login" not in out, out
+    else:
+        assert rc == 2 and "doc login" in out, out
+
+
+
+@pytest.mark.parametrize("fail", ["404", "401-kanidm-up"])
+def test_13a_r1_a_recorded_checkout_whose_download_fails_is_not_a_refusal(tmp_path, monkeypatch, capsys, fail):
+    """After the server recorded the checkout, a failed download (or a refused sign-in on it) is not "refused" with
+    exit 2: the person is an author of this cycle now. It says so, and to run checkout again to download."""
+    env = setup(tmp_path)
+    stub = env.stub
+
+    def t(method, url, headers=None, body=None):
+        if method == "GET" and "/remote.php/dav/" in url:
+            return (404, {}, b"") if fail == "404" else (401, {}, b"")
+        if url.endswith("/status"):
+            return 200, {}, b"true"
+        return stub(method, url, headers, body)
+    env.transport = t
+    rc, out = run(env, monkeypatch, capsys, "checkout", "CUI_SSP_v1.2.docx")
+    assert rc == 3 and "refused" not in out and "WAS recorded" in out and "author of this cycle" in out, out
+    assert posts(env)
+    # before anything is sent, a refusal stays a refusal (exit 2)
+    (tmp_path / "b").mkdir()
+    env2 = setup(tmp_path / "b")
+    rc, out = run(env2, monkeypatch, capsys, "checkout", "CUI_Nothing_v1.0.docx")
+    assert rc == 2 and "not found" in out

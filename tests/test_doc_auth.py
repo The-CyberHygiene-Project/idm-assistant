@@ -532,6 +532,7 @@ def test_13a_d3_login_refuses_a_nextcloud_account_without_groups(tmp_path):
         login(env)
     m = str(e.value)
     assert "no groups" in m and "browser" in m and f"{FILES}/" in m and "doc login" in m
+    assert "made by this sign-in" not in m and "before you ever signed in on the web" in m       # fix round 1
     assert A.load(env) is None
     env.stub.nc_groups = None                            # a NextCloud that does not list groups: not judged here
     assert login(env)["user"] == "alice"

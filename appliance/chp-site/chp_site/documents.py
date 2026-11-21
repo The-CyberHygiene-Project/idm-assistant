@@ -1260,8 +1260,11 @@ Q_ADMINS = "SELECT uid FROM oc_group_user WHERE gid = 'admin' ORDER BY uid"
 # P3-D3 (lab 11c, ruling): user_oidc makes an account from a chp-doc Bearer for a person who never signed in on the web,
 # although that provider has bearer provisioning off, and without a "User created" audit line. Every Kanidm person who
 # signs in on the web is in chp-users at least, so a user_oidc account with NO group was made that way.
+# A disabled account is left out (it cannot sign in or send anything; an administrator chose that state).
 Q_OIDC_NO_GROUPS = ("SELECT o.user_id AS uid FROM oc_user_oidc o WHERE NOT EXISTS (SELECT 1 FROM oc_group_user g "
-                    f"WHERE g.uid = o.user_id) ORDER BY o.user_id LIMIT {LIST_MAX + 1}")
+                    "WHERE g.uid = o.user_id) AND NOT EXISTS (SELECT 1 FROM oc_preferences p WHERE p.userid = o.user_id "
+                    "AND p.appid = 'core' AND p.configkey = 'enabled' AND p.configvalue = 'false') "
+                    f"ORDER BY o.user_id LIMIT {LIST_MAX + 1}")
 Q_LEDGER_APP = "SELECT configkey, configvalue FROM oc_appconfig WHERE appid = 'chp_ledger'"
 
 

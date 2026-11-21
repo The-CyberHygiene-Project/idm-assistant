@@ -473,7 +473,7 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
 | 100628 | 12 | Egress lock-down. |
 | 100635 | 12 | A workstation's egress lock-down has ended (it says when it began and why). |
 | 100636 | 7 | A workstation's egress addresses could not be rendered for a while; the last good file was used. |
-| 100634 | 12 | A NextCloud account with no groups sent a doc request. A chp-doc sign-in made the account before the person ever signed in on the web. The nightly check lists such accounts too. The person signs in once in the browser. |
+| 100634 | 12 | A NextCloud account with no groups sent a doc request. This is rare: `doc login` refuses such an account first. The real detector is the nightly check (`ALERT NextCloud check: … nogroups:<account>`): an account that a chp-doc sign-in made before the person ever signed in on the web. The person signs in once in the browser; an account that should have no access is deleted. |
 
 **Keep `SECURITY_ALERT_LEVEL` at 12 or lower while `DOCUMENTS=yes`.** Approvals and overrides are level 12. Above
 that, they reach only the daily summary, and the detection that T-13 relies on is gone.

@@ -179,4 +179,7 @@ def test_13a_d14_server_journal_is_persistent_and_bounded():
     assert "%{_sysconfdir}/systemd/journald.conf.d/50-chp-persistent.conf" in spec.split("%files", 1)[1]
     post = spec.split("%post", 1)[1].split("%preun", 1)[0]
     assert "systemctl restart systemd-journald" in post and "journalctl --flush" in post
+    # fix round 1: only on install, or while /var/log/journal is missing (never on every upgrade)
+    guard = post.index('if [ "$1" -eq 1 ] || [ ! -d /var/log/journal ]; then')
+    assert guard < post.index("systemctl restart systemd-journald") < post.index("fi\n", guard)
     assert "journald-chp-persistent.conf" in (SRV / "build-rpm.sh").read_text()

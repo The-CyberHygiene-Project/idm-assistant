@@ -47,9 +47,12 @@ install -Dm0644 %{SOURCE12} %{buildroot}%{_sysconfdir}/systemd/journald.conf.d/5
 
 %post
 %systemd_post chp-server-firstboot.service cert-renew-kanidm.timer
-# P3-D14: the persistent journal now (journald reads its config at start; then move /run's journal to /var/log/journal)
-systemctl restart systemd-journald.service >/dev/null 2>&1 || :
-journalctl --flush >/dev/null 2>&1 || :
+# P3-D14: the persistent journal now (journald reads its config at start; then move /run's journal to /var/log/journal).
+# Only on the first install, or while /var/log/journal is still missing: never a journald restart on every upgrade.
+if [ "$1" -eq 1 ] || [ ! -d /var/log/journal ]; then
+  systemctl restart systemd-journald.service >/dev/null 2>&1 || :
+  journalctl --flush >/dev/null 2>&1 || :
+fi
 %preun
 %systemd_preun chp-server-firstboot.service cert-renew-kanidm.timer
 
@@ -75,7 +78,8 @@ journalctl --flush >/dev/null 2>&1 || :
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-6.chp
 - ISO 0.7.0 Plan 3 Task 13a (P3-D14, ruling): /etc/systemd/journald.conf.d/50-chp-persistent.conf, Storage=persistent
   and SystemMaxUse=1G: the server's journal (the appender's lines, check 82, the ISSO review's journal rows) survives
-  a reboot; applied at install (journald restarted, then flushed). Requires chp-site >= 0.14.0-10 and
+  a reboot; applied on the first install or while /var/log/journal is missing (journald restarted, then flushed;
+  never on every upgrade). Requires chp-site >= 0.14.0-10 and
   chp-identity-client >= 0.2.4-4.
 
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-5.chp

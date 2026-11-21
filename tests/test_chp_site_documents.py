@@ -1343,6 +1343,7 @@ CREATE TABLE oc_group_folders_acl (acl_id INTEGER, fileid INTEGER, mapping_type 
                                    permissions INTEGER);
 CREATE TABLE oc_group_user (gid TEXT, uid TEXT);
 CREATE TABLE oc_user_oidc (id INTEGER, user_id TEXT, display_name TEXT);
+CREATE TABLE oc_preferences (userid TEXT, appid TEXT, configkey TEXT, configvalue TEXT);
 CREATE TABLE oc_group_folders_groups (folder_id INTEGER, group_id TEXT, permissions INTEGER, circle_id TEXT);
 CREATE TABLE oc_storages (numeric_id INTEGER, id TEXT);
 CREATE TABLE oc_mimetypes (id INTEGER, mimetype TEXT);
@@ -2409,3 +2410,11 @@ def test_13a_d3_nightly_check_flags_a_kanidm_account_without_groups(tmp_path):
     db.c.execute("INSERT INTO oc_group_user VALUES ('chp-users', 'lab02')")               # the web sign-in mapped them
     _, res, _ = do_check(tmp_path / "b", db=db)
     assert res["alerts"] == []
+    # fix round 1: a DISABLED account with no groups is left out (it can do nothing; an administrator chose it)
+    db.c.execute("INSERT INTO oc_user_oidc VALUES (3, 'lab03', 'lab03')")
+    db.c.execute("INSERT INTO oc_preferences VALUES ('lab03', 'core', 'enabled', 'false')")
+    _, res, _ = do_check(tmp_path / "c", db=db)
+    assert res["alerts"] == []
+    db.c.execute("UPDATE oc_preferences SET configvalue = 'true' WHERE userid = 'lab03'")
+    _, res, _ = do_check(tmp_path / "d", db=db)
+    assert keys(res) == {"nogroups:lab03"}

@@ -1138,6 +1138,7 @@ def process(ctx=None, budget=BUDGET, clock=time.monotonic):
     # its limit stops the appender (Task 11a item 6a). chp_ledger writes only <32 hex>.json (and .<id>.tmp). More than
     # STRAY_ALERT_MAX in one run: one alert for them all (fix round 1, m2), each still recorded.
     why = "not a request file name (chp_ledger writes <32 hex>.json only)"
+    strays = [n for n in strays if not _already_stuck(ctx, ctx.spool / n)]   # set aside before, undeletable: counted once
     many = len(strays) > STRAY_ALERT_MAX
     for n in sorted(strays):
         out.append(_set_aside(ctx, ctx.spool / n, why, answer=False, event="set-aside" if many else "quarantine"))

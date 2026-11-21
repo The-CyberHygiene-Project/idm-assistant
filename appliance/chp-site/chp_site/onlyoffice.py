@@ -193,10 +193,13 @@ def egress_lockdown(root, now=time.time):
     return 0
 
 
+REPORT_HOLD_MAX = 3600            # a recovery report held this long after the end for want of a connected agent goes anyway
+
+
 def _agent_connected(root, after):
     """None: no Wazuh agent state file (nothing to wait for); else whether wazuh-agentd says it is connected in a state
-    file written at or after `after` (it rewrites the file every few seconds; one left from before the failure, e.g.
-    from the previous boot, proves nothing)."""
+    file written at or after `after` (the failure's END: a "connected" written during the failure, before the agent
+    noticed the dead link, or one left from the previous boot, proves nothing)."""
     f = _p(root, AGENT_STATE)
     try:
         text, mtime = f.read_text(), f.stat().st_mtime
@@ -205,12 +208,20 @@ def _agent_connected(root, after):
     return re.search(r"^status='connected'\s*$", text, re.M) is not None and mtime >= after
 
 
+def _num(d, key, default):
+    v = d.get(key)
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else default
+
+
 def egress_recovered(root, run=subprocess.run, now=time.time):
     """`chp-site onlyoffice egress-recovered` (the egress unit's ExecStartPost, "-", and monitor check 83): for a
-    lock-down that has ended (the egress table loaded, no lock-down table) and a render failure followed by a good
-    render, ONE journal line each under the tag chp-egress-recovered, naming when it began and why. Not before the
-    Wazuh agent says it is connected (lines sent into a dead link were lost: P3-D7); a line logger could not write
-    (early boot) stays for the next run. Prints OK lines (check 83 ignores them)."""
+    lock-down that has ended (the egress table loaded, no lock-down table; its end is recorded at the first run that
+    sees it) and a render failure followed by a good render, ONE journal line each under the tag chp-egress-recovered,
+    naming when it began and why. Sent once the Wazuh agent says it is connected in a state file written after the
+    end (lines sent into a dead link were lost: P3-D7); held at most REPORT_HOLD_MAX after the end, then sent anyway
+    with an ALERT line (check 83 passes ALERT lines on). A line logger could not write stays for the next run (ALERT
+    once past the bound). Other lines start with OK."""
+    t = int(now())
     lock, rend = _read_state(root, "lockdown"), _read_state(root, "render-recovered")
     if lock is None and rend is None:
         print("OK egress: no ended lock-down or render failure to report")
@@ -220,25 +231,31 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
         locked = run(["nft", "list", "table", "inet", LOCKDOWN_TABLE], capture_output=True, text=True).returncode == 0
         if not loaded or locked:
             lock = None                                   # still locked down: nothing has ended yet
+        elif _num(lock, "ended", None) is None:
+            lock = dict(lock, ended=t)                    # the first run that sees it over: the end
+            _write_state(root, "lockdown", lock)
     todo = []
     if lock is not None:
-        todo.append(("lockdown", "auth.crit",
-                     f"EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at {_ts(lock['since'])} "
-                     f"({lock.get('why')}) has ended by {_ts(now())}; the egress table is loaded again (lines "
-                     "written during the lock-down may never have reached the manager)"))
+        todo.append(("lockdown", "auth.crit", _num(lock, "ended", t),
+                     f"EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at "
+                     f"{_ts(_num(lock, 'since', _num(lock, 'ended', t)))} ({lock.get('why') or 'cause not recorded'}) "
+                     f"ended at {_ts(_num(lock, 'ended', t))}; the egress table is loaded again (lines written during "
+                     "the lock-down may never have reached the manager)"))
     if rend is not None:
-        todo.append(("render-recovered", "auth.warning",
+        ended = _num(rend, "ended", t)
+        todo.append(("render-recovered", "auth.warning", ended,
                      f"EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from "
-                     f"{_ts(rend['since'])} until {_ts(rend.get('ended') or now())} ({rend.get('why')}); the last "
-                     "good address file was in use meanwhile"))
+                     f"{_ts(_num(rend, 'since', ended))} until {_ts(ended)} ({rend.get('why') or 'cause not recorded'}); "
+                     "the last good address file was in use meanwhile"))
     if not todo:
         print("OK egress: still in lock-down; nothing to report yet")
         return 0
-    after = max(x for x in ((lock or {}).get("since"), (rend or {}).get("ended"), 0) if isinstance(x, (int, float)))
-    if _agent_connected(root, after) is False:
-        print("OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries)")
-        return 0
-    for name, prio, line in todo:
+    for name, prio, ended, line in todo:
+        late = t - ended >= REPORT_HOLD_MAX
+        if _agent_connected(root, ended) is False and not late:
+            print("OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries, at "
+                  f"most until {_ts(ended + REPORT_HOLD_MAX)})")
+            continue
         try:
             ok = run(["logger", "-p", prio, "-t", RECOVERED_TAG, line], capture_output=True, text=True).returncode == 0
         except OSError:
@@ -246,6 +263,13 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
         if ok:
             _drop_state(root, name)
             print(f"OK egress: reported: {line}")
+            if late and _agent_connected(root, ended) is False:
+                print(f"ALERT workstation egress: a recovery report was held {REPORT_HOLD_MAX // 60} min without the "
+                      "Wazuh agent saying it is connected, and was sent anyway (check the agent: "
+                      "systemctl status wazuh-agent): " + line[:200])
+        elif late:
+            print(f"ALERT workstation egress: a recovery report could not be logged for {REPORT_HOLD_MAX // 60} min "
+                  "or more (logger failed): " + line[:200])
         else:
             print("OK egress: recovered; the report could not be logged yet (retried at the next run)")
     return 0
