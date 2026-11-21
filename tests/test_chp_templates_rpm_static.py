@@ -2,7 +2,7 @@
 from pathlib import Path
 
 D = Path(__file__).resolve().parents[1] / "appliance" / "rpm" / "chp-templates"
-SHA = "73964274430484e387a23e2cb95bee1747007841ecbd04c7f8c2f245dfc2c34f"   # templates-1.4.0 (local tag, unsigned until the owner releases)
+SHA = "3bf9d1272dfefff35e1e53201ce732fd17586d7e62a832fa7389fefd0032601e"   # templates-1.4.0 re-tagged at 1d7b682 (local tag, unsigned until the owner releases)
 
 
 def test_spec_installs_only_the_shipped_library():
@@ -117,6 +117,19 @@ def test_default_path_checks_unchanged():
     assert b.index('if [[ -n ${CHP_TEMPLATES_TAG:-} ]]') < b.index("scp ")
 
 
-def test_changelog_says_lab_candidate():
+def test_changelog_has_no_unconditional_lab_candidate_bullet():
+    # the same spec builds the signed release too: the lab-candidate note lives in the build record and the banner
     s = (D / "chp-templates.spec").read_text()
-    assert "PRE-RELEASE LAB CANDIDATE: built from the UNSIGNED local tag templates-1.4.0" in s
+    assert "LAB CANDIDATE" not in s.upper() and "Release:        2.chp%{?dist}" in s
+
+
+def test_empty_tag_variable_falls_through_to_the_signed_path(tmp_path):
+    p = _run(tmp_path, {"CHP_TEMPLATES_TAG": ""})
+    assert p.returncode != 0 and "set CHP_TEMPLATES_RELEASE to the signed release folder" in p.stderr
+    assert "LAB CANDIDATE" not in p.stdout and "REACHED" not in p.stdout + p.stderr
+    p = _run(tmp_path, {"CHP_TEMPLATES_TAG": "", "CHP_TEMPLATES_RELEASE": str(tmp_path)})
+    assert p.returncode == 1 and "refusing: bad signature" in p.stdout and "LAB CANDIDATE" not in p.stdout
+
+
+def test_lab_candidate_archives_the_tag_ref_not_a_branch():
+    assert '"refs/tags/templates-$V"' in BUILD.read_text()

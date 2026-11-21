@@ -54,16 +54,14 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 - The FCI templates (Task 12, owner decision 2026-11-20, "FCI should be marked as FCI"): doc/fci/ installed as
   doc/fci/Template.{docx,xlsx,md} (the banner FCI, no designation block), for `chp-site doc new --fci`; Rev 2 content
   1.2.6 (3.8.4 FCI marking; 3.3.7, 3.4.7, 3.13.1, 3.13.6 time from the server, 123/udp to the site subnet only).
-- NEEDS the re-tagged templates-1.4.0 (chp-templates commit with doc/fci/) and the build-rpm.sh sha256 pin redone
-  to its git archive: the current pin (0a18aca) has no doc/fci/ and this spec's %install would fail on it.
+- Rev 2 content 1.2.7: the POA&M seeds T-08 to T-16 for the document server; 3.4.3 and 3.8.4 cite the Plan 3 lab
+  proof (PROOF-RECORD-PLAN3.md). templates-1.4.0 re-tagged to chp-templates 1d7b682; build-rpm.sh pin re-done.
 
 * Thu Nov 19 2026 The CyberHygiene Project - 1.4.0-1.chp
 - chp-templates 1.4.0 (sha256 pinned in build-rpm.sh): the marked controlled-document templates (doc/cui and
   doc/noncui, installed as Template.{docx,xlsx,md}), five new site.conf mappings (DOC_ISSO_ACCOUNT,
   DOC_APPROVER_ACCOUNTS, CUI_CONTROLLED_BY, CUI_CATEGORY, CUI_POC), and Rev 2 content 1.2.5: narratives for the
   document workflow (3.1.3, 3.1.22, 3.3.1, 3.4.3, 3.8.4, 3.8.9, 3.13.8).
-- PRE-RELEASE LAB CANDIDATE: built from the UNSIGNED local tag templates-1.4.0 (build-rpm.sh CHP_TEMPLATES_TAG,
-  sha256 pin only, no signature provenance); the signed release follows as a new Release.
 
 * Fri Nov 06 2026 The CyberHygiene Project - 1.3.1-1.chp
 - chp-templates 1.3.1 from the signed tarball (sha256 73682cfc17b1707e…): Rev 2 content 1.2.3, narratives for the

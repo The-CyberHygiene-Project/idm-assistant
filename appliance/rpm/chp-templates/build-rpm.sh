@@ -14,7 +14,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 V=1.4.0
 TAR=chp-templates-$V.tar.gz
-SHA=73964274430484e387a23e2cb95bee1747007841ecbd04c7f8c2f245dfc2c34f   # templates-1.4.0 = git archive of the local tag at 0a18aca (re-pin if the tag moves before the owner signs)
+SHA=3bf9d1272dfefff35e1e53201ce732fd17586d7e62a832fa7389fefd0032601e   # templates-1.4.0 = git archive of the local tag at 1d7b682 (re-tagged 2026-11-21 from 0a18aca; re-pin if the tag moves again)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 t=""; w=""; trap 'rm -rf "$t" "$w"' EXIT
 if [[ -n ${CHP_TEMPLATES_TAG:-} ]]; then
@@ -27,7 +27,7 @@ if [[ -n ${CHP_TEMPLATES_TAG:-} ]]; then
   git -C "$G" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "refusing: $G is not a git working tree"; exit 1; }
   c=$(git -C "$G" rev-parse -q --verify "refs/tags/templates-$V^{commit}" 2>/dev/null) || { echo "refusing: tag templates-$V not found in $G"; exit 1; }
   t=$(mktemp -d); REL=$t
-  git -C "$G" archive --format=tar.gz --prefix="chp-templates-$V/" -o "$REL/$TAR" "templates-$V"
+  git -C "$G" archive --format=tar.gz --prefix="chp-templates-$V/" -o "$REL/$TAR" "refs/tags/templates-$V"
   got=$(shasum -a 256 "$REL/$TAR" | cut -d' ' -f1)
   [[ $got == "$SHA" ]] || { echo "refusing: git archive of templates-$V ($c) is $got, not the pinned $SHA"; exit 1; }
   echo "lab candidate input: templates-$V = commit $c, archive sha256 $got (= pin)"
