@@ -196,16 +196,39 @@ def egress_lockdown(root, now=time.time):
 REPORT_HOLD_MAX = 3600            # a recovery report held this long after the end for want of a connected agent goes anyway
 
 
-def _agent_connected(root, after):
-    """None: no Wazuh agent state file (nothing to wait for); else whether wazuh-agentd says it is connected in a state
-    file written at or after `after` (the failure's END: a "connected" written during the failure, before the agent
-    noticed the dead link, or one left from the previous boot, proves nothing)."""
+AGENT_PACKAGE = "wazuh-agent"
+AGENT_UNITS = ("etc/systemd/system/wazuh-agent.service", "usr/lib/systemd/system/wazuh-agent.service",
+               "lib/systemd/system/wazuh-agent.service")
+
+
+def _agent_installed(root, run):
+    """Whether this host has a Wazuh agent at all: its package (rpm -q) or its systemd unit."""
+    if any(_p(root, u).exists() for u in AGENT_UNITS):
+        return True
+    try:
+        return run(["rpm", "-q", AGENT_PACKAGE], capture_output=True, text=True).returncode == 0
+    except OSError:
+        return False
+
+
+def _agent_connected(root, after, run):
+    """(connected, note). connected is None only when no Wazuh agent is installed (no package, no unit): there is
+    nothing to wait for, so the report goes at once. Otherwise it is whether wazuh-agentd says it is connected in a
+    state file written at or after `after` (the failure's END: a "connected" written during the failure, before the
+    agent noticed the dead link, or one left from the previous boot, proves nothing). P3-D15 (lab logs/226): the agent
+    DELETES its state file when it stops, so an installed agent with no state file is a stopped agent, i.e. not
+    connected (held, bounded by REPORT_HOLD_MAX, with the ALERT); a state file that exists but cannot be read is not
+    connected either, with a note saying so."""
     f = _p(root, AGENT_STATE)
     try:
         text, mtime = f.read_text(), f.stat().st_mtime
-    except OSError:
-        return None
-    return re.search(r"^status='connected'\s*$", text, re.M) is not None and mtime >= after
+    except FileNotFoundError:
+        if not _agent_installed(root, run):
+            return None, ""
+        return False, f" (the agent's state file {AGENT_STATE} is missing: the agent is stopped)"
+    except OSError as e:
+        return False, f" (the agent's state file {AGENT_STATE} could not be read: {e.strerror or e})"
+    return re.search(r"^status='connected'\s*$", text, re.M) is not None and mtime >= after, ""
 
 
 def _num(d, key, default):
@@ -218,7 +241,8 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
     lock-down that has ended (the egress table loaded, no lock-down table; its end is recorded at the first run that
     sees it) and a render failure followed by a good render, ONE journal line each under the tag chp-egress-recovered,
     naming when it began and why. Sent once the Wazuh agent says it is connected in a state file written after the
-    end (lines sent into a dead link were lost: P3-D7); held at most REPORT_HOLD_MAX after the end, then sent anyway
+    end (lines sent into a dead link were lost: P3-D7; a stopped agent, which leaves no state file, holds it too:
+    P3-D15); held at most REPORT_HOLD_MAX after the end, then sent anyway
     with an ALERT line (check 83 passes ALERT lines on). A line logger could not write stays for the next run (ALERT
     once past the bound). Other lines start with OK."""
     t = int(now())
@@ -252,9 +276,10 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
         return 0
     for name, prio, ended, line in todo:
         late = t - ended >= REPORT_HOLD_MAX
-        if _agent_connected(root, ended) is False and not late:
+        connected, note = _agent_connected(root, ended, run)
+        if connected is False and not late:
             print("OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries, at "
-                  f"most until {_ts(ended + REPORT_HOLD_MAX)})")
+                  f"most until {_ts(ended + REPORT_HOLD_MAX)}){note}")
             continue
         try:
             ok = run(["logger", "-p", prio, "-t", RECOVERED_TAG, line], capture_output=True, text=True).returncode == 0
@@ -263,9 +288,9 @@ def egress_recovered(root, run=subprocess.run, now=time.time):
         if ok:
             _drop_state(root, name)
             print(f"OK egress: reported: {line}")
-            if late and _agent_connected(root, ended) is False:
+            if late and connected is False:
                 print(f"ALERT workstation egress: a recovery report was held {REPORT_HOLD_MAX // 60} min without the "
-                      "Wazuh agent saying it is connected, and was sent anyway (check the agent: "
+                      f"Wazuh agent saying it is connected{note}, and was sent anyway (check the agent: "
                       "systemctl status wazuh-agent): " + line[:200])
         elif late:
             print(f"ALERT workstation egress: a recovery report could not be logged for {REPORT_HOLD_MAX // 60} min "

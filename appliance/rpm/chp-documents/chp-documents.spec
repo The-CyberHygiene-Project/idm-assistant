@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        10.chp%{?dist}
+Release:        11.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -40,7 +40,7 @@ Source30:       chp-docs-ledger.service
 Source31:       chp-docs-ledger-alert.service
 Source32:       82-docs-ledger.sh
 Requires:       nextcloud-chp >= 35.0.3-7, chp-base >= 0.1.0-12, httpd, mod_ssl, php-fpm, postgresql-server, nftables, rsync, step-cli, openssl
-Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-10
+Requires:       python3, firewalld, policycoreutils, util-linux, chp-site >= 0.14.0-11
 # poppler-utils: pdftotext/pdfinfo for the marking check of reader PDFs at publish (chp_site.marking, Plan 3 Task 5)
 Requires:       poppler-utils
 Requires(post): policycoreutils-python-utils
@@ -175,6 +175,8 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/unfinished
 
 %changelog
+* Sat Nov 21 2026 The CyberHygiene Project - 0.1.0-11.chp
+- ISO 0.7.0 Plan 3 Task 13d: Requires chp-site >= 0.14.0-11 (one pin for every role package; P3-D15).
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-10.chp
 - ISO 0.7.0 Plan 3 Task 13a (P3-D6): LimitRequestBody on the chp_ledger OCS route is now a vhost-level <If> on the
   request URI (the <LocationMatch> did not stop a 97 MiB body in the lab); the app's own 64 MiB check is the

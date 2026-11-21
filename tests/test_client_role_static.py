@@ -138,7 +138,7 @@ def test_enrolment_failure_is_alerted_and_retried():               # final revie
 def test_client_rpm_carries_the_second_factor():
     s = text("chp-identity-client.spec")
     assert re.search(r"^Requires:\s+.*\bgoogle-authenticator\b", s, re.M)
-    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.14\.0-10\b", s, re.M)        # Task 8: onlyoffice; Task 12: time-sync; 13a pin
+    assert re.search(r"^Requires:\s+.*\bchp-site >= 0\.14\.0-11\b", s, re.M)        # Task 8: onlyoffice; Task 12: time-sync; 13a, 13d pin
     assert "%dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator" in s
     assert "53-ga.sh" in s and "Version:        0.2.4" in s
     assert "chp_ga.pp" not in s                           # Task 4: 0 AVC, the policy's var_auth_t suffices

@@ -974,12 +974,15 @@ def test_13a_d2_enable_installs_the_templates_on_a_host_that_has_the_editor(tmp_
 
 class Net:
     """nft list + logger for egress-recovered: which tables are loaded, what was logged."""
-    def __init__(self, tables=("chp_workstation_egress",), logger_rc=0):
+    def __init__(self, tables=("chp_workstation_egress",), logger_rc=0, agent_pkg=False):
         self.tables, self.logged, self.calls, self.logger_rc = set(tables), [], [], logger_rc
+        self.agent_pkg = agent_pkg                     # is the wazuh-agent package installed (rpm -q)
 
     def __call__(self, argv, **kw):
         argv = list(argv)
         self.calls.append(argv)
+        if argv[:2] == ["rpm", "-q"] and argv[-1] == "wazuh-agent":
+            return subprocess.CompletedProcess(argv, 0 if self.agent_pkg else 1, "", "")
         if argv[:4] == ["nft", "list", "table", "inet"]:
             return subprocess.CompletedProcess(argv, 0 if argv[4] in self.tables else 1, "", "")
         if argv[:1] == ["logger"]:
@@ -1182,3 +1185,84 @@ def test_13a_followup_check83_alerts_when_the_recovery_report_command_fails(tmp_
         del os.environ["CHP_SITE_BIN"]
     alerts = [ln for ln in out.splitlines() if ln.startswith("ALERT ")]
     assert len(alerts) == 1 and "egress-recovered failed (exit 7)" in alerts[0] and "OK workstation editor" not in out
+
+
+# ---------- Task 13d (P3-D15): a stopped agent (no state file) holds the report too ----------
+
+def _agent_unit(tmp_path, where="usr/lib/systemd/system"):
+    u = tmp_path / where / "wazuh-agent.service"
+    u.parent.mkdir(parents=True, exist_ok=True)
+    u.write_text("[Unit]\nDescription=Wazuh agent\n")
+
+
+def test_13d_d15_agent_installed_but_stopped_holds_the_report(tmp_path, capsys):
+    """P3-D15 (logs/226): wazuh-agentd deletes its state file when it stops; a missing file was read as "no agent" and
+    the report went out at once into a link nobody was listening on."""
+    for how in ("package", "unit"):
+        root = tmp_path / how
+        _locked_then_loaded(root)
+        if how == "unit":
+            _agent_unit(root)
+        n = Net(agent_pkg=(how == "package"))
+        OO.egress_recovered(root, run=n, now=lambda: 1795204400)
+        n = Net(agent_pkg=(how == "package"))
+        OO.egress_recovered(root, run=n, now=lambda: 1795204500)
+        out = capsys.readouterr().out
+        assert not [a for a in n.logged if "LOCKDOWN" in a[-1]], how
+        assert "waits until the Wazuh agent is connected" in out and "state file" in out, out
+
+
+def test_13d_d15_stopped_agent_fallback_after_60_min_logs_once_with_alert(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    OO.egress_recovered(tmp_path, run=Net(agent_pkg=True), now=lambda: 1795204400)
+    n = Net(agent_pkg=True)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + OO.REPORT_HOLD_MAX - 1)
+    assert not [a for a in n.logged if "LOCKDOWN" in a[-1]]
+    capsys.readouterr()
+    n = Net(agent_pkg=True)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + OO.REPORT_HOLD_MAX)
+    out = capsys.readouterr().out
+    assert len([a for a in n.logged if "LOCKDOWN" in a[-1]]) == 1
+    alerts = [ln for ln in out.splitlines() if ln.startswith("ALERT ") and "held" in ln and "LOCKDOWN" in ln]
+    assert len(alerts) == 1, out
+    n = Net(agent_pkg=True)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + 2 * OO.REPORT_HOLD_MAX)
+    assert n.logged == [] and "ALERT" not in capsys.readouterr().out
+
+
+def test_13d_d15_agent_not_installed_reports_at_once(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    n = Net(agent_pkg=False)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400)
+    assert len([a for a in n.logged if "LOCKDOWN" in a[-1]]) == 1
+    assert "ALERT" not in capsys.readouterr().out
+    assert ["rpm", "-q", "wazuh-agent"] in n.calls
+
+
+def test_13d_d15_installed_and_connected_fresh_state_reports(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    _agent_unit(tmp_path, "etc/systemd/system")
+    _agent(tmp_path, "connected", mtime=1795204400)
+    n = Net(agent_pkg=True)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400)
+    assert len([a for a in n.logged if "LOCKDOWN" in a[-1]]) == 1
+    assert "ALERT" not in capsys.readouterr().out
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a 0000 file")
+def test_13d_d15_unreadable_state_file_holds_with_a_note(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    _agent(tmp_path, "connected", mtime=1795204400)
+    f = tmp_path / OO.AGENT_STATE.lstrip("/")
+    f.chmod(0)
+    try:
+        n = Net(agent_pkg=True)
+        OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400)
+        out = capsys.readouterr().out
+        assert not [a for a in n.logged if "LOCKDOWN" in a[-1]]
+        assert "could not be read" in out and "waits" in out, out
+        n = Net(agent_pkg=False)                          # unreadable is held even when rpm says nothing
+        OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204401)
+        assert not [a for a in n.logged if "LOCKDOWN" in a[-1]]
+    finally:
+        f.chmod(0o644)

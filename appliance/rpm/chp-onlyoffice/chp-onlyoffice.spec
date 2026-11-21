@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-onlyoffice
 Version:        0.1.0
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        CyberHygiene workstation editor: ONLYOFFICE without AI Tools or vendor calls, the workstation egress table, the autosave sweep, linger off
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -27,7 +27,7 @@ Requires:       onlyoffice-desktopeditors = 10.0.0
 # pdftotext/pdfinfo: chp-site doc's marking check of reader PDFs (chp_site.marking)
 Requires:       poppler-utils
 # chp-site onlyoffice (enable, sweep, egress-render, egress-lockdown, egress-recovered) and the doc commands of Plan 3
-Requires:       chp-site >= 0.14.0-10
+Requires:       chp-site >= 0.14.0-11
 # doc new's marked templates (lab 11c, P3-D2: no workstation had them)
 Requires:       chp-templates >= 1.4.0-2
 # monitor check 83 runs under chp-base's monitor (/usr/lib/chp/monitor.d)
@@ -104,6 +104,9 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/chp/workstation-egress
 
 %changelog
+* Sat Nov 21 2026 The CyberHygiene Project - 0.1.0-6.chp
+- ISO 0.7.0 Plan 3 Task 13d: Requires chp-site >= 0.14.0-11 (P3-D15: a stopped Wazuh agent holds the egress
+  recovery report, as a disconnected one does).
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.0-5.chp
 - ISO 0.7.0 Plan 3 Task 13a: Requires chp-templates >= 1.4.0-2 (P3-D2: doc new refused on every workstation, no
   templates there). The egress unit runs `chp-site onlyoffice egress-recovered` after a good load and the lock-down

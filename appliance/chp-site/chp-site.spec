@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        10.chp%{?dist}
+Release:        11.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sat Nov 21 2026 The CyberHygiene Project - 0.14.0-11.chp
+- ISO 0.7.0 Plan 3 Task 13d (P3-D15, lab logs/226): onlyoffice egress-recovered treats a missing Wazuh agent state
+  file as a stopped agent when the agent is installed (wazuh-agent package or its systemd unit): the recovery report
+  is held, sent after 60 min anyway with the ALERT, as for a stale file. A state file that cannot be read holds it
+  too, with a note. Only a host with no agent at all reports at once.
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-10.chp
 - ISO 0.7.0 Plan 3 Task 13a (the 11c lab defects). doc commands: NextCloud's 502/503/504 before anything is sent
   (maintenance mode, the backup window) and a 401 while Kanidm is unreachable (probed at /status) are pending, exit 3

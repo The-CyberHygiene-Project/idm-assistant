@@ -444,7 +444,8 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
   manager** (lab 11c). The first live sign is the server's "agent disconnected" check (71). Monitor check 83 on the
   workstation alerts every 15 minutes while it lasts, but that alert cannot leave the workstation either: it is seen
   at the console. **After recovery** the workstation sends one line `EGRESS RECOVERED after LOCKDOWN` (Wazuh 100635,
-  level 12) that says when the lock-down began and why, once its Wazuh agent is connected again. A render failure
+  level 12) that says when the lock-down began and why, once its Wazuh agent is connected again. A stopped agent
+  holds it too (P3-D15); after 60 minutes it is sent anyway and check 83 raises an ALERT. A render failure
   that the last good file covered is reported the same way (`EGRESS RECOVERED after RENDER FAILED`, 100636, level 7).
   To recover, at the console:
   1. Read `journalctl -u chp-workstation-egress` and fix the cause.

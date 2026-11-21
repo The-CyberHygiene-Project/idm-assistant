@@ -1,6 +1,6 @@
 Name:           chp-identity-server
 Version:        0.1.2
-Release:        6.chp%{?dist}
+Release:        7.chp%{?dist}
 Summary:        CyberHygiene identity-server role (Kanidm, step-ca, SSH CA, BIND) with an unattended first boot
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -19,7 +19,7 @@ Source9:        40-escrow-pending.sh
 Source10:       LICENSE
 Source11:       chp-server-cui-tailoring.xml
 Source12:       journald-chp-persistent.conf
-Requires:       chp-base, chp-site >= 0.14.0-10, chp-identity-client >= 0.2.4-4, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
+Requires:       chp-base, chp-site >= 0.14.0-11, chp-identity-client >= 0.2.4-5, kanidm-server, kanidm-clients, step-ca, step-cli, bind, bind-utils, idm-collect
 Requires:       expect, python3, curl, openssl, firewalld, policycoreutils, openssh
 BuildRequires:  systemd-rpm-macros
 
@@ -75,6 +75,9 @@ fi
 %{_sysconfdir}/systemd/journald.conf.d/50-chp-persistent.conf
 
 %changelog
+* Sat Nov 21 2026 The CyberHygiene Project - 0.1.2-7.chp
+- ISO 0.7.0 Plan 3 Task 13d: Requires chp-site >= 0.14.0-11 and chp-identity-client >= 0.2.4-5 (pin consistency;
+  P3-D15).
 * Fri Nov 20 2026 The CyberHygiene Project - 0.1.2-6.chp
 - ISO 0.7.0 Plan 3 Task 13a (P3-D14, ruling): /etc/systemd/journald.conf.d/50-chp-persistent.conf, Storage=persistent
   and SystemMaxUse=1G: the server's journal (the appender's lines, check 82, the ISSO review's journal rows) survives
