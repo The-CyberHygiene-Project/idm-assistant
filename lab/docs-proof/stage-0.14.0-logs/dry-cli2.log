@@ -1,0 +1,125 @@
+== before
+-rw-r--r-- root root 385024 2026-11-20 12:00:11.221377394 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 69296128 2026-11-20 12:00:11.225377379 -0700 /var/lib/rpm/rpmdb.sqlite
+total 0
+drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .
+drwxr-xr-x. 9 root root 185 2026-11-20 10:15:52.149324942 -0700 ..
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-2.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+chp-onlyoffice-0.1.0-3.chp.el9.noarch
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64
+chp-templates-1.4.0-1.chp.el9.noarch
+== dry-run
+== whoami inside: 0 ; role workstation ; host module state:
+== installed (ours + editor):
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-2.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+chp-onlyoffice-0.1.0-3.chp.el9.noarch
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64
+chp-templates-1.4.0-1.chp.el9.noarch
+poppler-utils-21.01.0-24.el9.x86_64
+== 1. module list (repo s014 only)
+Added s014 repo from file:///var/tmp/s014/repo
+s014                                             69 MB/s | 425 kB     00:00    
+s014
+Name       Stream Profiles                   Summary                            
+php        8.3    common [d], devel, minimal PHP scripting language             
+postgresql 16     client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs what is applied)
+Added s014 repo from file:///var/tmp/s014/repo
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          s014       28 k
+ chp-identity-client      noarch      0.2.4-4.chp.el9           s014       25 k
+ chp-onlyoffice           noarch      0.1.0-5.chp.el9           s014       27 k
+ chp-site                 noarch      0.14.0-10.chp.el9         s014      213 k
+ chp-templates            noarch      1.4.0-2.chp.el9           s014       72 k
+
+Transaction Summary
+================================================================================
+Upgrade  5 Packages
+
+Total size: 365 k
+Operation aborted.
+rc=1
+== 3. check-update
+Last metadata expiration check: 0:00:01 ago on Sat 21 Nov 2026 04:45:49 AM MST.
+
+chp-base.noarch                           0.1.0-14.chp.el9                  s014
+chp-identity-client.noarch                0.2.4-4.chp.el9                   s014
+chp-onlyoffice.noarch                     0.1.0-5.chp.el9                   s014
+chp-site.noarch                           0.14.0-10.chp.el9                 s014
+chp-templates.noarch                      1.4.0-2.chp.el9                   s014
+rc=100 (100 = updates available)
+== 4. install --assumeno chp-onlyoffice (the workstation editor)
+Dependencies resolved.
+================================================================================
+ Package               Architecture  Version                  Repository   Size
+================================================================================
+Upgrading:
+ chp-onlyoffice        noarch        0.1.0-5.chp.el9          s014         27 k
+ chp-site              noarch        0.14.0-10.chp.el9        s014        213 k
+ chp-templates         noarch        1.4.0-2.chp.el9          s014         72 k
+
+Transaction Summary
+================================================================================
+Upgrade  3 Packages
+
+Total size: 313 k
+Operation aborted.
+rc=0
+== 5. upgrade + editor together --assumeno
+Transaction Summary
+================================================================================
+Upgrade  5 Packages
+
+Total size: 365 k
+Operation aborted.
+rc=0
+== 6. control: what chp-onlyoffice requires (resolved)
+Added s014 repo from file:///var/tmp/s014/repo
+chp-base-0:0.1.0-14.chp.el9.noarch
+chp-site-0:0.14.0-10.chp.el9.noarch
+chp-templates-0:1.4.0-2.chp.el9.noarch
+Last metadata expiration check: 0:00:02 ago on Sat 21 Nov 2026 04:45:49 AM MST.
+onlyoffice-desktopeditors-0:10.0.0-169.el7.x86_64
+poppler-utils-0:21.01.0-24.el9.x86_64
+== 7. rpm -U --test of the upgrades [chp-base chp-identity-client chp-onlyoffice chp-site chp-templates ] against a COPY of this host's rpm database
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.6RUC/./rpmdb.sqlite': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.6RUC/./.rpm.lock': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.6RUC/./rpmdb.sqlite-wal': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.6RUC/./rpmdb.sqlite-shm': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.6RUC/.': Invalid argument
+rc=0 (5 packages)
+== after
+-rw-r--r-- root root 385024 2026-11-20 12:00:11.221377394 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 69296128 2026-11-20 12:00:11.225377379 -0700 /var/lib/rpm/rpmdb.sqlite
+total 0
+drwxr-xr-x. 2 root root   6 2026-05-19 16:37:21.000000000 -0600 .
+drwxr-xr-x. 9 root root 185 2026-11-20 10:15:52.149324942 -0700 ..
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-2.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+chp-onlyoffice-0.1.0-3.chp.el9.noarch
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64
+chp-templates-1.4.0-1.chp.el9.noarch
+ls: cannot access '/var/tmp/s014': No such file or directory

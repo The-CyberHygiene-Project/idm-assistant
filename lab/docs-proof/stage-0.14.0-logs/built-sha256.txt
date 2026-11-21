@@ -1,0 +1,11 @@
+2fc465b0ac924e3b80b62bc362d88ef4d94cf44dbf3ae37509dd0e71feef4b1d  chp-site-0.14.0-10.chp.el9.noarch.rpm
+3df8800a873c5f5bdea121d6e02854a81b3b8ae0c6907e2a4c853296dbcb296d  chp-base-0.1.0-14.chp.el9.noarch.rpm
+8478f2c60a4f76ce58e6cdeebe18ec8684d4244200991e6e95174664fef5872c  chp-documents-0.1.0-10.chp.el9.noarch.rpm
+e848ec031e100120d1fe975998c8da774e8236f8b492d6c89571aea39ac965ac  chp-identity-client-0.2.4-4.chp.el9.noarch.rpm
+879391850e4be4e2cb7c74ddbe9a5afea0c6190b73676445c68c619d40e95002  chp-identity-server-0.1.2-6.chp.el9.noarch.rpm
+4d873405fb0c1b72747cd3f68111390d494758679968b9cda6941303595ed1bf  chp-onlyoffice-0.1.0-5.chp.el9.noarch.rpm
+c1f011fd28464c2b89571039630b2fb3b469c34538c85e891cae6bc09c656a08  chp-templates-1.4.0-2.chp.el9.noarch.rpm
+16c7e815903d4de289a84271cec51c285c24718678d666d57571fbea3ac18ab8  nextcloud-chp-35.0.3-7.chp.el9.noarch.rpm
+repo
+stage
+stage-superseded-templates-1.3.1

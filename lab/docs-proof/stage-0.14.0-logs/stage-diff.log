@@ -1,0 +1,47 @@
+8,11c8,11
+< chp-base-0.1.0-13.chp.el9.noarch.rpm
+< chp-documents-0.1.0-8.chp.el9.noarch.rpm
+< chp-identity-client-0.2.4-2.chp.el9.noarch.rpm
+< chp-identity-server-0.1.2-3.chp.el9.noarch.rpm
+---
+> chp-base-0.1.0-14.chp.el9.noarch.rpm
+> chp-documents-0.1.0-10.chp.el9.noarch.rpm
+> chp-identity-client-0.2.4-4.chp.el9.noarch.rpm
+> chp-identity-server-0.1.2-6.chp.el9.noarch.rpm
+13c13
+< chp-onlyoffice-0.1.0-3.chp.el9.noarch.rpm
+---
+> chp-onlyoffice-0.1.0-5.chp.el9.noarch.rpm
+15c15
+< chp-site-0.14.0-7.chp.el9.noarch.rpm
+---
+> chp-site-0.14.0-10.chp.el9.noarch.rpm
+17c17
+< chp-templates-1.4.0-1.chp.el9.noarch.rpm
+---
+> chp-templates-1.4.0-2.chp.el9.noarch.rpm
+38c38
+< nextcloud-chp-35.0.3-6.chp.el9.noarch.rpm
+---
+> nextcloud-chp-35.0.3-7.chp.el9.noarch.rpm
+== pins
+chp-base: chp-site
+chp-documents: chp-base >= 0.1.0-12
+chp-documents: chp-site >= 0.14.0-10
+chp-documents: nextcloud-chp >= 35.0.3-7
+chp-documents: poppler-utils
+chp-identity-client: chp-base >= 0.1.0-14
+chp-identity-client: chp-site >= 0.14.0-10
+chp-identity-server: chp-base
+chp-identity-server: chp-identity-client >= 0.2.4-4
+chp-identity-server: chp-site >= 0.14.0-10
+chp-integrity: chp-base
+chp-integrity: chp-site >= 0.7.1
+chp-onlyoffice: chp-base
+chp-onlyoffice: chp-site >= 0.14.0-10
+chp-onlyoffice: chp-templates >= 1.4.0-2
+chp-onlyoffice: onlyoffice-desktopeditors = 10.0.0
+chp-onlyoffice: poppler-utils
+chp-security: chp-base
+chp-security: chp-site >= 0.12.0
+chp-security: chp-yara-rules

@@ -1,0 +1,14 @@
+118cc9cf0b6fe367570d6d3a89a8c1f6187edb0b365aac01a9c48bc8be681aab-modules.yaml.gz
+37ace17736ac19112969a79a2027737eb1878b9a51152fde5f8a9c379effb4bc-filelists.sqlite.bz2
+493c1e955003773f60677e937facf51383df5c420510913c57407164bc4e4290-primary.xml.gz
+6795abbf29b0b2c3d5869ddf7aa7ccf3e809eb08ed6de3bf1f611ea4bcedf8ff-other.xml.gz
+c5bb65d830ead7dda8806b23c4b41995c5232e98b6fcf81c2fef71e2518847e2-filelists.xml.gz
+d8a8563d9cff4cb554c26ac45cba8c949e4d132bdf4a476d17c0d460f9aed270-other.sqlite.bz2
+e2acb026ff0e7c626ab3a58327bbc4886e68b56b8c65492c81ab95d72ed47482-primary.sqlite.bz2
+repomd.xml
+######## iso5-srv (192.168.100.50, server)
+rc=0 log /data/chp-release/tmp-c014/dry/dry-srv.log
+######## iso5-cli1 (192.168.100.51, workstation)
+rc=0 log /data/chp-release/tmp-c014/dry/dry-cli1.log
+######## iso5-cli2 (192.168.100.52, workstation)
+rc=0 log /data/chp-release/tmp-c014/dry/dry-cli2.log

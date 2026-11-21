@@ -1,0 +1,23 @@
+################################################################################
+## LAB CANDIDATE BUILD: chp-templates 1.4.0 from the UNSIGNED local tag templates-1.4.0 in /Users/dshannon/chp-templates
+## NO SIGNATURE PROVENANCE: the sha256 pin is the only input check. Not a release.
+################################################################################
+lab candidate input: templates-1.4.0 = commit 1d7b68208b084a2bca299f4a18aeb0261511563c, archive sha256 3bf9d1272dfefff35e1e53201ce732fd17586d7e62a832fa7389fefd0032601e (= pin)
+\S
+Kernel \r on \m
+
+\S
+Kernel \r on \m
+
+/usr/share/chp-templates
+/usr/share/chp-templates/README.md
+/usr/share/chp-templates/chpfill.pyz
+/usr/share/chp-templates/rev2
+/usr/share/chp-templates/rev2/MANIFEST.json
+/usr/share/chp-templates/rev2/catalog.csv
+/usr/share/chp-templates/rev2/defaults.ini
+/usr/share/chp-templates/rev2/templates
+/usr/share/chp-templates/rev2/templates/poam
+/usr/share/chp-templates/rev2/templates/poam/frame.md
+/usr/share/chp-templates/rev2/templates/ssp
+/usr/share/chp-templates/rev2/templates/ssp/arch

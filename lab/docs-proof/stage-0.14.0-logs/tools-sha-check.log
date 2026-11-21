@@ -1,0 +1,25 @@
+  assemble-repo.sh: OK
+  check-key-expiry.sh: OK
+  make-repodata.sh: OK
+  push.sh: OK
+  release-iso.sh: OK
+  release-kit.sh: OK
+  release-repo.sh: OK
+  sign-repo.sh: OK
+  sign-session.sh: OK
+  stage-modules.sh: OK
+  stage-vendor.sh: OK
+  test_sign_repo.sh: OK
+  test_sign_session.sh: OK
+  verify-repo.sh: OK
+  RPM-GPG-KEY-cyberhygiene: OK
+  RPM-GPG-KEY-EPEL-9: OK
+  RPM-GPG-KEY-WAZUH: OK
+  trusted-keys.txt: OK
+  PACKAGES.txt: OK
+  MODULES.txt: OK
+  VENDOR.txt: OK
+  vendor-keys/RPM-GPG-KEY-ONLYOFFICE: OK
+files: 22  not-ok: 0
+on aero, not in git:
+  RPM-GPG-KEY-Rocky-9 3a66e521e7a4abac vs DVD 3a66e521e7a4abac

@@ -1,0 +1,143 @@
+== before
+-rw-r--r-- root root 393216 2026-11-20 14:55:18.075822825 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82268160 2026-11-20 10:34:14.325112532 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+drwxr-xr-x. 2 root root  49 2026-11-20 10:33:33.815263034 -0700 .
+drwxr-xr-x. 9 root root 185 2026-11-20 09:48:31.010306838 -0700 ..
+-rw-r--r--. 1 root root  50 2026-11-20 10:33:33.815263034 -0700 php.module
+-rw-r--r--. 1 root root  63 2026-11-20 10:33:33.815263034 -0700 postgresql.module
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-documents-0.1.0-8.chp.el9.noarch
+nextcloud-chp-35.0.3-6.chp.el9.noarch
+package chp-onlyoffice is not installed
+package onlyoffice-desktopeditors is not installed
+package chp-templates is not installed
+== dry-run
+== whoami inside: 0 ; role server ; host module state:
+php.module
+postgresql.module
+[php]
+name=php
+stream=8.3
+profiles=
+state=enabled
+[postgresql]
+name=postgresql
+stream=16
+profiles=
+state=enabled
+== installed (ours + editor):
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-documents-0.1.0-8.chp.el9.noarch
+nextcloud-chp-35.0.3-6.chp.el9.noarch
+package chp-onlyoffice is not installed
+package onlyoffice-desktopeditors is not installed
+package chp-templates is not installed
+poppler-utils-21.01.0-24.el9.x86_64
+== 1. module list (repo s014 only)
+Added s014 repo from file:///var/tmp/s014/repo
+s014                                            220 MB/s | 425 kB     00:00    
+s014
+Name       Stream  Profiles                   Summary                            
+php        8.3 [e] common [d], devel, minimal PHP scripting language             
+postgresql 16 [e]  client, server [d]         PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+== 2. upgrade --assumeno (vs what is applied)
+Added s014 repo from file:///var/tmp/s014/repo
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          s014       28 k
+ chp-documents            noarch      0.1.0-10.chp.el9          s014       47 k
+ chp-identity-client      noarch      0.2.4-4.chp.el9           s014       25 k
+ chp-identity-server      noarch      0.1.2-6.chp.el9           s014       25 k
+ chp-site                 noarch      0.14.0-10.chp.el9         s014      213 k
+ nextcloud-chp            noarch      35.0.3-7.chp.el9          s014      212 M
+
+Transaction Summary
+================================================================================
+Upgrade  6 Packages
+
+Total size: 212 M
+Operation aborted.
+rc=1
+== 3. check-update
+Last metadata expiration check: 0:00:01 ago on Sat 21 Nov 2026 04:45:36 AM MST.
+
+chp-base.noarch                           0.1.0-14.chp.el9                  s014
+chp-documents.noarch                      0.1.0-10.chp.el9                  s014
+chp-identity-client.noarch                0.2.4-4.chp.el9                   s014
+chp-identity-server.noarch                0.1.2-6.chp.el9                   s014
+chp-site.noarch                           0.14.0-10.chp.el9                 s014
+nextcloud-chp.noarch                      35.0.3-7.chp.el9                  s014
+rc=100 (100 = updates available)
+== 4. install --assumeno nextcloud-chp chp-documents
+Dependencies resolved.
+================================================================================
+ Package              Architecture  Version                   Repository   Size
+================================================================================
+Upgrading:
+ chp-documents        noarch        0.1.0-10.chp.el9          s014         47 k
+ chp-site             noarch        0.14.0-10.chp.el9         s014        213 k
+ nextcloud-chp        noarch        35.0.3-7.chp.el9          s014        212 M
+
+Transaction Summary
+================================================================================
+Upgrade  3 Packages
+
+Total size: 212 M
+Operation aborted.
+rc=0
+== 5. install --assumeno chp-templates
+Dependencies resolved.
+================================================================================
+ Package              Architecture  Version                   Repository   Size
+================================================================================
+Installing:
+ chp-templates        noarch        1.4.0-2.chp.el9           s014         72 k
+
+Transaction Summary
+================================================================================
+Install  1 Package
+
+Total size: 72 k
+Installed size: 201 k
+Operation aborted.
+rc=0
+== 7. rpm -U --test of the upgrades [chp-base chp-documents chp-identity-client chp-identity-server chp-site nextcloud-chp ] against a COPY of this host's rpm database
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.pkhy/./rpmdb.sqlite': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.pkhy/./.rpm.lock': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.pkhy/./rpmdb.sqlite-wal': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.pkhy/./rpmdb.sqlite-shm': Invalid argument
+cp: failed to preserve ownership for '/var/tmp/s014/rpmdb.pkhy/.': Invalid argument
+rc=0 (6 packages)
+== after
+-rw-r--r-- root root 393216 2026-11-20 14:55:18.075822825 -0700 /var/lib/dnf/history.sqlite
+-rw-r--r-- root root 82268160 2026-11-20 10:34:14.325112532 -0700 /var/lib/rpm/rpmdb.sqlite
+total 8
+drwxr-xr-x. 2 root root  49 2026-11-20 10:33:33.815263034 -0700 .
+drwxr-xr-x. 9 root root 185 2026-11-20 09:48:31.010306838 -0700 ..
+-rw-r--r--. 1 root root  50 2026-11-20 10:33:33.815263034 -0700 php.module
+-rw-r--r--. 1 root root  63 2026-11-20 10:33:33.815263034 -0700 postgresql.module
+chp-site-0.14.0-7.chp.el9.noarch
+chp-base-0.1.0-13.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+chp-identity-server-0.1.2-3.chp.el9.noarch
+chp-identity-client-0.2.4-2.chp.el9.noarch
+chp-documents-0.1.0-8.chp.el9.noarch
+nextcloud-chp-35.0.3-6.chp.el9.noarch
+package chp-onlyoffice is not installed
+package onlyoffice-desktopeditors is not installed
+package chp-templates is not installed
+ls: cannot access '/var/tmp/s014': No such file or directory

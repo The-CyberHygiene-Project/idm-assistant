@@ -1,0 +1,103 @@
+srv rpmdb copy: 38092710 B
+cli1 rpmdb copy: 25748590 B
+cli2 rpmdb copy: 21561152 B
+=== cli1: upgrade + install chp-onlyoffice chp-templates, cand + DVD (anything from baseos/appstream = a missing extra)
+Dependencies resolved.
+================================================================================
+ Package               Architecture  Version                  Repository   Size
+================================================================================
+Upgrading:
+ chp-onlyoffice        noarch        0.1.0-5.chp.el9          cand         27 k
+ chp-site              noarch        0.14.0-10.chp.el9        cand        213 k
+ chp-templates         noarch        1.4.0-2.chp.el9          cand         72 k
+Transaction Summary
+================================================================================
+Upgrade  3 Packages
+Total size: 313 k
+Operation aborted.
+rc=0
+=== cli1: upgrade, cand ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          cand       28 k
+ chp-identity-client      noarch      0.2.4-4.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-5.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-10.chp.el9         cand      213 k
+ chp-templates            noarch      1.4.0-2.chp.el9           cand       72 k
+Transaction Summary
+================================================================================
+Upgrade  5 Packages
+Total size: 365 k
+Operation aborted.
+rc=0
+=== cli2: upgrade + install chp-onlyoffice chp-templates, cand + DVD (anything from baseos/appstream = a missing extra)
+Dependencies resolved.
+================================================================================
+ Package               Architecture  Version                  Repository   Size
+================================================================================
+Upgrading:
+ chp-onlyoffice        noarch        0.1.0-5.chp.el9          cand         27 k
+ chp-site              noarch        0.14.0-10.chp.el9        cand        213 k
+ chp-templates         noarch        1.4.0-2.chp.el9          cand         72 k
+Transaction Summary
+================================================================================
+Upgrade  3 Packages
+Total size: 313 k
+Operation aborted.
+rc=0
+=== cli2: upgrade, cand ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          cand       28 k
+ chp-identity-client      noarch      0.2.4-4.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-5.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-10.chp.el9         cand      213 k
+ chp-templates            noarch      1.4.0-2.chp.el9           cand       72 k
+Transaction Summary
+================================================================================
+Upgrade  5 Packages
+Total size: 365 k
+Operation aborted.
+rc=0
+=== srv: upgrade + install nextcloud-chp chp-documents chp-templates, cand + DVD
+Dependencies resolved.
+================================================================================
+ Package              Architecture  Version                   Repository   Size
+================================================================================
+Installing:
+ chp-templates        noarch        1.4.0-2.chp.el9           cand         72 k
+Upgrading:
+ chp-documents        noarch        0.1.0-10.chp.el9          cand         47 k
+ chp-site             noarch        0.14.0-10.chp.el9         cand        213 k
+ nextcloud-chp        noarch        35.0.3-7.chp.el9          cand        212 M
+Transaction Summary
+================================================================================
+Install  1 Package
+Upgrade  3 Packages
+Total size: 212 M
+Operation aborted.
+rc=0
+=== srv: upgrade, cand ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          cand       28 k
+ chp-documents            noarch      0.1.0-10.chp.el9          cand       47 k
+ chp-identity-client      noarch      0.2.4-4.chp.el9           cand       25 k
+ chp-identity-server      noarch      0.1.2-6.chp.el9           cand       25 k
+ chp-site                 noarch      0.14.0-10.chp.el9         cand      213 k
+ nextcloud-chp            noarch      35.0.3-7.chp.el9          cand      212 M
+Transaction Summary
+================================================================================
+Upgrade  6 Packages
+Total size: 212 M
+Operation aborted.
+rc=0
