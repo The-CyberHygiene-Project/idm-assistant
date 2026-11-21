@@ -1,0 +1,71 @@
+123:	public function userExists($uid): bool {
+124:		return is_string($uid) && $uid !== '' && $this->userMapper->userExists($uid);
+250:	public function getCurrentUserId(): string {
+310:		$autoProvisionAllowed = (!isset($oidcSystemConfig['auto_provision']) || $oidcSystemConfig['auto_provision']);
+357:							if (!$this->userManager->userExists($tokenUserId)) {
+366:							$softAutoProvisionAllowed = (!isset($oidcSystemConfig['soft_auto_provision']) || $oidcSystemConfig['soft_auto_provision']);
+374:								$backendUser = $this->userMapper->getOrCreate($provider->getId(), $tokenUserId, created: $created);
+385:							if ($this->providerService->getSetting($provider->getId(), ProviderService::SETTING_BEARER_PROVISIONING, '0') === '1') {
+388:									$this->provisionUser($validator->getProvisioningStrategy(), $provider, $tokenUserId, $headerToken, $existingUser);
+394:						} elseif ($this->userExists($tokenUserId)) {
+402:							if (!$this->userManager->userExists($tokenUserId)) {
+407:								if (!$this->userManager->userExists($tokenUserId)) {
+479:	private function provisionUser(
+488:			return $provisioningStrategy->provisionUser($provider, $tokenUserId, $headerToken, $existingUser);
+			}
+		} else {
+			$this->logger->debug('[NextcloudOidcProviderValidator] oidc_provider_bearer_validation is false or not defined');
+		}
+
+		$autoProvisionAllowed = (!isset($oidcSystemConfig['auto_provision']) || $oidcSystemConfig['auto_provision']);
+
+		// try to validate with all providers
+		foreach ($providers as $provider) {
+			if ($this->providerService->getSetting($provider->getId(), ProviderService::SETTING_CHECK_BEARER, '0') === '1') {
+				// find user id through different token validation methods
+						$discovery = $this->discoveryService->obtainDiscovery($provider);
+						$this->eventDispatcher->dispatchTyped(new TokenValidatedEvent(['token' => $headerToken], $provider, $discovery));
+
+						$tokenUserId = $this->settingsService->parseUserId($tokenUserId);
+
+						if ($autoProvisionAllowed) {
+							// look for user in other backends
+							if (!$this->userManager->userExists($tokenUserId)) {
+								$this->userManager->search($tokenUserId);
+								$this->ldapService->syncUser($tokenUserId);
+							}
+							$existingUser = $this->userManager->get($tokenUserId);
+							if ($existingUser !== null && $this->ldapService->isLdapDeletedUser($existingUser)) {
+								$existingUser = null;
+							}
+
+							$softAutoProvisionAllowed = (!isset($oidcSystemConfig['soft_auto_provision']) || $oidcSystemConfig['soft_auto_provision']);
+							if (!$softAutoProvisionAllowed && $existingUser !== null && $existingUser->getBackendClassName() !== Application::APP_ID) {
+								// if soft auto-provisioning is disabled,
+								// we refuse login for a user that already exists in another backend
+								return '';
+							}
+							if ($existingUser === null) {
+								// only create the user in our backend if the user does not exist in another backend
+								$backendUser = $this->userMapper->getOrCreate($provider->getId(), $tokenUserId, created: $created);
+								$userId = $backendUser->getUserId();
+								if ($created) {
+									$this->auditLogger->userProvisioned($userId, $provider->getId(), 'bearer_token');
+								}
+							} else {
+								$userId = $existingUser->getUID();
+							}
+
+							$this->checkFirstLogin($userId);
+
+							if ($this->providerService->getSetting($provider->getId(), ProviderService::SETTING_BEARER_PROVISIONING, '0') === '1') {
+								$provisioningStrategy = $validator->getProvisioningStrategy();
+								if ($provisioningStrategy) {
+									$this->provisionUser($validator->getProvisioningStrategy(), $provider, $tokenUserId, $headerToken, $existingUser);
+								}
+							}
+
+							$this->session->set('last-password-confirm', $this->timeFactory->getTime() + 4 * 365 * 24 * 3600);
+							return $userId;
+						} elseif ($this->userExists($tokenUserId)) {
+							$this->checkFirstLogin($tokenUserId);

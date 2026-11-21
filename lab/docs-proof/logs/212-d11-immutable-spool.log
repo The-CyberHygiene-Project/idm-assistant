@@ -1,0 +1,11 @@
+quarantine copies of the stuck file: 1 (total new: 39, 40 poke strays)
+      1 {"error":"[Errno 1] Operation not permitted: '/var/lib/chp-docs/spool/0123456789abcdef0123456789abcdef.json'","event":"s
+      1 {"event":"appender-failed",,"message":"the spool file 0123456789abcdef0123456789abcdef.json cannot be deleted or moved a
+      1 {"event":"quarantine","request_id":"0123456789abcdef0123456789abcdef","user":null,"why":"its request_id does not match i
+path unit: failed
+0
+removed 43 quarantine record(s)
+0
+active
+EXIT=0
+Wazuh alerts naming the stuck file: 4

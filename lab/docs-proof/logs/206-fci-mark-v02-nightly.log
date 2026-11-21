@@ -1,0 +1,26 @@
+## doc mark on an unmarked FCI_ draft
+edited FCI_Bare_v0.1-DRAFT.docx
+2
+dry run (nothing changed; run again with --apply): FCI_Bare_v0.1-DRAFT.docx
+  word/header1.xml: add the FCI banner to the default header
+  word/footer1.xml: add the FCI banner to the default footer
+marked: FCI_Bare_v0.1-DRAFT.docx
+  word/header1.xml: add the FCI banner to the default header
+  word/footer1.xml: add the FCI banner to the default footer
+  freshness: no checkout of this document in your working folder (nothing to compare)
+OK
+      2 <w:t>FCI</w:t>
+## FCI v0.2 (v0.1 -> Archive/Superseded)
+closed FCI_Quotedocx_v0.1.docx
+checkout recorded (ledger entry 65)
+edited FCI_Quotedocx_v0.2-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 66)
+published CUI/Compliance/FCI_Quotedocx_v0.2.docx as CR-2026-0016 (ledger entry 67)
+When you are done with it: chp-site doc close FCI_Quotedocx_v0.2.docx
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; cui-users and admin as Kanidm and enable made them, reviewers read-only; share canary ref
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+FCI_Quotedocx_v0.1.docx
+FCI_Quotedocx_v0.1.pdf
+EXIT=0

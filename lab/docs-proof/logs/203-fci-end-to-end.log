@@ -1,0 +1,39 @@
+######## FCI docx
+new recorded (ledger entry 47)
+FCI_Quotedocx_v0.1-DRAFT.docx: CUI area (FCI banner)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Quotedocx_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+FCI_Quotedocx_v0.1-DRAFT.docx: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 48)
+published CUI/Compliance/FCI_Quotedocx_v0.1.docx as CR-2026-0012 (ledger entry 49)
+When you are done with it: chp-site doc close FCI_Quotedocx_v0.1.docx
+publish-rc=0
+######## FCI xlsx
+new recorded (ledger entry 50)
+FCI_Quotexlsx_v0.1-DRAFT.xlsx: CUI area (FCI banner)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Quotexlsx_v0.1.xlsx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+FCI_Quotexlsx_v0.1-DRAFT.xlsx: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 51)
+published CUI/Compliance/FCI_Quotexlsx_v0.1.xlsx as CR-2026-0013 (ledger entry 52)
+When you are done with it: chp-site doc close FCI_Quotexlsx_v0.1.xlsx
+publish-rc=0
+######## FCI md
+new recorded (ledger entry 53)
+FCI_Quotemd_v0.1-DRAFT.md: CUI area (FCI banner)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Quotemd_v0.1.md and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+FCI_Quotemd_v0.1-DRAFT.md: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 54)
+published CUI/Compliance/FCI_Quotemd_v0.1.md as CR-2026-0014 (ledger entry 55)
+When you are done with it: chp-site doc close FCI_Quotemd_v0.1.md
+publish-rc=0

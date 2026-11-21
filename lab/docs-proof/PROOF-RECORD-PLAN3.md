@@ -199,3 +199,98 @@ Needs attention, D14 counts), 01:40 backup, 03:10 check + canary, 04:04 AIDE (D1
 | Nightly check + canary 03:10 | OK; 100618 level 3 inside the window; 100608 x2; canary disabled, 0 tokens; check 81 OK | 190 |
 | Daily AIDE 04:04 (D15) | no `/etc/pki/nextcloud` path although chain.pem was re-issued at 02:37 after the baseline (D15 fixed); lab residue listed (adapter, lab hook, /root lab logs) | 190 |
 | 8 h sign-in end (B15) | NOT RUN: no sign-in was kept alive overnight (sessions ended before the final golden) | — |
+
+# Round 2 (repo 0.14.0, Task 13c, 2026-11-21)
+
+Repo **0.14.0** (owner-signed; `verify-repo` REPO OK 72) applied **in place** (no reset) to iso5-srv, iso5-cli1,
+iso5-cli2. Code read from branch `iso-0.7.0-owner-batch`. Logs 191-227. Driver additions: `cycle.sh` (one document
+cycle). No product code changed. Full verdicts: `task-13c-report.md`.
+
+## Setup
+
+| Step | Result | Log |
+|---|---|---|
+| `dnf --refresh upgrade` | srv upgrade 6 (chp-base 0.1.0-14, chp-documents 0.1.0-10, chp-identity-client 0.2.4-4, chp-identity-server 0.1.2-6, chp-site 0.14.0-10, nextcloud-chp 35.0.3-7); cli1/cli2 upgrade 5 (incl. chp-onlyoffice 0.1.0-5, chp-templates 1.4.0-2); pins pulled together; 0 denials | 191 |
+| `chp-site time-sync --role server` (first), twice | chrony: `allow 192.168.100.0/24`, `bindaddress 192.168.100.50` + `::1`, `local stratum 10`; firewalld 123/udp from the subnet only; second run "unchanged"; label etc_t, no AVC; **NTP socket on 192.168.100.50:123 only** (no `[::1]:123` socket either: stricter than expected) | 192 |
+| `time-sync --role client` cli1, cli2 | only source the server (`^*`), Reference ID = server; egress table: chronyd (uid 997) → server:123 only; check 20 OK "the CHP server"; server serverstats count the packets | 193 |
+| Second time source by hand (cli1) | check 20 ALERT "time sources other than the CHP server"; the packets refused and logged (CHP-WS-EGRESS DPT=123); removed → OK | 194 |
+| `documents enable` run 6; `onlyoffice enable` cli1/cli2 | exit 0; new Wazuh rules; workstations: exit 0 (run as a transient unit: see note) | 195, 196 |
+| AIDE accept x3 | accepted and pinned | 198 |
+| CUI scan, round-1 profile | srv 107/3: the only change vs round 1 is `chronyd_client_only` pass→fail (the server now serves time: owner decision 2026-11-20); cli1/cli2 108/2, no change. Lab decision row added citing the owner decision → **Gate 3 MET** | 200, 202 |
+| Server tailoring `chp-server-cui-tailoring.xml` (profile `xccdf_org.cyberhygiene_profile_cui_chp_server`, extends the stock CUI profile) | vs the stock CUI profile on the same host: exactly `chronyd_client_only` and `sysctl_user_max_user_namespaces` change fail → notselected; everything else identical (101 pass, 0 fail) | 201 |
+
+Note: on the workstations `KillUserProcesses=yes` (in force since round 1's reboot) ends every process of the admin's
+console session at logout, so the driver's detached runs died there; workstation commands now run as transient units.
+This is the documented product behaviour (guide: admins' tmux/screen end at logout).
+
+## Proofs
+
+| Proof | Result | Log |
+|---|---|---|
+| FCI end to end, docx/xlsx/md | `doc new --fci` → check ("FCI banner") → mark → approve → publish: CR-2026-0012/13/14; reader PDFs: "FCI" first line and last line of page 1, no "CUI" line; files + PDFs in CUI/Compliance tagged CUI | 203, 204 |
+| CUI `.md` (D10) | CR-2026-0015; banners first/last, block on page one | 204 |
+| Wrong banners | CUI marks on an `FCI_` doc and FCI marks on a `CUI_` doc: refused by `doc check` and `doc mark` (client) and by the server's marking check (raw publish) | 205 |
+| `doc mark` on an unmarked FCI draft | adds only "FCI" (header + footer); then OK | 206 |
+| FCI v0.2, nightly check | v0.1 → Archive/Superseded; `documents check` OK, no `name:` alert | 206 |
+| 12b wrapped banners | `**CUI**`, `# CUI`, `> CUI`, `C U I`, `CUI //SP-PROPIN` in an FCI .md: each refused | 216 |
+| D4 | loser: "the current version changed since your checkout: lab06 published … as CR-2026-0017 (ledger entry 72) … check out the current version again" | 207 |
+| D13 | 2001 bytes: exit 2 plain text, nothing sent; 2000 bytes sent | 208 |
+| D9 | `/status` = `true` 200; kanidmd stopped: checkout exit 3 "Kanidm cannot be reached … no new sign-in is needed (nothing was sent)"; back: works, no new login | 209 |
+| D8 | maintenance mode: publish exit 3 "pending … maintenance mode … (nothing was sent)", spool and journal unchanged; after: CR-2026-0018 | 210 |
+| D6 | `<If "%{REQUEST_URI} …">` LimitRequestBody: a 97 MiB body still reached PHP on both OCS paths (app 400); the `%{THE_REQUEST}` variant tried on the lab conf, same; conf restored byte-identical. **Still failing** (the app's 64 MiB check stays the control, as the README now says) | 211 |
+| D11 | one quarantine copy, one spool-unlink-failed, one appender-failed for a run of 40 triggers; the path unit then trips its limit (as designed); reset | 212 |
+| D3 | (a) user_oidc 8.13.0 `Backend.php`: the Bearer path calls `getOrCreate` whenever the global `auto_provision` is on; per-provider bearer provisioning only controls attribute provisioning; no setting stops Bearer creation without stopping web first sign-ins. (b) lab02 (never on the web) `doc login`: refused with the browser URL; the group-less account exists. (c) a group-less account's POST: 403 "your NextCloud account has no groups yet …", audit `chp.ledger.nogroups`, **100634 L12** at the hook. (d) nightly check ALERT `has no groups`; after lab02's web sign-in: clean | 197, 213, 214 |
+| D2 | chp-onlyoffice requires chp-templates >= 1.4.0-2 and chp-site >= 0.14.0-10; upgraded together (the pull onto a workstation without templates not shown: round 1's W1 had installed it) | 215 |
+| D7 | agent state file `/var/ossec/var/run/wazuh-agentd.state`, `status='connected'`, rewritten every ~5 s. Render failure + lock-down on cli1 with a restore timer: after recovery the check-83 run sent **100635 L12** (lock-down start time + cause) and **100636 L7** to the manager. One 100636, for a render failure that ended the same second the lock-down began, was lost (the residual Task 13a noted). **60-min fallback: FAIL (P3-D15)** | 217, 226 |
+| D12 | `doc login`: "sign-in ends: about … (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end)" | 199 |
+| D14 | `/var/log/journal` exists; after a server reboot `--list-boots` keeps the previous boot with 92 appender lines (incl. CR-2026-0018); checks 77-82 OK | 219 |
+| D5 | guide row: "raises it five times" with the breakdown | (SITE-STICK.md:469) |
+| O5 | `matchpathcon` = `etc_t`: the old net_conf_t expectation was wrong; cosmetic | 217 |
+| D1 | NOT RUN: needs a server where NextCloud was never installed (a full reset); the run-6 enable found the trust entry already matching, so the probe did not run | 195 |
+
+## New defect
+
+- **P3-D15 (important).** `onlyoffice.py:199-208` `_agent_connected` returns None ("no Wazuh agent state file
+  (nothing to wait for)") when `/var/ossec/var/run/wazuh-agentd.state` is missing, and wazuh-agentd removes that file
+  when it stops. With the agent stopped at recovery (cli1, 18:13:41), the recovery lines were logged at once (18:13:42,
+  "OK egress: reported: EGRESS RECOVERED …"): no hold, no 60-min fallback, no ALERT, and a line written while the
+  agent is down is not sent later. Fix: when the agent is installed (`/var/ossec/bin/wazuh-agentd` or the unit
+  exists), treat a missing state file as "not connected". logs/226.
+
+## Fault injection and restoration (round 2)
+
+| Host | What | Why | Undone / evidence | Log |
+|---|---|---|---|---|
+| srv | kanidmd stopped (~1 min) | D9 | active | 209, 220 |
+| srv | maintenance mode on | D8 | off | 210, 220 |
+| srv | installed `chp-nextcloud.conf` edited to the THE_REQUEST variant + reload | D6 | copy restored, sha256 equal ("conf restored byte-identical"), `apachectl -t` OK, httpd active | 211 |
+| srv | immutable spool file + 40 stray files | D11 | `chattr -i`, path unit reset + active, quarantine purged (0), 0 immutable files | 212, 220 |
+| srv | lab01 removed from cui-users/chp-users in NextCloud | D3(c) | groups back by a web sign-in (user_oidc maps them) | 214, 220 |
+| srv | reboot | D14 | all units back, checks OK | 219 |
+| srv | /root lab outputs | driver | removed | 220 |
+| cli1 | a second chrony source by hand | T3 | deleted; check 20 OK | 194 |
+| cli1 | render failure, lock-down x2 (address file removed + DOMAIN broken), restore timers `lab-egress-restore-r2`/`-b`, units `lab-d7`/`lab-d7b` | D7 | site.conf + address file `sha256sum -c` OK against the pre-test hashes; 0 lab units; no `*.good`; egress active, policy drop, no lock-down table | 218, 226 |
+| cli1 | wazuh-agent stopped (~2 h) | D7 fallback | started, `status='connected'` | 226 |
+| cli2 | lab user sessions; 97 MiB bodies and test docs in /tmp | driver, D6 | anchors stopped, /tmp cleaned (220); **lab01's anchor restarted for B15 (kept on purpose)** | 220, 227 |
+| Mac (worktree only) | `.venv` symlink to the main checkout's venv (prove.sh/engine need it) | gates | not committed | — |
+| lab file | `lab/iso5/decisions.tsv`: the `chronyd_client_only` row citing the owner decision of 2026-11-20 | Gate 3 | committed (controller to confirm) | 202 |
+
+SELinux Enforcing, fapolicyd active (0 denials) and firewalld active on every host after the tests (218, 220, 226).
+
+## Gates (round 2)
+
+| Gate | Result | Log |
+|---|---|---|
+| CUI scan | srv 107/3 (`chronyd_client_only`, owner decision), cli1/cli2 108/2; no other change; MET | 200, 202 |
+| adapter / nvram / snapspike | ALL PASS | 221 |
+| fixtures | not re-runnable on users that already hold credentials (fixtures.py stops at lab01's enrolment; lab tool); round-1 users intact (lab01 web sign-in and POSIX probe OK) | 222 |
+| Golden | ALL PASS (fresh, after the proofs) | 223 |
+| Regression | **NOT RUN**: LM Studio's server was OFF on the Mac (`lms status`: Server OFF), all 32 runs before the stop EXPLAIN-FAILED; aborted, srv/cli2 reset to golden | 224 |
+| Row 36 | 3/3 | 225 |
+
+## Pending
+
+- **Regression 33/33:** needs LM Studio's server on the Mac (`lms server start`, the devstral model). Run it AFTER the
+  B15 check (it resets cli2).
+- **B15:** lab01's sign-in started 2026-11-21 20:03:45Z (13:03 MST) on cli2 in a held session; due ~21:04 MST
+  (04:04Z 11-22): `chp-site doc check` / any doc command should say "run chp-site doc login".

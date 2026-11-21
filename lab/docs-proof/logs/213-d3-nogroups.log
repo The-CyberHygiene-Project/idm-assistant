@@ -1,0 +1,24 @@
+The current PHP memory limit is below the recommended value of 512MB.
+user not found
+## (b) doc login by a never-web-signed-in person
+sign-in URL printed (redirect_uri http://127.0.0.1:34481/)
+Sign in at Kanidm in the browser (it should open by itself; if not, open this address):
+EXIT=2
+  - user_id: lab02
+  - groups:
+  - backend: user_oidc
+"message":"Login attempt: \"
+"message":"Login successful: \"
+"message":"Console command executed: user:info lab02"
+## (d) nightly check
+ALERT NextCloud check: the NextCloud account lab02 (Kanidm, user_oidc) has no groups: a chp-doc Bearer made it before lab02 ever signed in on the web (user_oidc does this although bearer provisioning is off; no audit lin
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+EXIT=0
+Sign in at Kanidm in the browser (it should open by itself; if not, open this address):
+chp-site: refused: your NextCloud account lab02 has no groups (a chp-doc sign-in made it before you ever signed in on the web, or your groups were taken away): sign in once in the browser at https://files.iso5.lab.test:8443/ (NextCloud then takes your groups from Kanidm), then run chp-site doc login again; if that does not help, ask the administrator
+EXIT=2
+SIGNED IN: id=lab02 display='Lab User 2' groups=['chp-users'] backend=user_oidc
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; cui-users and admin as Kanidm and enable made them, reviewers read-only; share canary ref
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+EXIT=0
+runtime dir: /run/user/1944792248

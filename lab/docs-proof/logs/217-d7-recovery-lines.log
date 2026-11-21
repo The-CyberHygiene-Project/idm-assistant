@@ -1,0 +1,41 @@
+agent state:  10:50:39 /var/ossec/var/run/wazuh-agentd.state; status='connected'
+agent state 6 s later:  10:50:44 /var/ossec/var/run/wazuh-agentd.state
+O5 matchpathcon: /etc/chp/workstation-egress-addr.nft	system_u:object_r:etc_t:s0
+## H14 render failure with a last good file, then fixed
+17:50:46
+active
+render-failed.json
+EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-21T17:50:46Z until 2026-11-21T17:50:50Z (DOMAIN: 'bad domain!' is not a lower-case DNS domain with at leas
+## lock-down, auto restore in 150 s
+17:50:50
+Job for chp-workstation-egress.service failed because the control process exited with error code.
+See "systemctl status chp-workstation-egress.service" and "journalctl -xeu chp-workstation-egress.service" for details.
+table inet firewalld table inet chp_workstation_egress table inet chp_workstation_lockdown 
+total 8
+drwx------. 2 root root  53 Nov 21 10:50 .
+drwxr-xr-x. 9 root root 140 Nov 21 05:36 ..
+-rw-------. 1 root root 225 Nov 21 10:50 lockdown.json
+-rw-------. 1 root root 110 Nov 21 10:50 render-failed.json
+{"since": 1795283450, "why": "the address file /etc/chp/workstation-egress-addr.nft was missing and the egress addresses could not be rendered (DOMAIN: 'bad domain!' is not a lower-case DNS domain wit
+{"since": 1795283450, "why": "DOMAIN: 'bad domain!' is not a lower-case DNS domain with at least two labels"}
+## restored at 17:53:40
+active
+table inet firewalld table inet chp_workstation_egress 
+EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-21T17:50:46Z until 2026-11-21T17:50:50Z (DOMAIN: 'bad domain!' is not a lower-case DNS domain with at leas
+total 8
+drwx------. 2 root root  56 Nov 21 10:53 .
+drwxr-xr-x. 9 root root 140 Nov 21 05:36 ..
+-rw-------. 1 root root 246 Nov 21 10:53 lockdown.json
+-rw-------. 1 root root 131 Nov 21 10:53 render-recovered.json
+## later recovery lines on cli1
+Nov 21 10:50:50 iso5-cli1.iso5.lab.test chp-egress-recovered[77624]: EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-21T17:50:46Z until 2026-11-21T17:50:50Z (DOMAIN: 'bad dom
+Nov 21 10:57:42 iso5-cli1.iso5.lab.test chp-egress-recovered[78011]: EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at 2026-11-21T17:50:50Z (the address file /etc/chp/workstation-egress-addr.nft was mis
+Nov 21 10:57:42 iso5-cli1.iso5.lab.test chp-egress-recovered[78012]: EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-21T17:50:50Z until 2026-11-21T17:53:40Z (DOMAIN: 'bad dom
+total 0
+drwx------. 2 root root   6 Nov 21 10:57 .
+drwxr-xr-x. 9 root root 140 Nov 21 05:36 ..
+OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+## manager
+2026-11-21T10:50:48 iso5-cli1 100632 level 7 d address file /etc/chp/workstation-egress-addr.nft is loaded if there is one (stale if the server or resolver moved; none: the unit fails and the workstation locks down)
+2026-11-21T10:57:44 iso5-cli1 100635 level 12  domain with at least two labels)) ended at 2026-11-21T17:53:40Z; the egress table is loaded again (lines written during the lock-down may never have reached the manager)
+2026-11-21T10:57:44 iso5-cli1 100636 level 7 1-21T17:50:50Z until 2026-11-21T17:53:40Z (DOMAIN: 'bad domain!' is not a lower-case DNS domain with at least two labels); the last good address file was in use meanwhile

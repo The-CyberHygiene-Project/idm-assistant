@@ -1,0 +1,7 @@
+chp-site >= 0.14.0-10
+chp-templates >= 1.4.0-2
+poppler-utils
+chp-onlyoffice-0.1.0-5.chp.el9.noarch
+2026-11-20T12:00:10-0700 SUBDEBUG Installed: chp-templates-1.4.0-1.chp.el9.noarch
+2026-11-21T05:37:17-0700 SUBDEBUG Upgrade: chp-templates-1.4.0-2.chp.el9.noarch
+2026-11-21T05:37:23-0700 SUBDEBUG Upgraded: chp-templates-1.4.0-1.chp.el9.noarch

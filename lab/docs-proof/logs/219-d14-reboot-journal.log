@@ -1,0 +1,17 @@
+PASS unixd online after reboot
+stage reboot: ALL PASS
+IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY
+ -1 8c4da80bb58b49019659a806cb071069 Fri 2026-11-20 13:23:44 MST Sat 2026-11-21 11:10:44 MST
+  0 e8bb2127b64a4af2ab76e79310b6ab3a Sat 2026-11-21 11:10:56 MST Sat 2026-11-21 11:11:21 MST
+appender lines from the previous boot: 92
+1
+drwxr-sr-x+ 3 root systemd-journal 46 Nov 21 05:36 /var/log/journal
+[Journal]
+Storage=persistent
+SystemMaxUse=1G
+check 77: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran
+check 79: OK NextCloud egress table present, matches the shipped rules, address file valid
+check 80: OK fapolicyd active and enforcing
+check 81: OK NextCloud DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused) (kn
+check 82: OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinish
+Denied accesses: 0

@@ -1,0 +1,12 @@
+B15 start 2026-11-21T17:35:51Z
+1
+lab01 700
+tmpfs
+sign-in URL printed (redirect_uri http://127.0.0.1:42423/)
+Sign in at Kanidm in the browser (it should open by itself; if not, open this address):
+signed in as lab01 (sign-in ends: about 2026-11-21 18:36 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+EXIT=0
+signed in as lab04 (sign-in ends: about 2026-11-21 18:36 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+EXIT=0
+signed in as lab06 (sign-in ends: about 2026-11-21 18:37 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+EXIT=0

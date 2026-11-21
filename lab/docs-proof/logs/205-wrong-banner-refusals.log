@@ -1,0 +1,41 @@
+## make the two wrong-banner files (lab01): CUI-marked content as FCI_Wrong1, FCI-marked content as CUI_Wrong2
+--- doc check FCI_Wrong1_v0.1-DRAFT.docx
+FCI_Wrong1_v0.1-DRAFT.docx: CUI area (FCI banner)
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: the default header (word/header1.xml) has no FCI banner line
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: the first header (word/header2.xml) has no FCI banner line
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: the default footer (word/footer1.xml) has no FCI banner line
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: the first footer (word/footer2.xml) has no FCI banner line
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: a CUI banner is in the header or footer, but this is an FCI_ document: it carries the FCI banner only (a document that holds CUI is named CUI_)
+  PROBLEM: FCI_Wrong1_v0.1-DRAFT.docx: a CUI designation block (CUI Category) is on page one, but this is an FCI_ document: an FCI document carries no CUI designation block
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Wrong1_v0.1.docx and publish that
+  freshness: no checkout of this document in your working folder (nothing to compare)
+NOT READY
+rc=1
+--- doc mark FCI_Wrong1_v0.1-DRAFT.docx
+refused: FCI_Wrong1_v0.1-DRAFT.docx: after inserting the marks the check still fails (FCI_Wrong1_v0.1-DRAFT.docx: a CUI banner is in the header or footer, but this is an FCI_ document: it carries the FCI banner only (a document that holds CUI is named CUI_); FCI_Wrong1_v0.1-DRAFT.docx: a CUI designation block (CUI Category) is on page one, but this is an FCI_ document: an FCI document carries no CUI designation block); nothing was changed; mark it in the editor
+rc=1
+--- doc check CUI_Wrong2_v0.1-DRAFT.docx
+CUI_Wrong2_v0.1-DRAFT.docx: CUI area (CUI marks)
+  PROBLEM: CUI_Wrong2_v0.1-DRAFT.docx: the default header (word/header1.xml) has no CUI banner line
+  PROBLEM: CUI_Wrong2_v0.1-DRAFT.docx: the default footer (word/footer1.xml) has no CUI banner line
+  PROBLEM: CUI_Wrong2_v0.1-DRAFT.docx: an FCI banner is in the header or footer, but this is a CUI_ document: it carries the CUI banner
+  PROBLEM: CUI_Wrong2_v0.1-DRAFT.docx: the designation block is not on page one: missing 'Controlled by: iso5 Lab Org'; 'CUI Category: CTI'; 'POC: Lab ISSO isso@iso5.lab.test'
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_Wrong2_v0.1.docx and publish that
+  freshness: no checkout of this document in your working folder (nothing to compare)
+NOT READY
+rc=1
+--- doc mark CUI_Wrong2_v0.1-DRAFT.docx
+refused: CUI_Wrong2_v0.1-DRAFT.docx: after inserting the marks the check still fails (CUI_Wrong2_v0.1-DRAFT.docx: an FCI banner is in the header or footer, but this is a CUI_ document: it carries the CUI banner); nothing was changed; mark it in the editor
+rc=1
+de06320e7cad3e54d5b1d8a94c3e64b5bf80271b9885f239ef9fd80b3851d9cb  FCI_Wrong1_v0.1-DRAFT.docx
+b3746c92e5e69bd2f5b28428effbc66121031ae4caf64a097bd35a7124827458  CUI_Wrong2_v0.1-DRAFT.docx
+HTTP 200
+HTTP 200
+#### FCI_Wrong1 (server side)
+raw new: RESULT done: new recorded (ledger entry 61)
+raw approve (lab04): RESULT done: approve recorded (ledger entry 62)
+raw publish (lab01): RESULT refused: refused: the marking check on the server failed: FCI_Wrong1_v0.1.docx: FCI_Wrong1_v0.1.docx: the default header (word/header1.xml) has no FCI banner line; FCI_Wrong1_v0.1.docx: FCI_Wrong1_v0.1.docx: the first header (word/header2.xml) has no FCI banner line; FCI_Wrong1_v0.1.docx: FCI_Wrong1_v0.1.docx: the default footer (word/footer1.xml) has no FCI banner line; FCI_Wrong1_v0.1.docx: FCI_Wrong1_v0.1.docx: the first footer (word/footer2.xml) has no FCI banner line; FCI_Wrong1_v0.1.docx: FCI_Wrong1_v0.1.docx: a CUI banner is in the header or footer, but this is an FCI_ document: 
+#### CUI_Wrong2 (server side)
+raw new: RESULT done: new recorded (ledger entry 63)
+raw approve (lab04): RESULT done: approve recorded (ledger entry 64)
+raw publish (lab01): RESULT refused: refused: the marking check on the server failed: CUI_Wrong2_v0.1.docx: CUI_Wrong2_v0.1.docx: the default header (word/header1.xml) has no CUI banner line; CUI_Wrong2_v0.1.docx: CUI_Wrong2_v0.1.docx: the default footer (word/footer1.xml) has no CUI banner line; CUI_Wrong2_v0.1.docx: CUI_Wrong2_v0.1.docx: an FCI banner is in the header or footer, but this is a CUI_ document: it carries the CUI banner; CUI_Wrong2_v0.1.docx: CUI_Wrong2_v0.1.docx: the designation block is not on page one: missing 'Controlled by: iso5 Lab Org'; 'CUI Category: CTI'; 'POC: Lab ISSO isso@iso5.lab.test'

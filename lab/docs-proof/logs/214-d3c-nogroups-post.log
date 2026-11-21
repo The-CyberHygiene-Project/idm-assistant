@@ -1,0 +1,16 @@
+user lab01 removed
+user lab01 removed
+  - groups:
+  - quota: none
+  - storage:
+17:48:42
+## (c) lab01 (now group-less) POSTs a checkout with its live Bearer
+/bin/bash: line 1: /tmp/doc_api.py: No such file or directory
+HTTP 403
+{"ocs":{"meta":{"status":"failure","statuscode":403,"message":""},"data":{"state":"refused","message":"refused: your NextCloud account has no groups yet: sign in once to NextCloud in the browser (it then takes your groups from Kanidm), then run chp-site doc login and the same command again"}}}
+"message":"chp.ledger.nogroups: a doc-command request from lab01, a NextCloud account with no groups (made by a chp-doc Bearer before any web sign-in?), refused"
+2026-11-21T10:48:52 100634 level 12 NextCloud account with NO groups (made by a chp-doc Bearer, never signed in on the web) sent a doc request: chp.ledger.n
+2026-11-21T10:48:43 iso5-srv.iso5.lab.test rule 100623 level 12: NextCloud: account or group membership changed OUTSIDE Kanidm: User "lab01" removed from group "cui-users"
+2026-11-21T10:48:54 iso5-srv.iso5.lab.test rule 100634 level 12: NextCloud account with NO groups (made by a chp-doc Bearer, never signed in on the web) sent a doc request: chp.ledger.nogroups: a doc-
+## restore lab01's groups by a web sign-in
+SIGNED IN: id=lab01 display='Lab User 1' groups=['chp-users', 'cui-users'] backend=user_oidc

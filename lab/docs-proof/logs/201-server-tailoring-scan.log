@@ -1,0 +1,7 @@
+stock-rc=2
+tailored-rc=0
+stock {'pass': 101, 'fail': 2, 'notselected': 1391, 'notapplicable': 35}
+tailored {'pass': 101, 'fail': 0, 'notselected': 1393, 'notapplicable': 35}
+differences: [('chronyd_client_only', 'fail', 'notselected'), ('sysctl_user_max_user_namespaces', 'fail', 'notselected')]
+stock fails: ['chronyd_client_only', 'sysctl_user_max_user_namespaces']
+EXIT=0

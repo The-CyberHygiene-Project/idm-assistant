@@ -1,0 +1,160 @@
+=== iso5-srv
+stick-attached
+AIDE changes since the baseline: 32 added, 2 removed, 30655 changed
+Explained by signed package updates: 30622 paths in 6 packages
+NOT explained: 67 paths (review every one)
+  added    /etc/sudoers.d/99-lab-adapter
+  added    /root/chp-scan
+  added    /root/chp-scan/iso5-srv.xml
+  added    /root/chp-scan/tailoring.xml
+  added    /root/docs-enable-3.log
+  added    /root/docs-enable-4.log
+  added    /root/docs-enable-5.log
+  added    /root/docs-enable-6.log
+  added    /root/lab-aide-accept-r2.log
+  added    /root/lab-check2.log
+  added    /root/lab-flood.log
+  added    /root/lab-flood2.log
+  added    /root/lab-flood3.log
+  added    /root/lab-i2.log
+  added    /root/lab-j11.log
+  added    /root/lab-nightly.log
+  added    /root/lab-restore.log
+  added    /root/lab-restore2.log
+  added    /root/lab-restore3.log
+  added    /root/ov.out
+  added    /root/rev.out
+  added    /root/ts.out
+  added    /usr/local/sbin/lab-hook
+  added    /var/lib/ssh-ca/keys/lab01.pub
+  added    /var/lib/ssh-ca/keys/lab02.pub
+  added    /var/lib/ssh-ca/keys/lab06.pub
+  added    /var/ossec/etc/rules/chp_nextcloud_rules_canary.xml
+  removed  /root/st.out
+  removed  /root/st.sh
+  changed  /etc/chp/site.conf
+  changed  /etc/chrony.conf
+  changed  /etc/fapolicyd/rules.d
+  changed  /etc/fapolicyd/trust.d/nextcloud
+  changed  /etc/firewalld/zones/public.xml
+  changed  /etc/firewalld/zones/public.xml.old
+  changed  /etc/httpd/conf/httpd.conf
+  changed  /etc/httpd/conf.d/autoindex.conf
+  changed  /etc/httpd/conf.d/ssl.conf
+  changed  /etc/httpd/conf.d/userdir.conf
+  changed  /etc/httpd/conf.d/welcome.conf
+  changed  /etc/ld.so.cache
+  changed  /etc/nextcloud/config.php
+  changed  /etc/selinux/targeted
+  changed  /etc/selinux/targeted/contexts/files
+  changed  /etc/selinux/targeted/contexts/files/file_contexts
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.local
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.local.bin
+  changed  /etc/selinux/targeted/policy
+  changed  /etc/selinux/targeted/policy/policy.33
+  changed  /etc/selinux/targeted/seusers
+  changed  /etc/sudoers.d
+  changed  /etc/systemd
+  changed  /etc/systemd/system/httpd.service.d
+  changed  /etc/systemd/system/php-fpm.service.d
+  changed  /root
+  changed  /root/.cache/kanidm_tokens
+  changed  /root/lab-aide-accept.log
+  changed  /root/lab-repo-upgrade.log
+  changed  /usr/local/sbin
+  changed  /usr/share/chp
+  changed  /var/lib/ssh-ca/keys
+  changed  /var/log
+  changed  /var/ossec/etc/rules
+  changed  /var/ossec/etc/rules/chp_nextcloud_rules.xml
+accepted by D. Shannon: new baseline c92e63b301b4ab89… (recorded in the audit log)
+Pinning the new baseline: plug in the site stick.
+pinned: aide/iso5-srv.txt on the site stick (SHA-512 c92e63b301b4ab89…)
+EXIT=0
+stick-detached
+=== iso5-cli1
+stick-attached
+AIDE changes since the baseline: 150 added, 2 removed, 67 changed
+Explained by signed package updates: 189 paths in 5 packages
+NOT explained: 30 paths (review every one)
+  added    /root/chp-scan
+  added    /root/chp-scan/iso5-cli1.xml
+  added    /root/chp-scan/tailoring.xml
+  added    /root/lab-aide-accept-r2.log
+  added    /root/lab-oo-enable-4.log
+  added    /root/oo-enable-2.log
+  added    /root/oo-enable-3.log
+  added    /root/tc.out
+  added    /usr/share/licenses/chp-templates
+  removed  /root/ws.out
+  removed  /root/ws.sh
+  changed  /etc/chp/site.conf
+  changed  /etc/chrony.conf
+  changed  /etc/ld.so.cache
+  changed  /etc/selinux/targeted
+  changed  /etc/selinux/targeted/contexts/files
+  changed  /etc/selinux/targeted/contexts/files/file_contexts
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs.bin
+  changed  /etc/selinux/targeted/policy
+  changed  /etc/selinux/targeted/policy/policy.33
+  changed  /etc/selinux/targeted/seusers
+  changed  /etc/systemd/system
+  changed  /etc/systemd/system/timers.target.wants
+  changed  /root
+  changed  /root/lab-aide-accept.log
+  changed  /root/lab-repo-upgrade.log
+  changed  /usr/share
+  changed  /usr/share/licenses
+accepted by D. Shannon: new baseline af1b45da9692d177… (recorded in the audit log)
+Pinning the new baseline: plug in the site stick.
+pinned: aide/iso5-cli1.txt on the site stick (SHA-512 af1b45da9692d177…)
+EXIT=0
+stick-detached
+=== iso5-cli2
+stick-attached
+AIDE changes since the baseline: 153 added, 0 removed, 69 changed
+Explained by signed package updates: 189 paths in 5 packages
+NOT explained: 33 paths (review every one)
+  added    /etc/sudoers.d/99-lab-adapter
+  added    /root/chp-scan
+  added    /root/chp-scan/iso5-cli2.xml
+  added    /root/chp-scan/tailoring.xml
+  added    /root/lab-aide-accept-r2.log
+  added    /root/lab-oo-enable-4.log
+  added    /root/oo-enable-2.log
+  added    /root/oo-enable-3.log
+  added    /root/tc.out
+  added    /root/wrb.out
+  added    /root/wrb.sh
+  added    /usr/share/licenses/chp-templates
+  changed  /etc/chrony.conf
+  changed  /etc/ld.so.cache
+  changed  /etc/modprobe.d/tuned.conf
+  changed  /etc/selinux/targeted
+  changed  /etc/selinux/targeted/contexts/files
+  changed  /etc/selinux/targeted/contexts/files/file_contexts
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.bin
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs
+  changed  /etc/selinux/targeted/contexts/files/file_contexts.homedirs.bin
+  changed  /etc/selinux/targeted/policy
+  changed  /etc/selinux/targeted/policy/policy.33
+  changed  /etc/selinux/targeted/seusers
+  changed  /etc/sudoers.d
+  changed  /etc/tuned/active_profile
+  changed  /etc/tuned/ppd_base_profile
+  changed  /etc/tuned/profile_mode
+  changed  /root
+  changed  /root/lab-aide-accept.log
+  changed  /root/lab-repo-upgrade.log
+  changed  /usr/share
+  changed  /usr/share/licenses
+accepted by D. Shannon: new baseline d7a1d2f0e6a2aa41… (recorded in the audit log)
+Pinning the new baseline: plug in the site stick.
+pinned: aide/iso5-cli2.txt on the site stick (SHA-512 d7a1d2f0e6a2aa41…)
+EXIT=0
+stick-detached

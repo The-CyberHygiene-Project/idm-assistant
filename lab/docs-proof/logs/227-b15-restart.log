@@ -1,0 +1,11 @@
+B15 restart 2026-11-21T20:03:45Z
+1
+lab01 700
+tmpfs
+signed in as lab01 (sign-in ends: about 2026-11-21 21:04 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+EXIT=0
+CUI_Notesmd_v0.1.md
+CUI_Plan_v0.1.docx
+CUI_Plan_v0.2.docx
+  PROBLEM: the canonical copy CUI_Plan_v0.1.docx changed since your checkout (or is no longer the current version); check it out again (chp-site doc checkout)
+NOT READY

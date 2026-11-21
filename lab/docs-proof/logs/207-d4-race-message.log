@@ -1,0 +1,18 @@
+closed FCI_Quotedocx_v0.2.docx
+checkout recorded (ledger entry 68)
+edited FCI_Quotedocx_v0.3-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 69)
+checkout recorded (ledger entry 70)
+edited FCI_Quotedocx_v0.3-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 71)
+== lab01
+refused: the current version changed since your checkout: lab06 published CUI/Compliance/FCI_Quotedocx_v0.3.docx as CR-2026-0017 (ledger entry 72), which ended the change you checked out; check out the current version again (chp-site doc checkout) and make your change on it
+rc=1
+== lab06
+published CUI/Compliance/FCI_Quotedocx_v0.3.docx as CR-2026-0017 (ledger entry 72)
+When you are done with it: chp-site doc close FCI_Quotedocx_v0.3.docx
+rc=0

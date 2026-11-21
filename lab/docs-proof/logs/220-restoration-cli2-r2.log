@@ -1,0 +1,9 @@
+lab units: 0
+
+selinux Enforcing; fapolicyd active Denied accesses: 0; egress active; lockdown absent; check83 OK workstation editor: egress table load
+srv: selinux Enforcing; kanidmd active; httpd active; ledger.path active; quarantine 0; immutable 0; conf sha 6c900a76b7aafd2a; /root lab files: ov.out pdf.out rev.out ts.out 
+Maintenance mode is currently disabled
+  - groups:
+    - cui-users
+    - chp-users
+chp-escrow-pending chp-post.log chp-post-nochroot.log chp-scan docs-enable-1.log docs-enable-2.log docs-enable-3.log docs-enable-4.log docs-enable-5.log docs-enable-6.log lab-aide-accept.log lab-aide-accept-r2.log lab-check2.log lab-check-d3b.log lab-check-d3.log lab-check-r2.log lab-d11.log lab-flood2.log lab-flood3.log lab-flood.log lab-i2.log lab-j11.log lab-nightly.log lab-repo-upgrade.log lab-restore2.log lab-restore3.log lab-restore.log lab-scan-tailoring.log openscap_data 

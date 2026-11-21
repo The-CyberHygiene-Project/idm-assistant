@@ -1,0 +1,9 @@
+HTTP 200
+0
+chp-site: refused: --notes is 2001 bytes; the ledger takes at most 2000 bytes (UTF-8: an accented letter is 2 bytes); shorten it and run the command again (nothing was sent)
+rc=2
+0
+3
+## exactly 2000 bytes
+refused: nothing to approve: CUI_Notesmd.md has no checkout or new in this cycle
+rc=1

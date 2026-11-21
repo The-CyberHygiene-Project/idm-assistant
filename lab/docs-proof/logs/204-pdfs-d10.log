@@ -1,0 +1,37 @@
+######## CUI md (D10)
+new recorded (ledger entry 56)
+CUI_Notesmd_v0.1-DRAFT.md: CUI area (CUI marks)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_Notesmd_v0.1.md and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+CUI_Notesmd_v0.1-DRAFT.md: nothing to add (the marks are there)
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 57)
+published CUI/Compliance/CUI_Notesmd_v0.1.md as CR-2026-0015 (ledger entry 58)
+When you are done with it: chp-site doc close CUI_Notesmd_v0.1.md
+publish-rc=0
+== FCI_Quotedocx_v0.1.pdf pages=1
+  page 1 top2: FCI|Title|  bottom3: Versions and approvals are recorded by the document workflow; do not type them here.|FCI||
+  page 1 top2: FCI|Title|  bottom3: Versions and approvals are recorded by the document workflow; do not type them here.|FCI||
+  any 'CUI' line in an FCI pdf: 0
+== FCI_Quotexlsx_v0.1.pdf pages=1
+  page 1 top2: FCI|Title|  bottom3: Versions and approvals are recorded by the document workflow; do not type them here.|FCI||
+  page 1 top2: FCI|Title|  bottom3: Versions and approvals are recorded by the document workflow; do not type them here.|FCI||
+  any 'CUI' line in an FCI pdf: 0
+== FCI_Quotemd_v0.1.pdf pages=1
+  page 1 top2: FCI|# Title|  bottom3: them here.|FCI||
+  page 1 top2: FCI|# Title|  bottom3: them here.|FCI||
+  any 'CUI' line in an FCI pdf: 0
+== CUI_Notesmd_v0.1.pdf pages=1
+  page 1 top2: CUI|Controlled by: iso5 Lab Org|  bottom3: them here.|CUI||
+  page 1 top2: CUI|Controlled by: iso5 Lab Org|  bottom3: them here.|CUI||
+  any 'CUI' line in an FCI pdf: 3
+files/Compliance/FCI_Quotedocx_v0.1.docx|CUI
+files/Compliance/FCI_Quotedocx_v0.1.pdf|CUI
+files/Compliance/FCI_Quotexlsx_v0.1.xlsx|CUI
+files/Compliance/FCI_Quotexlsx_v0.1.pdf|CUI
+files/Compliance/FCI_Quotemd_v0.1.md|CUI
+files/Compliance/FCI_Quotemd_v0.1.pdf|CUI
+files/Compliance/CUI_Notesmd_v0.1.md|CUI
+files/Compliance/CUI_Notesmd_v0.1.pdf|CUI

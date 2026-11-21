@@ -1,0 +1,4 @@
+/etc/chp/site.conf: OK
+/etc/chp/workstation-egress-addr.nft: OK
+lab units: 0; *.good: 0
+selinux Enforcing; fapolicyd active; firewalld active; egress active drop 1 lockdown absent

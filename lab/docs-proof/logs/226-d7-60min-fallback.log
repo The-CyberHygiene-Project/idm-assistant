@@ -1,0 +1,25 @@
+restored (agent stopped) at 18:13:42
+inactive
+Nov 21 11:13:42 iso5-cli1.iso5.lab.test chp-egress-recovered[78876]: EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at 2026-11-21T18:11:47Z (the address file /etc/chp/workstation-egr
+Nov 21 11:13:42 iso5-cli1.iso5.lab.test chp-egress-recovered[78877]: EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-21T18:11:47Z until 2026-11-21T18:13:4
+ls: cannot access '/var/ossec/var/run/wazuh-agentd.state': No such file or directory
+grep: /var/ossec/var/run/wazuh-agentd.state: No such file or directory
+Nov 21 11:13:40.288880 iso5-cli1.iso5.lab.test systemd[1]: Stopping Wazuh agent...
+Nov 21 11:13:40.504343 iso5-cli1.iso5.lab.test env[78554]: Killing wazuh-modulesd...
+Nov 21 11:13:40.537272 iso5-cli1.iso5.lab.test env[78554]: Killing wazuh-logcollector...
+Nov 21 11:13:40.568880 iso5-cli1.iso5.lab.test env[78554]: Killing wazuh-syscheckd...
+Nov 21 11:13:40.603538 iso5-cli1.iso5.lab.test env[78554]: Killing wazuh-agentd...
+Nov 21 11:13:40.634107 iso5-cli1.iso5.lab.test env[78554]: Killing wazuh-execd...
+Nov 21 11:13:41.693131 iso5-cli1.iso5.lab.test env[78554]: Wazuh v4.14.9 Stopped
+Nov 21 11:13:41.694673 iso5-cli1.iso5.lab.test systemd[1]: wazuh-agent.service: Deactivated successfully.
+Nov 21 11:13:41.694849 iso5-cli1.iso5.lab.test systemd[1]: Stopped Wazuh agent.
+Nov 21 11:13:41.695062 iso5-cli1.iso5.lab.test systemd[1]: wazuh-agent.service: Consumed 2min 32.859s CPU time.
+Nov 21 11:13:42.066013 iso5-cli1.iso5.lab.test chp-workstation-egress[78873]: OK egress: reported: EGRESS RECOVERED afte
+Nov 21 11:13:42.066013 iso5-cli1.iso5.lab.test chp-workstation-egress[78873]: OK egress: reported: EGRESS RECOVERED afte
+Nov 21 11:13:42.074335 iso5-cli1.iso5.lab.test systemd[1]: Finished CHP: this workstation may reach only the site server
+active
+status='connected'
+/etc/chp/site.conf: OK
+/etc/chp/workstation-egress-addr.nft: OK
+lab units: 0; *.good: 0
+selinux Enforcing; fapolicyd active; firewalld active; egress active drop 1 lockdown absent; check83 OK workstation editor: egress table loaded as shipped (polic

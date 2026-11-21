@@ -1,0 +1,37 @@
+=== iso5-cli1
+- /etc/chrony.conf: written for the client; chronyd restarted
+- time source: the CHP server 192.168.100.50 only
+rc=0
+2:#chp-time-sync# server 192.168.100.1 iburst
+8:#chp-time-sync# sourcedir /run/chrony-dhcp
+57:server 192.168.100.50 iburst maxpoll 16
+		meta l4proto { tcp, udp } th dport 853 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta l4proto { tcp, udp } th dport 53 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta skuid 997 ip daddr 192.168.100.50 udp dport 123 accept
+		limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS " flags skuid
+^* 192.168.100.50               11   6     7     1    +23us[  +70us] +/-  913us
+Reference ID    : C0A86432 (192.168.100.50)
+Leap status     : Normal
+check 20: OK clock offset 0.000000008s
+OK time source: the CHP server 192.168.100.50
+check 83: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+table inet firewalld table inet chp_workstation_egress === iso5-cli2
+- /etc/chrony.conf: written for the client; chronyd restarted
+- time source: the CHP server 192.168.100.50 only
+rc=0
+2:#chp-time-sync# server 192.168.100.1 iburst
+8:#chp-time-sync# sourcedir /run/chrony-dhcp
+57:server 192.168.100.50 iburst maxpoll 16
+		meta l4proto { tcp, udp } th dport 853 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta l4proto { tcp, udp } th dport 53 limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS-DNS " flags skuid
+		meta skuid 997 ip daddr 192.168.100.50 udp dport 123 accept
+		limit rate 6/minute burst 5 packets log prefix "CHP-WS-EGRESS " flags skuid
+^* 192.168.100.50               11   6     7     2  +1498ns[  -16us] +/-  931us
+Reference ID    : C0A86432 (192.168.100.50)
+Leap status     : Normal
+check 20: OK clock offset 0.000000003s
+OK time source: the CHP server 192.168.100.50
+check 83: OK workstation editor: egress table loaded as shipped (policy drop), no lockdown, sweep timer active
+table inet firewalld table inet chp_workstation_egress NTP packets received       : 8
+NTP packets dropped        : 0
+Command packets received   : 1

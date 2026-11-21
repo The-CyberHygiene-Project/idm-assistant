@@ -1,0 +1,31 @@
+- /etc/chrony.conf: written for the server; chronyd restarted
+- time service: the site subnet 192.168.100.0/24 only (123/udp; owner-approved exception)
+rc=0
+## second run
+- /etc/chrony.conf: unchanged
+- time service: the site subnet 192.168.100.0/24 only (123/udp; owner-approved exception)
+rc=0
+2:server 192.168.100.1 iburst
+28:#allow 192.168.0.0/16
+31:#local stratum 10
+53:# Per : Set port 0 in /etc/chrony.conf
+54:#chp-time-sync# port 0
+57:allow 192.168.100.0/24
+58:bindaddress 192.168.100.50
+59:bindaddress ::1
+60:local stratum 10
+rule family="ipv4" source address="192.168.100.51/32" port port="1514" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.52/32" port port="1514" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.0/24" port port="8443" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.0/24" port port="123" protocol="udp" accept
+rule family="ipv4" source address="192.168.100.51/32" port port="1514" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.0/24" port port="8443" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.52/32" port port="1514" protocol="tcp" accept
+rule family="ipv4" source address="192.168.100.0/24" port port="123" protocol="udp" accept
+0.0.0.0:* 
+unconfined_u:object_r:etc_t:s0 /etc/chrony.conf
+0
+journal: persistent; boots: 2
+192.168.100.50:123 users:(("chronyd",pid=52094,fd=8))
+127.0.0.1:323 users:(("chronyd",pid=52094,fd=6))
+[::1]:323 users:(("chronyd",pid=52094,fd=7))

@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/dshannon/idm-assistant/.claude/worktrees/agent-a330864f750d136c3/lab/iso5/fixtures.py", line 54, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/dshannon/idm-assistant/.claude/worktrees/agent-a330864f750d136c3/lab/iso5/fixtures.py", line 40, in main
+    out = remote.run("srv1", ["expect", "idm-lab/srv1/enrol-user.exp"], stdin=f"{tok}\n{pw}\n{upw}\ntotp\n").stdout
+          ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/dshannon/idm-assistant/.claude/worktrees/agent-a330864f750d136c3/engine/remote.py", line 19, in run
+    return subprocess.run(cmd, **io, capture_output=True, text=True, timeout=timeout, check=check)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['ssh', '-F', '/Users/dshannon/idm-assistant/.claude/worktrees/agent-a330864f750d136c3/lab/iso5/ssh_config', '-o', 'BatchMode=yes', 'srv1', 'expect idm-lab/srv1/enrol-user.exp']' returned non-zero exit status 1.

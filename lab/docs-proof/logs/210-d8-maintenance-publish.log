@@ -1,0 +1,16 @@
+edited CUI_Plan_v0.2-DRAFT.docx
+HTTP 201
+HTTP 200
+approve recorded (ledger entry 74)
+Maintenance mode enabled
+42
+## publish in maintenance mode
+pending: NextCloud is not available right now (HTTP 503: maintenance mode, e.g. the nightly backup) for CUI/Compliance. Run the same command again in a few minutes (nothing was sent)
+rc=3
+0
+42
+Maintenance mode disabled
+## the same command after maintenance
+published CUI/Compliance/CUI_Plan_v0.2.docx as CR-2026-0018 (ledger entry 75); marking warnings (not refused; fix them in the next version): CUI_SecPolicy_v0.7 is cited, but the current version in the Compliance area is v0.8 (a superseded citation)
+When you are done with it: chp-site doc close CUI_Plan_v0.2.docx
+rc=0

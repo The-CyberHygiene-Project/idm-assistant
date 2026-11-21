@@ -1,0 +1,15 @@
+# CUI scan deviations (iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test)
+
+## Failures
+
+| rule | severity | hosts | decision | decided by | reason | title |
+|---|---|---|---|---|---|---|
+| xccdf_org.ssgproject.content_rule_aide_periodic_cron_checking | medium | iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): chp-aide-check.timer daily + 61-aide-stale; the OVAL test accepts only a cron line | Configure Periodic Execution of AIDE |
+| xccdf_org.ssgproject.content_rule_aide_scan_notification | medium | iso5-cli1.iso5.lab.test, iso5-cli2.iso5.lab.test, iso5-srv.iso5.lab.test | accept | D. Shannon (ISSO) | Met by equivalent means (spec §8, 2026-10-12): monitor -> journal + ALERT_HOOK (no MTA on the appliance); the OVAL test accepts only /bin/mail on the cron line | Configure Notification of Post-AIDE Scan Details |
+| xccdf_org.ssgproject.content_rule_chronyd_client_only | low | iso5-srv.iso5.lab.test | accept | D. Shannon (owner/ISSO) | Owner decision 2026-11-20: the CHP server serves time to the site subnet only (123/udp, owner-approved exception); workstations sync from it; the shipped server tailoring chp-server-cui-tailoring.xml unselects this rule on the server ("an acceptable compromise for NIST") | Disable chrony daemon from acting as server |
+
+## Not evaluated
+
+
+**Gate 3: MET** (3 failing rules)
+rc=0

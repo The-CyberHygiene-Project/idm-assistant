@@ -1,0 +1,34 @@
+SSLCertificateFile: file '/etc/pki/nextcloud/chain.pem' does not exist or is empty
+34-    # the app's own 64 MiB check (413) is the control until the lab shows httpd's own 413 here.
+35-    <If "%{REQUEST_URI} =~ m#^/ocs/v[12]\.php/apps/chp_ledger/#">
+36:        LimitRequestBody 100663296
+37-    </If>
+38-    RewriteEngine On
+39-    # /login straight to Kanidm with two user_oidc providers (ISO 0.7.0 Plan 3)
+## 97 MiB to /ocs/v2.php
+HTTP 400
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+## 97 MiB to /ocs/v1.php
+HTTP 200
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":"","totalitems":"","itemsperpage":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a con
+## 64 MiB (decoded) still accepted
+HTTP 400
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not
+192.168.100.52 - - [21/Nov/2026:10:45:04 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 400 198 "-" "CHP plan3 lab api"
+192.168.100.52 - - [21/Nov/2026:10:45:06 -0700] "POST /ocs/v1.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 200 232 "-" "CHP plan3 lab api"
+192.168.100.52 - - [21/Nov/2026:10:45:07 -0700] "POST /ocs/v2.php/apps/chp_ledger/api/v1/request?format=json HTTP/1.1" 400 198 "-" "CHP plan3 lab api"
+22:        <IfModule mod_dav.c>
+33:    # the lab (php-fpm read it); an <If> is merged last, after <Location> and the php handler. Defence in depth only:
+35:    <If "%{THE_REQUEST} =~ m#^POST /ocs/v[12]\.php/apps/chp_ledger/#">
+Syntax OK
+reloaded
+## THE_REQUEST variant: 97 MiB to /ocs/v2.php
+HTTP 400
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can use"}}}
+## THE_REQUEST variant: 97 MiB to /ocs/v1.php
+HTTP 200
+{"ocs":{"meta":{"status":"failure","statuscode":400,"message":"","totalitems":"","itemsperpage":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a con
+## a <Location> LimitRequestBody 1000 probe on a NON-proxied static path is out of scope; restore
+conf restored byte-identical
+Syntax OK
+active

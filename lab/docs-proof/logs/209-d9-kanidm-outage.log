@@ -1,0 +1,11 @@
+## GET /status (from cli2)
+true HTTP 200
+inactive
+17:44:11
+## checkout during the outage
+pending: NextCloud could not check your sign-in because Kanidm cannot be reached (idm.iso5.lab.test could not be reached ([Errno 111] Connection refused)). Run the same command again when Kanidm is back (no new sign-in is needed) (nothing was sent)
+rc=3
+active
+## same command, Kanidm back, no new login
+checkout recorded (ledger entry 73)
+rc=0

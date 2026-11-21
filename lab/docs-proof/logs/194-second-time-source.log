@@ -1,0 +1,9 @@
+200 OK
+^* 192.168.100.50               11   6    17    43  -4256ns[  -51us] +/-  870us
+^? 192.168.100.1                 0   6     0     -     +0ns[   +0ns] +/-    0ns
+check 20: OK clock offset 0.000000012s ALERT time sources other than the CHP server 192.168.100.50: 192.168.100.1 
+CHP-WS-EGRESS IN= OUT=enp1s0 SRC=192.168.100.51 DST=192.168.100.1 LEN=76 TOS=0x00 PREC=0x00 TTL=64 ID=52784 DF PROTO=UDP SPT=43530 DPT=123 LEN=56 UID=
+CHP-WS-EGRESS IN= OUT=enp1s0 SRC=192.168.100.51 DST=192.168.100.1 LEN=76 TOS=0x00 PREC=0x00 TTL=64 ID=65263 DF PROTO=UDP SPT=32815 DPT=123 LEN=56 UID=
+200 OK
+^* 192.168.100.50               11   6    17    46  -4256ns[  -51us] +/-  870us
+check 20 after: OK time source: the CHP server 192.168.100.50
