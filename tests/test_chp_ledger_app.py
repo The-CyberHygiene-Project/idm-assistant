@@ -348,3 +348,16 @@ def test_13a_d3_wazuh_pages_the_audit_line():
     kid = re.search(rf'<rule id="{W.LEDGER_NOGROUPS_RULE}" level="12">(.*?)</rule>', r, re.S).group(1)
     assert f"<if_sid>{W.LEDGER_AUDIT_RULE}</if_sid>" in kid and "chp.ledger.nogroups" in kid
     assert "chp_access_granted" not in kid and "<group>chp_doc_refused,chp_account,</group>" in kid   # fix round 1
+
+
+def test_fixwave_a_i1_text_refuses_c0_c1_and_del():                           # final review A I-1
+    c = code(CTL)
+    t = method(c, "text")
+    assert "preg_match('/[\\x00-\\x1f\\x7f]|\\xc2[\\x80-\\x9f]/', $v) === 1" in t
+    assert "preg_match('//u', $v) !== 1" in t and "strlen($v) > self::MAX_TEXT" in t
+    import re as _r
+    pat = _r.compile(rb"[\x00-\x1f\x7f]|\xc2[\x80-\x9f]")               # the same pattern on UTF-8 bytes
+    for bad in ("a\nb", "\x01", "x\x7f", "c1 \x85"):
+        assert pat.search(bad.encode()), bad
+    for good in ("Geprüft – OK ✅", "é" * 900, "plain"):
+        assert not pat.search(good.encode()), good

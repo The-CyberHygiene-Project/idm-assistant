@@ -3,21 +3,27 @@
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 # chp-nextcloud-backup [backup|restore DIR|keep-days] (root; chp-nextcloud-backup.timer nightly):
-#   backup     the document ledger (under its shared lock) -> maintenance mode on -> pg_dump (peer auth) + rsync of the data directory and /etc/nextcloud into
+#   backup     the document ledger and its unfinished-publish records (under its shared lock) -> maintenance mode on -> pg_dump (peer auth) + rsync of the data directory and /etc/nextcloud into
 #              /backup/nextcloud/<UTC stamp>/ -> maintenance off; keeps DOCUMENTS_BACKUP_DAYS days (from
 #              /etc/chp/documents.conf, default 14); MANIFEST with sha256. The copies hold CUI: mode 0700, root only.
 #              Only a directory with a MANIFEST is a copy (MANIFEST is written last, via rename): a directory left
 #              without one by a killed run (SIGKILL skips the cleanup trap) is neither the --link-dest base nor
 #              counted toward MIN_KEEP, and is deleted at the start of the next run.
-#   restore    the reverse onto a reset server (nextcloud-chp installed, database empty or absent); verifies MANIFEST
+#   restore    the reverse onto a reset server (nextcloud-chp installed, database empty or absent); verifies MANIFEST;
+#              the appender and the nightly check are stopped meanwhile (started again if they were running)
 #   keep-days  print the retention in force
 set -Eeuo pipefail
 CONF=${CHP_DOCUMENTS_CONF:-/etc/chp/documents.conf}
 B=${CHP_NC_BACKUP:-/backup/nextcloud}; D=${CHP_NC_DATA:-/data/nextcloud/data}; OCC=${CHP_OCC:-/usr/bin/occ}
 CHP_SITE=${CHP_SITE:-/usr/bin/chp-site}
 SD=${CHP_DOCS_STATE:-/var/lib/chp/documents}; MIN_KEEP=2
-# the controlled-document ledger (Plan 3): only ledger/ -- never spool/ (Bearer tokens), out/, work/ or quarantine/
+# the controlled-document ledger (Plan 3): only ledger/ and unfinished/ (the durable records of publishes that never
+# ended cleanly: final review A M-1) -- never spool/ (Bearer tokens), out/, work/ or quarantine/
 LEDGER=${CHP_DOCS_LEDGER:-/var/lib/chp-docs/ledger}
+UNFINISHED=${CHP_DOCS_UNFINISHED:-/var/lib/chp-docs/unfinished}
+# what else touches the database or the ledger: stopped for a restore, started again after it if it was running
+# (final review A M-2)
+DOCS_UNITS="chp-docs-ledger.path chp-docs-ledger.service chp-documents-check.timer chp-documents-check.service"
 keep_days() {
   local v; v=$(sed -n 's/^DOCUMENTS_BACKUP_DAYS=//p' "$CONF" 2>/dev/null | head -1)
   case $v in ''|*[!0-9]*|0) v=14 ;; esac
@@ -74,8 +80,12 @@ case ${1:-backup} in
         fi
       fi
       rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"
+      if [ -d "$UNFINISHED" ]; then rsync -aHAX --numeric-ids "$UNFINISHED/" "$o/chp-docs-unfinished/"; fi
     fi
-    occ maintenance:mode --on >/dev/null
+    # bounded (final review A, Task 9 carry): a hung occ must not hold the ledger lock all night; FAILED, the trap
+    # records it and the lock goes with this process
+    timeout 300 "$OCC" maintenance:mode --on >/dev/null \
+      || { log "backup FAILED: occ maintenance:mode --on failed or did not finish in 300 s"; exit 75; }
     exec 8<&- 2>/dev/null || true                         # the appender may run again (occ refuses in maintenance mode)
     runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
     link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
@@ -94,6 +104,8 @@ case ${1:-backup} in
   restore)
     o=${2:?restore DIR}; [ -s "$o/MANIFEST" ] || { echo "no MANIFEST in $o"; exit 1; }
     (cd "$o" && sha256sum --quiet -c MANIFEST) || { echo "MANIFEST check FAILED: not restoring"; exit 1; }
+    was=(); for u in $DOCS_UNITS; do systemctl -q is-active "$u" && was+=("$u"); done
+    systemctl stop $DOCS_UNITS                            # nothing writes the database or the ledger meanwhile
     systemctl stop httpd php-fpm nextcloud-cron.timer
     runuser -u postgres -- psql -qc "DROP DATABASE IF EXISTS nextcloud" -c "CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING 'UTF8'"
     runuser -u postgres -- pg_restore -d nextcloud --no-owner --role=apache < "$o/nextcloud.pgdump"   # stdin: the dir is root-only
@@ -103,7 +115,13 @@ case ${1:-backup} in
     # the ledger only onto a server that has none: a live ledger is never rolled back (verify it against the stick)
     if [ -d "$o/chp-docs-ledger" ]; then
       if [ -s "$LEDGER/ledger.jsonl" ]; then log "restore: kept the existing document ledger $LEDGER (not overwritten)"
-      else install -d -m 0700 "$LEDGER" && rsync -aHAX --numeric-ids "$o/chp-docs-ledger/" "$LEDGER/" && restorecon -R "$LEDGER"; fi
+      else
+        install -d -m 0700 "$LEDGER" && rsync -aHAX --numeric-ids "$o/chp-docs-ledger/" "$LEDGER/" && restorecon -R "$LEDGER"
+        # with the ledger: the unfinished publishes it does not yet resolve (check 82 lists them again)
+        if [ -d "$o/chp-docs-unfinished" ]; then
+          install -d -m 0700 "$UNFINISHED" && rsync -aHAX --numeric-ids "$o/chp-docs-unfinished/" "$UNFINISHED/" && restorecon -R "$UNFINISHED"
+        fi
+      fi
     fi
     restorecon -R /data/nextcloud /etc/nextcloud
     systemctl start php-fpm httpd nextcloud-cron.timer
@@ -112,6 +130,7 @@ case ${1:-backup} in
     # equal the file again, else the nightly check alerts "trust" (lab round 3, D10). Refreshed and read back; no occ
     # call may follow it.
     "$CHP_SITE" documents trust || { log "restore FAILED: the fapolicyd trust entry for /etc/nextcloud/config.php was not refreshed (run chp-site documents trust)"; exit 1; }
+    [ ${#was[@]} -eq 0 ] || systemctl start "${was[@]}"
     log "restored from $o" ;;
   *) echo "usage: chp-nextcloud-backup [backup|restore DIR|keep-days]"; exit 2 ;;
 esac

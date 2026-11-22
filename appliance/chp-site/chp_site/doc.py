@@ -891,6 +891,9 @@ def _sign(env, a, say, kind):
 def _text(opt, v):
     """--notes / --reason as the ledger takes them: at most MAX_TEXT bytes of UTF-8 (P3-D13: refused here in plain
     words, before anything is sent, instead of the server's generic refusal)."""
+    if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in v):
+        raise DocError(f"refused: {opt} has a control character (a line break, a tab or similar); the ledger takes one "
+                       "line of plain text; run the command again (nothing was sent)")
     n = len(v.encode("utf-8", "surrogateescape"))
     if n > MAX_TEXT:
         raise DocError(f"refused: {opt} is {n} bytes; the ledger takes at most {MAX_TEXT} bytes (UTF-8: an accented "

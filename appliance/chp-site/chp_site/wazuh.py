@@ -244,6 +244,11 @@ DOC_QUARANTINE_RULE, DOC_FAILURE_RULE, DOC_UNDO_FAILED_RULE, DOC_PARTIAL_RULE = 
 DOC_UNDONE_RULE, DOC_RESOLVE_RULE, DOC_PROBLEM_RULE, DOC_ENTRY_RULE = "100650", "100651", "100652", "100653"
 DOC_OTHER_RULE = "100654"
 DOC_RECORD_FAILED_RULE = "100655"                        # round 2 (c): the durable unfinished record
+DOC_PURGED_RULE = "100656"                               # final review A M-8: root purged the quarantine (level 7)
+# the rows the daily review lists from the verified ledger itself (publications, overrides): their alerts are not
+# repeated as "intrusions" (final review A M-3); the appender's other alerts are shown as kind "documents"
+DOC_LEDGER_LISTED_RULES = frozenset({DOC_APPROVE_RULE, DOC_OVERRIDE_RULE, DOC_PUBLISH_RULE, DOC_RESOLVE_RULE,
+                                     DOC_ENTRY_RULE, DOC_ROUTINE_RULE})
 DOCS_DECODER = "chp-docs-ledger"                         # = doc_ledger.IDENT (not imported: keep this module light)
 DOCS_DECODERS_FILE = "chp_docs_decoders.xml"
 # Wazuh's stock JSON decoder does not take a JSON body behind a syslog header (wazuh-logtest 4.14.7 on aero, Plan 3
@@ -600,7 +605,7 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
   </rule>
   <rule id="{DOC_PROBLEM_RULE}" level="7">
     <if_sid>{DOC_BASE_RULE}</if_sid>
-    <field name="event" type="pcre2">^(head-write-failed|result-write-failed|result-not-written|spool-unlink-failed|quarantine-record-failed|unfinished-clear-failed)$</field>
+    <field name="event" type="pcre2">^(head-write-failed|result-write-failed|result-not-written|spool-unlink-failed|quarantine-record-failed|unfinished-clear-failed|start-marker-clear-failed)$</field>
     <description>Document ledger appender problem: $(event): $(error)</description>
   </rule>
   <!-- level 12: the durable unfinished-publish record (/var/lib/chp-docs/unfinished) could not be written. At the start
@@ -614,7 +619,12 @@ NEXTCLOUD_RULES = f"""<!-- Managed by chp-site documents enable (ISO 0.7.0 desig
     <description>Document ledger: the unfinished-publish record could NOT be written ($(stage)): $(error)</description>
     <group>chp_doc_appender,</group>
   </rule>
-  <!-- last: every other event of the appender (refused, retry, budget-reached, quarantine-purged, an unknown one) is
+  <rule id="{DOC_PURGED_RULE}" level="7">
+    <if_sid>{DOC_BASE_RULE}</if_sid>
+    <field name="event">^quarantine-purged$</field>
+    <description>Document ledger quarantine PURGED by root: $(count) record(s) removed</description>
+  </rule>
+  <!-- last: every other event of the appender (refused, retry, budget-reached, an unknown one) is
        stored at 3. The base is level 15 only so that it is tried before Wazuh's stock syslog rules (logtest 4.14.7:
        an error text "No space left on device" was taken by stock rule 1007, level 7, ahead of a level-3 base; a line
        over 1 KiB would be taken by 1003); every line ends in one of its children, never at 15 -->

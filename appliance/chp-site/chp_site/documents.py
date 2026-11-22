@@ -1333,13 +1333,18 @@ def q_shares(storages, limit=LIST_MAX + 1):
         + (f" ORDER BY sh.id LIMIT {int(limit)}" if limit is not None else "")
 
 
-def sql_runner(run):
+def sql_runner(run, timeout=None):
     """The real database: one query as the apache user over the socket (peer authentication, no password), the rows
-    returned as JSON by PostgreSQL itself (json_agg), so names with any character in them arrive intact."""
+    returned as JSON by PostgreSQL itself (json_agg), so names with any character in them arrive intact. timeout
+    (seconds; the ledger appender's, which holds the ledger lock: final review A I-2): psql killed, SiteError."""
     def q(query):
         wrapped = f"SELECT coalesce(json_agg(t), '[]'::json) FROM ({query}) t"
-        r = run(["runuser", "-u", "apache", "--", "psql", "-d", "nextcloud", "-qtAX", "-v", "ON_ERROR_STOP=1", "-c",
-                 wrapped], capture_output=True, text=True)
+        argv = ["runuser", "-u", "apache", "--", "psql", "-d", "nextcloud", "-qtAX", "-v", "ON_ERROR_STOP=1", "-c",
+                wrapped]
+        try:
+            r = run(argv, capture_output=True, text=True, **({"timeout": timeout} if timeout else {}))
+        except subprocess.TimeoutExpired:
+            raise SiteError(f"psql timed out after {timeout} s") from None
         if r.returncode != 0:
             why = (r.stderr or r.stdout or f"exit {r.returncode}").strip().splitlines()
             raise SiteError(f"psql failed: {(why[-1] if why else '')[:200]}")

@@ -649,3 +649,24 @@ def test_unfinished_record_events_are_alerted():                         # Task 
             (w.DOC_RECORD_FAILED_RULE, 12)
     assert _level(x, _dl("unfinished-clear-failed", request_id="0" * 32, error="EACCES")) == (w.DOC_PROBLEM_RULE, 7)
     assert w.DOC_RECORD_FAILED_RULE in w.NEXTCLOUD_RULE_IDS
+
+
+def test_fixwave_a_m8_purge_and_marker_clear_are_level_7():                     # final review A M-8
+    x = w.NEXTCLOUD_RULES
+    assert _level(x, _dl("quarantine-purged", count=2)) == (w.DOC_PURGED_RULE, 7)
+    assert _level(x, _dl("start-marker-clear-failed", error="EACCES")) == (w.DOC_PROBLEM_RULE, 7)
+    assert _re.findall(r'<rule id="(\d+)"', x)[-1] == w.DOC_OTHER_RULE
+
+
+def test_fixwave_a_i1_a_shortened_override_line_still_pages():                  # final review A I-1
+    import json as _json
+    from chp_site import doc_ledger as dl
+    e = {"seq": 3, "ts": "2026-11-19T10:00:00Z", "kind": "override", "user": "lab02", "auth": "bearer",
+         "kanidm_sub": "s", "session_id": "x", "request_id": "0" * 32, "doc": "12/CUI_SSP.docx", "file_id": 44,
+         "path": "CUI/Compliance/CUI_SSP_v1.1.docx", "sha256": "a" * 64, "cycle": 1, "prev": "b" * 64,
+         "reason": "\x01" * 2000, "notes": "\x01" * 2000}
+    line = dl._journal_line({"event": "ledger", **e})
+    assert line is not None and len(line.encode()) <= dl.JOURNAL_MAX < dl.JOURNAL_SIZE
+    rec = _json.loads(line)
+    assert rec["kind"] == "override" and "2000 bytes, sha256" in rec["reason"] and "2000 bytes" in rec["notes"]
+    assert _level(w.NEXTCLOUD_RULES, _dl(rec.pop("event"), **rec)) == (w.DOC_OVERRIDE_RULE, 12)

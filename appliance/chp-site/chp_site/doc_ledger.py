@@ -69,6 +69,8 @@ MAX_TEXT = 2000
 MAX_TOKEN = 16384
 TIMEOUT = 10
 OCC_TIMEOUT = 120                 # per occ call; a publish makes at most 7 writes and reads
+SQL_TIMEOUT = 45                  # per psql query (final review A I-2: the ledger lock is held meanwhile)
+MAX_READ = 64 * 1024 * 1024       # a canonical file read back (the publish cap, chp_ledger MAX_CONTENT)
 BUDGET = 600                      # process() starts no new request after this many seconds: the rest wait for the
                                   # next start (the path unit triggers again while spool files remain), so a request is
                                   # never cut off by the unit's TimeoutStartSec (45 min > BUDGET + one worst case)
@@ -143,6 +145,11 @@ class LedgerBusy(LedgerError):
 
 class _Refuse(Exception):
     pass
+
+
+class _UndoIncomplete(Exception):
+    """An unexpected error in a publish whose undo could not be completed (final review A I-2): its text starts with
+    UNDO INCOMPLETE, so the quarantine record and the owner's refusal say so (never "nothing was published")."""
 
 
 class _Retry(Exception):
@@ -242,20 +249,56 @@ def _chown_apache(p):
     os.chown(p, 0, grp.getgrnam("apache").gr_gid)
 
 
+JOURNAL_SIZE = 16384               # logger --size
+JOURNAL_MAX = 16000                # a line longer than this is shortened (room for logger's own header)
+
+
+def _shortened(v):
+    b = v.encode("utf-8", "surrogatepass") if isinstance(v, str) else json.dumps(v).encode()
+    return f"(shortened for the journal: {len(b)} bytes, sha256 {_sha(b)}; the full text is in the ledger)"
+
+
+def _journal_line(rec):
+    """The JSON line for logger, always at most JOURNAL_MAX bytes when it can be (final review A I-1: logger --size
+    cuts a longer line SILENTLY, exit 0, and a cut JSON line matches no Wazuh rule, so an override's 100643 alert was
+    lost). First reason and notes, then any other long text, are replaced by their size and sha256 (the ledger keeps
+    them); the event, kind, user and path stay, so the rules still match. None: it still does not fit."""
+    line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+    if len(line.encode()) <= JOURNAL_MAX:
+        return line
+    rec = dict(rec)
+    for k in ("reason", "notes"):
+        if k in rec and rec[k] not in (None, ""):
+            rec[k] = _shortened(rec[k])
+    line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+    if len(line.encode()) > JOURNAL_MAX:
+        for k, v in list(rec.items()):
+            if k not in ("event", "kind") and len(json.dumps(v).encode()) > 256:
+                rec[k] = _shortened(v)
+        line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+    return line if len(line.encode()) <= JOURNAL_MAX else None
+
+
 def journal(rec):
     """One JSON line to the journal with SYSLOG_IDENTIFIER=chp-docs-ledger. Never a token or file bytes (callers
-    pass entries and short records only). logger's 1 KiB default would cut a long entry: --size. A logger that fails
-    is never silent (Task 11a item 6b): the line goes to stderr, which systemd puts in the unit's journal
-    (journalctl -u chp-docs-ledger); a caller's flow is never changed by it."""
-    line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
-    try:
-        r = subprocess.run(["logger", "-t", IDENT, "--size", "16384", "--", line], check=False, timeout=10)
-        why = None if r.returncode == 0 else f"exit {r.returncode}"
-    except (OSError, subprocess.SubprocessError) as e:
-        why = f"{type(e).__name__}: {e}"
+    pass entries and short records only). logger's 1 KiB default would cut a long entry: --size; a line that would
+    still be cut is shortened first (_journal_line), and one that cannot be is never handed to logger (its cut would
+    be silent) but goes to stderr. A logger that fails is never silent (Task 11a item 6b): the line goes to stderr,
+    which systemd puts in the unit's journal (journalctl -u chp-docs-ledger); a caller's flow is never changed by it."""
+    line = _journal_line(rec)
+    if line is None:
+        line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+        why = f"the line is {len(line.encode())} bytes, longer than logger takes ({JOURNAL_SIZE})"
+    else:
+        try:
+            r = subprocess.run(["logger", "-t", IDENT, "--size", str(JOURNAL_SIZE), "--", line], check=False,
+                               timeout=10)
+            why = None if r.returncode == 0 else f"exit {r.returncode}"
+        except (OSError, subprocess.SubprocessError) as e:
+            why = f"{type(e).__name__}: {e}"
     if why is not None:
         try:
-            print(f"{IDENT}: logger failed ({why[:200]}); the journal line was: {line[:16384]}", file=sys.stderr,
+            print(f"{IDENT}: logger failed ({why[:200]}); the journal line was: {line[:JOURNAL_SIZE]}", file=sys.stderr,
                   flush=True)
         except (OSError, ValueError):
             pass
@@ -574,7 +617,7 @@ def _hold(ctx, p, err):
         if stat.S_ISREG(os.lstat(dest).st_mode):
             os.chmod(dest, 0o600)
             _held_record(ctx, p.name, dest, err)          # fix round 1, m1: the Bearer token goes at once
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, RecursionError) as e:
         note = f"; it still holds its Bearer token until purge-quarantine (rewrite failed: {str(e)[:80]})"
     _safe(ctx.journal, {"event": "quarantine", "request_id": p.name[:32] if REQ_NAME.fullmatch(p.name) else None,
                         "user": None, "why": f"the spool file {_clean(p.name, 80)} could not be deleted "
@@ -593,7 +636,7 @@ def _held_record(ctx, name, dest, err):
             n += len(chunk)
     try:
         req = json.loads(head) if n <= MAX_SPOOL else None
-    except ValueError:
+    except (ValueError, RecursionError):
         req = None
     rec = {"held_from": name, "held_at": _ts(ctx.now()), "original_sha256": h.hexdigest(), "bytes": n,
            "why": f"could not be deleted from the spool ({str(err)[:200]})",
@@ -975,6 +1018,19 @@ def unresolved(records, entries, now, grace=PENDING_GRACE, files=()):
     return sorted(out, key=lambda p: p["at"])
 
 
+def _control(c):
+    """A C0 or C1 control character, or DEL (final review A I-1: refused in reason and notes, as chp_ledger does)."""
+    return ord(c) < 32 or 127 <= ord(c) <= 159
+
+
+def _text_ok(v):
+    """reason / notes as chp_ledger takes them: UTF-8 text of at most MAX_TEXT bytes with no control character."""
+    try:
+        return isinstance(v, str) and len(v.encode()) <= MAX_TEXT and not any(_control(c) for c in v)
+    except UnicodeEncodeError:                            # a lone surrogate: not text
+        return False
+
+
 def _clean(x, n=300):
     return "".join(" " if ord(c) < 32 or 127 <= ord(c) <= 159 else c for c in str(x))[:n]
 
@@ -996,7 +1052,7 @@ def resolve(ctx, request_id, reason, *, operator, records, now=None):
     if not isinstance(request_id, str) or not re.fullmatch(r"[0-9a-f]{32}", request_id):
         raise SiteError("resolve needs the request id (32 hex) that chp-site doc-ledger pending prints")
     reason = (reason or "").strip()
-    if not reason or len(reason.encode()) > MAX_TEXT or any(ord(c) < 32 or ord(c) == 127 for c in reason):
+    if not reason or not _text_ok(reason):
         raise SiteError(f"resolve needs a --reason: what was checked and done (one line, at most {MAX_TEXT} bytes)")
     now = ctx.now() if now is None else now
     with _Ledger(ctx) as led:
@@ -1021,13 +1077,15 @@ def resolve(ctx, request_id, reason, *, operator, records, now=None):
 
 
 def pending(ctx, records_fn=None, now=None):
-    """chp-site doc-ledger pending: (the unresolved publishes, or raises LedgerError / LedgerBusy). Reads the ledger,
-    the durable records and the journal under the shared lock, so no request is half-way while it looks."""
+    """chp-site doc-ledger pending: (the unresolved publishes, or raises LedgerError / LedgerBusy). Reads the ledger
+    and the durable records under the shared lock, so no request is half-way while it looks. The journal is read
+    BEFORE the lock (final review A M-6: journalctl can take long, and the appender waits for the lock meanwhile): a
+    publish that starts after it has its durable record, and one that ends meanwhile has its entry in the ledger."""
     records_fn = records_fn or journal_records
+    recs = records_fn()
     with _Shared(ctx.ledger):
         entries = read(ctx.ledger, ctx.head)
         files = unfinished_records(ctx)
-        recs = records_fn()
     return unresolved(recs, entries, ctx.now() if now is None else now, files=files)
 
 # ---------- one request ----------
@@ -1060,7 +1118,7 @@ def _shape(r):
         return "sha256 is missing or not 64 hex"
     for f in ("reason", "notes"):
         v = r.get(f)
-        if v is not None and (not isinstance(v, str) or len(v.encode()) > MAX_TEXT or "\0" in v):
+        if v is not None and not _text_ok(v):
             return f"{f} is not valid text"
     for f in ("content", "pdf_content"):
         v = r.get(f)
@@ -1093,7 +1151,7 @@ def process_one(spool_path, ctx=None):
             return Result("refused", "the request is gone", None)
         try:
             req = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):              # RecursionError: nested too deep (final review A M-7)
             return _quarantine(ctx, p, raw, _UNPARSED, "not valid JSON")
         if not isinstance(req, dict):
             return _quarantine(ctx, p, raw, req, "not a JSON object")
@@ -1181,7 +1239,7 @@ def _set_aside(ctx, p, why, *, event="quarantine", answer=True):
             return Result("refused", "the request is gone", None)
         try:
             req = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError):
             req = _UNPARSED
         if isinstance(req, dict) and req.get("request_id") != p.name[:32]:
             answer = False                                # never a result under an id the file does not name
@@ -1248,7 +1306,7 @@ def _defer(ctx, p, why):
         try:
             raw = _read_spool(p)
             req = json.loads(raw) if raw is not None else None
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             req = None
         user = req.get("user") if isinstance(req, dict) and req.get("request_id") == rid else None
         ok_user = isinstance(user, str) and USER.fullmatch(user)
@@ -1269,10 +1327,10 @@ def _defer(ctx, p, why):
 def _answer(ctx, rid, user, state, message, entry=None):
     try:
         if not _write_result(ctx, rid, user, state, message, entry):
-            ctx.journal({"event": "result-not-written", "request_id": rid, "user": user,
-                         "why": "the result belongs to another user"})
+            _safe(ctx.journal, {"event": "result-not-written", "request_id": rid, "user": user,
+                                "why": "the result belongs to another user"})
     except Exception as err:                              # noqa: BLE001 - after an append: still "done"
-        ctx.journal({"event": "result-write-failed", "request_id": rid, "error": str(err)[:200]})
+        _safe(ctx.journal, {"event": "result-write-failed", "request_id": rid, "error": str(err)[:200]})
     return Result(state, message, entry)
 
 
@@ -1396,7 +1454,7 @@ def _prior(ctx, rid, user, prior):
 
 
 def _broken(ctx, rid, user, err):
-    ctx.journal({"event": "ledger-broken", "request_id": rid, "error": str(err)[:300]})
+    _safe(ctx.journal, {"event": "ledger-broken", "request_id": rid, "error": str(err)[:300]})
     return _answer(ctx, rid, user, "refused", "refused: the document ledger does not verify, so nothing can be "
                                               "recorded; the ISSO must restore it (chp-site doc-ledger verify)")
 
@@ -1543,9 +1601,28 @@ def _current(ctx, folder, series, exclude=None):
     return out
 
 
+def _reader_of(ctx, folder, name):
+    """The current non-PDF document whose reader PDF `name` is (same name, .pdf), or None (final review A M-10: a
+    reader copy is made by publish from its document; checked out, created or published as a document of its own it
+    would start a second series under the reader's name)."""
+    stem, ext = os.path.splitext(name)
+    if ext.lower() != ".pdf":
+        return None
+    for n in ctx.store.children(folder):
+        nst, next_ = os.path.splitext(_nfc(n.name))
+        if n.type == "file" and nst == stem and next_.lower() != ".pdf":
+            return n
+    return None
+
+
 def _decide_and_act(ctx, led, r, ident, undo, warn=None):
     t = _target(ctx, r)
     kind, user = r["kind"], r["user"]
+    if kind in ("checkout", "new", "publish"):
+        doc = _reader_of(ctx, t.folder, t.name)
+        if doc is not None:
+            raise _Refuse(f"refused: {t.name} is the reader copy of {doc.name} (publish makes it from that document), "
+                          f"not a document of its own; check out {doc.name} instead")
     cycle, cyc = _cycle(led.entries, t.doc)
     starts = [i for i, e in enumerate(cyc) if e["kind"] in ("new", "checkout")]
     authors = _authors(cyc)
@@ -1853,10 +1930,14 @@ def _publish(ctx, led, r, t, e, cyc, starts, authors, undo, warn):
             msg = str(err) if isinstance(err, _Refuse) else (f"refused: the document server could not publish "
                                                              f"({str(err)[:300]}); nothing was published")
         raise _Refuse(msg) from None
-    except Exception:
+    except Exception as err:
         failed = _undo(s, undo)
         undo.clear()
         _journal_undo(ctx, r, t.doc, failed)
+        if failed:                                        # quarantined as an internal error: the words must stay
+            raise _UndoIncomplete(f"UNDO INCOMPLETE ({'; '.join(failed)[:300]}): parts of the publish may be in the "
+                                  f"area; the ISSO must check it; cause {type(err).__name__}: {str(err)[:200]}") \
+                from err
         raise
 
     # 9. the entry (appended by the caller, still under the lock)
@@ -1934,8 +2015,20 @@ class OccStore:
         self.run = run
         # occ: in its own process group, killed whole at the timeout (a test's fake `run` stands in for both)
         self.occ_run = occ_run or (_run_group if run is subprocess.run else run)
-        self.sql = sql or D.sql_runner(run)
+        self._sql = sql or D.sql_runner(run, timeout=SQL_TIMEOUT)
         self.data = Path(data)
+
+    def sql(self, query):
+        """documents.sql_runner raises SiteError (psql failed, timed out, or answered no JSON): a database blip is a
+        StoreError like any other NextCloud failure (retry/undo paths), never a quarantine (final review A I-2)."""
+        try:
+            return self._sql(query)
+        except StoreError:
+            raise
+        except SiteError as e:
+            raise StoreError(f"the NextCloud database could not be read ({str(e)[:200]})") from None
+        except subprocess.TimeoutExpired:
+            raise StoreError(f"the NextCloud database did not answer in {SQL_TIMEOUT} s") from None
 
     def _occ(self, *argv, data=b""):
         if not self.user:
@@ -1986,16 +2079,40 @@ class OccStore:
         return [n for n in (self.info(int(r["fileid"])) for r in rows) if n is not None]
 
     def read(self, fid):
+        """The canonical bytes, opened one path component at a time from the team folders' root with O_NOFOLLOW (a
+        symbolic link anywhere below it is refused, never followed), a regular file only, at most MAX_READ bytes
+        (final review A M-5)."""
         row = self._row(fid)
         if row is None:
             raise StoreError(f"file id {fid} is not in the file cache")
-        f = self.data / str(int(row["folder_id"])) / row["path"]
+        parts = [str(int(row["folder_id"]))] + str(row["path"]).split("/")
+        if any(x in ("", ".", "..") for x in parts):
+            raise StoreError(f"cannot read {row['path']} (not a plain path in the file cache)")
+        fds = []
         try:
-            fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
-        except OSError as e:
-            raise StoreError(f"cannot read {row['path']} ({e.strerror or e})") from None
+            try:
+                fds.append(os.open(self.data, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)))
+                for x in parts[:-1]:
+                    fds.append(os.open(x, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_DIRECTORY", 0),
+                                       dir_fd=fds[-1]))
+                fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0), dir_fd=fds[-1])
+            except OSError as e:
+                why = "a symbolic link (not followed)" if e.errno in (errno.ELOOP, errno.ENOTDIR) else \
+                    (e.strerror or str(e))
+                raise StoreError(f"cannot read {row['path']} ({why})") from None
+        finally:
+            for d in fds:
+                os.close(d)
         with os.fdopen(fd, "rb") as fh:
-            return fh.read()
+            st = os.fstat(fh.fileno())
+            if not stat.S_ISREG(st.st_mode):
+                raise StoreError(f"cannot read {row['path']} (not a regular file)")
+            if st.st_size > MAX_READ:
+                raise StoreError(f"cannot read {row['path']} (larger than {MAX_READ} bytes)")
+            data = fh.read(MAX_READ + 1)
+        if len(data) > MAX_READ:
+            raise StoreError(f"cannot read {row['path']} (larger than {MAX_READ} bytes)")
+        return data
 
     def _view(self, node):
         return f"/{self.user}/files/{node.path}"

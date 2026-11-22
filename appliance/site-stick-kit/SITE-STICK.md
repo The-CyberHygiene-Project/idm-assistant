@@ -223,6 +223,10 @@ encrypted disk, or the commands refuse. Run `chp-site doc` as yourself, never as
    and sends them. The server then writes the new version and its PDF to the Compliance area, moves the old version
    to Superseded, tags the files, and gives the change a number (`CR-<year>-<number>`). `publish` never renames
    anything and refuses a `-DRAFT` name. It refuses a file larger than 64 MiB together with its PDF.
+   The approved document is the record. The reader PDF is checked for its marks, and its sha256 is in the ledger
+   entry (`pdf_sha256`), but the server does not yet check that its text is the approved document's (known issue,
+   POA&M residual): if a reader PDF and its document ever disagree, the document counts. The reader PDF is not a
+   document of its own: `checkout`, `new` and `publish` refuse it by name.
 9. Clean up: `chp-site doc close CUI_MyPolicy_v1.1.docx`. It removes your working copy and ONLYOFFICE's recovery
    copies. It refuses while ONLYOFFICE is running, so quit ONLYOFFICE first.
 
@@ -255,7 +259,7 @@ The upload is an ordinary work file, tagged and audited. The approver removes th
 Approvers are the accounts in `DOC_APPROVER_ACCOUNTS`, and the ISSO's account in `DOC_ISSO_ACCOUNT`.
 
 - Sign in as yourself (`chp-site doc login`), then `chp-site doc approve <file>`. Add `--notes "text"` if you want a
-  note in the record (at most 2000 bytes; an accented letter counts 2; so does a longer `--reason`).
+  note in the record (one line, at most 2000 bytes; an accented letter counts 2; the same holds for `--reason`).
 - Your local marking check runs first. A file that fails it is not sent.
 - **You cannot approve a change you are an author of.** The author is whoever created the document or checked it
   out since the last publish.
@@ -466,6 +470,7 @@ hand. Run `publish` again once `chp-site documents status` no longer says DEGRAD
 | 100648 | 12 | The ledger may end in a partial line. |
 | 100655 | 12 | The record of an unfinished publish could not be written. |
 | 100650, 100651, 100652 | 7 | A publish was undone, an unfinished publish was resolved, an appender problem. |
+| 100656 | 7 | Root purged the quarantine (`chp-site doc-ledger purge-quarantine`). |
 | 100629 | 12 | The Kanidm sign-in added an account to `admin` or `cui-users`. It pages once for each new CUI reader's first sign-in. |
 | 100623 | 12 | An account or group was changed inside NextCloud. The **first** `documents enable` raises it five times: the break-glass admin `ncadmin` is made and added to `admin` (2), and the publish account `chp-publisher` is made and added to `chp-users` and `cui-users` (3). Tell the ISSO first. |
 | 100609 | 12 | `chp-canary` was enabled outside 03:05-03:45. Running `chp-site documents check` by hand does this. |

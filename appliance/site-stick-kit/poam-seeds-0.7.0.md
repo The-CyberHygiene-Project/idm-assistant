@@ -27,4 +27,9 @@ them.
 | T-15 | Rev 2 | 3.1.1, 3.5.2 | Three NextCloud accounts live outside Kanidm: `chp-publisher` (the root appender's account, which alone writes the Compliance and Superseded areas, and is in `cui-users`), `chp-canary` (the nightly share test, disabled between runs) and `ncadmin` (the break-glass administrator). The first two have no usable password (the publisher's is reset to a random value that nobody keeps, at every `chp-site documents enable`), so no one can sign in as them. `ncadmin` has a usable password, kept in the site stick's `escrow/` folder; every sign-in as `ncadmin` pages at level 12. *Seeded by the template: confirm, adapt or close.* | Name an owner for all three; check 81 already accepts exactly the publisher and the canary in `cui-users` and flags any other; keep the stick safe; review all three at every access review. | {{poam.due_t15}} | {{roles.administrator}} | Open |
 | T-16 | Rev 2 | 3.8.4 | The CUI banner check reads text only: a banner in a white or 1-point font passes. It does not pass when it is missing, in a text box, hidden or deleted text, or in the wrong place. *Seeded by the template: confirm, adapt or close.* | Record the residual; add a visual check to the approver's review of each controlled document. | {{poam.due_t16}} | {{roles.security_officer}} | Open |
 
+Residual not yet in a seeded row (final review A I-3; Plan 4 adds the check): the reader PDF of a published
+document is checked for its marks and its sha256 is in the ledger, but it is not compared with the approved
+document's text, so its content rests on the author. The approved document is the record. A site that wants this
+tracked adds it as a P- item under 3.8.4 (owner: `{{roles.security_officer}}`).
+
 Add the site's own items below the seeded ones, numbered P-01, P-02 and so on.

@@ -24,6 +24,12 @@ DAY = 86400
 SCANS = (("yara_recent", 300, "73-yara-scan"), ("yara_full", 7 * DAY, "73-yara-scan"),
          ("suricata_stats", 60, "74-suricata"), ("aide_check", DAY, "61-aide-stale"))
 NC_RULES = _wazuh.NEXTCLOUD_RULE_IDS                           # derived from the rules wazuh.py defines
+# the document workflow's own rules (final review A M-3): not NextCloud intrusions. Those the review lists from the
+# verified ledger (publications, overrides) are left out here; the appender's faults (quarantine, failures,
+# undo incomplete, purge) and chp_ledger's group-less account are shown as kind "documents"
+DOC_LISTED = _wazuh.DOC_LEDGER_LISTED_RULES
+DOC_RULES = frozenset(str(i) for i in range(int(_wazuh.DOC_BASE_RULE), int(_wazuh.DOC_PURGED_RULE) + 1)) \
+    | {_wazuh.LEDGER_AUDIT_RULE, _wazuh.LEDGER_NOGROUPS_RULE}
 FUTURE = 300                                                    # a timestamp this far ahead is a clock fault
 KANIDM_CERTS = "/etc/pki/kanidm/"
 
@@ -143,7 +149,11 @@ def _intrusions(alerts, site, ip_host):
         if rid == RECORD_RULE or rid in YARA_OTHER:
             continue
         al = d.get("alert") if isinstance(d.get("alert"), dict) else None
-        if rid in NC_RULES and lvl >= LEVEL_FLOOR:
+        if rid in DOC_LISTED:
+            continue                                    # listed from the ledger (_ledger_items), never twice
+        if rid in DOC_RULES and lvl >= LEVEL_FLOOR:
+            kind, src, target, sig = "documents", None, host, r.get("description", "?")
+        elif rid in NC_RULES and lvl >= LEVEL_FLOOR:
             kind, src, target, sig = "nextcloud", d.get("remoteAddr"), host, r.get("description", "?")
         elif rid in SURICATA_RULES or (al and "suricata" in r.get("groups", [])):
             kind, src, target, sig = "suricata", d.get("src_ip"), d.get("dest_ip"), (al or {}).get("signature", "?")

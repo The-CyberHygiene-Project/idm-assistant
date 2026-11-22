@@ -931,7 +931,7 @@ def test_results_carry_owner_and_mode(env):
     env.checkout("alice", rid=rid)
     res = env.base / "out" / f"{rid}.json"
     assert env.out(rid)["user"] == "alice" and oct(res.stat().st_mode & 0o777) == "0o640"
-    assert "bearer" not in res.read_text().lower() or "tok-" not in res.read_text()
+    assert "bearer_token" not in res.read_text() and "tok-" not in res.read_text()      # no token (was `or`)
 
 
 def test_purge_quarantine_requires_root(env, monkeypatch):
@@ -2127,3 +2127,189 @@ def test_13a_r1_d11_undeletable_strays_are_counted_once_in_the_aggregated_line(e
     L.process(env.ctx)
     q = [j for j in env.journal if j.get("event") == "quarantine"]
     assert len(q) == 2 and "fresh" not in q[0]["why"]
+
+
+# ---------- Task 14: the final review's fix wave (A: server) ----------
+
+@pytest.mark.parametrize("field", ["notes", "reason"])
+@pytest.mark.parametrize("bad", ["\x01" * 2000, "line one\nline two", "tab\there", "c1 \x85 next line", "del \x7f"])
+def test_fixwave_a_i1_control_characters_in_reason_or_notes_are_refused(env, field, bad):
+    ok(env.checkout("alice"))
+    r = env.req("approve", "bob", 100, name="CUI_SSP_v1.1.docx", sha256=sha(V11), **{field: bad})
+    assert r.state == "refused" and f"{field} is not valid text" in r.message and len(env.ledger()) == 1
+
+
+def test_fixwave_a_i1_plain_text_with_letters_and_emoji_is_taken(env):
+    ok(env.checkout("alice"))
+    ok(env.approve("bob", V11, notes="Geprüft – OK ✅ " + "é" * 900))
+
+
+def test_fixwave_a_i1_journal_never_hands_logger_a_line_it_would_cut(monkeypatch, capsys):
+    sent = []
+    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: sent.append(argv) or SimpleNamespace(returncode=0))
+    rec = {"event": "ledger", "kind": "override", "user": "dana", "path": "CUI/Compliance/CUI_SSP_v1.1.docx",
+           "reason": "\x01" * 2000, "notes": "\x01" * 2000}
+    L.journal(rec)
+    line = sent[-1][-1]
+    assert len(line.encode()) <= L.JOURNAL_MAX and json.loads(line)["kind"] == "override"
+    assert sent[-1][:5] == ["logger", "-t", L.IDENT, "--size", str(L.JOURNAL_SIZE)]
+    assert f"sha256 {sha(chr(1).encode() * 2000)}" in json.loads(line)["reason"]
+    # a short line is unchanged
+    L.journal({"event": "ledger", "kind": "approve", "notes": "short"})
+    assert json.loads(sent[-1][-1])["notes"] == "short"
+    # a line that cannot be made to fit is never handed to logger (a cut is silent): it goes to stderr
+    n = len(sent)
+    L.journal({"event": "x", **{f"k{i}": "y" * 200 for i in range(200)}})
+    assert len(sent) == n and "longer than logger takes" in capsys.readouterr().err
+
+
+def _failing_sql(q):
+    raise SiteError("psql failed: connection refused")             # what documents.sql_runner really raises
+
+
+def test_fixwave_a_i2_occstore_turns_a_database_failure_into_a_store_error():
+    s = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=_failing_sql)
+    for call in (lambda: s.info(5), lambda: s.children(5), lambda: s.read(5), lambda: s.tags(5),
+                 lambda: s.put(5, "x", b"x"), lambda: s.move(5, 6)):
+        with pytest.raises(L.StoreError, match="database could not be read"):
+            call()
+
+
+def test_fixwave_a_i2_a_database_blip_is_refused_plainly_not_quarantined(env):   # the reviewer's probe
+    env.ctx.store = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=_failing_sql)
+    rid = "0c" * 16
+    r = env.checkout("alice", rid=rid)
+    assert r.state == "refused" and "could not do it" in r.message and "database" in r.message
+    assert env.quarantine() == [] and env.out(rid)["state"] == "refused"
+    assert not any(j.get("event") == "quarantine" for j in env.journal)
+
+
+def test_fixwave_a_i2_sql_runner_has_a_timeout_and_reports_it():
+    from chp_site import documents as D
+    seen = []
+
+    def run(argv, **kw):
+        seen.append(kw.get("timeout"))
+        raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
+    with pytest.raises(SiteError, match="timed out after 45 s"):
+        D.sql_runner(run, timeout=L.SQL_TIMEOUT)("SELECT 1")
+    assert seen == [45] and 30 <= L.SQL_TIMEOUT <= 60
+    import inspect
+    assert "D.sql_runner(run, timeout=SQL_TIMEOUT)" in inspect.getsource(L.OccStore.__init__)
+
+
+def test_fixwave_a_i2_an_unexpected_error_after_a_failed_undo_keeps_undo_incomplete(env):
+    _ready_to_publish(env)
+    real_tags = env.store.tags
+    env.store.tags = lambda fid: (_ for _ in ()).throw(RuntimeError("boom"))
+    env.store.delete = lambda fid: (_ for _ in ()).throw(L.StoreError("occ files:delete: exit 1"))
+    rid = "0d" * 16
+    r = env.publish("alice", V11, rid=rid)
+    env.store.tags = real_tags
+    assert r.state == "refused" and "UNDO INCOMPLETE" in r.message
+    assert "UNDO INCOMPLETE" in env.out(rid)["message"] and "nothing was published" not in env.out(rid)["message"]
+    assert any(j.get("event") == "publish-undo-failed" for j in env.journal)
+
+
+def test_fixwave_a_m5_read_refuses_links_non_files_and_oversize(tmp_path, monkeypatch):
+    rows = {7: {"fileid": 7, "parent": 100, "name": "x.docx", "path": "files/Compliance/x.docx", "etag": "e",
+                "mimetype": "text/plain", "folder_id": 1, "mount_point": "CUI"}}
+    sql = lambda q: [] if q.startswith("WITH") else [rows[7]]
+    s = L.OccStore({"DOC_PUBLISH_USER": "chp-publisher"}, sql=sql, data=tmp_path)
+    comp = tmp_path / "1/files/Compliance"
+    comp.mkdir(parents=True)
+    (comp / "x.docx").write_bytes(b"ok")
+    assert s.read(7) == b"ok"
+    # a symbolic link in a middle component (files -> elsewhere) is refused, not followed
+    other = tmp_path / "other/Compliance"
+    other.mkdir(parents=True)
+    (other / "x.docx").write_bytes(b"elsewhere")
+    (tmp_path / "1/files").rename(tmp_path / "1/real")
+    (tmp_path / "1/files").symlink_to(tmp_path / "other")
+    with pytest.raises(L.StoreError, match="symbolic link"):
+        s.read(7)
+    (tmp_path / "1/files").unlink()
+    (tmp_path / "1/real").rename(tmp_path / "1/files")
+    # the file itself a link, a FIFO (no hang), "..", too big
+    (comp / "x.docx").unlink()
+    (comp / "x.docx").symlink_to(tmp_path / "other/Compliance/x.docx")
+    with pytest.raises(L.StoreError, match="symbolic link"):
+        s.read(7)
+    (comp / "x.docx").unlink()
+    os.mkfifo(comp / "x.docx")
+    with pytest.raises(L.StoreError, match="not a regular file"):
+        s.read(7)
+    (comp / "x.docx").unlink()
+    rows[7]["path"] = "files/../files/Compliance/x.docx"
+    with pytest.raises(L.StoreError, match="not a plain path"):
+        s.read(7)
+    rows[7]["path"] = "files/Compliance/x.docx"
+    with open(comp / "x.docx", "wb") as f:
+        f.truncate(L.MAX_READ + 1)
+    with pytest.raises(L.StoreError, match="larger than"):
+        s.read(7)
+    assert L.MAX_READ == 64 * 1024 * 1024
+
+
+def test_fixwave_a_m6_pending_reads_the_journal_before_the_lock(env, monkeypatch):
+    order = []
+    real = L._Shared
+
+    class Shared(real):
+        def __enter__(self):
+            order.append("lock")
+            return super().__enter__()
+    monkeypatch.setattr(L, "_Shared", Shared)
+    L.pending(env.ctx, records_fn=lambda: order.append("journal") or [], now=NOW)
+    assert order == ["journal", "lock"]
+
+
+@pytest.mark.parametrize("body", [b"[" * 200000, b'{"a":' * 200000])
+def test_fixwave_a_m7_deeply_nested_json_is_quarantined_not_a_crash(env, body):
+    r = L.process_one(env.spool(body), env.ctx)
+    assert r.state == "refused" and "not valid JSON" in r.message and len(env.quarantine()) == 1
+    # set aside and deferred too (the appender could not start)
+    p = env.spool(body)
+    assert L._set_aside(env.ctx, p, "why").state == "refused" and not p.exists()
+    p = env.spool(body)
+    assert L._defer(env.ctx, p, "why").state == "retry" and not p.exists()
+
+
+def test_fixwave_a_m7_held_record_survives_deep_nesting(env):
+    dest = env.base / "held.json"
+    dest.write_bytes(b"[" * 200000)
+    L._held_record(env.ctx, "x.json", dest, OSError(13, "denied"))
+    assert json.loads(dest.read_text())["request"] == {"unparsed": True}
+
+
+@pytest.mark.parametrize("kind", ["checkout", "new", "publish"])
+def test_fixwave_a_m10_the_reader_pdf_is_not_a_document_of_its_own(env, kind):
+    pdf = next(f for f, n in env.store.nodes.items() if n["name"] == "CUI_SSP_v1.0.pdf")
+    if kind == "checkout":
+        r = env.checkout("alice", fid=pdf)
+    elif kind == "new":
+        r = env.req("new", "alice", 100, name="CUI_SSP_v1.0.pdf")
+    else:
+        env.store.delete(env.doc)
+        env.store.add(100, "CUI_SSP_v1.1.docx", V11)
+        r = env.publish("alice", b"%PDF CUI//BANNER 1.1", name="CUI_SSP_v1.1.pdf", pdf=b"%PDF CUI//BANNER 1.1")
+    refused(r, "reader copy of", "check out")
+    assert env.ledger() == []
+    # a PDF document whose name matches no other document is unchanged
+    assert L._reader_of(env.ctx, 100, "CUI_Other_v1.0.pdf") is None
+
+
+def test_fixwave_a12_broken_and_answer_journal_safely(env):
+    def bad(rec):
+        raise OSError("journal down")
+    env.ctx.journal = bad
+    r = L._broken(env.ctx, "0e" * 16, "alice", L.LedgerError("x"))
+    assert r.state == "refused"
+    monkey = L._write_result
+    try:
+        L._write_result = lambda *a, **k: (_ for _ in ()).throw(OSError("disk"))
+        assert L._answer(env.ctx, "0e" * 16, "alice", "done", "m").state == "done"
+        L._write_result = lambda *a, **k: False
+        assert L._answer(env.ctx, "0e" * 16, "alice", "done", "m").state == "done"
+    finally:
+        L._write_result = monkey

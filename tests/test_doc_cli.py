@@ -930,3 +930,17 @@ def test_13a_r1_a_recorded_checkout_whose_download_fails_is_not_a_refusal(tmp_pa
     env2 = setup(tmp_path / "b")
     rc, out = run(env2, monkeypatch, capsys, "checkout", "CUI_Nothing_v1.0.docx")
     assert rc == 2 and "not found" in out
+
+
+@pytest.mark.parametrize("opt", ["--notes", "--reason"])
+@pytest.mark.parametrize("bad", ["two\nlines", "tab\there", "c1 \x85 x"])
+def test_fixwave_a_i1_control_characters_are_refused_here(tmp_path, monkeypatch, capsys, opt, bad):
+    """Final review A I-1: chp_ledger and the appender refuse a control character in notes/reason (it grew sixfold in
+    the journal line and an override's alert was cut off); the client says so plainly and sends nothing."""
+    env = setup(tmp_path, user="bob")
+    f = tmp_path / "from-alice" / "CUI_SSP_v1.3-DRAFT.docx"
+    f.parent.mkdir()
+    f.write_bytes(MARKED)
+    cmd = "approve" if opt == "--notes" else "override"
+    rc, out = run(env, monkeypatch, capsys, cmd, str(f), opt, bad)
+    assert rc == 2 and "control character" in out and opt in out and not posts(env), out

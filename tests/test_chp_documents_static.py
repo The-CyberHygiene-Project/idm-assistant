@@ -127,16 +127,17 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
 
-def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0, partial=(), flock_rc=0):
+def _backup(tmp, free_kb, stamps, name="backup", rsync_rc=0, partial=(), flock_rc=0, on_rc=0):
     """Run chp-nextcloud-backup with fake occ/runuser/rsync/df/logger; returns (rc, out, calls)."""
     b = tmp / "bin"; b.mkdir(exist_ok=True)
     calls = tmp / "calls"
-    (b / "occ").write_text("#!/bin/bash\necho occ \"$@\" >> " + str(calls) + "\n")
+    (b / "occ").write_text("#!/bin/bash\necho occ \"$@\" >> " + str(calls) + f"\n[ \"$2\" = --on ] && exit {on_rc}\nexit 0\n")
     (b / "runuser").write_text("#!/bin/bash\necho DUMP\n")
     (b / "rsync").write_text("#!/bin/bash\necho rsync \"$@\" >> " + str(calls) + "\nfor a; do last=$a; done; mkdir -p \"$last\"; echo f > \"$last/f\"\nexit " + str(rsync_rc) + "\n")
     (b / "df").write_text(f"#!/bin/bash\necho Filesystem; echo x 1 1 {free_kb} 1% /backup\n")
     (b / "logger").write_text("#!/bin/bash\nexit 0\n")
     (b / "flock").write_text("#!/bin/bash\necho flock \"$@\" >> " + str(calls) + f"\nexit {flock_rc}\n")
+    (b / "timeout").write_text("#!/bin/bash\necho timeout \"$1\" >> " + str(calls) + "\nshift; exec \"$@\"\n")
     for x in b.iterdir():
         x.chmod(0o755)
     B = tmp / "backup"; B.mkdir(exist_ok=True)
@@ -295,3 +296,83 @@ def test_ledger_route_body_limit_covers_the_publish_cap_and_nothing_else():     
     assert "the app's own 64 MiB check is the control" in readme
     php = (D.parent / "nextcloud-chp/chp_ledger/lib/Controller/LedgerController.php").read_text()
     assert "MAX_B64 = 89478488;" in php and "MAX_CONTENT = 67108864;" in php
+
+
+# ---------- Task 14: the final review's fix wave (A M-1, M-2, A12) ----------
+
+def test_fixwave_a_m1_backup_copies_the_unfinished_records_under_the_ledger_lock(tmp_path, monkeypatch):
+    docs = tmp_path / "chp-docs"
+    (docs / "ledger").mkdir(parents=True)
+    (docs / "ledger/ledger.jsonl").write_text("{}\n")
+    (docs / "unfinished").mkdir()
+    (docs / "unfinished" / ("a" * 32)).write_text("{}")
+    monkeypatch.setenv("CHP_DOCS_LEDGER", str(docs / "ledger"))
+    monkeypatch.setenv("CHP_DOCS_UNFINISHED", str(docs / "unfinished"))
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 0, out
+    seq = [ln for ln in calls.splitlines() if ln.startswith(("flock -s", "occ maintenance", "rsync"))]
+    un = [i for i, ln in enumerate(seq) if ln.startswith("rsync") and f"{docs}/unfinished/" in ln]
+    assert len(un) == 1 and seq[un[0]].split()[-1].endswith("/chp-docs-unfinished/")
+    assert seq.index("flock -s -w 900 8") < un[0] < seq.index("occ maintenance:mode --on")
+    b = t("chp-nextcloud-backup")
+    assert "UNFINISHED=${CHP_DOCS_UNFINISHED:-/var/lib/chp-docs/unfinished}" in b
+    assert b.index('"$UNFINISHED/" "$o/chp-docs-unfinished/"') < b.index("exec 8<&-")
+
+
+def test_fixwave_a12_maintenance_on_is_bounded_and_fails_closed(tmp_path):
+    rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"])
+    assert rc == 0 and "timeout 300\nocc maintenance:mode --on" in calls
+    b = t("chp-nextcloud-backup")
+    assert 'timeout 300 "$OCC" maintenance:mode --on' in b
+    # occ hangs / fails: FAILED (the trap), the copy removed, maintenance switched off again
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    rc, out, calls = _backup(bad, 10**9, ["20260101T000000Z"], on_rc=124)          # timeout(1)'s exit on expiry
+    assert rc == 75 and "maintenance:mode --on failed or did not finish in 300 s" in out
+    assert (bad / "st/backup.status").read_text().startswith("FAILED ") and "occ maintenance:mode --off" in calls
+    assert [p.name for p in (bad / "backup").iterdir()] == ["20260101T000000Z"]   # the new copy removed
+
+
+def test_fixwave_a_m2_restore_stops_the_appender_and_check_and_restores_unfinished(tmp_path):
+    b = tmp_path / "bin"; b.mkdir()
+    calls = tmp_path / "calls"
+    rec = "echo \"$(basename \"$0\") $*\" >> " + str(calls) + "\n"
+    (b / "systemctl").write_text("#!/bin/bash\n" + rec + "[ \"$1\" = -q ] && { case $3 in chp-docs-ledger.path|chp-documents-check.timer) exit 0;; esac; exit 3; }\nexit 0\n")
+    for n in ("runuser", "restorecon", "occ", "chp-site"):
+        (b / n).write_text("#!/bin/bash\n" + rec + "exit 0\n")
+    (b / "install").write_text("#!/bin/bash\nfor a; do last=$a; done; mkdir -p \"$last\"\n")
+    (b / "rsync").write_text("#!/bin/bash\n" + rec + "n=$#; src=${@:n-1:1}; dst=${@:n:1}; mkdir -p \"$dst\"; cp -R \"$src\". \"$dst\" 2>/dev/null; exit 0\n")
+    (b / "logger").write_text("#!/bin/bash\nexit 0\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    o = tmp_path / "copy"
+    (o / "chp-docs-ledger").mkdir(parents=True)
+    (o / "chp-docs-ledger/ledger.jsonl").write_text("{}\n")
+    (o / "chp-docs-unfinished").mkdir()
+    (o / "chp-docs-unfinished" / ("b" * 32)).write_text("{}")
+    (o / "data").mkdir(); (o / "etc-nextcloud").mkdir(); (o / "nextcloud.pgdump").write_text("x")
+    subprocess.run("find . -type f -print0 | sort -z | xargs -0 sha256sum > ../MANIFEST && mv ../MANIFEST MANIFEST",
+                   shell=True, cwd=o, check=True)
+    docs = tmp_path / "chp-docs"
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_OCC=str(b / "occ"), CHP_SITE=str(b / "chp-site"),
+               CHP_NC_DATA=str(tmp_path / "data"), CHP_DOCS_LEDGER=str(docs / "ledger"),
+               CHP_DOCS_UNFINISHED=str(docs / "unfinished"), CHP_DOCUMENTS_CONF=str(tmp_path / "c"),
+               CHP_DOCS_STATE=str(tmp_path / "st"))
+    r = subprocess.run(["bash", str(D / "chp-nextcloud-backup"), "restore", str(o)], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    seq = calls.read_text().splitlines()
+    stop = seq.index("systemctl stop chp-docs-ledger.path chp-docs-ledger.service chp-documents-check.timer "
+                     "chp-documents-check.service")
+    drop = next(i for i, ln in enumerate(seq) if "DROP DATABASE" in ln)
+    trust = seq.index("chp-site documents trust")
+    start = seq.index("systemctl start chp-docs-ledger.path chp-documents-check.timer")   # the ones that were running
+    assert stop < drop < trust < start
+    assert (docs / "unfinished" / ("b" * 32)).exists() and (docs / "ledger/ledger.jsonl").exists()
+    # a server that already has a ledger keeps it, and its unfinished records are not replaced either
+    (docs / "unfinished" / ("b" * 32)).unlink()
+    calls.unlink()
+    r = subprocess.run(["bash", str(D / "chp-nextcloud-backup"), "restore", str(o)], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0 and "kept the existing document ledger" in r.stdout
+    assert not (docs / "unfinished" / ("b" * 32)).exists()

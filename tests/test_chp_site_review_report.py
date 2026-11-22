@@ -491,3 +491,22 @@ def test_review_document_text_goes_through_cell():
                     led("publish", START + 6, seq=2, cr="CR-1`\n", path="a|b`c")])
     md = rr.render_md(d)
     assert "`" not in md and "x`|\nboom" not in md
+
+
+def test_fixwave_a_m3_document_workflow_alerts_are_not_nextcloud_intrusions():   # final review A M-3
+    from chp_site import wazuh as w
+    listed = [alert(w.DOC_OVERRIDE_RULE, 12, "srv1", START + 3600, {}, desc="ISSO OVERRIDE"),
+              alert(w.DOC_APPROVE_RULE, 12, "srv1", START + 3601, {}, desc="APPROVED"),
+              alert(w.DOC_PUBLISH_RULE, 7, "srv1", START + 3602, {}, desc="published")]
+    faults = [alert(w.DOC_QUARANTINE_RULE, 12, "srv1", START + 3603, {}, desc="QUARANTINED"),
+              alert(w.DOC_UNDO_FAILED_RULE, 12, "srv1", START + 3604, {}, desc="UNDO INCOMPLETE"),
+              alert(w.LEDGER_NOGROUPS_RULE, 12, "srv1", START + 3605, {}, desc="no groups"),
+              alert(w.DOC_PURGED_RULE, 7, "srv1", START + 3606, {}, desc="purged")]
+    real = [alert("100609", 12, "srv1", START + 3700, {"remoteAddr": "192.0.2.51"}, desc="canary enabled"),
+            alert("100620", 12, "srv1", START + 3701, {}, desc="egress")]
+    d = build(healthy(listed + faults + real))
+    kinds = sorted((i["kind"], i["signature"]) for i in d["intrusions"] if i["target"] == "srv1")
+    assert ("nextcloud", "canary enabled") in kinds and ("nextcloud", "egress") in kinds
+    assert {s for k, s in kinds if k == "documents"} == {"QUARANTINED", "UNDO INCOMPLETE", "no groups", "purged"}
+    assert not any(s in ("ISSO OVERRIDE", "APPROVED", "published") for _, s in kinds)   # listed from the ledger
+    assert not any(k == "nextcloud" and s in ("QUARANTINED", "no groups") for k, s in kinds)

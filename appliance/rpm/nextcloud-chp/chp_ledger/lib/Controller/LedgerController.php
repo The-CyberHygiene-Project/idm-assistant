@@ -321,12 +321,14 @@ class LedgerController extends OCSController {
 		return $v;
 	}
 
-	/** notes and reason: absent = '', else valid UTF-8 without NUL, at most MAX_TEXT bytes; anything else null. */
+	/** notes and reason: absent = '', else valid UTF-8 without a control character (C0, DEL, C1: one would grow
+	 *  sixfold in the appender's JSON journal line; final review A I-1), at most MAX_TEXT bytes; anything else null. */
 	private static function text(mixed $v): ?string {
 		if ($v === null) {
 			return '';
 		}
-		if (!is_string($v) || strlen($v) > self::MAX_TEXT || preg_match('//u', $v) !== 1 || str_contains($v, "\0")) {
+		if (!is_string($v) || strlen($v) > self::MAX_TEXT || preg_match('//u', $v) !== 1
+			|| preg_match('/[\x00-\x1f\x7f]|\xc2[\x80-\x9f]/', $v) === 1) {
 			return null;
 		}
 		return $v;
