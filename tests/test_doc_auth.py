@@ -236,9 +236,9 @@ def make_env(tmp_path, stub=None, clock=None, **kw):
     clock = clock or Clock()
     stub = stub or Stub(clock)
     home = tmp_path / "home"
-    run = tmp_path / "run"
+    run = tmp_path / "run-user" / str(os.getuid())         # /run/user/<uid> (final review B M7)
     home.mkdir(exist_ok=True)
-    run.mkdir(mode=0o700, exist_ok=True)
+    run.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(run, 0o700)
     os.chmod(home, 0o700)
     mounts = tmp_path / "mounts"
@@ -257,7 +257,7 @@ def make_env(tmp_path, stub=None, clock=None, **kw):
             (b / "slaves" / s).mkdir(exist_ok=True)
     args = dict(domain=D, uid=os.getuid(), user_name="alice", home=home, runtime=str(run), transport=stub,
                 mounts=str(mounts), sysfs=str(sysfs), linger_dir=str(tmp_path / "linger"), clock=clock,
-                sleep=clock.sleep)
+                sleep=clock.sleep, run_user=str(tmp_path / "run-user"))
     args.update(kw)
     env = A.Env(**args)
     env.stub = stub
@@ -352,7 +352,7 @@ def test_runtime_dir_refused(tmp_path, bad):
     with pytest.raises(A.AuthError) as e:
         login(env)
     assert "XDG_RUNTIME_DIR" in str(e.value) or "linger" in str(e.value)
-    assert not list(Path(tmp_path / "run").rglob("session.json"))
+    assert not list(Path(tmp_path / "run-user").rglob("session.json"))
 
 
 def test_refresh_before_send(tmp_path):

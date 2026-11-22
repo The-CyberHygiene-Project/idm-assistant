@@ -97,6 +97,8 @@ R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PR = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+REL_STRICT = "http://purl.oclc.org/ooxml/officeDocument/relationships/"
+A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"     # DrawingML text (a:p, a:t)
 # subtrees whose text is not "in the header/footer/body" as a page mark: text boxes, shapes, drawings, VML, objects,
 # alternate content, deleted and moved-away text
 _SKIP = {W + "txbxContent", W + "pict", W + "drawing", W + "object", MC + "AlternateContent", W + "del",
@@ -148,8 +150,8 @@ def parse_name(name) -> NameParts:
 
     if not n:
         bad("the name is empty")
-    if len(n) > 200:
-        bad("the name is too long (200 characters at most)")
+    if len(n) > 200 or len(n.encode("utf-8", "surrogatepass")) > 255:
+        bad("the name is too long (200 characters and 255 bytes at most; an accented letter is 2 bytes)")
     if "/" in n or "\\" in n or "\0" in n:
         bad("give a file name, not a path")
     if any(c.isspace() for c in n):
@@ -169,6 +171,9 @@ def parse_name(name) -> NameParts:
     title = stem
     if not title:
         bad("the title is empty")
+    if prefix and _fold(title[:8]).startswith(("cui_", "fci_")):
+        bad("the title starts with a second CUI_ or FCI_ prefix (one prefix only, for example FCI_Plan, not "
+            "FCI_CUI_Plan)")
     if re.search(r"_[vV]\d", title):                     # \d is any script's digit on purpose: refuse lookalikes
         bad("the title has a second _v<number>; only the version at the end may look like _vX.Y")
     if re.search(r"-draft$", title, re.I):
@@ -719,12 +724,16 @@ class _Zip:
             rid, typ, tgt = r.get("Id"), r.get("Type") or "", r.get("Target") or ""
             if not rid:
                 continue
+            # the short type ("header", "styles", ...) only for the OOXML relationship namespaces: a Type of another
+            # namespace that merely ends in /header is not a header (final review B M3); it stays whole
+            typ = next((typ[len(p):] for p in (REL, REL_STRICT) if typ.startswith(p) and "/" not in typ[len(p):]),
+                       typ)
             if (r.get("TargetMode") or "").lower() == "external":
-                out[rid] = (typ.rsplit("/", 1)[-1], None)
+                out[rid] = (typ, None)
                 continue
             t = tgt[1:] if tgt.startswith("/") else posixpath.join(d, tgt)
             t = posixpath.normpath(t)
-            out[rid] = (typ.rsplit("/", 1)[-1], None if t.startswith("..") or t.startswith("/") else t)
+            out[rid] = (typ, None if t.startswith("..") or t.startswith("/") else t)
         return out
 
     def main(self):
@@ -877,6 +886,76 @@ def _boxed_lines(root):
     return out
 
 
+_WRONG_SKIP = (W + "del", W + "moveFrom")       # deleted and moved-away text never shows
+_PARAS = (W + "p", A_NS + "p")
+
+
+def _wrong_lines(root):
+    """Every line a header/footer part could show, for the WRONG-banner search only (final review B I1): the text of
+    each paragraph (w:p, and DrawingML a:p) anywhere in the part -- text boxes, shapes, drawings, objects, hidden
+    runs included -- each nested paragraph a line of its own, every mc:AlternateContent read once per branch (Choice
+    and Fallback), and every VML text path (v:textpath string, Word's Design > Watermark). Only deleted and moved-away
+    text is left out. The required banner is never looked for here (it stays strict: _part_lines)."""
+    acs = [e for e in root.iter(MC + "AlternateContent")]
+    width = max([len([k for k in a if k.tag in (MC + "Choice", MC + "Fallback")]) for a in acs] or [1])
+
+    def line(p, branch):
+        buf = []
+
+        def walk(e):
+            for c in e:
+                t = c.tag
+                if t in _WRONG_SKIP or t in _PARAS:
+                    continue                              # a nested paragraph is a line of its own
+                if t == MC + "AlternateContent":
+                    ks = [k for k in c if k.tag in (MC + "Choice", MC + "Fallback")]
+                    if ks:
+                        walk(ks[min(branch, len(ks) - 1)])
+                    continue
+                if t in (W + "t", A_NS + "t"):
+                    buf.append(c.text or "")
+                elif t == W + "tab":
+                    buf.append(" ")
+                elif t in (W + "br", W + "cr", A_NS + "br"):
+                    buf.append("\n")
+                walk(c)
+        walk(p)
+        return [_norm(x) for x in "".join(buf).split("\n")]
+
+    deleted = set()
+    for d in root.iter():
+        if d.tag in _WRONG_SKIP:
+            deleted.update(id(x) for x in d.iter())
+    out = []
+    for e in root.iter():
+        if id(e) in deleted:
+            continue
+        if e.tag in _PARAS:
+            for b in range(width):
+                out += [x for x in line(e, b) if x]
+        elif isinstance(e.tag, str) and e.tag.rsplit("}", 1)[-1] == "textpath" and e.get("string"):
+            out += [x for x in (_norm(y) for y in e.get("string").split("\n")) if x]
+    return out
+
+
+def _body_paras(e):
+    """The body-level paragraphs: children of w:body, also through w:sdt/w:sdtContent and w:customXml wrappers."""
+    for c in e:
+        if c.tag == W + "p":
+            yield c
+        elif c.tag == W + "sdt":
+            sc = c.find(W + "sdtContent")
+            if sc is not None:
+                yield from _body_paras(sc)
+        elif c.tag == W + "customXml":
+            yield from _body_paras(c)
+
+
+BAD_SECT = ("a section break is in a place that cannot be checked (inside alternate content, a tracked change, a "
+            "text box or a table, or on a deleted paragraph mark), so which header and footer its pages show is not "
+            "certain; remove or accept it in the editor")
+
+
 class _Docx:
     def __init__(self, data):
         self.z = _Zip(data)
@@ -897,7 +976,24 @@ class _Docx:
         for ch in self.doc.iter(W + "sectPrChange"):
             nested.update(id(x) for x in ch.iter(W + "sectPr"))
         self.all_sects = list(self.body.iter(W + "sectPr"))
-        self.sects = [s for s in self.all_sects if id(s) not in nested]
+        # final review B I2: only the places Word reads a section's properties from count -- the body's last child,
+        # and the paragraph properties of a body-level paragraph whose mark is not deleted. Any other sectPr
+        # (mc:Fallback, w:pPrChange, a text box, a table cell, a deleted paragraph mark) is a problem, never a source
+        # of header inheritance
+        ok = set()
+        for p in _body_paras(self.body):
+            ppr = p.find(W + "pPr")
+            sp = ppr.find(W + "sectPr") if ppr is not None else None
+            if sp is None:
+                continue
+            rpr = ppr.find(W + "rPr")
+            if rpr is None or (rpr.find(W + "del") is None and rpr.find(W + "moveFrom") is None):
+                ok.add(id(sp))
+        kids = list(self.body)
+        if kids and kids[-1].tag == W + "sectPr":
+            ok.add(id(kids[-1]))
+        self.sects = [s for s in self.all_sects if id(s) in ok]
+        self.bad_sects = [s for s in self.all_sects if id(s) not in ok and id(s) not in nested]
         self._parts = {}
 
     def part(self, name):
@@ -916,7 +1012,9 @@ class _Docx:
                     for ref in s.findall(W + tag):
                         typ = ref.get(W + "type") or "default"
                         rid = ref.get("{%s}id" % R_NS)
-                        tgt = self.rels.get(rid, (None, None))[1]
+                        rtyp, tgt = self.rels.get(rid, (None, None))
+                        if tgt and rtyp != kind:              # final review B M3: not a header/footer relationship
+                            tgt = "!" + tgt
                         carry[(kind, typ)] = tgt if tgt else ("?" + str(rid))
             types = ["default"]
             if s is not None and _on(s.find(W + "titlePg")):
@@ -930,7 +1028,12 @@ class _Docx:
         first = self.plan()[0]
         types = {t for _, t, _, _ in first}
         want = "first" if "first" in types else "default"
-        return [p for k, t, p, _ in first if t == want and p and not p.startswith("?")]
+        return [p for k, t, p, _ in first if t == want and p and not p.startswith(("?", "!"))
+                and self.hf_root_ok(p, k)]
+
+    def hf_root_ok(self, part, kind):
+        """The part is a header (w:hdr) or footer (w:ftr) as its reference says (final review B M3)."""
+        return self.z.has(part) and self.part(part).tag == W + ("hdr" if kind == "header" else "ftr")
 
     def body_page_one(self):
         lines, n = [], 0
@@ -953,9 +1056,17 @@ class _Docx:
         multi = len(plan) > 1
         seen = set()
         wrong = set()
+        if self.bad_sects:
+            problems.append(BAD_SECT)
         for i, sect in enumerate(plan, 1):
             for kind, typ, part, _ in sect:
                 where = (f"section {i}: " if multi else "") + f"the {typ} {kind}"
+                if part is not None and part.startswith("!"):
+                    if (kind, typ, part) not in seen:
+                        problems.append(f"{where}: its reference points at {part[1:]}, which is not a {kind} "
+                                        "relationship; fix the file in the editor")
+                    seen.add((kind, typ, part))
+                    continue
                 if part is None or part.startswith("?"):
                     if want and (kind, typ, part) not in seen:
                         what = {"default": "", "first": " (the section has a title page)",
@@ -970,9 +1081,13 @@ class _Docx:
                 if not self.z.has(part):
                     problems.append(f"{where} part {part} is missing from the file")
                     continue
+                if not self.hf_root_ok(part, kind):
+                    problems.append(f"{where} part {part} is not a {kind} part (its root element is not "
+                                    f"w:{'hdr' if kind == 'header' else 'ftr'}); fix the file in the editor")
+                    continue
                 root = self.part(part)
                 lines = _part_lines(root, self.styles)
-                wrong |= _wrong(lines + _boxed_lines(root), mode)     # a wrong banner in a text box still shows
+                wrong |= _wrong(lines + _wrong_lines(root), mode)     # a wrong banner anywhere it can show
                 if want and not _has_banner(lines, want):
                     hint = ""
                     if _has_banner(_boxed_lines(root), want):
@@ -1255,6 +1370,9 @@ def _md_unfenced(lines):
     return [x for _, x in _md_unfenced_idx(lines)]
 
 
+_MD_EOL = re.compile(r"\r\n|\r|\n")
+
+
 class _Md:
     def __init__(self, data):
         try:
@@ -1263,12 +1381,23 @@ class _Md:
             raise _Bad("is not UTF-8 text") from None
         if self.text_.startswith("﻿"):
             self.text_ = self.text_[1:]
-        self.lines = self.text_.splitlines()
+        # lines end at LF, CR or CRLF only (final review B M1): str.splitlines also ends one at VT, FF, the file and
+        # group separators, NEL and U+2028/9, which CommonMark keeps inside a line, so a required "banner" after one
+        # of those was a line here and need not be one on the rendered page
+        self.lines = _MD_EOL.split(self.text_)
+        if self.lines and self.lines[-1] == "":
+            self.lines.pop()
+
+    def wrong(self, mode):
+        """The wrong banner kinds, in both readings: lines ended at LF/CR only, and also at every other separator
+        (a renderer may break the line there: U+2028 is a mandatory break in UAX #14), so a wrong banner is found
+        whichever way the line is shown (fail closed); the required banner is read from LF/CR lines only."""
+        return _md_wrong(self.lines, mode) | _md_wrong(self.text_.splitlines(), mode)
 
     def check(self, mode, block, problems):
         lines = self.lines
         last = max((i for i, x in enumerate(lines) if x.strip()), default=-1)
-        _wrong_problems(_md_wrong(lines, mode), mode, "a line of the document", problems)
+        _wrong_problems(self.wrong(mode), mode, "a line of the document", problems)
         if mode == "none":
             return
         word = _KINDS[mode][0]
@@ -1546,6 +1675,8 @@ def _ins_docx(data, values, mode="cui"):
     sect_tags = _starts(doc_text, w, "sectPr")
     if len(sect_tags) != len(d.all_sects):
         raise MarkingError(f"refused: {d.main}: its section layout cannot be edited safely; mark it in the editor")
+    if d.bad_sects:
+        raise MarkingError(f"refused: {d.main}: {BAD_SECT}")
     sect_index = {id(s): i for i, s in enumerate(d.all_sects)}
     doc_ins = []                                           # (position, text) insertions into document.xml
     rels_part = posixpath.join(posixpath.dirname(d.main), "_rels", posixpath.basename(d.main) + ".rels")
@@ -1571,6 +1702,12 @@ def _ins_docx(data, values, mode="cui"):
 
     carry_new, done = {}, set()
     plan = d.plan()
+    for sect in plan:
+        for kind, typ, part, _ in sect:
+            if part and not part.startswith("?") and (part.startswith("!") or (z.has(part)
+                                                                                and not d.hf_root_ok(part, kind))):
+                raise MarkingError(f"refused: the {typ} {kind} reference points at {part.lstrip('!')}, which is not "
+                                   f"a {kind}; fix the file in the editor")
     if not d.sects:                                        # no sectPr at all: one is added at the end of the body
         sect_refs = []
     for sect in plan:
@@ -1686,6 +1823,11 @@ def _hf_raw_sections(s):
     return secs
 
 
+def _hf_plain(raw):
+    """A header/footer section's text without its codes, for a message."""
+    return " ".join(_hf_lines("&L" + raw)) or raw
+
+
 def _hf_join(secs):
     return "".join(f"&{k}{secs[k]}" for k in "LCR" if secs.get(k))
 
@@ -1737,7 +1879,15 @@ def _ins_xlsx(data, values, mode="cui"):
                         if not _has_banner(_hf_lines(kids[n])):
                             kids[n] = _hf_with_banner(kids[n])
                 secs = _hf_raw_sections(kids.get("firstFooter", ""))
-                secs["L"] = "\n".join(v.replace("&", "&&") for v in lines)
+                left = "\n".join(v.replace("&", "&&") for v in lines)
+                if secs.get("L", "").strip() and secs["L"] != left:
+                    # final review B M5: never replaced silently (the dry run says so too: it is the same refusal)
+                    raise MarkingError(f"refused: sheet {name!r}: the designation block goes in the left section of "
+                                       "the first-page footer, which already holds text "
+                                       f"({_hf_plain(secs['L'])[:80]!r}); insert never replaces text: move that text "
+                                       "to the centre or right section in Excel, or type the designation block into "
+                                       "rows 1-3 of the first sheet, then run it again")
+                secs["L"] = left
                 kids["firstFooter"] = _hf_join(secs)
                 if not _has_banner(_hf_lines(kids["firstFooter"])):
                     kids["firstFooter"] = _hf_with_banner(kids["firstFooter"])
@@ -1799,7 +1949,7 @@ def _ins_md(data, values, mode="cui"):
     bom = data.startswith(b"\xef\xbb\xbf")
     nl = "\r\n" if "\r\n" in m.text_ else "\n"
     lines = list(m.lines)
-    found = _md_wrong(lines, mode)
+    found = m.wrong(mode)
     if found:                                                # never wrap the right banner around a wrong one
         raise MarkingError("refused: the file carries " + " and ".join(f"{_ART[k]} banner" for k in sorted(found))
                            + "; insert never removes a mark: fix it in the editor")

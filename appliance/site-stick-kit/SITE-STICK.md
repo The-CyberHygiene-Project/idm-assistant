@@ -298,7 +298,10 @@ Every `chp-site doc` command ends with one of these:
 | 3 | **Pending.** The server has not answered, or NextCloud or Kanidm cannot serve it right now (NextCloud's maintenance mode during the nightly backup, a Kanidm outage); then nothing was sent. Wait a minute and run **the same command again**. |
 
 A pending command is never sent twice. The second run asks about the same request. The request ids are kept when you
-run `chp-site doc logout`. They are lost only when your last session ends and your runtime folder goes away.
+run `chp-site doc logout`. They are lost only when your last session ends and your runtime folder goes away, or when
+you run `chp-site doc logout --forget` (the next run of such a command then sends a new request). A kept request the
+server will not take again and holds nothing for (for example one sent while signed in as someone else) is dropped
+with a plain refusal.
 
 If the sign-in ends, the command says so. Run `chp-site doc login` and then the same command again.
 

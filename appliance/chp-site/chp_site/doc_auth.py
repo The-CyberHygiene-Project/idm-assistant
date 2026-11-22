@@ -66,7 +66,7 @@ class Env:
                  sysfs="/sys", linger_dir="/var/lib/systemd/linger", clock=time.time, sleep=time.sleep,
                  browser=None, site=None, site_dir="/etc/chp", templates="/usr/share/chp-templates/doc",
                  x2t="/opt/onlyoffice/desktopeditors/converter/x2t", editor_running=None,
-                 login_timeout=LOGIN_TIMEOUT, poll_timeout=None, poll_interval=1.0):
+                 login_timeout=LOGIN_TIMEOUT, poll_timeout=None, poll_interval=1.0, run_user="/run/user"):
         self.domain, self.uid, self.user_name = domain, uid, user_name
         self.home, self.runtime = Path(home), runtime
         self.transport = transport or https_transport()
@@ -78,6 +78,7 @@ class Env:
         self.editor_running = editor_running
         self.login_timeout = login_timeout
         self.poll_timeout, self.poll_interval = poll_timeout, poll_interval
+        self.run_user = run_user
 
     @property
     def idm(self):
@@ -178,14 +179,17 @@ def mount_of(path, mounts="/proc/self/mounts"):
 
 
 def runtime_dir(env):
-    """$XDG_RUNTIME_DIR/chp-doc, made 0700; refused unless the runtime dir is a private tmpfs folder of this user and
-    linger is off (so the tokens die with the user's last session)."""
+    """$XDG_RUNTIME_DIR/chp-doc, made 0700; refused unless the runtime dir is /run/user/<uid> (logind's), a private
+    tmpfs folder of this user, and linger is off (so the tokens die with the user's last session)."""
     r = env.runtime
     why = None
     if not r:
         why = "XDG_RUNTIME_DIR is not set (sign in on the desktop or through ssh, so systemd makes it)"
     elif not os.path.isabs(r):
         why = f"XDG_RUNTIME_DIR ({r}) is not an absolute path"
+    elif os.path.normpath(r) != os.path.join(env.run_user, str(env.uid)):
+        # final review B M7: systemd-logind's own runtime dir only (/run/user/<uid>), not any private tmpfs folder
+        why = f"XDG_RUNTIME_DIR ({r}) is not {os.path.join(env.run_user, str(env.uid))}"
     else:
         try:
             st = os.lstat(r)

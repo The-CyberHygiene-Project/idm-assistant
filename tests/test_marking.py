@@ -1594,3 +1594,216 @@ def test_13a_lower_case_or_split_sp_category_after_a_citation_is_judged(tmp_path
 @pytest.mark.parametrize("line", ["CUI_SSP_v1.2 crisp-looking tables", "CUI_SSP_v1.2 wasp-nest notes"])
 def test_13a_sp_inside_a_word_after_a_citation_passes(tmp_path, line):
     _passes_everywhere(tmp_path, line)
+
+
+# ---------- Task 14: the final review's fix wave (B: marking) ----------
+# the reviewers' probes (/private/tmp/revB/probe/p1-p5), rebuilt from make.py
+
+MK = _make()
+_REFS_XML = '<w:headerReference w:type="default" r:id="rId2"/><w:footerReference w:type="default" r:id="rId3"/>'
+
+
+def _chk(tmp_path, name, data, cui=True, values=VALUES):
+    f = tmp_path / name
+    f.write_bytes(data)
+    return M.check(f, cui, values)
+
+
+def _patch(data, fn):
+    import io
+    zin = zipfile.ZipFile(io.BytesIO(data))
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w") as z:
+        for i in zin.infolist():
+            z.writestr(i, fn(i.filename, zin.read(i.filename)))
+    return b.getvalue()
+
+
+def _doc_edit(fn):
+    return lambda n, d: fn(d.decode()).encode() if n == "word/document.xml" else d
+
+
+_BASE = lambda: MK.docx(MK.BLOCK_XML + MK.FILLER, [MK.BANNER_HDR, MK.BANNER_FTR], MK.REFS)
+_FBASE = lambda: MK.docx(MK.FILLER, [MK.FCI_HDR, MK.FCI_FTR], MK.REFS)
+_WM = ('<w:p><w:r><w:pict><v:shape id="PowerPlusWaterMarkObject" type="#_x0000_t136" '
+       'style="position:absolute;rotation:315"><v:textpath style="font-family:Calibri;font-size:1pt" string="{}"/>'
+       '</v:shape></w:pict></w:r></w:p>')
+
+
+def test_fixwave_b_i1_a_vml_watermark_of_the_wrong_kind_is_refused(tmp_path):     # probe p4
+    r = _chk(tmp_path, "FCI_WM_v1.0.docx", MK.docx(MK.FILLER, [("hdr", "header1.xml", MK.p("FCI", True)
+                                                                + _WM.format("CUI")), MK.FCI_FTR], MK.REFS))
+    assert not r.ok and any("CUI banner is in the header or footer" in p for p in r.problems), r.problems
+    r = _chk(tmp_path, "Plain-WM_v1.0.docx", MK.docx(MK.FILLER, [("hdr", "header1.xml", _WM.format("CUI")),
+                                                                 ("ftr", "footer1.xml", MK.p("x"))], MK.REFS),
+             cui=False)
+    assert not r.ok and any("non-CUI area" in p for p in r.problems), r.problems
+    # an FCI watermark in a CUI_ document
+    r = _chk(tmp_path, "CUI_WM_v1.0.docx", MK.docx(MK.BLOCK_XML + MK.FILLER, [("hdr", "header1.xml", MK.p("CUI", True)
+                                                                              + _WM.format("FCI")), MK.BANNER_FTR],
+                                                   MK.REFS))
+    assert not r.ok and any("FCI banner" in p for p in r.problems), r.problems
+    # a watermark of the right kind (or an unrelated one) is fine; the required banner is still a real line
+    assert _chk(tmp_path, "CUI_WM2_v1.0.docx", MK.docx(MK.BLOCK_XML + MK.FILLER, [
+        ("hdr", "header1.xml", MK.p("CUI", True) + _WM.format("CONFIDENTIAL")), MK.BANNER_FTR], MK.REFS)).ok
+    r = _chk(tmp_path, "CUI_WM3_v1.0.docx", MK.docx(MK.BLOCK_XML + MK.FILLER, [
+        ("hdr", "header1.xml", _WM.format("CUI")), MK.BANNER_FTR], MK.REFS))
+    assert not r.ok and any("no CUI banner line" in p for p in r.problems)
+
+
+@pytest.mark.parametrize("hdr", [
+    '<w:p><w:r><mc:AlternateContent><mc:Choice Requires="w14"><w:t>CUI//SP-PROPIN</w:t></mc:Choice><mc:Fallback>'
+    '<w:t>CUI//SP-PROPIN</w:t></mc:Fallback></mc:AlternateContent></w:r></w:p>',                      # p1 P3
+    '<mc:AlternateContent><mc:Choice Requires="w14"><w:p><w:r><w:t>CUI</w:t></w:r></w:p></mc:Choice><mc:Fallback/>'
+    '</mc:AlternateContent>',                                                                           # p1 P3b
+    '<mc:AlternateContent><mc:Choice Requires="w14"><w:p/></mc:Choice><mc:Fallback><w:p><w:r><w:t>CUI</w:t></w:r>'
+    '</w:p></mc:Fallback></mc:AlternateContent>',                                                       # Fallback only
+    '<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>CUI</w:t></w:r></w:p>',                                 # hidden run
+    '<w:p><w:r><w:drawing><a:graphic><a:graphicData uri="x"><a:p><a:r><a:t>CUI</a:t></a:r></a:p></a:graphicData>'
+    '</a:graphic></w:drawing></w:r></w:p>',                                                             # DrawingML a:t
+])
+def test_fixwave_b_i1_alternate_content_and_shapes_are_searched_for_the_wrong_banner(tmp_path, hdr):
+    data = MK.docx(MK.FILLER, [("hdr", "header1.xml", MK.p("FCI", True) + hdr), MK.FCI_FTR], MK.REFS)
+    r = _chk(tmp_path, "FCI_Alt_v1.0.docx", data)
+    assert not r.ok and any("CUI banner is in the header or footer" in p for p in r.problems), r.problems
+
+
+def test_fixwave_b_i1_deleted_text_and_the_required_banner_stay_as_they_were(tmp_path):
+    deleted = ('<w:p><w:del w:id="1" w:author="x"><w:r><w:delText>CUI</w:delText></w:r></w:del>'
+               '<w:del w:id="2" w:author="x"><w:r><w:t>CUI</w:t></w:r></w:del></w:p>')
+    assert _chk(tmp_path, "FCI_Del_v1.0.docx", MK.docx(MK.FILLER, [("hdr", "header1.xml", MK.p("FCI", True)
+                                                                    + deleted), MK.FCI_FTR], MK.REFS)).ok
+    # a CUI banner only inside an AlternateContent branch is still no required banner (strict)
+    alt = ('<mc:AlternateContent><mc:Choice Requires="w14"><w:p><w:r><w:t>CUI</w:t></w:r></w:p></mc:Choice>'
+           '</mc:AlternateContent>')
+    r = _chk(tmp_path, "CUI_Alt_v1.0.docx", MK.docx(MK.BLOCK_XML + MK.FILLER, [("hdr", "header1.xml", alt),
+                                                                               MK.BANNER_FTR], MK.REFS))
+    assert not r.ok and any("no CUI banner line" in p for p in r.problems)
+    assert _chk(tmp_path, "CUI_Base_v1.0.docx", _BASE()).ok and _chk(tmp_path, "FCI_Base_v1.0.docx", _FBASE()).ok
+
+
+_P1 = ('<w:body><mc:AlternateContent><mc:Choice Requires="w14"><w:p/></mc:Choice><mc:Fallback><w:p><w:pPr><w:sectPr>'
+       + _REFS_XML + '</w:sectPr></w:pPr></w:p></mc:Fallback></mc:AlternateContent>')
+_P2 = ('<w:body><w:p><w:pPr><w:pPrChange w:id="1" w:author="x"><w:pPr><w:sectPr>' + _REFS_XML
+       + '</w:sectPr></w:pPr></w:pPrChange></w:pPr></w:p>')
+_P2B = ('<w:body><w:p><w:r><w:pict><v:rect><v:textbox><w:txbxContent><w:p><w:pPr><w:sectPr>' + _REFS_XML
+        + '</w:sectPr></w:pPr></w:p></w:txbxContent></v:textbox></v:rect></w:pict></w:r></w:p>')
+_PDEL = ('<w:body><w:p><w:pPr><w:rPr><w:del w:id="3" w:author="x"/></w:rPr><w:sectPr>' + _REFS_XML
+         + '</w:sectPr></w:pPr></w:p>')
+_PTBL = ('<w:body><w:tbl><w:tr><w:tc><w:p><w:pPr><w:sectPr>' + _REFS_XML + '</w:sectPr></w:pPr></w:p></w:tc></w:tr>'
+         '</w:tbl>')
+
+
+@pytest.mark.parametrize("body", [_P1, _P2, _P2B, _PDEL, _PTBL], ids=["AltSect", "PprChange", "TxbxSect", "DelMark",
+                                                                    "TableCell"])
+def test_fixwave_b_i2_a_section_break_word_does_not_read_is_a_problem(tmp_path, body):     # probe p1 P1/P2/P2b
+    data = _patch(_BASE(), _doc_edit(lambda d: d.replace(_REFS_XML, "").replace("<w:body>", body)))
+    r = _chk(tmp_path, "CUI_Sect_v1.0.docx", data)
+    assert not r.ok and any(M.BAD_SECT in p for p in r.problems), r.problems
+    f = tmp_path / "CUI_Sect_v0.1-DRAFT.docx"
+    f.write_bytes(data)
+    with pytest.raises(M.MarkingError, match="section break is in a place that cannot be checked"):
+        M.insert(f, VALUES, dry_run=True)
+
+
+def test_fixwave_b_i2_section_breaks_word_reads_still_work(tmp_path):
+    # a body-level paragraph's section break, also inside a content control (w:sdt) or customXml: a section of its own
+    for wrap in ("{}", "<w:sdt><w:sdtContent>{}</w:sdtContent></w:sdt>", "<w:customXml w:element=\"x\">{}</w:customXml>"):
+        sect = wrap.format('<w:p><w:pPr><w:sectPr>' + _REFS_XML + '</w:sectPr></w:pPr></w:p>')
+        data = _patch(_BASE(), _doc_edit(lambda d, s=sect: d.replace(MK.FILLER, MK.FILLER + s, 1)))
+        r = _chk(tmp_path, "CUI_Two_v1.0.docx", data)
+        assert r.ok, (wrap, r.problems)
+    # a sectPr inside w:sectPrChange (the old properties of a tracked change) is history, as before
+    old = '<w:sectPrChange w:id="9" w:author="x"><w:sectPr/></w:sectPrChange>'
+    data = _patch(_BASE(), _doc_edit(lambda d: d.replace('<w:pgSz', old + '<w:pgSz', 1)))
+    assert _chk(tmp_path, "CUI_Chg_v1.0.docx", data).ok
+
+
+def test_fixwave_b_m3_header_relationship_type_and_root_are_checked(tmp_path):            # probe p1 P5/P5b
+    base = MK.docx(MK.p("CUI") + MK.BLOCK_XML + MK.FILLER, [MK.BANNER_HDR, MK.BANNER_FTR], MK.REFS)
+    as_doc = _patch(base, lambda n, d: d.decode().replace('Target="header1.xml"', 'Target="document.xml"')
+                    .replace('Target="footer1.xml"', 'Target="document.xml"').encode()
+                    if n == "word/_rels/document.xml.rels" else d)
+    r = _chk(tmp_path, "CUI_P5_v1.0.docx", as_doc)
+    assert not r.ok and any("is not a header part" in p for p in r.problems), r.problems
+    image = _patch(_BASE(), lambda n, d: d.decode().replace('relationships/header"', 'relationships/image"').encode()
+                   if n == "word/_rels/document.xml.rels" else d)
+    r = _chk(tmp_path, "CUI_P5b_v1.0.docx", image)
+    assert not r.ok and any("not a header relationship" in p for p in r.problems), r.problems
+    other = _patch(_BASE(), lambda n, d: d.decode().replace(
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"',
+        'Type="urn:example:header"').encode() if n == "word/_rels/document.xml.rels" else d)
+    r = _chk(tmp_path, "CUI_P5c_v1.0.docx", other)
+    assert not r.ok and any("not a header relationship" in p for p in r.problems), r.problems
+    # the same refusals for a non-CUI file (fail closed) and for insert
+    r = _chk(tmp_path, "Plain_v1.0.docx", image, cui=False)
+    assert not r.ok
+    f = tmp_path / "CUI_P5_v0.1-DRAFT.docx"
+    f.write_bytes(as_doc)
+    with pytest.raises(M.MarkingError, match="not a header"):
+        M.insert(f, VALUES, dry_run=True)
+    # the Strict OOXML namespace is a header too
+    strict = _patch(_BASE(), lambda n, d: d.decode().replace(
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header",
+        "http://purl.oclc.org/ooxml/officeDocument/relationships/header").encode()
+        if n == "word/_rels/document.xml.rels" else d)
+    assert _chk(tmp_path, "CUI_Strict_v1.0.docx", strict).ok
+
+
+@pytest.mark.parametrize("sep", [" ", " ", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+def test_fixwave_b_m1_markdown_lines_end_at_lf_and_cr_only(tmp_path, sep):
+    body = "CUI\n\n" + "\n\n".join(MK.BLOCK) + "\n\nx\n\nnot" + sep + "CUI\n"
+    r = _chk(tmp_path, "CUI_Md-Sep_v1.0.md", body.encode())
+    assert not r.ok and any("last line must be the CUI banner" in p for p in r.problems), (repr(sep), r.problems)
+    # CR and CRLF still end lines
+    for nl in ("\r", "\r\n"):
+        txt = nl.join(["CUI", ""] + [x for b in MK.BLOCK for x in (b, "")] + ["x", "", "CUI", ""])
+        assert _chk(tmp_path, "CUI_Md-NL_v1.0.md", txt.encode()).ok, repr(nl)
+
+
+def test_fixwave_b_m1_insert_keeps_the_line_ends_and_does_not_split_at_a_separator(tmp_path):
+    f = tmp_path / "CUI_Md-Ins_v0.1-DRAFT.md"
+    f.write_bytes("# T\n\nline CUI\n".encode())
+    M.insert(f, VALUES, dry_run=False)
+    t = f.read_text()
+    assert t.endswith("line CUI\n\nCUI\n") and t.startswith("CUI\n\n") and t.count("\n\n\n") == 0
+    assert M.check(f, True, VALUES).ok
+
+
+def test_fixwave_b_m4_name_cap_is_255_bytes_and_one_prefix():
+    assert M.parse_name("CUI_" + "a" * 186 + "_v1.0.docx").title        # 200 characters, 200 bytes
+    with pytest.raises(M.NameRuleError, match="255 bytes"):
+        M.parse_name("CUI_" + "é" * 150 + "_v1.0.docx")                   # 165 characters, 315 bytes
+    assert M.parse_name("CUI_" + "é" * 120 + "_v1.0.docx").title        # 254 bytes
+    for n in ("FCI_CUI_Plan_v1.0.docx", "CUI_CUI_Plan_v1.0.docx", "CUI_FCI_Plan_v1.0.docx", "FCI_cui_Plan_v1.0.docx",
+              "CUI_ＣＵＩ_Plan_v1.0.docx"):
+        with pytest.raises(M.NameRuleError, match="second CUI_ or FCI_ prefix"):
+            M.parse_name(n)
+    for n in ("CUI_Cuisine_v1.0.docx", "FCI_CUI-Plan_v1.0.docx", "Plan-CUI_v1.0.md"):
+        assert M.parse_name(n).title
+
+
+def test_fixwave_b_m5_insert_never_replaces_a_first_page_footer_left_section(tmp_path):   # probe p5 CUI_D
+    f = tmp_path / "CUI_D_v0.1-DRAFT.xlsx"
+    f.write_bytes(MK.xlsx([("S", MK.sheet([["a"]], {"oddFooter": "&LExisting left"}))]))
+    before = f.read_bytes()
+    for dry in (True, False):
+        with pytest.raises(M.MarkingError, match="already holds text.*Existing left"):
+            M.insert(f, VALUES, dry_run=dry)
+    assert f.read_bytes() == before
+    # an empty left section (or none) takes the block as before
+    g = tmp_path / "CUI_E_v0.1-DRAFT.xlsx"
+    g.write_bytes(MK.xlsx([("S", MK.sheet([["a"]], {"oddFooter": "&CPage &P&RRight"}))]))
+    assert M.insert(g, VALUES, dry_run=False) and M.check(g, True, VALUES).ok
+
+
+@pytest.mark.parametrize("sep", [" ", " ", "\x85", "\x0b"])
+def test_fixwave_b_m1_a_wrong_banner_is_still_found_after_any_line_separator(tmp_path, sep):
+    # the required banner is read from LF/CR lines only, the wrong one in both readings (a renderer may break the
+    # line at U+2028: UAX #14 class BK), as Task 12b's probe (r12c n.py, 'CUI<LS>SP' in an FCI_ body) wants
+    r = _chk(tmp_path, "FCI_H_v1.0.md", f"FCI\n\nCUI{sep}SP\n\nBody\n\nFCI\n".encode(), values=M.MarkValues())
+    assert not r.ok and any("a CUI banner is a line of the document" in p for p in r.problems), (repr(sep), r.problems)
+    f = tmp_path / "FCI_I_v0.1-DRAFT.md"
+    f.write_bytes(f"# T\n\nCUI{sep}SP\n".encode())
+    with pytest.raises(M.MarkingError, match="carries a CUI banner"):
+        M.insert(f, M.MarkValues(), dry_run=True)

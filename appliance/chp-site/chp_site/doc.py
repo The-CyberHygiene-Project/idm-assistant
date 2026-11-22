@@ -312,6 +312,16 @@ class _Pending:
             if d.pop(key, None) is not None:
                 auth.write_private(self.path, d)
 
+    def forget(self):
+        """Every kept id (doc logout --forget; final review B M6): the number forgotten."""
+        with auth.locked(self.env, "pending"):
+            n = len(self._all())
+            try:
+                os.unlink(self.path)
+            except FileNotFoundError:
+                pass
+        return n
+
 
 # ---------- NextCloud ----------
 
@@ -570,6 +580,24 @@ def send(env, kind, fields, say=print):
                                      "and run the command again)"}
             if st not in (409, 500):
                 return pending(d.get("message") or f"the server answered HTTP {st}")
+            if st == 409 and kept:
+                # final review B M6: a kept id the app will not take (409) and of which it holds nothing for this
+                # account (404: e.g. signed in now as someone else) would stay pending forever: dropped, refused
+                try:
+                    how, got = _result_once(env, rid)
+                except auth.Unreachable as e:
+                    return pending(str(e))
+                except auth.AuthError as e:
+                    return pending(f"{_plain(e)}; {SIGN_IN_AGAIN}")
+                if how == "final":
+                    pend.drop(key)
+                    return got
+                if how == "absent":
+                    pend.drop(key)
+                    return "refused", {"message": "refused: the server will not take this request again (HTTP 409) "
+                                                  "and holds no answer to it for the account you are signed in as "
+                                                  "(it was sent under another sign-in?); it is dropped: run the "
+                                                  "command again to send a new request"}
             # 409 / 500 on a re-sent id: poll its result
         try:
             state, d = _poll(env, rid)
@@ -1131,6 +1159,10 @@ def cmd_login(env, a, say):
 
 
 def cmd_logout(env, a, say):
+    if getattr(a, "forget", False):
+        n = _Pending(env).forget()
+        say(f"forgot {n} pending request(s): the next run of such a command sends a new request" if n else
+            "no pending requests to forget")
     auth.logout(env, say=say)
     return 0
 
@@ -1145,7 +1177,9 @@ def add_parser(sub):
                                     "check, mark, approve, override, publish, close")
     ds = dp.add_subparsers(dest="doc_cmd", required=True)
     ds.add_parser("login", help="sign in at Kanidm (browser; the tokens stay in memory, in XDG_RUNTIME_DIR)")
-    ds.add_parser("logout", help="revoke the sign-in and remove the tokens")
+    lo = ds.add_parser("logout", help="revoke the sign-in and remove the tokens")
+    lo.add_argument("--forget", action="store_true",
+                    help="also forget the pending requests (their ids are kept across logout otherwise)")
     c = ds.add_parser("checkout", help="fetch the current version to ~/Documents/CHP-Working as the next -DRAFT")
     c.add_argument("document", help="its name (CUI_SSP_v1.2.docx) or its NextCloud path")
     n = ds.add_parser("new", help="start a new document from the marked template")
@@ -1157,7 +1191,7 @@ def add_parser(sub):
     n.add_argument("--type", choices=("docx", "xlsx", "md"), default="docx")
     k = ds.add_parser("check", help="report what is missing (name rule, marks, -DRAFT, freshness); changes nothing")
     k.add_argument("file")
-    m = ds.add_parser("mark", help="insert the missing CUI marks into a -DRAFT file (dry run unless --apply)")
+    m = ds.add_parser("mark", help="insert the missing CUI/FCI marks into a -DRAFT file (dry run unless --apply)")
     m.add_argument("file")
     m.add_argument("--apply", action="store_true")
     ap = ds.add_parser("approve", help="(approver) record your approval of this exact file")

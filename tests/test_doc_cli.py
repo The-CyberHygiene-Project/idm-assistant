@@ -715,7 +715,7 @@ def test_other_answers_on_a_kept_id_stay_pending(tmp_path, monkeypatch, capsys, 
     assert rc == 3 and "pending" in out and list(_pending_ids(env).values()) == [rid], out
 
 
-@pytest.mark.parametrize("st", [409, 500])
+@pytest.mark.parametrize("st", [500])           # 409 + nothing held: dropped (final review B M6, below)
 def test_409_and_500_on_a_kept_id_poll_and_stay_pending_without_a_result(tmp_path, monkeypatch, capsys, st):
     env = setup(tmp_path, user="bob")
     env.poll_timeout = 30
@@ -944,3 +944,65 @@ def test_fixwave_a_i1_control_characters_are_refused_here(tmp_path, monkeypatch,
     cmd = "approve" if opt == "--notes" else "override"
     rc, out = run(env, monkeypatch, capsys, cmd, str(f), opt, bad)
     assert rc == 2 and "control character" in out and opt in out and not posts(env), out
+
+
+# ---------- Task 14: the final review's fix wave (B M6, M7, C-M10) ----------
+
+def test_fixwave_b_m6_409_on_a_kept_id_the_server_holds_nothing_for_is_dropped(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    env.poll_timeout = 30
+    f = _draft(tmp_path)
+    rid = _kept_id(env, monkeypatch, capsys, f)
+    env.stub.post_status[rid] = [409]                          # e.g. the id was taken by another sign-in's request
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 1 and "HTTP 409" in out and "dropped" in out and "pending" not in out, out
+    assert not _pending_ids(env)                               # not pending forever
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))   # the next run is a new request
+    assert rc == 0 and env.stub.requests[-1][0]["request_id"] != rid
+
+
+def test_fixwave_b_m6_409_on_a_kept_id_with_an_answer_gives_it(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    env.stub.script["*"] = ["queued"] * 100000
+    rc, _ = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 3
+    (rid,) = _pending_ids(env).values()
+    env.stub.script["*"] = []                                  # processed since: done
+    env.stub.post_status[rid] = [409]
+    rc, out = run(env, monkeypatch, capsys, "approve", str(f))
+    assert rc == 0 and "approve recorded" in out and not _pending_ids(env)
+
+
+def test_fixwave_b_m6_logout_forget_clears_the_kept_ids(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob")
+    f = _draft(tmp_path)
+    _kept_id(env, monkeypatch, capsys, f)
+    assert _pending_ids(env)
+    rc, out = run(env, monkeypatch, capsys, "logout")
+    assert rc == 0 and _pending_ids(env)                       # kept across a plain logout
+    rc, out = run(env, monkeypatch, capsys, "logout", "--forget")
+    assert rc == 0 and "forgot 1 pending request" in out and not _pending_ids(env), out
+
+
+def test_fixwave_b_m7_runtime_dir_must_be_run_user_uid(tmp_path, monkeypatch, capsys):
+    env = setup(tmp_path, user="bob", sign_in=False)
+    other = tmp_path / "elsewhere"
+    other.mkdir(mode=0o700)
+    os.chmod(other, 0o700)
+    Path(env.mounts).write_text(Path(env.mounts).read_text() + f"tmpfs {os.path.realpath(other)} tmpfs rw 0 0\n")
+    env.runtime = str(other)                                   # private tmpfs, but not logind's /run/user/<uid>
+    rc, out = run(env, monkeypatch, capsys, "login")
+    assert rc != 0 and f"is not {env.run_user}/{env.uid}" in out, out
+    from chp_site import doc_auth as A
+    assert A.Env.__init__.__kwdefaults__["run_user"] == "/run/user"
+
+
+def test_fixwave_c_m10_mark_help_says_cui_or_fci():
+    import argparse
+    ap = argparse.ArgumentParser()
+    DOC.add_parser(ap.add_subparsers())
+    sub = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction)).choices["doc"]
+    helps = {a.dest: a for a in sub._actions if isinstance(a, argparse._SubParsersAction)}
+    mark = next(c for c in helps["doc_cmd"]._choices_actions if c.dest == "mark")
+    assert "CUI/FCI marks" in mark.help
