@@ -14,7 +14,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 V=1.4.0
 TAR=chp-templates-$V.tar.gz
-SHA=3bf9d1272dfefff35e1e53201ce732fd17586d7e62a832fa7389fefd0032601e   # templates-1.4.0 = git archive of the local tag at 1d7b682 (re-tagged 2026-11-21 from 0a18aca; re-pin if the tag moves again)
+SHA=9af9dda9f44cd038ab21e12789b9002229da4dd4fd600a7ac65ae4ddc5d656c8   # templates-1.4.0 = git archive of the local tag at d015ba5 (content 1.2.8; re-tagged 2026-11-22 from 1d7b682, earlier 0a18aca; re-pin if the tag moves again)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 t=""; w=""; trap 'rm -rf "$t" "$w"' EXIT
 if [[ -n ${CHP_TEMPLATES_TAG:-} ]]; then

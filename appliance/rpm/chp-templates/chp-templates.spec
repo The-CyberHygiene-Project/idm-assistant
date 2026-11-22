@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-templates
 Version:        1.4.0
-Release:        2.chp%{?dist}
+Release:        3.chp%{?dist}
 Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2), their renderer and document templates
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -50,6 +50,12 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 %{_datadir}/chp-templates/README.md
 
 %changelog
+* Sun Nov 22 2026 The CyberHygiene Project - 1.4.0-3.chp
+- Rev 2 content 1.2.8 (the final review's corrections): the SSP 3.4.3 and 3.1.3 alert-level conditions (level 12
+  alerts reach ALERT_HOOK at once when SECURITY_ALERT_LEVEL is 12 or lower), the 3.1.3 DEGRADED wording, and
+  PROOF-RECORD-PLAN3.md cited by 3.3.7, 3.4.2, 3.4.7, 3.13.1 and 3.13.6. templates-1.4.0 re-tagged to chp-templates
+  d015ba5; build-rpm.sh pin re-done.
+
 * Fri Nov 20 2026 The CyberHygiene Project - 1.4.0-2.chp
 - The FCI templates (Task 12, owner decision 2026-11-20, "FCI should be marked as FCI"): doc/fci/ installed as
   doc/fci/Template.{docx,xlsx,md} (the banner FCI, no designation block), for `chp-site doc new --fci`; Rev 2 content

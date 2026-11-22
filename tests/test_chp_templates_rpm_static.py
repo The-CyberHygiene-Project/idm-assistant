@@ -2,7 +2,7 @@
 from pathlib import Path
 
 D = Path(__file__).resolve().parents[1] / "appliance" / "rpm" / "chp-templates"
-SHA = "3bf9d1272dfefff35e1e53201ce732fd17586d7e62a832fa7389fefd0032601e"   # templates-1.4.0 re-tagged at 1d7b682 (local tag, unsigned until the owner releases)
+SHA = "9af9dda9f44cd038ab21e12789b9002229da4dd4fd600a7ac65ae4ddc5d656c8"   # templates-1.4.0 re-tagged at d015ba5 (content 1.2.8; local tag, unsigned until the owner releases)
 
 
 def test_spec_installs_only_the_shipped_library():
@@ -120,7 +120,7 @@ def test_default_path_checks_unchanged():
 def test_changelog_has_no_unconditional_lab_candidate_bullet():
     # the same spec builds the signed release too: the lab-candidate note lives in the build record and the banner
     s = (D / "chp-templates.spec").read_text()
-    assert "LAB CANDIDATE" not in s.upper() and "Release:        2.chp%{?dist}" in s
+    assert "LAB CANDIDATE" not in s.upper() and "Release:        3.chp%{?dist}" in s
 
 
 def test_empty_tag_variable_falls_through_to_the_signed_path(tmp_path):

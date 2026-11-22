@@ -959,7 +959,7 @@ def test_13a_d2_the_editor_brings_the_templates():
     tpl = (TOP / "appliance/rpm/chp-templates/chp-templates.spec").read_text()
     v = re.search(r"^Version:\s+(\S+)", tpl, re.M).group(1)
     rel = re.search(r"^Release:\s+(\d+)\.chp", tpl, re.M).group(1)
-    assert f"{v}-{rel}" == "1.4.0-2"
+    assert f"{v}-{rel}" == "1.4.0-3"                         # Task 13e: content 1.2.8; the pin below stays >= 1.4.0-2
     assert re.search(r"^Requires:\s+chp-templates >= 1\.4\.0-2$", SPEC, re.M)
 
 
