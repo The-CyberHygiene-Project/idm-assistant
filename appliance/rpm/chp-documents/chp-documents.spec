@@ -1,6 +1,6 @@
 Name:           chp-documents
 Version:        0.1.0
-Release:        12.chp%{?dist}
+Release:        13.chp%{?dist}
 Summary:        CyberHygiene documents role: NextCloud units, egress containment, web/PHP config, backup, cert renewal, nightly tag check, checks 77-79 and 81
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -175,6 +175,11 @@ if [ -x /usr/sbin/fagenrules ]; then /usr/sbin/fagenrules --load >/dev/null 2>&1
 %dir %attr(0700,root,root) %{_localstatedir}/lib/chp-docs/unfinished
 
 %changelog
+* Sun Nov 22 2026 The CyberHygiene Project - 0.1.0-13.chp
+- ISO 0.7.0 Plan 3 Task 14b: the nightly backup releases the ledger lock before exit 75 and first in its EXIT trap,
+  writes status FAILED before any occ call, and bounds the trap's occ maintenance:mode --off (timeout 300; a failure
+  is logged, not fatal); chp-nextcloud-backup.service gets TimeoutStartSec=6h. A failed restore says "restore FAILED:
+  document units were stopped" and starts again the units that were running.
 * Sun Nov 22 2026 The CyberHygiene Project - 0.1.0-12.chp
 - ISO 0.7.0 Plan 3 Task 14 (final review A M-1, M-2, small): the nightly backup also copies
   /var/lib/chp-docs/unfinished (the unfinished-publish records) under the ledger's shared lock, and a restore puts them

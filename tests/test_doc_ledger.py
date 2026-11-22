@@ -1292,9 +1292,10 @@ def test_nightly_backup_copies_the_ledger_under_its_shared_lock(tmp_path, monkey
     assert led_rs[0] < min(i for i, ln in enumerate(seq) if ln.startswith("rsync") and str(led) not in ln)
     script = (TOP / "appliance/rpm/chp-documents/chp-nextcloud-backup").read_text()
     lock, rs = script.index('exec 8<"$LEDGER/ledger.jsonl"'), script.index('"$LEDGER/" "$o/chp-docs-ledger/"')
-    rel, mon = script.index("exec 8<&-"), script.index("occ maintenance:mode --on")
+    mon = script.index("occ maintenance:mode --on")
+    rel = script.index("exec 8<&-", script.index('maintenance:mode --on >/dev/null'))     # the normal release (Task 14b: more exist)
     assert lock < rs < mon < rel < script.index("runuser -u postgres -- pg_dump")
-    assert script.count("exec 8<&-") == 1 and script.count('"$LEDGER/" "$o/chp-docs-ledger/"') == 1
+    assert script.count("exec 8<&-") == 4 and script.count('"$LEDGER/" "$o/chp-docs-ledger/"') == 1
 
 
 def test_occ_store_undo_delete_is_forced_and_skips_the_trash():

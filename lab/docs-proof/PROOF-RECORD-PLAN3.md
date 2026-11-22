@@ -8,13 +8,11 @@ verified). Raw logs: `lab/docs-proof/logs/101-…` onwards. Driver: `plan3.sh` (
 helpers `doc_browser.py` (scripted Kanidm sign-in for `chp-site doc login`), `doc_api.py` (raw WebDAV/OCS with the
 user's own Bearer), `doc_req.py` (raw ledger requests, for the server-side refusals), `docx_edit.py` (the lab stand-in
 for editing in ONLYOFFICE), `g3_probe.py`, `introspect_probe.py`. Work list: spec §8 and
-`.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-checklist.md` (every item's verdict is in that
-folder's `task-11c-report.md`). **Product code was not changed.**
+the lab worker's Task 11c checklist (every item's verdict is in the lab worker's Task 11c report). **Product code was not changed.**
 
 ## Verdicts (both rounds; final review C I3)
 
-The per-item verdicts live in the Task 11c and 13c reports
-(`.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-report.md`, `task-13c-report.md`); their
+The per-item verdicts live in the lab worker's Task 11c and 13c reports; their
 tallies, and every item that did not fully pass, are copied here so this record stands alone.
 
 **Round 1** (repo 0.13.0, Task 11c; the 133-item checklist, final after the timed items of 2026-11-21):
@@ -56,7 +54,7 @@ login", exit 2) → **PASS 29 · PARTLY 2 · FAIL 2 · NOT RUN 4.**
   in the lab).
 - NOT RUN: T6 (no fresh client install), D1 (needs a server where NextCloud was never installed), D3e (a disabled
   account), D7b (the early-boot repeat; round 1's proof stands).
-- Regression gate: the first round-2 attempt did NOT RUN (log 224: LM Studio's server was off). The re-run is log 229
+- Regression gate: the first round-2 attempt did NOT RUN (log 224: the local model server was off). The re-run is log 229
   (the lab worker's, not yet committed): when this section was written (2026-11-22) it had 16 of 33 runs GREEN and
   none failed, and was still running. Its final count is the lab worker's to record.
 
@@ -371,12 +369,12 @@ SELinux Enforcing, fapolicyd active (0 denials) and firewalld active on every ho
 | adapter / nvram / snapspike | ALL PASS | 221 |
 | fixtures | not re-runnable on users that already hold credentials (fixtures.py stops at lab01's enrolment; lab tool); round-1 users intact (lab01 web sign-in and POSIX probe OK) | 222 |
 | Golden | ALL PASS (fresh, after the proofs) | 223 |
-| Regression | **NOT RUN**: LM Studio's server was OFF on the Mac (`lms status`: Server OFF), all 32 runs before the stop EXPLAIN-FAILED; aborted, srv/cli2 reset to golden | 224 |
+| Regression | **NOT RUN**: the local model server was OFF on the Mac, all 32 runs before the stop EXPLAIN-FAILED; aborted, srv/cli2 reset to golden | 224 |
 | Row 36 | 3/3 | 225 |
 
 ## Pending
 
-- **Regression 33/33:** needs LM Studio's server on the Mac (`lms server start`, the devstral model). Run it AFTER the
+- **Regression 33/33:** needs the local model server on the Mac (the devstral model loaded). Run it AFTER the
   B15 check (it resets cli2).
 - **B15:** lab01's sign-in started 2026-11-21 20:03:45Z (13:03 MST) on cli2 in a held session; due ~21:04 MST
   (04:04Z 11-22): `chp-site doc check` / any doc command should say "run chp-site doc login".

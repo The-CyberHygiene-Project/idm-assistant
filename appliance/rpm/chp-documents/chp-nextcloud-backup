@@ -30,6 +30,7 @@ keep_days() {
   echo "$v"
 }
 KEEP=$(keep_days)
+OCC_TIMEOUT=${CHP_OCC_TIMEOUT:-300}   # the bound on every occ maintenance:mode call that can hang (tests inject a short one)
 occ() { "$OCC" "$@"; }
 log() { logger -t chp-nextcloud-backup -- "$*" 2>/dev/null || :; echo "$*"; }
 status() { install -d -m 0700 "$SD"; printf '%s %s %s\n' "$1" "$(date +%s)" "$2" > "$SD/backup.status"; }
@@ -63,7 +64,13 @@ case ${1:-backup} in
       fi
     fi
     t=$(date -u +%Y%m%dT%H%M%SZ); o=$B/$t
-    trap 'rc=$?; occ maintenance:mode --off >/dev/null 2>&1 || true; if [ $rc -ne 0 ]; then rm -rf "$o"; status FAILED "backup $t exited $rc"; fi' EXIT
+    # The trap (Task 14b): (a) release the ledger lock first (idempotent: it may already be closed), (b) write FAILED
+    # BEFORE any occ call (check 77 must see it even if occ hangs), (c) switch maintenance off under a time limit and
+    # carry on if that fails, (d) only then remove the half copy.
+    trap 'rc=$?; exec 8<&- 2>/dev/null || true
+          if [ $rc -ne 0 ]; then status FAILED "backup $t exited $rc" || true; fi
+          timeout "$OCC_TIMEOUT" "$OCC" maintenance:mode --off >/dev/null 2>&1 || log "backup: occ maintenance:mode --off failed or did not finish in ${OCC_TIMEOUT} s (check it by hand)"
+          if [ $rc -ne 0 ]; then rm -rf "$o"; fi' EXIT
     install -d -m 0700 "$o"
     # the document ledger FIRST, under its shared lock (Task 9 review M1: no half-written line is copied), and the lock
     # released only once maintenance mode is ON (Task 11a fix round 1, I1): a publish that took the lock in a gap before
@@ -76,7 +83,7 @@ case ${1:-backup} in
       if [ -e "$LEDGER/ledger.jsonl" ]; then
         exec 8<"$LEDGER/ledger.jsonl"
         if ! flock -s -w 900 8; then
-          log "backup FAILED: the document ledger stayed locked by the appender for 15 min"; exit 75
+          log "backup FAILED: the document ledger stayed locked by the appender for 15 min"; exec 8<&-; exit 75
         fi
       fi
       rsync -aHAX --numeric-ids "$LEDGER/" "$o/chp-docs-ledger/"
@@ -84,8 +91,8 @@ case ${1:-backup} in
     fi
     # bounded (final review A, Task 9 carry): a hung occ must not hold the ledger lock all night; FAILED, the trap
     # records it and the lock goes with this process
-    timeout 300 "$OCC" maintenance:mode --on >/dev/null \
-      || { log "backup FAILED: occ maintenance:mode --on failed or did not finish in 300 s"; exit 75; }
+    timeout "$OCC_TIMEOUT" "$OCC" maintenance:mode --on >/dev/null \
+      || { log "backup FAILED: occ maintenance:mode --on failed or did not finish in 300 s"; exec 8<&-; exit 75; }
     exec 8<&- 2>/dev/null || true                         # the appender may run again (occ refuses in maintenance mode)
     runuser -u postgres -- pg_dump -Fc nextcloud > "$o/nextcloud.pgdump"
     link=(); [ -n "$prev" ] && [ -d "$prev/data" ] && link=(--link-dest="$prev/data")
@@ -105,6 +112,12 @@ case ${1:-backup} in
     o=${2:?restore DIR}; [ -s "$o/MANIFEST" ] || { echo "no MANIFEST in $o"; exit 1; }
     (cd "$o" && sha256sum --quiet -c MANIFEST) || { echo "MANIFEST check FAILED: not restoring"; exit 1; }
     was=(); for u in $DOCS_UNITS; do systemctl -q is-active "$u" && was+=("$u"); done
+    # a failure from here on leaves the document units stopped: say so and start the ones that were running again
+    # (the web stack stays stopped on purpose: the database is half restored)
+    trap 'rc=$?; if [ $rc -ne 0 ]; then
+            if [ ${#was[@]} -eq 0 ] || systemctl start "${was[@]}"; then log "restore FAILED: document units were stopped; restarted them"
+            else log "restore FAILED: document units were stopped; could not restart: ${was[*]} (systemctl start them by hand)"; fi
+          fi' EXIT
     systemctl stop $DOCS_UNITS                            # nothing writes the database or the ledger meanwhile
     systemctl stop httpd php-fpm nextcloud-cron.timer
     runuser -u postgres -- psql -qc "DROP DATABASE IF EXISTS nextcloud" -c "CREATE DATABASE nextcloud OWNER apache TEMPLATE template0 ENCODING 'UTF8'"
@@ -130,6 +143,7 @@ case ${1:-backup} in
     # equal the file again, else the nightly check alerts "trust" (lab round 3, D10). Refreshed and read back; no occ
     # call may follow it.
     "$CHP_SITE" documents trust || { log "restore FAILED: the fapolicyd trust entry for /etc/nextcloud/config.php was not refreshed (run chp-site documents trust)"; exit 1; }
+    trap - EXIT
     [ ${#was[@]} -eq 0 ] || systemctl start "${was[@]}"
     log "restored from $o" ;;
   *) echo "usage: chp-nextcloud-backup [backup|restore DIR|keep-days]"; exit 2 ;;

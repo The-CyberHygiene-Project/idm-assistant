@@ -5,4 +5,8 @@ After=postgresql.service
 [Service]
 UMask=0077
 Type=oneshot
+# A oneshot has no start timeout by default: a hung step would hold the ledger lock and the status forever. A large
+# data directory (hundreds of GB over the first rsync, plus pg_dump) can legitimately take hours, so 6h: far above any
+# honest run, finite for a hung one.
+TimeoutStartSec=6h
 ExecStart=/usr/sbin/chp-nextcloud-backup backup

@@ -112,7 +112,7 @@ def test_monitor_checks_and_units_in_spec():
     for n in ("77-nextcloud-services.sh", "78-nextcloud-cert.sh", "79-nextcloud-egress.sh", "81-documents-tags.sh",
               "82-docs-ledger.sh"):
         assert f"/usr/lib/chp/monitor.d/{n}" in SPEC.replace("%{_prefix}", "/usr")
-    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        12.chp%{?dist}" in SPEC
+    assert "Requires:" in SPEC and "nextcloud-chp" in SPEC and "Release:        13.chp%{?dist}" in SPEC
     for p in ("/etc/chp/nextcloud-egress-addr.nft", "/etc/httpd/conf.d/chp-nextcloud-lan.inc", "/etc/pki/nextcloud"):
         assert p in SPEC.split("%install")[0], p      # rendered paths documented in %description
     assert (D / "README.md").exists() and "CUI" in (D / "README.md").read_text()
@@ -122,7 +122,7 @@ def test_spec_scriptlets_state_dir_and_backup_umask():
     assert "%systemd_post chp-nextcloud-egress.service" in SPEC and "%systemd_preun" in SPEC
     assert "%systemd_postun_with_restart chp-nextcloud-egress.service" in SPEC
     assert re.search(r"%triggerin -- httpd, mod_ssl\n.*nextcloud-httpd-stock-off", SPEC)
-    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        12.chp" in SPEC
+    assert "/var/lib/chp/documents" in SPEC.replace("%{_sharedstatedir}", "/var/lib") and "Release:        13.chp" in SPEC
     assert "UMask=0077" in t("chp-nextcloud-backup.service")
     assert "chmod 0700 \"$docs_sd\"" in t("chp-documents-lib.sh") and "/var/lib/chp/documents" in t("chp-documents-lib.sh")
 
@@ -316,14 +316,14 @@ def test_fixwave_a_m1_backup_copies_the_unfinished_records_under_the_ledger_lock
     assert seq.index("flock -s -w 900 8") < un[0] < seq.index("occ maintenance:mode --on")
     b = t("chp-nextcloud-backup")
     assert "UNFINISHED=${CHP_DOCS_UNFINISHED:-/var/lib/chp-docs/unfinished}" in b
-    assert b.index('"$UNFINISHED/" "$o/chp-docs-unfinished/"') < b.index("exec 8<&-")
+    assert b.index('"$UNFINISHED/" "$o/chp-docs-unfinished/"') < b.index("exec 8<&-", b.index("maintenance:mode --on"))
 
 
 def test_fixwave_a12_maintenance_on_is_bounded_and_fails_closed(tmp_path):
     rc, out, calls = _backup(tmp_path, 10**9, ["20260101T000000Z"])
     assert rc == 0 and "timeout 300\nocc maintenance:mode --on" in calls
     b = t("chp-nextcloud-backup")
-    assert 'timeout 300 "$OCC" maintenance:mode --on' in b
+    assert 'timeout "$OCC_TIMEOUT" "$OCC" maintenance:mode --on' in b and "OCC_TIMEOUT=${CHP_OCC_TIMEOUT:-300}" in b
     # occ hangs / fails: FAILED (the trap), the copy removed, maintenance switched off again
     bad = tmp_path / "bad"
     bad.mkdir()
@@ -376,3 +376,73 @@ def test_fixwave_a_m2_restore_stops_the_appender_and_check_and_restores_unfinish
                        text=True)
     assert r.returncode == 0 and "kept the existing document ledger" in r.stdout
     assert not (docs / "unfinished" / ("b" * 32)).exists()
+
+
+# ---------- Task 14b: a hung occ must not hold the ledger lock or hide the FAILED status; restore failure restarts ----------
+
+def _hang_env(tmp, flavor):
+    b = tmp / "bin"; b.mkdir()
+    calls = tmp / "calls"
+    # fake occ: maintenance:mode hangs; records whether fd 8 (the ledger lock) was still open in the child
+    (b / "occ").write_text("#!/bin/bash\nf=closed; [ -e /dev/fd/8 ] && f=open\necho \"occ $* fd8=$f\" >> " + str(calls) + "\nsleep 5\n")
+    for n in ("runuser", "rsync", "logger", "flock"):
+        (b / n).write_text("#!/bin/bash\nfor a; do last=$a; done; [ -d \"$last\" ] || true\nexit 0\n")
+    (b / "df").write_text("#!/bin/bash\necho Filesystem; echo x 1 1 1000000000 1% /backup\n")
+    # a minimal timeout(1): kill after $1 seconds, exit 124
+    (b / "timeout").write_text("#!/bin/bash\nt=$1; shift; \"$@\" & p=$!; (sleep $t; kill $p 2>/dev/null) & w=$!; wait $p; rc=$?; kill $w 2>/dev/null; [ $rc -gt 128 ] && exit 124; exit $rc\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    (tmp / "backup").mkdir(); (tmp / "data").mkdir()
+    led = tmp / "led"; led.mkdir(); (led / "ledger.jsonl").write_text("{}\n")
+    conf = tmp / "c"; conf.write_text("DOCUMENTS_BACKUP_DAYS=14\n")
+    return dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_NC_BACKUP=str(tmp / "backup"), CHP_NC_DATA=str(tmp / "data"),
+                CHP_OCC=str(b / "occ"), CHP_DOCS_STATE=str(tmp / "st"), CHP_DOCUMENTS_CONF=str(conf),
+                CHP_DOCS_LEDGER=str(led), CHP_DOCS_UNFINISHED=str(tmp / "none"), CHP_OCC_TIMEOUT="1"), calls
+
+
+def test_task14b_hung_occ_on_and_off_releases_the_lock_writes_failed_first_and_is_bounded(tmp_path):
+    import time
+    env, calls = _hang_env(tmp_path, "hang")
+    t0 = time.time()
+    r = subprocess.run(["bash", str(D / "chp-nextcloud-backup"), "backup"], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 75, r.stdout + r.stderr
+    assert time.time() - t0 < 15                                            # 1 s + 1 s injected limits, not forever
+    assert (tmp_path / "st/backup.status").read_text().startswith("FAILED ")
+    seen = calls.read_text().splitlines()
+    assert any("--on" in ln for ln in seen) and any("--off" in ln for ln in seen)   # the trap still tried to switch it off
+    assert all("fd8=closed" in ln for ln in seen if "--off" in ln)          # the ledger lock was released before the trap's occ
+    assert [p.name for p in (tmp_path / "backup").iterdir()] == []          # the half copy removed
+    b = t("chp-nextcloud-backup")
+    trap = b[b.index("trap 'rc=$?"):b.index("install -d -m 0700 \"$o\"")]
+    assert trap.index("exec 8<&-") < trap.index("status FAILED") < trap.index("maintenance:mode --off")
+    assert 'timeout "$OCC_TIMEOUT"' in trap
+    assert "exec 8<&-; exit 75; }" in b                                      # released before the exit 75 too
+
+
+def test_task14b_backup_service_has_a_start_timeout():
+    s = t("chp-nextcloud-backup.service")
+    assert re.search(r"^TimeoutStartSec=6h$", s, re.M)
+    assert "oneshot" in s and "#" in s[s.index("TimeoutStartSec") - 400:s.index("TimeoutStartSec")]   # justified in a comment
+
+
+def test_task14b_restore_failure_says_so_and_restarts_the_stopped_units(tmp_path):
+    b = tmp_path / "bin"; b.mkdir()
+    calls = tmp_path / "calls"
+    rec = "echo \"$(basename \"$0\") $*\" >> " + str(calls) + "\n"
+    (b / "systemctl").write_text("#!/bin/bash\n" + rec + "[ \"$1\" = -q ] && { case $3 in chp-docs-ledger.path|chp-documents-check.timer) exit 0;; esac; exit 3; }\nexit 0\n")
+    (b / "runuser").write_text("#!/bin/bash\n" + rec + "case \"$*\" in *pg_restore*) exit 1;; esac\nexit 0\n")
+    for n in ("restorecon", "occ", "chp-site", "rsync"):
+        (b / n).write_text("#!/bin/bash\n" + rec + "exit 0\n")
+    (b / "logger").write_text("#!/bin/bash\nexit 0\n")
+    for x in b.iterdir():
+        x.chmod(0o755)
+    o = tmp_path / "copy"; o.mkdir(); (o / "nextcloud.pgdump").write_text("x")
+    subprocess.run("sha256sum nextcloud.pgdump > MANIFEST", shell=True, cwd=o, check=True)
+    env = dict(os.environ, PATH=f"{b}:{os.environ['PATH']}", CHP_OCC=str(b / "occ"), CHP_SITE=str(b / "chp-site"),
+               CHP_NC_DATA=str(tmp_path / "data"), CHP_DOCUMENTS_CONF=str(tmp_path / "c"), CHP_DOCS_STATE=str(tmp_path / "st"))
+    r = subprocess.run(["bash", str(D / "chp-nextcloud-backup"), "restore", str(o)], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert "restore FAILED: document units were stopped; restarted them" in r.stdout
+    seq = calls.read_text().splitlines()
+    assert seq.index("systemctl stop chp-docs-ledger.path chp-docs-ledger.service chp-documents-check.timer chp-documents-check.service") \
+        < seq.index("systemctl start chp-docs-ledger.path chp-documents-check.timer")
