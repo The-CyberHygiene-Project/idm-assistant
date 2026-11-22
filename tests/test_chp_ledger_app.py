@@ -259,7 +259,7 @@ def test_duplicate_request_id_never_overwrites():
 
 def test_info_xml_and_licence_headers():
     info = (APP / "appinfo/info.xml").read_text()
-    assert "<id>chp_ledger</id>" in info and "<version>1.0.2</version>" in info
+    assert "<id>chp_ledger</id>" in info and "<version>1.0.3</version>" in info
     assert "<licence>Apache-2.0</licence>" in info and "<namespace>ChpLedger</namespace>" in info
     assert '<nextcloud min-version="35" max-version="35"/>' in info
     assert len(PHP) >= 5
@@ -282,7 +282,7 @@ def test_routes_are_ocs_api_routes():
 
 def test_spec_bundles_the_app_and_its_directories():
     g = dict(re.findall(r"^%global\s+(\S+)\s+(\S+)", SPEC, re.M))
-    assert g["ledger_ver"] == "1.0.2"
+    assert g["ledger_ver"] == "1.0.3"
     assert re.search(r"^Source7:\s+chp_ledger\.tar\.gz$", SPEC, re.M)
     prep = section("prep")
     assert "%{SOURCE7}" in prep and "chp_ledger:%{ledger_ver}" in prep
@@ -299,8 +299,9 @@ def test_spec_bundles_the_app_and_its_directories():
     # fapolicyd trusts the app through the rpm database, like chp_foldertag: nothing added by hand
     assert "--trust-file" not in SPEC and "fapolicyd-cli --file add" not in SPEC
     assert "chp_ledger %{ledger_ver}" in section("description")
-    assert re.search(r"^Release:\s+7\.chp%\{\?dist\}$", SPEC, re.M)
-    assert re.search(r"^\* .* - 35\.0\.3-7\.chp\n- chp_ledger 1\.0\.2", section("changelog"))     # Task 13a on top
+    assert re.search(r"^Release:\s+8\.chp%\{\?dist\}$", SPEC, re.M)
+    assert re.search(r"^\* .* - 35\.0\.3-8\.chp\n- chp_ledger 1\.0\.3", section("changelog"))     # Task 14 on top
+    assert re.search(r"^\* .* - 35\.0\.3-7\.chp\n- chp_ledger 1\.0\.2", section("changelog"), re.M)   # Task 13a
     assert re.search(r"^\* .* - 35\.0\.3-6\.chp\n- chp_ledger 1\.0\.0", section("changelog"), re.M)
 
 

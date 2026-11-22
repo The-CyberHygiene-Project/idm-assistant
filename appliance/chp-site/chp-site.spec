@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        11.chp%{?dist}
+Release:        12.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,24 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sun Nov 22 2026 The CyberHygiene Project - 0.14.0-12.chp
+- ISO 0.7.0 Plan 3 Task 14 (the final review's fix wave), the ledger appender: control characters refused in reason
+  and notes (as chp_ledger 1.0.3 does); a journal line that logger --size would cut silently is shortened (reason and
+  notes, then other long text, by size and sha256) or, if it still cannot fit, goes to stderr; OccStore turns a
+  database failure (SiteError, psql timeout 45 s) into a store error (refused or undone, never quarantined); an
+  unexpected error after an incomplete undo keeps "UNDO INCOMPLETE"; canonical reads opened component by component
+  with O_NOFOLLOW, regular files only, at most 64 MiB; pending reads the journal before the lock; deeply nested JSON
+  is "not valid JSON"; a reader PDF cannot be checked out, created or published as a document of its own; new Wazuh
+  rule 100656 (quarantine purged, level 7), start-marker-clear-failed level 7; the daily review no longer lists the
+  document workflow's alerts as NextCloud intrusions (publications and overrides come from the ledger; the
+  appender's faults are kind "documents").
+- Marking: the wrong-banner search of a docx header/footer reads text boxes, shapes, hidden runs, every
+  AlternateContent branch, DrawingML text and VML watermarks; section properties only where Word reads them (others,
+  and one on a deleted paragraph mark, are a problem; insert refuses); header/footer relationships and parts must be
+  headers and footers; Markdown required banners from LF/CR lines (the wrong banner in both readings); names at most
+  255 UTF-8 bytes and one CUI_/FCI_ prefix; xlsx insert never replaces a first-page footer's left section.
+- doc: a kept request id answered 409 that the server holds nothing for is dropped with a refusal; doc logout
+  --forget; the runtime dir must be /run/user/<uid>; doc mark help says CUI/FCI marks.
 * Sat Nov 21 2026 The CyberHygiene Project - 0.14.0-11.chp
 - ISO 0.7.0 Plan 3 Task 13d (P3-D15, lab logs/226): onlyoffice egress-recovered treats a missing Wazuh agent state
   file as a stopped agent when the agent is installed (wazuh-agent package or its systemd unit): the recovery report

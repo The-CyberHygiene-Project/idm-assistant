@@ -1,6 +1,6 @@
 Name:           chp-identity-client
 Version:        0.2.4
-Release:        5.chp%{?dist}
+Release:        6.chp%{?dist}
 Summary:        CyberHygiene identity-client role (Kanidm unixd, authselect, sshd, forced-command accounts)
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -21,7 +21,7 @@ Source12:       52-kanidm-tls.sh
 Source13:       LICENSE
 Source14:       49-client-enrolled.sh
 Source15:       53-ga.sh
-Requires:       chp-base >= 0.1.0-14, chp-site >= 0.14.0-11, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
+Requires:       chp-base >= 0.1.0-14, chp-site >= 0.14.0-12, google-authenticator, kanidm-unixd, kanidm-clients, idm-collect, step-cli
 Requires:       authselect, policycoreutils, policycoreutils-python-utils, openssh-server, openssl, curl, python3, sudo, shadow-utils
 Requires(post): policycoreutils, policycoreutils-python-utils
 Requires(postun): policycoreutils, policycoreutils-python-utils
@@ -86,6 +86,9 @@ fi
 %dir %attr(0700,root,root) %{_sharedstatedir}/google-authenticator
 
 %changelog
+* Sun Nov 22 2026 The CyberHygiene Project - 0.2.4-6.chp
+- ISO 0.7.0 Plan 3 Task 14: Requires chp-site >= 0.14.0-12 (one pin for every role package; the final review's fix
+  wave).
 * Sat Nov 21 2026 The CyberHygiene Project - 0.2.4-5.chp
 - ISO 0.7.0 Plan 3 Task 13d: Requires chp-site >= 0.14.0-11 (one pin for every role package; P3-D15).
 * Fri Nov 20 2026 The CyberHygiene Project - 0.2.4-4.chp

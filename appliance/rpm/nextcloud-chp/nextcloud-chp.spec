@@ -16,7 +16,7 @@
 %global files_accesscontrol_ver 6.0.1
 %global user_oidc_ver 8.13.0
 %global foldertag_ver 1.0.0
-%global ledger_ver 1.0.2
+%global ledger_ver 1.0.3
 %global debug_package %{nil}
 %global __brp_mangle_shebangs %{nil}
 %global __os_install_post %{nil}
@@ -24,7 +24,7 @@
 
 Name:           nextcloud-chp
 Version:        %{ncver}
-Release:        7.chp%{?dist}
+Release:        8.chp%{?dist}
 Summary:        NextCloud server with the bundled apps for the CyberHygiene document store
 # NextCloud and its bundled apps: AGPL-3.0-or-later (their 3rdparty trees carry further permissive licences);
 # chp_foldertag, chp_ledger: Apache-2.0 (this repository's licence)
@@ -134,6 +134,10 @@ fi
 %dir %attr(0750,root,apache) %{_localstatedir}/lib/chp-docs/out
 
 %changelog
+* Sun Nov 22 2026 The CyberHygiene Project - 35.0.3-8.chp
+- chp_ledger 1.0.3 (ISO 0.7.0 Plan 3 Task 14, final review A I-1): notes and reason with a control character (C0,
+  DEL, C1) are refused like any other malformed request (the appender's journal line grew sixfold from them and
+  logger cut it silently, losing the override's level-12 alert).
 * Fri Nov 20 2026 The CyberHygiene Project - 35.0.3-7.chp
 - chp_ledger 1.0.2 (ISO 0.7.0 Plan 3 Task 13a, P3-D3): a request from a NextCloud account with no groups (user_oidc
   made it from a chp-doc Bearer before the person ever signed in on the web) is refused 403 with a plain "sign in once
