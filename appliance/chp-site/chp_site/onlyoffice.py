@@ -199,35 +199,42 @@ REPORT_HOLD_MAX = 3600            # a recovery report held this long after the e
 AGENT_PACKAGE = "wazuh-agent"
 AGENT_UNITS = ("etc/systemd/system/wazuh-agent.service", "usr/lib/systemd/system/wazuh-agent.service",
                "lib/systemd/system/wazuh-agent.service")
+AGENT_BIN = "var/ossec/bin/wazuh-agentd"
+RPM_TIMEOUT = 30
 
 
 def _agent_installed(root, run):
-    """Whether this host has a Wazuh agent at all: its package (rpm -q) or its systemd unit."""
-    if any(_p(root, u).exists() for u in AGENT_UNITS):
+    """Whether this host may have a Wazuh agent: its systemd unit, its wazuh-agentd binary or its package. Only rpm's
+    clean answer (exit 1, "is not installed") means no agent; any other rpm failure (a locked rpmdb, no rpm, a hang)
+    counts as installed, so the doubt holds the report (bounded by REPORT_HOLD_MAX) rather than sending it unheard."""
+    if any(_p(root, u).exists() for u in AGENT_UNITS + (AGENT_BIN,)):
         return True
     try:
-        return run(["rpm", "-q", AGENT_PACKAGE], capture_output=True, text=True).returncode == 0
-    except OSError:
-        return False
+        r = run(["rpm", "-q", AGENT_PACKAGE], capture_output=True, text=True, timeout=RPM_TIMEOUT)
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    return not (r.returncode == 1 and "is not installed" in (r.stdout or ""))
 
 
 def _agent_connected(root, after, run):
-    """(connected, note). connected is None only when no Wazuh agent is installed (no package, no unit): there is
-    nothing to wait for, so the report goes at once. Otherwise it is whether wazuh-agentd says it is connected in a
-    state file written at or after `after` (the failure's END: a "connected" written during the failure, before the
-    agent noticed the dead link, or one left from the previous boot, proves nothing). P3-D15 (lab logs/226): the agent
-    DELETES its state file when it stops, so an installed agent with no state file is a stopped agent, i.e. not
-    connected (held, bounded by REPORT_HOLD_MAX, with the ALERT); a state file that exists but cannot be read is not
-    connected either, with a note saying so."""
+    """(connected, note). connected is None only when no Wazuh agent is installed (no unit, no binary, and rpm
+    cleanly says the package is not installed: _agent_installed): there is nothing to wait for, so the report goes at
+    once. Otherwise it is whether wazuh-agentd says it is connected in a state file written at or after `after` (the
+    failure's END: a "connected" written during the failure, before the agent noticed the dead link, or one left from
+    the previous boot, proves nothing). P3-D15 (lab logs/226): the agent DELETES its state file when it stops, so an
+    installed agent with no state file is a stopped agent, i.e. not connected (held, bounded by REPORT_HOLD_MAX, with
+    the ALERT); a state file that exists but cannot be read (permissions, a directory, garbled bytes) is not connected
+    either, with a note saying so."""
     f = _p(root, AGENT_STATE)
     try:
-        text, mtime = f.read_text(), f.stat().st_mtime
+        text, mtime = f.read_text(encoding="utf-8"), f.stat().st_mtime
     except FileNotFoundError:
         if not _agent_installed(root, run):
             return None, ""
         return False, f" (the agent's state file {AGENT_STATE} is missing: the agent is stopped)"
-    except OSError as e:
-        return False, f" (the agent's state file {AGENT_STATE} could not be read: {e.strerror or e})"
+    except (OSError, ValueError) as e:                   # ValueError: a garbled (non-UTF-8) file
+        why = getattr(e, "strerror", None) or str(e)
+        return False, f" (the agent's state file {AGENT_STATE} could not be read: {why[:120]})"
     return re.search(r"^status='connected'\s*$", text, re.M) is not None and mtime >= after, ""
 
 

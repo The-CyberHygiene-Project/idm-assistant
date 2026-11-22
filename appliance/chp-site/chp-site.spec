@@ -46,7 +46,9 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 - ISO 0.7.0 Plan 3 Task 13d (P3-D15, lab logs/226): onlyoffice egress-recovered treats a missing Wazuh agent state
   file as a stopped agent when the agent is installed (wazuh-agent package or its systemd unit): the recovery report
   is held, sent after 60 min anyway with the ALERT, as for a stale file. A state file that cannot be read holds it
-  too, with a note. Only a host with no agent at all reports at once.
+  too, with a note. Only a host with no agent at all reports at once. Review: only rpm's clean "is not installed"
+  means no agent (a locked rpmdb, a missing rpm, a hang past 30 s or any other failure holds the report), the
+  wazuh-agentd binary counts as installed, and a garbled (non-UTF-8) state file holds with a note, not a crash.
 * Fri Nov 20 2026 The CyberHygiene Project - 0.14.0-10.chp
 - ISO 0.7.0 Plan 3 Task 13a (the 11c lab defects). doc commands: NextCloud's 502/503/504 before anything is sent
   (maintenance mode, the backup window) and a 401 while Kanidm is unreachable (probed at /status) are pending, exit 3

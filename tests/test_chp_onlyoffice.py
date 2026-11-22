@@ -974,15 +974,26 @@ def test_13a_d2_enable_installs_the_templates_on_a_host_that_has_the_editor(tmp_
 
 class Net:
     """nft list + logger for egress-recovered: which tables are loaded, what was logged."""
-    def __init__(self, tables=("chp_workstation_egress",), logger_rc=0, agent_pkg=False):
+    def __init__(self, tables=("chp_workstation_egress",), logger_rc=0, agent_pkg=False, rpm=None):
         self.tables, self.logged, self.calls, self.logger_rc = set(tables), [], [], logger_rc
         self.agent_pkg = agent_pkg                     # is the wazuh-agent package installed (rpm -q)
+        self.rpm = rpm                                 # None, "oserror", "timeout", "locked", "other": rpm misbehaves
 
     def __call__(self, argv, **kw):
         argv = list(argv)
         self.calls.append(argv)
         if argv[:2] == ["rpm", "-q"] and argv[-1] == "wazuh-agent":
-            return subprocess.CompletedProcess(argv, 0 if self.agent_pkg else 1, "", "")
+            if self.rpm == "oserror":
+                raise FileNotFoundError(2, "No such file or directory", "rpm")
+            if self.rpm == "timeout":
+                raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
+            if self.rpm == "locked":
+                return subprocess.CompletedProcess(argv, 1, "", "error: rpmdb: BDB0113 Thread/process failed: lock\n")
+            if self.rpm == "other":
+                return subprocess.CompletedProcess(argv, 2, "", "error: cannot open Packages database\n")
+            if self.agent_pkg:
+                return subprocess.CompletedProcess(argv, 0, "wazuh-agent-4.9.2-1.x86_64\n", "")
+            return subprocess.CompletedProcess(argv, 1, "package wazuh-agent is not installed\n", "")
         if argv[:4] == ["nft", "list", "table", "inet"]:
             return subprocess.CompletedProcess(argv, 0 if argv[4] in self.tables else 1, "", "")
         if argv[:1] == ["logger"]:
@@ -1266,3 +1277,63 @@ def test_13d_d15_unreadable_state_file_holds_with_a_note(tmp_path, capsys):
         assert not [a for a in n.logged if "LOCKDOWN" in a[-1]]
     finally:
         f.chmod(0o644)
+
+
+# ---------- Task 13d review minors: every doubt about the agent holds the report ----------
+
+def _lockdown_held(tmp_path, n, now=1795204400):
+    OO.egress_recovered(tmp_path, run=n, now=lambda: now)
+    return not [a for a in n.logged if "LOCKDOWN" in a[-1]]
+
+
+@pytest.mark.parametrize("how", ["oserror", "timeout", "locked", "other"])
+def test_13d_r1_an_rpm_that_cannot_answer_counts_as_installed(tmp_path, how):
+    """Only rpm's clean "is not installed" (exit 1) means no agent; a locked rpmdb, a missing rpm, a hang or any other
+    failure holds the report (bounded by the 60-minute fallback)."""
+    _locked_then_loaded(tmp_path)
+    n = Net(rpm=how)
+    assert _lockdown_held(tmp_path, n), how
+    rq = [c for c in n.calls if c[:2] == ["rpm", "-q"]]
+    assert rq, how
+    n = Net(rpm=how)
+    OO.egress_recovered(tmp_path, run=n, now=lambda: 1795204400 + OO.REPORT_HOLD_MAX)
+    assert len([a for a in n.logged if "LOCKDOWN" in a[-1]]) == 1, how
+
+
+def test_13d_r1_the_rpm_query_has_a_timeout(tmp_path):
+    _locked_then_loaded(tmp_path)
+    seen = {}
+    n = Net()
+    def run(argv, **kw):
+        if list(argv[:2]) == ["rpm", "-q"]:
+            seen.update(kw)
+        return n(argv, **kw)
+    OO.egress_recovered(tmp_path, run=run, now=lambda: 1795204400)
+    assert isinstance(seen.get("timeout"), (int, float)) and 0 < seen["timeout"] <= 60
+
+
+def test_13d_r1_the_agentd_binary_alone_counts_as_installed(tmp_path):
+    _locked_then_loaded(tmp_path)
+    b = tmp_path / "var/ossec/bin/wazuh-agentd"
+    b.parent.mkdir(parents=True)
+    b.write_text("")
+    assert _lockdown_held(tmp_path, Net(agent_pkg=False))
+
+
+def test_13d_r1_a_garbled_state_file_is_held_with_a_note(tmp_path, capsys):
+    _locked_then_loaded(tmp_path)
+    f = tmp_path / OO.AGENT_STATE.lstrip("/")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_bytes(b"status='conn\xff\xfeected'\n")
+    os.utime(f, (1795204400, 1795204400))
+    assert _lockdown_held(tmp_path, Net(agent_pkg=True))
+    out = capsys.readouterr().out
+    assert "could not be read" in out and "Traceback" not in out
+
+
+def test_13d_r1_an_unreadable_state_path_is_held_even_as_root(tmp_path, capsys):
+    """Root-safe version of the 0000 test: the state path is a directory, which nobody can read as a file."""
+    _locked_then_loaded(tmp_path)
+    (tmp_path / OO.AGENT_STATE.lstrip("/")).mkdir(parents=True)
+    assert _lockdown_held(tmp_path, Net(agent_pkg=False))
+    assert "could not be read" in capsys.readouterr().out
