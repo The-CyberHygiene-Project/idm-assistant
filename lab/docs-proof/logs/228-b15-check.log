@@ -1,0 +1,8 @@
+B15 check 2026-11-22T18:22:52Z (sign-in 2026-11-21T20:03:45Z, ~22 h earlier)
+drwx------. 2 lab01 lab01   60 Nov 21 13:04 .
+drwx------. 5 lab01 lab01  180 Nov 21 13:04 ..
+-rw-------. 1 lab01 lab01 1528 Nov 21 13:04 session.json
+## doc checkout (needs a fresh token)
+chp-site: refused: your Kanidm sign-in has ended; run chp-site doc login
+rc=2
+runtime dir: /run/user/2104078988

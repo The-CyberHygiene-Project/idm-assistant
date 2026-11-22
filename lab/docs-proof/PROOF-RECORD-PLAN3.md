@@ -368,7 +368,7 @@ SELinux Enforcing, fapolicyd active (0 denials) and firewalld active on every ho
 | CUI scan | srv 107/3 (`chronyd_client_only`, owner decision), cli1/cli2 108/2; no other change; MET | 200, 202 |
 | adapter / nvram / snapspike | ALL PASS | 221 |
 | fixtures | not re-runnable on users that already hold credentials (fixtures.py stops at lab01's enrolment; lab tool); round-1 users intact (lab01 web sign-in and POSIX probe OK) | 222 |
-| Golden | ALL PASS (fresh, after the proofs) | 223 |
+| Golden | ALL PASS (fresh, after the proofs, 223); retaken after the regression (230) | 223, 230 |
 | Regression | **NOT RUN**: the local model server was OFF on the Mac, all 32 runs before the stop EXPLAIN-FAILED; aborted, srv/cli2 reset to golden | 224 |
 | Row 36 | 3/3 | 225 |
 
@@ -378,3 +378,13 @@ SELinux Enforcing, fapolicyd active (0 denials) and firewalld active on every ho
   B15 check (it resets cli2).
 - **B15:** lab01's sign-in started 2026-11-21 20:03:45Z (13:03 MST) on cli2 in a held session; due ~21:04 MST
   (04:04Z 11-22): `chp-site doc check` / any doc command should say "run chp-site doc login".
+
+## B15 and regression (2026-11-22)
+
+| Item | Result | Log |
+|---|---|---|
+| B15: 8 h sign-in end | lab01's held session on cli2 survived (sign-in 2026-11-21T20:03:45Z); 22 h later `doc checkout` answered "refused: your Kanidm sign-in has ended; run chp-site doc login" (exit 2), nothing sent. **PASS** | 228 |
+| Regression | **33/33 in one pass**, no c4 flake | 229 |
+| Owner | confirmed the lab decision row for `chronyd_client_only` on the server (CUI scan 107/3) | - |
+| P3-D15 re-test | **needs 0.14.1**: fixed on the branch (415b8db + follow-up) after the signed 0.14.0; the lab stays on 0.14.0 | - |
+| Lab state | srv and cli2 at a fresh golden (230); cli1 at 0.14.0, restored; B15 session ended | 230 |
