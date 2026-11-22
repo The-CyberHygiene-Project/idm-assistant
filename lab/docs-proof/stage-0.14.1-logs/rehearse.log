@@ -1,0 +1,36 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+gpg: out of core handler ignored in FIPS mode
+gpg: checking the trustdb
+gpg: marginals needed: 3  completes needed: 1  trust model: pgp
+gpg: depth: 0  valid:   1  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 1u
+gpg: next trustdb check due at 2026-11-23
+throwaway key: F9677BEC5E965A1EF2360DA84C6D802934397639
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+warning: Could not set GPG_TTY to stdin: Inappropriate ioctl for device
+gpg: out of core handler ignored in FIPS mode
+gpg: out of core handler ignored in FIPS mode
+REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by F9677BEC5E965A1EF2360DA84C6D802934397639
+SIGNED REPO: /data/chp-release/tmp-r0141/rehearsal/out
+rc=0
+rpms: 72
+REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by F9677BEC5E965A1EF2360DA84C6D802934397639
+verify rc=0
+onlyoffice: Signature, key ID 34397639: OK  header 64189290d93e8e85debbd276e3c0cb2c236bed54c3267dc54e67af4cce5dc785
+boost-system (Rocky, kept): RSA/SHA256, Thu 18 Dec 2025 08:42:32 PM MST, Key ID 702d426d350d275d
+stage
+stage unchanged vs stage-sha256.txt

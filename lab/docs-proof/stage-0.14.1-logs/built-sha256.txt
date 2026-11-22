@@ -1,0 +1,7 @@
+437b862bdd96d0cde8219847c65c8d457ba900e6a9896ce898241bbd907891f5  chp-documents-0.1.0-13.chp.el9.noarch.rpm
+f4141a0236fda6be0cc570d795bda770765fcefac75db1fb5099bec0f0d57bb6  chp-identity-client-0.2.4-6.chp.el9.noarch.rpm
+dd4ebbd7f5b52ba534427fbc633277d75254527ce7265beff50b5f5c1f6ed2ba  chp-identity-server-0.1.2-8.chp.el9.noarch.rpm
+eefe9c42ede64407e16c64735dd9c1f425a214e7655eca882560949b1fb404ff  chp-onlyoffice-0.1.0-7.chp.el9.noarch.rpm
+b7c56ab9dec38f3d8b7b27b7f36e784a2767a5cd4c9cb564cf8e8d0a48e13783  chp-site-0.14.0-12.chp.el9.noarch.rpm
+bec4cb2a3745d0887419ac65551ec934a2c33562e4f1a6d2ba94b61b3c5987f1  chp-templates-1.4.0-3.chp.el9.noarch.rpm
+84a31a9995d49c26884f9087434882b84ff6049f5df90f052077fcfdf7af6439  nextcloud-chp-35.0.3-8.chp.el9.noarch.rpm

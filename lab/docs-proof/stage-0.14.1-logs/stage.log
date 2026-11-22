@@ -1,0 +1,63 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+== before (0.13.0 / 0.14.0 trees)
+66f89bcd578987b91c3d75b00688d1c0455309d118a53fefdedda84e6af57843  0.13.0/repo
+163742a74a42d775ae439528d9773f1006fd60f3b6af77a752ad6f12c2ad5c0e  0.13.0/stage
+aa4ae827a61b152f92989ef911ab7607cd16a473287b680f116938d82e00be3c  0.14.0/repo
+e8f1a270d0f0e9643b2a9ed98f6c996d732b87e5919454286ff3028dcc2d1c7e  0.14.0/stage
+2026-11-20 09:34:27.862832443 -0700 /data/chp-release/0.13.0/repo
+2026-11-21 05:32:30.068323296 -0700 /data/chp-release/0.14.0/repo
+removed '/data/chp-release/0.14.1/stage/chp-site-0.14.0-10.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/chp-documents-0.1.0-10.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/chp-identity-client-0.2.4-4.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/chp-identity-server-0.1.2-6.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/chp-onlyoffice-0.1.0-5.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/chp-templates-1.4.0-2.chp.el9.noarch.rpm'
+removed '/data/chp-release/0.14.1/stage/nextcloud-chp-35.0.3-7.chp.el9.noarch.rpm'
+added chp-site-0.14.0-12
+added chp-documents-0.1.0-13
+added chp-identity-client-0.2.4-6
+added chp-identity-server-0.1.2-8
+added chp-onlyoffice-0.1.0-7
+added chp-templates-1.4.0-3
+added nextcloud-chp-35.0.3-8
+== counts: rpms 72, files 73, size 1.2G
+== diff 0.14.0 stage -> 0.14.1 stage (sha256 lists)
+9,11c9,11
+< 8478f2c60a4f76ce58e6cdeebe18ec8684d4244200991e6e95174664fef5872c  chp-documents-0.1.0-10.chp.el9.noarch.rpm
+< e848ec031e100120d1fe975998c8da774e8236f8b492d6c89571aea39ac965ac  chp-identity-client-0.2.4-4.chp.el9.noarch.rpm
+< 879391850e4be4e2cb7c74ddbe9a5afea0c6190b73676445c68c619d40e95002  chp-identity-server-0.1.2-6.chp.el9.noarch.rpm
+---
+> 437b862bdd96d0cde8219847c65c8d457ba900e6a9896ce898241bbd907891f5  chp-documents-0.1.0-13.chp.el9.noarch.rpm
+> f4141a0236fda6be0cc570d795bda770765fcefac75db1fb5099bec0f0d57bb6  chp-identity-client-0.2.4-6.chp.el9.noarch.rpm
+> dd4ebbd7f5b52ba534427fbc633277d75254527ce7265beff50b5f5c1f6ed2ba  chp-identity-server-0.1.2-8.chp.el9.noarch.rpm
+13c13
+< 4d873405fb0c1b72747cd3f68111390d494758679968b9cda6941303595ed1bf  chp-onlyoffice-0.1.0-5.chp.el9.noarch.rpm
+---
+> eefe9c42ede64407e16c64735dd9c1f425a214e7655eca882560949b1fb404ff  chp-onlyoffice-0.1.0-7.chp.el9.noarch.rpm
+15c15
+< 2fc465b0ac924e3b80b62bc362d88ef4d94cf44dbf3ae37509dd0e71feef4b1d  chp-site-0.14.0-10.chp.el9.noarch.rpm
+---
+> b7c56ab9dec38f3d8b7b27b7f36e784a2767a5cd4c9cb564cf8e8d0a48e13783  chp-site-0.14.0-12.chp.el9.noarch.rpm
+17c17
+< c1f011fd28464c2b89571039630b2fb3b469c34538c85e891cae6bc09c656a08  chp-templates-1.4.0-2.chp.el9.noarch.rpm
+---
+> bec4cb2a3745d0887419ac65551ec934a2c33562e4f1a6d2ba94b61b3c5987f1  chp-templates-1.4.0-3.chp.el9.noarch.rpm
+38c38
+< 16c7e815903d4de289a84271cec51c285c24718678d666d57571fbea3ac18ab8  nextcloud-chp-35.0.3-7.chp.el9.noarch.rpm
+---
+> 84a31a9995d49c26884f9087434882b84ff6049f5df90f052077fcfdf7af6439  nextcloud-chp-35.0.3-8.chp.el9.noarch.rpm
+== reused files identical to the signed 0.14.0 stage: 66 (expect 66 = 65 RPMs + modules.yaml), different: 0
+== stage-sha256.txt digest: 789e1455769640acfb58ae07e142f1065b5e48e8b8c5bc585963b50558009b8a
+== after (0.13.0 / 0.14.0 trees)
+66f89bcd578987b91c3d75b00688d1c0455309d118a53fefdedda84e6af57843  0.13.0/repo
+163742a74a42d775ae439528d9773f1006fd60f3b6af77a752ad6f12c2ad5c0e  0.13.0/stage
+aa4ae827a61b152f92989ef911ab7607cd16a473287b680f116938d82e00be3c  0.14.0/repo
+e8f1a270d0f0e9643b2a9ed98f6c996d732b87e5919454286ff3028dcc2d1c7e  0.14.0/stage
+2026-11-20 09:34:27.862832443 -0700 /data/chp-release/0.13.0/repo
+2026-11-21 05:32:30.068323296 -0700 /data/chp-release/0.14.0/repo
+0.13.0 and 0.14.0 unchanged

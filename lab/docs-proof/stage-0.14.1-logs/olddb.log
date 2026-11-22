@@ -1,0 +1,85 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+######## srv (real rpm db of 2026-11-19, 1280 packages): installed ours:
+chp-base-0.1.0-12.chp.el9.noarch chp-documents-0.1.0-6.chp.el9.noarch chp-identity-client-0.2.4-1.chp.el9.noarch chp-identity-server-0.1.2-3.chp.el9.noarch chp-integrity-0.1.7-1.chp.el9.noarch chp-security-0.4.1-1.chp.el9.noarch chp-site-0.14.0-4.chp.el9.noarch chp-suricata-rules-2026.11.04-1.chp.el9.noarch chp-yara-rules-2026.10.29-1.chp.el9.noarch nextcloud-chp-35.0.3-5.chp.el9.noarch 
+== upgrade + install chp-documents nextcloud-chp chp-templates, candidate ONLY, --assumeno
+Dependencies resolved.
+ Package              Architecture  Version                   Repository   Size
+Installing:
+ chp-templates        noarch        1.4.0-3.chp.el9           cand         73 k
+Upgrading:
+ chp-documents        noarch        0.1.0-13.chp.el9          cand         49 k
+ chp-site             noarch        0.14.0-12.chp.el9         cand        221 k
+ nextcloud-chp        noarch        35.0.3-8.chp.el9          cand        212 M
+
+Transaction Summary
+Install  1 Package
+Upgrade  3 Packages
+
+Total size: 212 M
+Operation aborted.
+Dependencies resolved.
+ Package                  Arch        Version                   Repo       Size
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          cand       28 k
+ chp-documents            noarch      0.1.0-13.chp.el9          cand       49 k
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-identity-server      noarch      0.1.2-8.chp.el9           cand       25 k
+ chp-integrity            noarch      0.1.7-2.chp.el9           cand       24 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ nextcloud-chp            noarch      35.0.3-8.chp.el9          cand      212 M
+
+Transaction Summary
+Upgrade  7 Packages
+
+Total size: 212 M
+Operation aborted.
+== rpm -U --test of [chp-base chp-documents chp-identity-client chp-identity-server chp-integrity chp-site chp-templates nextcloud-chp ] against a COPY of the database
+rc=0 (8 packages)
+######## cli1 (real rpm db of 2026-11-19, 1238 packages): installed ours:
+chp-base-0.1.0-12.chp.el9.noarch chp-identity-client-0.2.4-1.chp.el9.noarch chp-integrity-0.1.7-1.chp.el9.noarch chp-security-0.4.1-1.chp.el9.noarch chp-site-0.14.0-4.chp.el9.noarch chp-suricata-rules-2026.11.04-1.chp.el9.noarch chp-yara-rules-2026.10.29-1.chp.el9.noarch 
+== upgrade + install chp-onlyoffice chp-templates, candidate ONLY, --assumeno
+Dependencies resolved.
+ Package                       Arch       Version                Repo      Size
+Installing:
+ chp-onlyoffice                noarch     0.1.0-7.chp.el9        cand      27 k
+ chp-templates                 noarch     1.4.0-3.chp.el9        cand      73 k
+Upgrading:
+ chp-site                      noarch     0.14.0-12.chp.el9      cand     221 k
+Installing dependencies:
+ boost-filesystem              x86_64     1.75.0-13.el9_7        cand      55 k
+ boost-system                  x86_64     1.75.0-13.el9_7        cand      11 k
+ libXScrnSaver                 x86_64     1.2.3-10.el9           cand      24 k
+ liberation-narrow-fonts       noarch     2:1.07.6-9.el9         cand     205 k
+ onlyoffice-desktopeditors     x86_64     10.0.0-169.el7         cand     278 M
+ xcb-util-image                x86_64     0.4.0-19.el9.0.1       cand      18 k
+ xcb-util-keysyms              x86_64     0.4.0-17.el9           cand      14 k
+ xcb-util-renderutil           x86_64     0.3.9-20.el9.0.1       cand      16 k
+ xcb-util-wm                   x86_64     0.4.1-22.el9           cand      31 k
+
+Transaction Summary
+Install  11 Packages
+Upgrade   1 Package
+
+Total size: 278 M
+Operation aborted.
+Dependencies resolved.
+ Package                  Arch        Version                   Repo       Size
+Upgrading:
+ chp-base                 noarch      0.1.0-14.chp.el9          cand       28 k
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-integrity            noarch      0.1.7-2.chp.el9           cand       24 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+
+Transaction Summary
+Upgrade  4 Packages
+
+Total size: 297 k
+Operation aborted.
+== rpm -U --test of [boost-filesystem boost-system chp-base chp-identity-client chp-integrity chp-onlyoffice chp-site chp-templates liberation-narrow-fonts libXScrnSaver onlyoffice-desktopeditors xcb-util-image xcb-util-keysyms xcb-util-renderutil xcb-util-wm ] against a COPY of the database
+rc=0 (15 packages)
+ls: cannot access '/data/chp-release/tmp-o0141': No such file or directory

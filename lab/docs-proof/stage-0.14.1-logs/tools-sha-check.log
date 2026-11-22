@@ -1,0 +1,32 @@
+      22
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+  assemble-repo.sh: OK
+  check-key-expiry.sh: OK
+  make-repodata.sh: OK
+  push.sh: OK
+  release-iso.sh: OK
+  release-kit.sh: OK
+  release-repo.sh: OK
+  sign-repo.sh: OK
+  sign-session.sh: OK
+  stage-modules.sh: OK
+  stage-vendor.sh: OK
+  test_sign_repo.sh: OK
+  test_sign_session.sh: OK
+  verify-repo.sh: OK
+  RPM-GPG-KEY-cyberhygiene: OK
+  RPM-GPG-KEY-EPEL-9: OK
+  RPM-GPG-KEY-WAZUH: OK
+  trusted-keys.txt: OK
+  PACKAGES.txt: OK
+  MODULES.txt: OK
+  VENDOR.txt: OK
+  vendor-keys/RPM-GPG-KEY-ONLYOFFICE: OK
+files: 22  not-ok: 0
+on aero, not in git:
+  RPM-GPG-KEY-Rocky-9 702D426D350D275D vs DVD 702D426D350D275D cmp=same

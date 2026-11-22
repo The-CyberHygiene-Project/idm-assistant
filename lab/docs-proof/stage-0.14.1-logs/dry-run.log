@@ -1,0 +1,238 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+######## srv (server): rebuild the 0.14.0 state (justdb) from the signed 0.14.0 repo + DVD: chp-site chp-base chp-integrity chp-identity-server chp-identity-client chp-documents nextcloud-chp chp-templates chp-security
+
+Complete!
+justdb build rc=0 (301 packages in the scratch db)
+== installed (ours + editor) in the rebuilt db:
+chp-site-0.14.0-10.chp.el9.noarch
+chp-base-0.1.0-14.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+chp-identity-server-0.1.2-6.chp.el9.noarch
+chp-identity-client-0.2.4-4.chp.el9.noarch
+chp-documents-0.1.0-10.chp.el9.noarch
+nextcloud-chp-35.0.3-7.chp.el9.noarch
+package chp-onlyoffice is not installed
+package onlyoffice-desktopeditors is not installed
+chp-templates-1.4.0-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+poppler-utils-21.01.0-24.el9.x86_64
+== module state:
+[php]
+stream=8.3
+state=enabled
+[postgresql]
+stream=16
+state=enabled
+== 1. upgrade --assumeno, candidate ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-documents            noarch      0.1.0-13.chp.el9          cand       49 k
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-identity-server      noarch      0.1.2-8.chp.el9           cand       25 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+ nextcloud-chp            noarch      35.0.3-8.chp.el9          cand      212 M
+
+Transaction Summary
+================================================================================
+Upgrade  6 Packages
+
+Total size: 212 M
+Operation aborted.
+upgrade set: [chp-documents chp-identity-client chp-identity-server chp-site chp-templates nextcloud-chp ]
+== 2. install --assumeno the role set, candidate + DVD (anything from baseos/appstream = a missing extra)
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-documents            noarch      0.1.0-13.chp.el9          cand       49 k
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-identity-server      noarch      0.1.2-8.chp.el9           cand       25 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+ nextcloud-chp            noarch      35.0.3-8.chp.el9          cand      212 M
+
+Transaction Summary
+================================================================================
+Upgrade  6 Packages
+
+Total size: 212 M
+Operation aborted.
+== 3. rpm -U --test of [chp-documents chp-identity-client chp-identity-server chp-site chp-templates nextcloud-chp ] against a COPY of the rebuilt database
+rc=0 (6 packages)
+######## cli1 (workstation): rebuild the 0.14.0 state (justdb) from the signed 0.14.0 repo + DVD: chp-site chp-base chp-integrity chp-identity-client chp-onlyoffice chp-templates chp-security
+justdb build rc=0 (306 packages in the scratch db)
+== installed (ours + editor) in the rebuilt db:
+chp-site-0.14.0-10.chp.el9.noarch
+chp-base-0.1.0-14.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-4.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+chp-onlyoffice-0.1.0-5.chp.el9.noarch
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64
+chp-templates-1.4.0-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+poppler-utils-21.01.0-24.el9.x86_64
+== module state:
+== 1. upgrade --assumeno, candidate ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-7.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 346 k
+Operation aborted.
+upgrade set: [chp-identity-client chp-onlyoffice chp-site chp-templates ]
+== 2. install --assumeno the role set, candidate + DVD (anything from baseos/appstream = a missing extra)
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-7.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 346 k
+Operation aborted.
+== 3. rpm -U --test of [chp-identity-client chp-onlyoffice chp-site chp-templates ] against a COPY of the rebuilt database
+rc=0 (4 packages)
+######## cli2 (workstation): rebuild the 0.14.0 state (justdb) from the signed 0.14.0 repo + DVD: chp-site chp-base chp-integrity chp-identity-client chp-onlyoffice chp-templates chp-security
+justdb build rc=0 (306 packages in the scratch db)
+== installed (ours + editor) in the rebuilt db:
+chp-site-0.14.0-10.chp.el9.noarch
+chp-base-0.1.0-14.chp.el9.noarch
+chp-integrity-0.1.7-2.chp.el9.noarch
+package chp-identity-server is not installed
+chp-identity-client-0.2.4-4.chp.el9.noarch
+package chp-documents is not installed
+package nextcloud-chp is not installed
+chp-onlyoffice-0.1.0-5.chp.el9.noarch
+onlyoffice-desktopeditors-10.0.0-169.el7.x86_64
+chp-templates-1.4.0-2.chp.el9.noarch
+chp-security-0.4.1-1.chp.el9.noarch
+poppler-utils-21.01.0-24.el9.x86_64
+== module state:
+== 1. upgrade --assumeno, candidate ONLY
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-7.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 346 k
+Operation aborted.
+upgrade set: [chp-identity-client chp-onlyoffice chp-site chp-templates ]
+== 2. install --assumeno the role set, candidate + DVD (anything from baseos/appstream = a missing extra)
+Dependencies resolved.
+================================================================================
+ Package                  Arch        Version                   Repo       Size
+================================================================================
+Upgrading:
+ chp-identity-client      noarch      0.2.4-6.chp.el9           cand       25 k
+ chp-onlyoffice           noarch      0.1.0-7.chp.el9           cand       27 k
+ chp-site                 noarch      0.14.0-12.chp.el9         cand      221 k
+ chp-templates            noarch      1.4.0-3.chp.el9           cand       73 k
+
+Transaction Summary
+================================================================================
+Upgrade  4 Packages
+
+Total size: 346 k
+Operation aborted.
+== 3. rpm -U --test of [chp-identity-client chp-onlyoffice chp-site chp-templates ] against a COPY of the rebuilt database
+rc=0 (4 packages)
+######## fresh-srv: fresh install of the server set into an EMPTY root, candidate + DVD, --assumeno
+Complete!
+  chp-base 0.1.0-14.chp.el9 cand
+  chp-documents 0.1.0-13.chp.el9 cand
+  chp-identity-client 0.2.4-6.chp.el9 cand
+  chp-identity-server 0.1.2-8.chp.el9 cand
+  chp-integrity 0.1.7-2.chp.el9 cand
+  chp-security 0.4.1-1.chp.el9 cand
+  chp-site 0.14.0-12.chp.el9 cand
+  chp-templates 1.4.0-3.chp.el9 cand
+  nextcloud-chp 35.0.3-8.chp.el9 cand
+  aide 0.19.2-5.el9 cand
+  chp-yara-rules 2026.10.29-1.chp.el9 cand
+  google-authenticator 1.09-5.el9 cand
+  idm-collect 0.1.0-11.chp.el9 cand
+  kanidm-clients 1.11.2-2.chp.el9 cand
+  kanidm-server 1.11.2-2.chp.el9 cand
+  kanidm-unixd 1.11.2-2.chp.el9 cand
+  poppler 21.01.0-24.el9 appstream
+  poppler-data 0.4.9-9.el9.0.1 appstream
+  poppler-utils 21.01.0-24.el9 cand
+  step-ca 0.30.2-3.chp.el9 cand
+  step-cli 0.31.0-2.chp.el9 cand
+  yara 4.5.2-1.el9 cand
+Transaction Summary
+===============================================================================================
+Install  301 Packages
+
+Total size: 395 M
+Installed size: 1.4 G
+Operation aborted.
+rc=1; lines from repo cand: 52, from baseos/appstream: 252
+######## fresh-ws: fresh install of the workstation set into an EMPTY root, candidate + DVD, --assumeno
+  chp-base 0.1.0-14.chp.el9 cand
+  chp-identity-client 0.2.4-6.chp.el9 cand
+  chp-integrity 0.1.7-2.chp.el9 cand
+  chp-onlyoffice 0.1.0-7.chp.el9 cand
+  chp-security 0.4.1-1.chp.el9 cand
+  chp-site 0.14.0-12.chp.el9 cand
+  chp-templates 1.4.0-3.chp.el9 cand
+  aide 0.19.2-5.el9 cand
+  chp-yara-rules 2026.10.29-1.chp.el9 cand
+  google-authenticator 1.09-5.el9 cand
+  idm-collect 0.1.0-11.chp.el9 cand
+  kanidm-clients 1.11.2-2.chp.el9 cand
+  kanidm-unixd 1.11.2-2.chp.el9 cand
+  onlyoffice-desktopeditors 10.0.0-169.el7 cand
+  poppler 21.01.0-24.el9 appstream
+  poppler-data 0.4.9-9.el9.0.1 appstream
+  poppler-utils 21.01.0-24.el9 cand
+  step-cli 0.31.0-2.chp.el9 cand
+  yara 4.5.2-1.el9 cand
+Transaction Summary
+================================================================================
+Install  306 Packages
+
+Total size: 444 M
+Installed size: 1.7 G
+Operation aborted.
+rc=1; lines from repo cand: 26, from baseos/appstream: 283
+ls: cannot access '/data/chp-release/tmp-d0141': No such file or directory
