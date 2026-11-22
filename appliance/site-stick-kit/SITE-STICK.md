@@ -306,7 +306,7 @@ with a plain refusal.
 If the sign-in ends, the command says so. Run `chp-site doc login` and then the same command again.
 
 The 15-minute access token is refreshed 60 seconds before it ends (the sign-in itself lasts about 8 hours). That assumes the workstation clock is right. chrony keeps it
-right: a workstation takes its time from the CHP server only (see "Time" below).
+right: a workstation takes its time from the CHP server only (see "From 0.7.0 on: time from the CHP server" above).
 
 #### The ISSO's duties
 
@@ -358,7 +358,9 @@ Copying or moving out of CUI, FCI or Archive to any other place is refused in an
 to Archive and Archive to CUI.
 
 To change a folder with files in it, an administrator can do it one file at a time. **These steps are not yet
-proven in the lab.** Read all of them first.
+proven in the lab as a whole.** The lab ran them once on a folder with no access rules of its own (the folder move refused, then
+new folders, the files moved one by one, the empty folders deleted bottom up, the tags kept); copying a folder's own
+access rules (steps 1 and 2) was not exercised. Read all of them first.
 
 - Never use them on a Compliance or Superseded area, or on a team folder's root.
 - Folder access rules (groupfolders advanced permissions) belong to the old folder. A new folder takes its parent's
@@ -541,7 +543,7 @@ release's known issues are in `docs/release/0.7.0-known-issues.md` in the projec
 | T-12 | The OIDC code in NextCloud's audit log |
 | T-13 | Ledger forgery residual, with detection |
 | T-14 | DNS tunnelling through the site resolver |
-| T-15 | `chp-publisher` and `chp-canary` outside Kanidm |
+| T-15 | `chp-publisher`, `chp-canary` and `ncadmin` outside Kanidm |
 | T-16 | The banner check reads text only |
 
 ### From 0.6.0 on: disks, the layout, and the backup drive

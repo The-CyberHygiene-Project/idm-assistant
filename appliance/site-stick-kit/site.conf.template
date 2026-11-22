@@ -64,7 +64,7 @@ SECURITY_ADDONS=no
 # the server, then: systemctl restart chp-wazuh-alerts
 SECURITY_ALERT_LEVEL=10
 
-# Optional (0.7.0 on): the document server (Nextcloud, at https://files.<your domain>). yes = the server may run it:
+# Optional (0.7.0 on): the document server (Nextcloud, at https://files.<your domain>:8443). yes = the server may run it:
 # an administrator turns it on with chp-site documents enable on the server (a Kanidm admin session and the site
 # stick are needed); it is not set up at first boot. no (default) = the same as before. yes needs SECURITY_ADDONS=yes.
 DOCUMENTS=no

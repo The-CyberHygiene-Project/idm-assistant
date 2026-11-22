@@ -11,6 +11,92 @@ for editing in ONLYOFFICE), `g3_probe.py`, `introspect_probe.py`. Work list: spe
 `.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-checklist.md` (every item's verdict is in that
 folder's `task-11c-report.md`). **Product code was not changed.**
 
+## Verdicts (both rounds; final review C I3)
+
+The per-item verdicts live in the Task 11c and 13c reports
+(`.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-report.md`, `task-13c-report.md`); their
+tallies, and every item that did not fully pass, are copied here so this record stands alone.
+
+**Round 1** (repo 0.13.0, Task 11c; the 133-item checklist, final after the timed items of 2026-11-21):
+**PASS 97 · PARTLY 18 · FAIL 9 · NOT RUN 9.**
+
+- FAIL (each a product defect, below): A13 (P3-D5), A20 (P3-D14), B6 (P3-D3), B12 (P3-D9), B14 (P3-D12), C5 (P3-D6),
+  G4 (P3-D10), H11 (P3-D7), J11 (P3-D11).
+- PARTLY:
+  - A6 (out/ root:apache 0750 httpd_sys_content_t; the file modes not listed; 109).
+  - A16 (password replaced at enable 4; `/login?direct=1` as chp-publisher not tried; 118).
+  - B1 (callback and groups PASS; the ncadmin sign-in, a web-UI group change and 100625 NOT RUN; 122).
+  - B7 (`apachectl -t` OK, /ocs Bearer OK; the /login rewrite and redirect_url not driven; 109, 119).
+  - B8 (preferred_username short form and sub recorded; aud/azp/sid not inspected).
+  - B11 (a forged Bearer is 401; cookie + forged Bearer NOT RUN; 143).
+  - C3 (every id rule PASS; a cui-only file for a chp-users-only user NOT RUN; 146).
+  - E2 (id and tag kept; the old-versions MD5 case NOT RUN; 144).
+  - E5 (process group PASS; a forced timeout NOT RUN; 175).
+  - E6 (3-6 s publishes; a 64 MiB put NOT RUN).
+  - G2 (x2t PDF and the page-one block PASS; "no repair prompt" NOT RUN: no display; 162).
+  - G7 (the AI plugin absent; the reinstall trigger NOT RUN; 111).
+  - H7 (KillUserProcesses after reboot, the polkit refusal, doc login PASS; linger-on turned off NOT RUN; 151, 176).
+  - H10 (a flush removes the egress table and check 83 says MISSING; a lock-down under a flush NOT RUN; 154).
+  - I5 (100626/100627 live, 100628 by logtest only).
+  - I10 (100603, 100612 PASS; 100602 NOT RUN; 156).
+  - J2 (no permanent stop; the trigger limit not reachable; the alert path proved; 149, 152).
+  - J8 (ledger copied first, maintenance mode answers retry; a real overlap not caught: P3-D8; 158-160).
+- NOT RUN: A12 (release-kit.sh signs and publishes: a release step), A14 (a code property, no live observable), A19,
+  B13, F9 and the spec §8 "missing tag" (tags are by folder; a publish cannot arrive untagged without patching), G3
+  and G8 (no display in the lab VMs), I7 (100631), B15 (no sign-in kept alive overnight; run in round 2).
+
+**Round 2** (repo 0.14.0, Task 13c; 37 items): PASS 28 · PARTLY 2 · FAIL 2 · NOT RUN 4 · TIMED 1, then **B15 PASS**
+(log 228: 22 h after the sign-in, `doc checkout` answered "refused: your Kanidm sign-in has ended; run chp-site doc
+login", exit 2) → **PASS 29 · PARTLY 2 · FAIL 2 · NOT RUN 4.**
+
+- PARTLY: F1 (FCI end to end PASS; the ONLYOFFICE save round-trip not shown: no display), D2 (Requires present and
+  upgraded together; the pull onto a workstation without chp-templates not shown).
+- FAIL: D6 (P3-D6 still: httpd's body limit is not enforced on the chp_ledger route; the app's 64 MiB check is the
+  control), D7c (P3-D15: a stopped Wazuh agent did not hold the recovery report; fixed in Task 13d, not yet re-run
+  in the lab).
+- NOT RUN: T6 (no fresh client install), D1 (needs a server where NextCloud was never installed), D3e (a disabled
+  account), D7b (the early-boot repeat; round 1's proof stands).
+- Regression gate: the first round-2 attempt did NOT RUN (log 224: LM Studio's server was off). The re-run is log 229
+  (the lab worker's, not yet committed): when this section was written (2026-11-22) it had 16 of 33 runs GREEN and
+  none failed, and was still running. Its final count is the lab worker's to record.
+
+Round-1 fault injection and restoration (copied from the Task 11c report; every weakening was on an iso5-* lab VM,
+except the read-only tap capture on aero):
+
+| Host | What I did | Why (item) | Log | Undone / evidence |
+|---|---|---|---|---|
+| srv | `systemctl stop kanidmd` (~1 min) | B12/J16 Kanidm outage | 161 | started; `kanidmd active` (183) |
+| srv | site.conf DOMAIN broken (2x, minutes) | J9/J14 broken set-up | 153 | restored from `/root/site.conf.good`; sha256 `d991d39d…92bf` = the good copy, `cmp` identical (183, 184); copy removed (188) |
+| srv | `SECURITY_ALERT_LEVEL=13` in site.conf + stick, enable 5 | A8 | 184 | key removed from both; site.conf byte-identical to the good copy (184) |
+| srv | `DOC_APPROVER_ACCOUNTS=` (one-person site), then `nosuchuser`, then `lab04` | F4, A7 | 117, 118, 138 | final value lab04 (stick + server) |
+| srv | `chp-docs-ledger.path` stopped | J3 | 148 | started; active (183) |
+| srv | 450 stray spool files, 400+330 rapid appender starts | J2 | 149 | spool empty, quarantine purged (0), path active (183) |
+| srv | `chattr +i` on a spool file; `chattr +i` on `unfinished/` | J11, I8 | 166, 167 | `chattr -i`; lsattr clean, 0 immutable spool files (183) |
+| srv | `/usr/bin/false` bind-mounted over `/usr/bin/logger` (6 s) | J12 | 167 | unmounted; no mount on /usr/bin/logger (183) |
+| srv | NextCloud maintenance mode on (by hand) | E10/J8 | 159, 160 | off (183) |
+| srv | `occ app:disable chp_ledger`; cui-users RO rule on CUI/Compliance cleared; doc-reviewers mapped to Internal | I10, D7 | 156 | app enabled 1.0.1; ACL rows identical to the post-enable list (183 vs 109); Internal mapped to chp-users only |
+| srv | local account `lablocal` in cui-users | I9 (I2) | 170 | deleted ("user not found", 183) |
+| srv | `chp-publisher` disabled (seconds) | A17 | 170 | enabled (183) |
+| srv | ledger moved aside for the restore test | J15 | 169 | restored from the backup, identical sha256, verify --stick OK (169, 183) |
+| srv | an injected root journal `publish-started` | J3 | 148, 168 | resolved in the ledger (entry 39); pending OK |
+| srv | exclusive flock on the ledger for 70 min | J6 | 186 | ended by itself (sleep 4200); 0 flock processes, check 82 OK (186, 188) |
+| srv | lab alert hook `/usr/local/sbin/lab-hook`, `ALERT_HOOK=` it | F4/F5 alert proofs | 118 | **kept on purpose** (the overnight alert checks need it), as Plan 2's w2catch did |
+| srv | lab scripts/outputs in /root (st/j2/j3/j11/nc/i2/lt/rb/vs .sh/.out) | driver | — | removed (188) |
+| cli1 | IPv6 address 2001:db8:100::51 + IPv6 default route | H3/G3 | 150 | removed: 0 v6 default routes, 0 2001:db8 addresses (180) |
+| cli1 | site.conf DOMAIN broken + address file removed (render failure, lock-down twice, a lock-down table deleted by hand) with a transient restore timer | H13/H14/H9 | 154 | restored by the timer at 19:53:52Z; egress active, lock-down table absent (154, 180) |
+| cli1 | `nftables.service` start+stop (flush ruleset) | H13 | 154 | egress unit restarted + firewalld reloaded; both tables back, check 83 OK |
+| cli1 | early-boot test: same breakage + `lab-egress-restore.service/.timer` (OnBootSec=240) | H9 | 179 | timer restored the files; units removed, a "not-found" loaded timer stopped and reset; 0 lab units/timers (180) |
+| cli1 | — evidence | | 180 | SELinux Enforcing; fapolicyd active 0 denials; firewalld active; egress active, policy drop, no lock-down table; address file sha256 `133fd4be…19bf7` = cli2's; site.conf same content as cli2's (sorted sha `c4415733…0415`); no `*.good`; lab scripts removed |
+| cli2 | user sessions via `systemd-run -p PAMName=login`, anchors `lab-anchor-*`, `lab-login-*` | workflow driver | — | anchors stopped; 0 lab units; no lab user processes or runtime dirs (187) |
+| cli2 | 64-97 MiB request bodies, test docs in /tmp | C5, F2 | 141 | removed (187) |
+| cli2 | a plain ext4 loop mount over lab01's working folder | G6 | 172 | unmounted, image removed |
+| cli2 | `chp-templates` installed (W1 for P3-D2) | workflow | 120 | **kept** (it is the missing dependency; signed package) |
+| cli2 | — evidence | | 187 | SELinux Enforcing; fapolicyd active 0 denials; firewalld active; egress active, policy drop, no lock-down; check 83 OK; address file `133fd4be…` |
+| aero | `tcpdump -i br-lab -w /tmp/g3cap.pcap` (150 s, read-only capture) | G3 tap | 150 | pcap removed; 0 tcpdump processes (181) |
+
+Nothing outside the iso5-* VMs was changed (aero: the capture only; aero's fapolicyd untouched). Round 2's table is
+below ("Fault injection and restoration (round 2)").
+
 ## How the lab ran it (method notes)
 
 - **Users on the workstation** (iso5-cli2, after the lab adapter): each lab user runs `chp-site doc` in a real logind
@@ -180,8 +266,8 @@ folder's `task-11c-report.md`). **Product code was not changed.**
 
 Every deliberate weakening (stopped kanidmd, broken site.conf / address file, lock-downs, immutable files, a logger
 bind mount, maintenance mode, app off, rules removed, a local cui-users account, a disabled chp-publisher, a held lock,
-an IPv6 route, a tap capture on aero) and the evidence that each was undone is listed in the Task 11c report
-(`.superpowers/sdd/2026-11-19-iso-0.7.0-plan3-document-workflow/task-11c-report.md`), logs/180, 181, 183, 184, 186-188.
+an IPv6 route, a tap capture on aero) and the evidence that each was undone is in the table under "Verdicts" above
+(copied from the Task 11c report), logs/180, 181, 183, 184, 186-188.
 Kept on purpose: the lab alert hook (`ALERT_HOOK=/usr/local/sbin/lab-hook`) and chp-templates on the workstations (W1).
 
 ## Lab state at the end
