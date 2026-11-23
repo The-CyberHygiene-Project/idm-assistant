@@ -413,7 +413,7 @@ outside the iso5 VMs (aero: the repo read only).
 | adapter / nvram / snapspike | ALL PASS | 244 |
 | Golden | ALL PASS (fresh) | 247 |
 | Row 36 | 3/3 | 248 |
-| Regression | **PENDING**: LM Studio's server is OFF on the Mac (`lms status`) | - |
+| Regression | **33/33 in one pass** (2026-11-23, LM Studio started by the controller; 11 scenarios x 3 GREEN, model 33/33 valid and agreeing, c4 3/3); lab reset to golden afterwards - `lab/iso5/regression-2026-11-23.md` | 249 |
 
 ## New defect
 
@@ -427,6 +427,13 @@ outside the iso5 VMs (aero: the repo read only).
 - `chp-nextcloud-backup` logs "did not finish in 300 s" whatever `CHP_OCC_TIMEOUT` is (text hard-coded).
 - After a failed restore, "document units were stopped; restarted them" is right for the ledger/check units; it could
   also say the web stack was left stopped on purpose (only check 77 says so).
+
+## Known issues (Plan 4 carries)
+
+| Id | Severity | Carry |
+|---|---|---|
+| P3-D16 | minor | Wazuh leaves rule 100643's description unexpanded for a long override reason (~2000 bytes; 900 bytes is fine): the level-12 ALERT_HOOK page then lacks the account and the document. Keep the reason out of the description or shorten it there; check 100642 (notes) the same way. Plan 4. |
+| P3-D6 | minor | httpd's LimitRequestBody on the chp_ledger OCS route is not enforced (`<If>`, THE_REQUEST tried); the app's 64 MiB check is the control. Open since round 1. |
 
 ## Fault injection and restoration (round 3)
 
