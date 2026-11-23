@@ -1,0 +1,15 @@
+restored (agent stopped) at 17:29:32
+inactive
+Nov 23 10:29:32 iso5-cli1.iso5.lab.test chp-workstation-egress[145777]: OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries, at most until 2026-11-23T18:29:32Z) (the agent's state file /var/
+Nov 23 10:29:32 iso5-cli1.iso5.lab.test chp-workstation-egress[145777]: OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries, at most until 2026-11-23T18:29:31Z) (the agent's state file /var/
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-egress-recovered[147980]: EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at 2026-11-23T17:27:21Z (the address file /etc/chp/workstation-eg
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-egress-recovered[147981]: EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-23T17:27:21Z until 2026-11-23T17:29:
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-egress-recovered[147980]: EGRESS RECOVERED after LOCKDOWN: the egress lock-down that began at 2026-11-23T17:27:21Z (the address file /etc/chp/workstation-egress-addr.nft was missing and 
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-egress-recovered[147981]: EGRESS RECOVERED after RENDER FAILED: the egress addresses could not be rendered from 2026-11-23T17:27:21Z until 2026-11-23T17:29:31Z (DOMAIN: 'bad domain!' is 
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-monitor[147982]: workstation egress: a recovery report was held 60 min without the Wazuh agent saying it is connected (the agent's state file /var/ossec/var/run/wazuh-agentd.state is mis
+Nov 23 11:33:42 iso5-cli1.iso5.lab.test chp-monitor[147983]: workstation egress: a recovery report was held 60 min without the Wazuh agent saying it is connected (the agent's state file /var/ossec/var/run/wazuh-agentd.state is mis
+agent active status='connected'
+/etc/chp/site.conf: OK
+/etc/chp/workstation-egress-addr.nft: OK
+lab units: 0; *.good: 0
+selinux Enforcing; fapolicyd active; firewalld active; egress active drop 1 lockdown absent; check83 OK workstation editor: egress table loaded as shipped (polic

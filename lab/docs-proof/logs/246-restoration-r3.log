@@ -1,0 +1,6 @@
+cli2 lab units: 0; /tmp: 
+selinux Enforcing; fapolicyd active; egress active; lockdown absent
+srv: selinux Enforcing; fapolicyd active Denied accesses: 0; postgresql active; stopped postgres procs: 0; httpd active; ledger.path active; approvers lab04; /root/bad-backup: ls: cannot access '/root/bad-backup': No
+Maintenance mode is currently disabled
+check 77: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran
+check 82: OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinish

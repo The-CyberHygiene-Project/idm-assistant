@@ -1,0 +1,18 @@
+== iso5-cli1
+- AI Tools plugin absent
+- fapolicyd active
+- /etc/hosts: 7 ONLYOFFICE vendor names -> 0.0.0.0
+- linger off (nobody had it)
+- egress table inet chp_workstation_egress: only the site server 192.168.100.50 (and its resolver); DoT/DoH refused
+- sweep timer chp-onlyoffice-sweep.timer: recovery copies older than 12 h of users with no session
+- logind KillUserProcesses=yes takes effect at the next boot
+enable-rc=0
+== iso5-cli2
+- AI Tools plugin absent
+- fapolicyd active
+- /etc/hosts: 7 ONLYOFFICE vendor names -> 0.0.0.0
+- linger off (nobody had it)
+- egress table inet chp_workstation_egress: only the site server 192.168.100.50 (and its resolver); DoT/DoH refused
+- sweep timer chp-onlyoffice-sweep.timer: recovery copies older than 12 h of users with no session
+- logind KillUserProcesses=yes takes effect at the next boot
+enable-rc=0

@@ -1,0 +1,13 @@
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+override recorded (ledger entry 79)
+rc=0
+journal line 2701 bytes; reason 2000 bytes
+100643 level 12 2026-11-23T10:29:11 full_log 2765 bytes
+2026-11-23T10:29:13 iso5-srv.iso5.lab.test rule 100643 level 12: Controlled document ISSO OVERRIDE (no independent approver) by $(dstuser): 
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+stick: DOC_APPROVER_ACCOUNTS=lab04
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: DOC_APPROVER_ACCOUNTS=lab04
+OK: iso5.lab.test, 3 hosts, server iso5-srv

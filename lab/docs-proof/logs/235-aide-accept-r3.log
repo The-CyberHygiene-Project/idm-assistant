@@ -1,0 +1,24 @@
+=== iso5-srv
+stick-attached
+AIDE changes since the baseline: 7 added, 3 removed, 30635 changed
+Explained by signed package updates: 30604 paths in 5 packages
+NOT explained: 41 paths (review every one)
+accepted by D. Shannon: new baseline ab91a0aa3751c216… (recorded in the audit log)
+pinned: aide/iso5-srv.txt on the site stick (SHA-512 ab91a0aa3751c216…)
+stick-detached
+=== iso5-cli1
+stick-attached
+AIDE changes since the baseline: 2 added, 0 removed, 177 changed
+Explained by signed package updates: 162 paths in 4 packages
+NOT explained: 17 paths (review every one)
+accepted by D. Shannon: new baseline 93c5c8c2fa7844e1… (recorded in the audit log)
+pinned: aide/iso5-cli1.txt on the site stick (SHA-512 93c5c8c2fa7844e1…)
+stick-detached
+=== iso5-cli2
+stick-attached
+AIDE changes since the baseline: 2 added, 0 removed, 175 changed
+Explained by signed package updates: 161 paths in 4 packages
+NOT explained: 16 paths (review every one)
+accepted by D. Shannon: new baseline 34a5448794fdb89d… (recorded in the audit log)
+pinned: aide/iso5-cli2.txt on the site stick (SHA-512 34a5448794fdb89d…)
+stick-detached

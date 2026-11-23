@@ -1,0 +1,17 @@
+inactive
+5c326d68ec2a379cfde29302a97edeed.json
+{"event":"refused","file_id":143,"kind":"checkout","message":"refused: the document server could not do it (the NextCloud database could not be read (psql failed: \tIs the server running locally and accepting connections on that s
+0
+0
+{"message": "refused: the document server could not do it (the NextCloud database could not be read (psql failed: \tIs the server running locally and accepting connections on that socket?)); nothing was recorded; run the command again", "request_id":
+active
+## client during the blip
+pending: the ledger answered HTTP 500. Nothing more happens now; run the same command again in a minute (it sends this same request again, never a second one)
+rc=3
+## the same command after
+refused: the document server could not do it (the NextCloud database could not be read (psql failed: 	Is the server running locally and accepting connections on that socket?)); nothing was recorded; run the command again
+rc=0
+checkout recorded (ledger entry 84)
+working copy: /home/lab01@idm.iso5.lab.test/Documents/CHP-Working/CUI_SecPolicy_v0.9-DRAFT.docx
+Open it in ONLYOFFICE (the first time, start ONLYOFFICE once from the desktop: publish needs its first run).
+active active active active OK document ledger: path unit active, chain and head verify, quarantine empty, no unfinish

@@ -1,0 +1,37 @@
+occ rc=124 after 22 s (124 = hung)
+active
+t+10 s: ledger lock FREE
+backup exit 11 after 42 s
+after the backup: ledger lock free
+backup: occ maintenance:mode --off failed or did not finish in 40 s (check it by hand)
+FAILED 1795455316 backup 20261123T173516Z exited 11
+copies: 5 -> 5 (half copy removed?)
+/backup/nextcloud/20261123T084004Z/
+postgresql active
+Maintenance mode is currently disabled
+check 77: ALERT NextCloud backup failed: backup 20261123T173516Z exited 11 
+## a normal backup after the thaw
+rsync error: error in file IO (code 11) at main.c(780) [Receiver=3.2.5]
+rc=0
+check 77: OK NextCloud backup failed: backup 20261123T173602Z exited 11 - still failing (alerted 2026-11-23T17:36:02Z)
+EXIT=0
+## (the two runs above were a lab-driver artifact: rsync from a transient unit is confined -> code 11; repeated from the root console shell below)
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
+t+10 s: ledger lock held (shared, by the backup during its bounded occ call)
+backup exit 75 after 84 s
+after the backup: ledger lock free
+
+Session terminated, killing shell... ...killed.
+backup FAILED: occ maintenance:mode --on failed or did not finish in 300 s
+backup: occ maintenance:mode --off failed or did not finish in 40 s (check it by hand)
+FAILED 1795455419 backup 20261123T173617Z exited 75
+copies: 5 -> 5 (half copy removed?)
+/backup/nextcloud/20261123T084004Z/
+postgresql active
+Maintenance mode is currently disabled
+check 77: OK NextCloud backup failed: backup 20261123T173617Z exited 75 - still failing (alerted 2026-11-23T17:36:02Z) 
+## a normal backup after the thaw
+backup 20261123T173745Z: 4.1M, 100 files, keeping 14 days (at least 2 copies)
+rc=0
+check 77: OK NextCloud services (httpd, php-fpm, postgresql, cron timer) active; background jobs ran 2026-11-23T17:32:48Z
+EXIT=0

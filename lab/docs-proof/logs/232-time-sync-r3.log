@@ -1,0 +1,17 @@
+## server
+- /etc/chrony.conf: unchanged
+- time service: the site subnet 192.168.100.0/24 only (123/udp; owner-approved exception)
+rc=0
+192.168.100.50:123
+## iso5-cli1
+- /etc/chrony.conf: unchanged
+- time source: the CHP server 192.168.100.50 only
+rc=0
+^* 192.168.100.50               11  16  
+OK time source: the CHP server 192.168.100.50
+## iso5-cli2
+- /etc/chrony.conf: unchanged
+- time source: the CHP server 192.168.100.50 only
+rc=0
+^* 192.168.100.50               11  14  
+OK time source: the CHP server 192.168.100.50

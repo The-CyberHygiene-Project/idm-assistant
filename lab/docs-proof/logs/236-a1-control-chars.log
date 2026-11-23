@@ -1,0 +1,19 @@
+new recorded (ledger entry 77)
+## client: --notes with C0 () and C1 (U+0085)
+HTTP 200
+OK
+chp-site: refused: --reason has a control character (a line break, a tab or similar); the ledger takes one line of plain text; run the command again (nothing was sent)
+rc=2
+chp-site: refused: --reason has a control character (a line break, a tab or similar); the ledger takes one line of plain text; run the command again (nothing was sent)
+rc=2
+## server: raw requests with C0 / DEL / C1 in reason/notes
+notes=: HTTP 400 {"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can 
+
+notes=: HTTP 400 {"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can 
+
+notes=: HTTP 400 {"ocs":{"meta":{"status":"failure","statuscode":400,"message":""},"data":{"state":"refused","message":"refused: the request is not valid, or the document is not a controlled document you can 
+
+3
+control (notes=ab, same body): HTTP 200 {"ocs":{"meta":{"status":"ok","statuscode":200,"message":"OK"},"data":{"request_id":"22be34897639b7db7e0c84591efd1586","state":"queued"}}} 
+0
+0

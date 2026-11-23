@@ -1,0 +1,18 @@
+## restore from a copy with a corrupt dump (MANIFEST rebuilt so it passes)
+pg_restore: error: could not read from input file: end of file
+restore FAILED: document units were stopped; restarted them
+restore-rc=0
+inactive inactive inactive active 
+OK 1795455467 backup 20261123T173745Z
+check 77: ALERT NextCloud: httpd is not active ALERT NextCloud: php-fpm is not active 
+## good restore
+Fapolicyd was notified
+OK fapolicyd trust entry for /etc/nextcloud/config.php refreshed (fapolicyd-cli --file update, --update): size 2549, sha256 c082a69fd755b17b0b47aff7bb102c78e5c599ec78ce420f42a4e4e62b1feefe
+restored from /backup/nextcloud/20261123T173745Z
+restore-rc=0
+active active active active 
+OK NextCloud check: every file in CUI, FCI and Archive tagged, no untagged CUI_/FCI_ file, policy as required; cui-users and admin as Kanidm
+DEGRADED: database MD5 unavailable (folder moves/renames/deletes refused)
+OK: chain and head match, 86 entries; stick anchor NOT checked (run with --stick
+Denied accesses: 0
+EXIT=0

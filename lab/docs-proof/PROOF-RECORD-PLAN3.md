@@ -388,3 +388,55 @@ SELinux Enforcing, fapolicyd active (0 denials) and firewalld active on every ho
 | Owner | confirmed the lab decision row for `chronyd_client_only` on the server (CUI scan 107/3) | - |
 | P3-D15 re-test | **needs 0.14.1**: fixed on the branch (415b8db + follow-up) after the signed 0.14.0; the lab stays on 0.14.0 | - |
 | Lab state | srv and cli2 at a fresh golden (230); cli1 at 0.14.0, restored; B15 session ended | 230 |
+
+# Round 3 (repo 0.14.1, 2026-11-23)
+
+Repo **0.14.1** (owner-signed; `verify-repo` REPO OK 72) applied **in place** to iso5-srv, iso5-cli1, iso5-cli2.
+Logs 231-248; new lab helper `docx_inject.py` (B1/B2 test files). No product code changed, nothing signed, no work
+outside the iso5 VMs (aero: the repo read only).
+
+| Item | Result | Log |
+|---|---|---|
+| Apply 0.14.1 | srv upgrade 5 (chp-site 0.14.0-12, chp-identity-client 0.2.4-6, chp-identity-server 0.1.2-8, chp-documents 0.1.0-13, nextcloud-chp 35.0.3-8); cli1/cli2 upgrade 4 (incl. chp-onlyoffice 0.1.0-7, chp-templates 1.4.0-3); 0 denials | 231 |
+| `time-sync`: server first, then clients | all "unchanged"; NTP on 192.168.100.50:123 only; clients `^*` the server, check 20 OK | 232 |
+| `documents enable` 7, `onlyoffice enable` x2, AIDE accept x3 | exit 0 everywhere; accepted and pinned | 233-235 |
+| **P3-D15** (agent stopped at recovery) | **PASS**: at recovery "OK egress: recovered; the report waits until the Wazuh agent is connected (check 83 retries, at most until 18:29:32Z) (the agent's state file … is missing: the agent is stopped)"; at the first check-83 run after the hour (18:33:42Z) both reports logged anyway, each with ONE monitor ALERT "a recovery report was held 60 min without the Wazuh agent saying it is connected …" | 245 |
+| **A1** control characters | **PASS**: client refuses C0 and C1 in `--reason` ("has a control character … nothing was sent", exit 2); raw requests with `\u0001`, `\u007f`, `\u0085` in notes → 400 at the app, nothing spooled or quarantined; the same body with plain notes → 200 queued | 236 |
+| A1 "the alert fits" | **FAIL (P3-D16)**: a 2000-byte override reason → journal line 2701 bytes (fits), 100643 level 12 delivered, but Wazuh left its description UNEXPANDED ("by $(dstuser): $(path); reason: $(reason)"); a 12-byte and a 900-byte reason expand normally | 237, 238 |
+| **A2** database blip | **PASS**: PostgreSQL stopped with a request in the spool → appender "refused: the document server could not do it (the NextCloud database could not be read …); nothing was recorded; run the command again"; no quarantine; client pending (exit 3) during the blip; after the restart the command works (ledger entry 84) | 239 |
+| **Backup hang fix** | **PASS**: PostgreSQL frozen (SIGSTOP) so occ hangs; the backup (occ bound set to 40 s through `CHP_OCC_TIMEOUT`; default 300) exited 75 after 84 s, status FAILED (check 77 ALERT), half copy removed, ledger lock free afterwards, the trap's `--off` bounded too; thawed: the next backup OK and check 77 clears. (The first two attempts ran from a transient unit, where rsync is confined: code 11, a lab artifact.) | 241 |
+| Restore failure handling | **PASS**: a restore from a copy whose dump is corrupt (MANIFEST rebuilt) → "pg_restore: error … restore FAILED: document units were stopped; restarted them"; the ledger/check units back, the web stack stopped on purpose (check 77 alerts httpd/php-fpm); a good restore then: services up, nightly check OK, ledger 86 entries verify, 0 denials | 242 |
+| **B1** wrong banner anywhere in a header | **PASS**: a CUI text box, and a paragraph of one hidden run "CUI", in an FCI_ header → refused by `doc check` and `doc mark --apply` (the unmodified source: OK). (A first hidden-run file put "CUI" in the same paragraph as "FCI" — line "FCICUI", not a banner — a helper mistake, redone.) | 240 |
+| **B2** section breaks | **PASS**: a sectPr in a table cell and one on a tracked-deleted paragraph mark → "a section break is in a place that cannot be checked …", refused by check and by mark --apply | 240 |
+| D1 fresh enable | **NOT RUN**: needs a server where NextCloud was never installed (a full reset) | - |
+| CUI scan | srv 107/3, cli1/cli2 108/2: **no rule changed vs round 2**; Gate 3 MET (decision row kept) | 243 |
+| adapter / nvram / snapspike | ALL PASS | 244 |
+| Golden | ALL PASS (fresh) | 247 |
+| Row 36 | 3/3 | 248 |
+| Regression | **PENDING**: LM Studio's server is OFF on the Mac (`lms status`) | - |
+
+## New defect
+
+- **P3-D16 (minor).** Wazuh does not expand rule 100643's description when the override reason is long (2000 bytes:
+  "by $(dstuser): $(path); reason: $(reason)" left literal; 900 bytes expands). The page still fires at level 12,
+  but the ALERT_HOOK text does not say who or which document. Fix: keep the reason out of the description (it is in
+  data.reason) or shorten it there; check 100642's notes the same way.
+
+## Observations
+
+- `chp-nextcloud-backup` logs "did not finish in 300 s" whatever `CHP_OCC_TIMEOUT` is (text hard-coded).
+- After a failed restore, "document units were stopped; restarted them" is right for the ledger/check units; it could
+  also say the web stack was left stopped on purpose (only check 77 says so).
+
+## Fault injection and restoration (round 3)
+
+| Host | What | Why | Undone / evidence | Log |
+|---|---|---|---|---|
+| cli1 | address file removed + DOMAIN broken → lock-down; restore timer; wazuh-agent stopped ~80 min | P3-D15 | `sha256sum -c` OK for both files; agent `status='connected'`; 0 lab units, no `*.good`; egress active, policy drop, no lock-down | 245 |
+| srv | `DOC_APPROVER_ACCOUNTS` emptied (one-person site) for 3 overrides | A1 alert | back to lab04 (stick + server) | 237, 238, 246 |
+| srv | chp-docs-ledger.path stopped, PostgreSQL stopped (~20 s) | A2 | both active | 239, 246 |
+| srv | PostgreSQL frozen with SIGSTOP (~60 s, twice) | backup hang | SIGCONT; 0 stopped postgres processes; maintenance off; check 77 OK | 241, 246 |
+| srv | NextCloud database dropped by the deliberate failed restore | restore failure | restored from the fresh backup 20261123T173745Z; nightly check OK; ledger verifies | 242 |
+| srv/cli2 | lab test files, anchor sessions | driver | removed / stopped | 246 |
+
+SELinux Enforcing, fapolicyd active (0 denials), firewalld active on every host at the end (245, 246).

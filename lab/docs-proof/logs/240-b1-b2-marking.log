@@ -1,0 +1,33 @@
+CUI_Csrc_v0.1-DRAFT.docx
+FCI_Bsrc_v0.1-DRAFT.docx
+copied
+######## hidden-cui
+injected hidden-cui into FCI_Bhidden_v0.1-DRAFT.docx
+OK
+-- mark --apply:
+FCI_Bhidden_v0.1-DRAFT.docx: nothing to add (the marks are there)
+######## textbox-cui
+injected textbox-cui into FCI_Btextbox_v0.1-DRAFT.docx
+  PROBLEM: FCI_Btextbox_v0.1-DRAFT.docx: a CUI banner is in the header or footer, but this is an FCI_ document: it carries the FCI banner only (a document that holds CUI is named CUI_)
+NOT READY
+-- mark --apply:
+refused: FCI_Btextbox_v0.1-DRAFT.docx: nothing can be added, but the check fails (FCI_Btextbox_v0.1-DRAFT.docx: a CUI banner is in the header or footer, but this is an FCI_ document: it carries the FCI banner only (a doc
+######## sect-in-table
+injected sect-in-table into CUI_Ctable_v0.1-DRAFT.docx
+  PROBLEM: CUI_Ctable_v0.1-DRAFT.docx: a section break is in a place that cannot be checked (inside alternate content, a tracked change, a text box or a table, or on a deleted paragraph mark), so which header and footer 
+NOT READY
+-- mark --apply:
+refused: word/document.xml: a section break is in a place that cannot be checked (inside alternate content, a tracked change, a text box or a table, or on a deleted paragraph mark), so which header and footer its pages s
+######## sect-deleted
+injected sect-deleted into CUI_Cdeleted_v0.1-DRAFT.docx
+  PROBLEM: CUI_Cdeleted_v0.1-DRAFT.docx: a section break is in a place that cannot be checked (inside alternate content, a tracked change, a text box or a table, or on a deleted paragraph mark), so which header and foote
+NOT READY
+-- mark --apply:
+refused: word/document.xml: a section break is in a place that cannot be checked (inside alternate content, a tracked change, a text box or a table, or on a deleted paragraph mark), so which header and footer its pages s
+######## control: the unmodified sources
+FCI_Bsrc_v0.1-DRAFT.docx: OK
+CUI_Csrc_v0.1-DRAFT.docx: OK
+######## hidden-cui (own paragraph)
+injected hidden-cui into FCI_Bhidden2_v0.1-DRAFT.docx
+  PROBLEM: FCI_Bhidden2_v0.1-DRAFT.docx: a CUI banner is in the header or footer, but this is an FCI_ document: it carries the FCI banner only (a document that holds CUI is named CUI_)
+NOT READY

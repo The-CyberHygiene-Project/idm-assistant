@@ -1,0 +1,20 @@
+description: Controlled document ISSO OVERRIDE (no independent approver) by $(dstuser): $(path); reason: $(reason)
+decoder: {'name': 'chp-docs-ledger'}
+data keys: ['auth', 'cycle', 'doc', 'dstuser', 'event', 'file_id', 'kanidm_sub', 'kind', 'path', 'prev', 'reason', 'request_id', 'seq', 'session_id', 'sha256', 'ts']
+dstuser: lab01
+284:  <rule id="100643" level="12">
+285-    <if_sid>100653</if_sid>
+286-    <field name="kind">^override$</field>
+287-    <description>Controlled document ISSO OVERRIDE (no independent approver) by $(dstuser): $(path); reason: $(reason)</description>
+288-    <group>chp_doc_override,</group>
+last 100642: 2026-11-23T10:28:55 Controlled document APPROVED by lab04: CUI/Compliance/CUI_Ctl_v0.1-DRAFT.docx (sha256 0000000000000000000000000000000000
+3
+override recorded (ledger entry 81)
+override recorded (ledger entry 83)
+2026-11-23T10:29:11 reason 2000 bytes: Controlled document ISSO OVERRIDE (no independent approver) by $(dstuser): $(path); reason: $(reason)
+2026-11-23T10:30:17 reason 12 bytes: Controlled document ISSO OVERRIDE (no independent approver) by lab01: CUI/Compliance/CUI_Ctl2_v0.1-DRAFT.docx;
+2026-11-23T10:30:21 reason 900 bytes: Controlled document ISSO OVERRIDE (no independent approver) by lab01: CUI/Compliance/CUI_Ctl3_v0.1-DRAFT.docx;
+stick: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: ALERT_HOOK=/usr/local/sbin/lab-hook
+server: DOC_APPROVER_ACCOUNTS=lab04
+OK: iso5.lab.test, 3 hosts, server iso5-srv
