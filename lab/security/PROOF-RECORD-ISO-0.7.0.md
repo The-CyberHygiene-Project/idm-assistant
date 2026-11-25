@@ -22,7 +22,14 @@
 | **Workflow end to end, CUI and FCI** | `CUI_Policy2`: new → approve (lab04) → publish CR-2026-0001, then checkout → approve → publish CR-2026-0002 (v0.1 to Archive/Superseded); `FCI_Quote2` likewise CR-2026-0003/0004; reader PDFs banner "CUI" / "FCI" first and last. (A first attempt failed only in the lab driver: `CUI/Drafts/lab01` did not exist on the fresh server, so the hand-off upload got 404; it leaves two harmless open "new" cycles, CUI_Policy and FCI_Quote, in the ledger.) | `rc1-workflow-e2e.log` |
 | Golden | **ALL PASS** (reset + 0 engine findings) | `rc1-golden.log` |
 | **Gate 2: row 36** | **3/3** | `rc1-row36.log` |
-| **Gate 2: regression** | **PENDING**: waiting for the controller to start LM Studio | - |
+| **Gate 2: regression** | **33/33 in one pass** (11 scenarios x 3 GREEN; model `devstral-small-2-2512` 33/33 valid, 33/33 agreeing; c4 3/3); LM Studio started by the controller; lab reset to golden afterwards - `lab/iso5/regression-2026-11-24.md` | `rc1-regress.log` |
+
+## Lab residue (recorded, not removed)
+
+The first workflow attempt left two open `new` cycles in the lab ledger (ledger entries 1 and 2: `CUI_Policy` and
+`FCI_Quote`, created, never approved or published). The ledger is append-only and hash-chained by design, so they are
+not removed; they only block a later `doc new` of those two names on this throwaway lab (use `doc checkout`-free new
+names). `doc-ledger verify` is unaffected.
 
 ## Defects
 
