@@ -1,0 +1,13 @@
+== iso5-srv
+chp-site-0.14.0-12.chp.el9.noarch chp-base-0.1.0-14.chp.el9.noarch chp-identity-client-0.2.4-6.chp.el9.noarch chp-identity-server-0.1.2-8.chp.el9.noarch chp-security-0.4.1-1.chp.el9.noarch 
+^* 192.168.100.1                10   8  
+192.168.100.50:123
+journal persistent; fapolicyd Denied accesses: 0; selinux Enforcing
+== iso5-cli1
+chp-site-0.14.0-12.chp.el9.noarch chp-base-0.1.0-14.chp.el9.noarch chp-identity-client-0.2.4-6.chp.el9.noarch chp-security-0.4.1-1.chp.el9.noarch 
+^* 192.168.100.50               11   7  
+journal volatile; fapolicyd Denied accesses: 0; selinux Enforcing
+== iso5-cli2
+chp-site-0.14.0-12.chp.el9.noarch chp-base-0.1.0-14.chp.el9.noarch chp-identity-client-0.2.4-6.chp.el9.noarch chp-security-0.4.1-1.chp.el9.noarch 
+^* 192.168.100.50               11   6  
+journal volatile; fapolicyd Denied accesses: 0; selinux Enforcing

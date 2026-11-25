@@ -1,0 +1,30 @@
+Successfully added ["lab01", "lab04"] to group "cui-users"
+Successfully added ["lab03", "lab04"] to group "doc-reviewers"
+member: lab01 member: lab04 name: cui-users 
+member: lab03 member: lab04 name: doc-reviewers 
+member: lab02 member: lab03 member: lab01 member: lab04 member: lab06 name: chp_users 
+stick: ALERT_HOOK=
+stick: DOC_ISSO_ACCOUNT=lab01
+stick: DOC_APPROVER_ACCOUNTS=lab04
+server: ALERT_HOOK=
+server: DOC_ISSO_ACCOUNT=lab01
+server: DOC_APPROVER_ACCOUNTS=lab04
+OK: iso5.lab.test, 3 hosts, server iso5-srv
+- NextCloud installed offline (data /data/nextcloud/data); /etc/nextcloud/config.php trusted by fapolicyd first
+- document approvers: ISSO lab01; approvers lab04 (Kanidm accounts, checked)
+- fapolicyd: no restart needed (active)
+enable-rc=0
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+tunnel up
+1
+SIGNED IN: id=lab01 display='Lab User 1' groups=['chp-users', 'cui-users'] backend=user_oidc
+SIGNED IN: id=lab04 display='Lab User 4' groups=['chp-users', 'cui-users', 'doc-reviewers'] backend=user_oidc
+signed in as lab01 (sign-in ends: about 2026-11-25 01:19 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+signed in as lab04 (sign-in ends: about 2026-11-25 01:19 MST (an estimate: sign-in time + the 8 h refresh lifetime; Kanidm did not give the end))
+/home/lab01@idm.iso5.lab.test/.local/share/onlyoffice/desktopeditors/data/fonts/AllFonts.js
+/bin/bash: line 1:  3997 Segmentation fault      /usr/bin/desktopeditors > /tmp/oo-$USER.log 2>&1

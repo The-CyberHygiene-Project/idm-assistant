@@ -1,0 +1,17 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+\S
+Kernel \r on \m
+
+== DVD: sha256 (takes about a minute)
+== repo 0.14.1: signatures
+REPO OK: 72 packages, all signed by pinned keys; repomd.xml signed by 2DE0D71BF37D8F5E4201A590521276F43C908F8E
+== DVD tree -> work copy (about 15 GB, on /backup)
+== stage /chp, menus, NOTICE
+== /images/efiboot.img: our grub.cfg (DVD and USB UEFI boot read this copy; the EFI binaries are not touched)
+== ISO
+Written to medium : 8115992 sectors at LBA 0
+Writing to 'stdio:/var/lib/libvirt/images/chp-iso/0.7.0-rc1/cyberhygiene-lab-installer-el9.iso' completed successfully.
+
+built: /var/lib/libvirt/images/chp-iso/0.7.0-rc1/cyberhygiene-lab-installer-el9.iso

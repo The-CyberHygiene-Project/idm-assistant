@@ -1,0 +1,173 @@
+######## CUI_Policy: new -> publish v0.1
+new recorded (ledger entry 1)
+CUI_Policy_v0.1-DRAFT.docx: CUI area (CUI marks)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_Policy_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+CUI_Policy_v0.1-DRAFT.docx: nothing to add (the marks are there)
+HTTP 404
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: CUI_Policy_v0.1-DRAFT.docx does not pass the marking check (nothing was sent):
+  CUI_Policy_v0.1-DRAFT.docx: is not a valid Office file (not a zip package)
+refused: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+publish-rc=1
+######## CUI_Policy: checkout -> approve -> publish v0.2
+closed CUI_Policy_v0.1.docx
+chp-site: refused: CUI_Policy_v0.1.docx was not found in CUI/Compliance
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/usr/lib64/python3.9/zipfile.py", line 1266, in __init__
+    self.fp = io.open(file, filemode)
+FileNotFoundError: [Errno 2] No such file or directory: 'CUI_Policy_v0.2-DRAFT.docx'
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: CUI_Policy_v0.2-DRAFT.docx does not pass the marking check (nothing was sent):
+  CUI_Policy_v0.2-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'CUI_Policy_v0.2-DRAFT.docx': No such file or directory
+chp-site: refused: CUI_Policy_v0.2.docx is not a file
+publish-rc=2
+######## FCI_Quote: new -> publish v0.1
+new recorded (ledger entry 2)
+FCI_Quote_v0.1-DRAFT.docx: CUI area (FCI banner)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Quote_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+FCI_Quote_v0.1-DRAFT.docx: nothing to add (the marks are there)
+HTTP 404
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: FCI_Quote_v0.1-DRAFT.docx does not pass the marking check (nothing was sent):
+  FCI_Quote_v0.1-DRAFT.docx: is not a valid Office file (not a zip package)
+refused: no valid approval of this exact file (sha256) after the cycle's last checkout, by an approver who is not an author
+publish-rc=1
+######## FCI_Quote: checkout -> approve -> publish v0.2
+closed FCI_Quote_v0.1.docx
+chp-site: refused: FCI_Quote_v0.1.docx was not found in CUI/Compliance
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/usr/lib64/python3.9/zipfile.py", line 1266, in __init__
+    self.fp = io.open(file, filemode)
+FileNotFoundError: [Errno 2] No such file or directory: 'FCI_Quote_v0.2-DRAFT.docx'
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: FCI_Quote_v0.2-DRAFT.docx does not pass the marking check (nothing was sent):
+  FCI_Quote_v0.2-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'FCI_Quote_v0.2-DRAFT.docx': No such file or directory
+chp-site: refused: FCI_Quote_v0.2.docx is not a file
+publish-rc=2
+######## (lab driver fix: CUI/Drafts/lab01 created; the first hand-off above got 404)
+HTTP 201
+HTTP 201
+######## CUI_Policy v0.1
+mv: cannot stat 'CUI_Policy_v0.1.docx': No such file or directory
+chp-site: refused: CUI_Policy_v0.1-DRAFT.docx is not a file
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: CUI_Policy_v0.1-DRAFT.docx does not pass the marking check (nothing was sent):
+  CUI_Policy_v0.1-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'CUI_Policy_v0.1-DRAFT.docx': No such file or directory
+chp-site: refused: CUI_Policy_v0.1.docx is not a file
+######## CUI_Policy checkout -> v0.2
+CUI_Policy_v0.1.docx: nothing to remove
+chp-site: refused: CUI_Policy_v0.1.docx was not found in CUI/Compliance
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/usr/lib64/python3.9/zipfile.py", line 1266, in __init__
+    self.fp = io.open(file, filemode)
+FileNotFoundError: [Errno 2] No such file or directory: 'CUI_Policy_v0.2-DRAFT.docx'
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: CUI_Policy_v0.2-DRAFT.docx does not pass the marking check (nothing was sent):
+  CUI_Policy_v0.2-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'CUI_Policy_v0.2-DRAFT.docx': No such file or directory
+chp-site: refused: CUI_Policy_v0.2.docx is not a file
+######## FCI_Quote v0.1
+mv: cannot stat 'FCI_Quote_v0.1.docx': No such file or directory
+chp-site: refused: FCI_Quote_v0.1-DRAFT.docx is not a file
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: FCI_Quote_v0.1-DRAFT.docx does not pass the marking check (nothing was sent):
+  FCI_Quote_v0.1-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'FCI_Quote_v0.1-DRAFT.docx': No such file or directory
+chp-site: refused: FCI_Quote_v0.1.docx is not a file
+######## FCI_Quote checkout -> v0.2
+FCI_Quote_v0.1.docx: nothing to remove
+chp-site: refused: FCI_Quote_v0.1.docx was not found in CUI/Compliance
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/usr/lib64/python3.9/zipfile.py", line 1266, in __init__
+    self.fp = io.open(file, filemode)
+FileNotFoundError: [Errno 2] No such file or directory: 'FCI_Quote_v0.2-DRAFT.docx'
+Traceback (most recent call last):
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+refused: FCI_Quote_v0.2-DRAFT.docx does not pass the marking check (nothing was sent):
+  FCI_Quote_v0.2-DRAFT.docx: is not a valid Office file (not a zip package)
+mv: cannot stat 'FCI_Quote_v0.2-DRAFT.docx': No such file or directory
+chp-site: refused: FCI_Quote_v0.2.docx is not a file
+######## (rerun with fresh names CUI_Policy2 / FCI_Quote2; the first attempt's working copies were closed before publish)
+######## CUI_Policy2: new -> publish v0.1
+new recorded (ledger entry 3)
+CUI_Policy2_v0.1-DRAFT.docx: CUI area (CUI marks)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to CUI_Policy2_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+CUI_Policy2_v0.1-DRAFT.docx: nothing to add (the marks are there)
+HTTP 201
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+approve recorded (ledger entry 4)
+published CUI/Compliance/CUI_Policy2_v0.1.docx as CR-2026-0001 (ledger entry 5)
+When you are done with it: chp-site doc close CUI_Policy2_v0.1.docx
+publish-rc=0
+######## CUI_Policy2: checkout -> approve -> publish v0.2
+closed CUI_Policy2_v0.1.docx
+checkout recorded (ledger entry 6)
+edited CUI_Policy2_v0.2-DRAFT.docx
+HTTP 201
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+approve recorded (ledger entry 7)
+published CUI/Compliance/CUI_Policy2_v0.2.docx as CR-2026-0002 (ledger entry 8)
+######## FCI_Quote2: new -> publish v0.1
+new recorded (ledger entry 9)
+FCI_Quote2_v0.1-DRAFT.docx: CUI area (FCI banner)
+  -DRAFT: still a draft; after the approval rename it, unchanged, to FCI_Quote2_v0.1.docx and publish that
+  freshness: fresh (the canonical copy is the one you checked out)
+OK
+FCI_Quote2_v0.1-DRAFT.docx: nothing to add (the marks are there)
+HTTP 201
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+approve recorded (ledger entry 10)
+published CUI/Compliance/FCI_Quote2_v0.1.docx as CR-2026-0003 (ledger entry 11)
+When you are done with it: chp-site doc close FCI_Quote2_v0.1.docx
+publish-rc=0
+######## FCI_Quote2: checkout -> approve -> publish v0.2
+closed FCI_Quote2_v0.1.docx
+checkout recorded (ledger entry 12)
+edited FCI_Quote2_v0.2-DRAFT.docx
+HTTP 201
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+/bin/bash: line 1: cd: /home/lab04@idm.iso5.lab.test/Documents/CHP-Working: No such file or directory
+approve recorded (ledger entry 13)
+published CUI/Compliance/FCI_Quote2_v0.2.docx as CR-2026-0004 (ledger entry 14)
+/data/nextcloud/data/__groupfolders/1/files/Compliance/:
+CUI_Policy2_v0.2.docx
+CUI_Policy2_v0.2.pdf
+FCI_Quote2_v0.2.docx
+FCI_Quote2_v0.2.pdf
+
+/data/nextcloud/data/__groupfolders/3/files/Superseded/:
+CUI_Policy2_v0.1.docx
+CUI_Policy2_v0.1.pdf
+FCI_Quote2_v0.1.docx
+FCI_Quote2_v0.1.pdf
+CUI_Policy2_v0.2.pdf: CUI||
+FCI_Quote2_v0.2.pdf: FCI||

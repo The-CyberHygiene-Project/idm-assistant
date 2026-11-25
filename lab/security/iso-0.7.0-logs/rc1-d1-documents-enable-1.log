@@ -1,0 +1,126 @@
+kanidm login: LOGGEDIN
+RC=0
+stick-attached
+2026-11-24T23:32:24Z
+Last metadata expiration check: 0:36:12 ago on Tue 24 Nov 2026 03:56:15 PM MST.
+Dependencies resolved.
+================================================================================
+ Package                Arch   Version                                Repo
+                                                                           Size
+================================================================================
+Installing:
+ chp-documents          noarch 0.1.0-13.chp.el9                       chp  49 k
+ nextcloud-chp          noarch 35.0.3-8.chp.el9                       chp 212 M
+Installing dependencies:
+ apr                    x86_64 1.7.0-12.el9_3                         chp 122 k
+ apr-util               x86_64 1.6.1-23.el9                           chp  94 k
+ apr-util-bdb           x86_64 1.6.1-23.el9                           chp  12 k
+ capstone               x86_64 4.0.2-12.el9_8                         chp 755 k
+ httpd                  x86_64 2.4.62-13.el9                          chp  45 k
+ httpd-core             x86_64 2.4.62-13.el9                          chp 1.4 M
+ httpd-filesystem       noarch 2.4.62-13.el9                          chp  12 k
+ httpd-tools            x86_64 2.4.62-13.el9                          chp  79 k
+ libpq                  x86_64 13.23-1.el9_7                          chp 208 k
+ libzip                 x86_64 1.7.3-8.el9                            chp  61 k
+ mod_ssl                x86_64 1:2.4.62-13.el9                        chp 110 k
+ nginx-filesystem       noarch 2:1.20.1-28.el9.rocky.0.1              chp 9.9 k
+ php-bcmath             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  33 k
+ php-cli                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 3.7 M
+ php-common             x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 714 k
+ php-fpm                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 1.9 M
+ php-gd                 x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  40 k
+ php-gmp                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  30 k
+ php-intl               x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 169 k
+ php-mbstring           x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 524 k
+ php-opcache            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 353 k
+ php-pdo                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  86 k
+ php-pecl-apcu          x86_64 5.1.23-1.module+el9.7.0+40005+715283ec chp  60 k
+ php-pecl-zip           x86_64 1.22.3-1.module+el9.7.0+40005+715283ec chp  63 k
+ php-pgsql              x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  75 k
+ php-process            x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp  42 k
+ php-xml                x86_64 8.3.29-1.module+el9.7.0+40074+b1038bdd chp 150 k
+ postgresql             x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 1.9 M
+ postgresql-private-libs
+                        x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 143 k
+ postgresql-server      x86_64 16.13-1.module+el9.8.0+40159+adcaa225  chp 6.9 M
+ rocky-logos-httpd      noarch 90.17-1.el9                            chp  24 k
+
+Transaction Summary
+================================================================================
+Install  33 Packages
+
+Total size: 232 M
+Installed size: 887 M
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Running scriptlet: httpd-filesystem-2.4.62-13.el9.noarch                 2/33 
+  Running scriptlet: postgresql-server-16.13-1.module+el9.8.0+40159+adc    9/33 
+  Running scriptlet: postgresql-server-16.13-1.module+el9.8.0+40159+adc    9/33 
+  Running scriptlet: httpd-2.4.62-13.el9.x86_64                           23/33 
+  Running scriptlet: nginx-filesystem-2:1.20.1-28.el9.rocky.0.1.noarch    24/33 
+  Running scriptlet: php-fpm-8.3.29-1.module+el9.7.0+40074+b1038bdd.x86   25/33 
+  Running scriptlet: nextcloud-chp-35.0.3-8.chp.el9.noarch                32/33 
+File context for /etc/nextcloud(/.*)? already defined, modifying instead
+
+  Running scriptlet: chp-documents-0.1.0-13.chp.el9.noarch                33/33 
+  Running scriptlet: httpd-2.4.62-13.el9.x86_64                           33/33 
+  Running scriptlet: nextcloud-chp-35.0.3-8.chp.el9.noarch                33/33 
+  Running scriptlet: chp-documents-0.1.0-13.chp.el9.noarch                33/33 
+Installed products updated.
+
+Installed:
+
+Complete!
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-nextcloud-egress.service → /usr/lib/systemd/system/chp-nextcloud-egress.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/postgresql.service → /usr/lib/systemd/system/postgresql.service.
+Fapolicyd was notified
+Using Standalone Mode HTTP challenge to validate files.iso5.lab.test . done!
+Waiting for Order to be 'ready' for finalization .. done!
+Finalizing Order .. done!
+Created symlink /etc/systemd/system/multi-user.target.wants/php-fpm.service → /usr/lib/systemd/system/php-fpm.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/httpd.service → /usr/lib/systemd/system/httpd.service.
+Created symlink /etc/systemd/system/timers.target.wants/nextcloud-cron.timer → /usr/lib/systemd/system/nextcloud-cron.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-nextcloud-backup.timer → /usr/lib/systemd/system/chp-nextcloud-backup.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-nextcloud-cert-renew.timer → /usr/lib/systemd/system/chp-nextcloud-cert-renew.timer.
+Created symlink /etc/systemd/system/timers.target.wants/chp-documents-check.timer → /usr/lib/systemd/system/chp-documents-check.timer.
+Created symlink /etc/systemd/system/multi-user.target.wants/chp-docs-ledger.path → /usr/lib/systemd/system/chp-docs-ledger.path.
+Fapolicyd was notified
+- packages: nextcloud-chp, chp-documents (PHP 8.3, PostgreSQL 16.13, httpd from Rocky)
+- mail: no mail server installed (postfix, sendmail, exim, opensmtpd absent); NextCloud mail off
+- /etc/hosts: the site names -> 192.168.100.50 (apache has no DNS)
+- DNS: files.iso5.lab.test IN A 192.168.100.50 in the site zone
+- rendered: LAN-only httpd (192.168.100.0/24), egress address 192.168.100.50, /etc/chp/documents.conf
+- egress table inet chp_nextcloud_egress loaded (apache: this server only, no DNS)
+- Wazuh: NextCloud audit log read; rules 100600-100630 (share/contain/app-off/tag/egress/break-glass/accounts at 12; uploads and downloads stored)
+- database: PostgreSQL 16.13, socket only, peer authentication, database nextcloud (owner apache)
+- NextCloud installed offline (data /data/nextcloud/data); /etc/nextcloud/config.php trusted by fapolicyd first
+- settings: no internet connection, app store and update checker off, mail off, trusted domain files.iso5.lab.test, https://files.iso5.lab.test:8443, sharing locked down
+- apps on: admin_audit, groupfolders, files_accesscontrol, user_oidc, chp_foldertag, chp_ledger, systemtags, password_policy, bruteforcesettings, files_downloadlimit, workflowengine, viewer, files_pdfviewer; editors and outbound apps off
+- break-glass NextCloud admin ncadmin made (bcrypt); secret to the escrow
+- Kanidm: groups cui-users, doc-reviewers; OAuth2 client nextcloud (ES256, PKCE), chp_groups claim
+- sign-in: user_oidc provider kanidm; the login page goes straight to Kanidm
+- team folders: CUI=1, FCI=2, Archive=3, Operations=4, Internal=5, Public=6; read back: CUI/FCI/Archive mapped to cui-users only, share off; reviewers read-only there
+- tags: CUI folder and Archive -> CUI, FCI -> FCI; copy/move out refused except CUI <-> Archive
+- doc client: Kanidm public client chp-doc (PKCE S256, redirect http://127.0.0.1/ on any port, scopes openid profile groups, refresh token 8 h), chp_groups claim
+- Bearer: user_oidc provider kanidm-cli checks chp-doc tokens at Kanidm's userinfo (no provisioning); /login still goes straight to Kanidm (provider 1)
+- compliance areas: CUI/Compliance=36, Internal/Compliance=37, Archive/Superseded=38, Internal/Compliance/Superseded=39; read-only to every group there (CUI: cui-users, doc-reviewers; Archive: cui-users, doc-reviewers; Internal: chp-users); only the root appender writes them (as the local account chp-publisher, through occ: write, create, delete on these four areas only; no password anyone knows)
+- document approvers: not set (DOC_ISSO_ACCOUNT, DOC_APPROVER_ACCOUNTS in site.conf): controlled documents cannot be approved until they are
+- certificate for files.iso5.lab.test from the site CA (renewed by chp-nextcloud-cert-renew.timer)
+- started: php-fpm, httpd, nextcloud-cron.timer, chp-nextcloud-backup.timer, chp-nextcloud-cert-renew.timer, chp-documents-check.timer, chp-docs-ledger.path (HTTPS 8443, LAN 192.168.100.0/24 only)
+- fapolicyd trust entry for /etc/nextcloud/config.php refreshed (it did not match the file)
+- fapolicyd restarted (rule 65 loaded); active over 5 s; Denied accesses: 0
+- break-glass secret written to the site stick (escrow/), read back, shredded here
+- documents.conf ENABLED=yes
+- AIDE: this run changed /etc/hosts, /var/named/iso5.lab.test.zone, /etc/httpd/conf.d/chp-nextcloud-lan.inc, /etc/chp/nextcloud-egress-addr.nft, /etc/chp/documents.conf, /var/lib/pgsql/data/postgresql.conf, /var/lib/pgsql/data/pg_hba.conf, /etc/nextcloud/config.php and 17 more: refresh the baseline now with chp-site aide-accept --approver "<ISSO>" --reason "documents enable"
+enable-rc=0
+2026-11-24T23:35:11Z
+EXIT=0
+stick-detached
+chp-site documents-enable host="iso5-srv" step="trust"
+chp-site documents-enable host="iso5-srv" step="aide" aide_refresh="needed" changed="[ /etc/hosts ,  /var/named/iso5.lab.test.zone ,  /etc/httpd/conf.d/chp-nextcloud-lan.inc ,  /etc/chp/nextcloud-egre
+php denials on config.php during enable: 0
