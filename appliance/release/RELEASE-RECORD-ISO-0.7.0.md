@@ -27,10 +27,10 @@ fixes, the lockdown-recovery alert, the backup and restore hang fix, `chp-templa
 | File | sha256 |
 |---|---|
 | `0.7.0/cyberhygiene-lab-installer-el9.iso` (rc1, tested bytes) | `eed5f77eeec452b9723f1017996355900afa08ee83a8d922405db2b808aa9f17` |
-| `0.7.0//Volumes/For` | `7c0b4ae6a2ffec548a365dfa6703e87c795d8f72c7acc3365f454669f8d3be82` |
-| `0.7.0//Volumes/For` | `87081ccd47855109ec284bd0ddadf4efc3804cd994d9981de01818df069625c1` |
-| `0.7.0//Volumes/For` | `f2c24c9b248a5aae3bad4f257128087212e05a7a23ddcf5f0406521b98dd3d3f` |
-| `0.7.0//Volumes/For` | `dafb2da89c3a9dcb8ef2b8597b6cb07b6529d776fd9af128814ae05d364eb7b6` |
+| `0.7.0/VERIFY.md` | `7c0b4ae6a2ffec548a365dfa6703e87c795d8f72c7acc3365f454669f8d3be82` |
+| `0.7.0/NOTICE.txt` | `87081ccd47855109ec284bd0ddadf4efc3804cd994d9981de01818df069625c1` |
+| `0.7.0/RPM-GPG-KEY-cyberhygiene` | `f2c24c9b248a5aae3bad4f257128087212e05a7a23ddcf5f0406521b98dd3d3f` |
+| `0.7.0/chp-repo-0.14.1.tar.gz` | `dafb2da89c3a9dcb8ef2b8597b6cb07b6529d776fd9af128814ae05d364eb7b6` |
 
 **Signatures:** both `SHA256SUMS.asc` (ISO folder and kit folder) made with `2DE0D71BF37D8F5E4201A590521276F43C908F8E`
 (the YubiKey) and verified → Good signature. The ISO was copied from aero and its hash checked against the tested rc1
