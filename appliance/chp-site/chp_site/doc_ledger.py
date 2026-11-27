@@ -253,6 +253,22 @@ JOURNAL_SIZE = 16384               # logger --size
 JOURNAL_MAX = 16000                # a line longer than this is shortened (room for logger's own header)
 
 
+REASON_JOURNAL_MAX = 400           # the reason in the journal line the Wazuh decoder sees (P3-D16); the ledger keeps all
+REASON_CUT = "…[truncated; full text in the ledger]"
+
+
+def _journal_reason(v):
+    """P3-D16: a ~2000-byte override reason made the level-12 alert for rule 100643 print "$(dstuser): $(path); reason:
+    $(reason)" unexpanded (900 bytes was fine), so the journal line carries only the first REASON_JOURNAL_MAX bytes,
+    cut on a UTF-8 boundary, and the marker; user and path always survive. The ledger entry keeps the full text."""
+    if not isinstance(v, str):
+        return v
+    b = v.encode("utf-8", "surrogatepass")
+    if len(b) <= REASON_JOURNAL_MAX:
+        return v
+    return b[:REASON_JOURNAL_MAX].decode("utf-8", "ignore") + REASON_CUT
+
+
 def _shortened(v):
     b = v.encode("utf-8", "surrogatepass") if isinstance(v, str) else json.dumps(v).encode()
     return f"(shortened for the journal: {len(b)} bytes, sha256 {_sha(b)}; the full text is in the ledger)"
@@ -263,13 +279,18 @@ def _journal_line(rec):
     cuts a longer line SILENTLY, exit 0, and a cut JSON line matches no Wazuh rule, so an override's 100643 alert was
     lost). First reason and notes, then any other long text, are replaced by their size and sha256 (the ledger keeps
     them); the event, kind, user and path stay, so the rules still match. None: it still does not fit."""
+    if "reason" in rec:
+        rec = dict(rec, reason=_journal_reason(rec["reason"]))
     line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
     if len(line.encode()) <= JOURNAL_MAX:
         return line
     rec = dict(rec)
-    for k in ("reason", "notes"):
+    for k in ("notes", "reason"):                                  # reason is already cut (P3-D16): notes go first
         if k in rec and rec[k] not in (None, ""):
             rec[k] = _shortened(rec[k])
+            line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+            if len(line.encode()) <= JOURNAL_MAX:
+                return line
     line = json.dumps(rec, sort_keys=True, separators=(",", ":"))
     if len(line.encode()) > JOURNAL_MAX:
         for k, v in list(rec.items()):

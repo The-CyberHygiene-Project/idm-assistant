@@ -2149,12 +2149,13 @@ def test_fixwave_a_i1_journal_never_hands_logger_a_line_it_would_cut(monkeypatch
     sent = []
     monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: sent.append(argv) or SimpleNamespace(returncode=0))
     rec = {"event": "ledger", "kind": "override", "user": "dana", "path": "CUI/Compliance/CUI_SSP_v1.1.docx",
-           "reason": "\x01" * 2000, "notes": "\x01" * 2000}
+           "reason": "\x01" * 2000, "notes": "\x01" * 4000}
     L.journal(rec)
     line = sent[-1][-1]
     assert len(line.encode()) <= L.JOURNAL_MAX and json.loads(line)["kind"] == "override"
     assert sent[-1][:5] == ["logger", "-t", L.IDENT, "--size", str(L.JOURNAL_SIZE)]
-    assert f"sha256 {sha(chr(1).encode() * 2000)}" in json.loads(line)["reason"]
+    assert f"sha256 {sha(chr(1).encode() * 4000)}" in json.loads(line)["notes"]      # P3-D16: reason is cut first
+    assert json.loads(line)["reason"].endswith(L.REASON_CUT) and json.loads(line)["user"] == "dana"
     # a short line is unchanged
     L.journal({"event": "ledger", "kind": "approve", "notes": "short"})
     assert json.loads(sent[-1][-1])["notes"] == "short"
@@ -2162,6 +2163,47 @@ def test_fixwave_a_i1_journal_never_hands_logger_a_line_it_would_cut(monkeypatch
     n = len(sent)
     L.journal({"event": "x", **{f"k{i}": "y" * 200 for i in range(200)}})
     assert len(sent) == n and "longer than logger takes" in capsys.readouterr().err
+
+
+def _sent_line(monkeypatch, rec):
+    sent = []
+    monkeypatch.setattr(L.subprocess, "run", lambda argv, **kw: sent.append(argv) or SimpleNamespace(returncode=0))
+    L.journal(rec)
+    return json.loads(sent[-1][-1])
+
+
+def test_p3_d16_a_2000_byte_override_reason_is_truncated_in_the_journal_line_only(monkeypatch):
+    full = "r" * 2000
+    j = _sent_line(monkeypatch, {"event": "ledger", "kind": "override", "user": "dana", "path": "CUI/X_v1.1.docx",
+                                 "reason": full})
+    assert j["user"] == "dana" and j["path"] == "CUI/X_v1.1.docx"
+    assert j["reason"] == "r" * L.REASON_JOURNAL_MAX + L.REASON_CUT and "full text in the ledger" in j["reason"]
+    assert len(json.dumps(j).encode()) < 700                             # well inside what the decoder handled at 900 bytes
+
+
+def test_p3_d16_a_900_byte_reason_is_cut_too_and_a_short_one_is_untouched(monkeypatch):
+    assert _sent_line(monkeypatch, {"event": "ledger", "reason": "short reason"})["reason"] == "short reason"
+    assert _sent_line(monkeypatch, {"event": "ledger", "reason": "x" * L.REASON_JOURNAL_MAX})["reason"] == "x" * 400
+    assert _sent_line(monkeypatch, {"event": "ledger", "reason": "x" * 401})["reason"].endswith(L.REASON_CUT)
+
+
+def test_p3_d16_the_cut_never_splits_a_multibyte_character(monkeypatch):
+    for pad in range(4):                                                 # the cut lands in every position of a 3-byte char
+        reason = "a" * pad + "✅" * 700                                  # 3 bytes each
+        j = _sent_line(monkeypatch, {"event": "ledger", "user": "u", "reason": reason})
+        head = j["reason"][: -len(L.REASON_CUT)]
+        assert j["reason"].endswith(L.REASON_CUT) and "\ufffd" not in j["reason"]
+        assert len(head.encode()) <= L.REASON_JOURNAL_MAX and reason.startswith(head)
+        assert len(head.encode()) > L.REASON_JOURNAL_MAX - 3
+
+
+def test_p3_d16_the_ledger_keeps_the_full_reason_while_the_journal_gets_the_cut(tmp_path):
+    solo = Env(tmp_path / "b", isso="dana", approvers=())
+    ok(solo.checkout("dana"))
+    o = ok(solo.req("override", "dana", 100, name="CUI_SSP_v1.1.docx", sha256=sha(V11), reason="é" * 1000))
+    assert o["reason"] == "é" * 1000 and solo.ledger()[-1]["reason"] == "é" * 1000
+    j = [x for x in solo.journal if x.get("kind") == "override"][-1]
+    assert j["user"] and j["path"]
 
 
 def _failing_sql(q):

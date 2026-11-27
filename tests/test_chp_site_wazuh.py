@@ -664,9 +664,9 @@ def test_fixwave_a_i1_a_shortened_override_line_still_pages():                  
     e = {"seq": 3, "ts": "2026-11-19T10:00:00Z", "kind": "override", "user": "lab02", "auth": "bearer",
          "kanidm_sub": "s", "session_id": "x", "request_id": "0" * 32, "doc": "12/CUI_SSP.docx", "file_id": 44,
          "path": "CUI/Compliance/CUI_SSP_v1.1.docx", "sha256": "a" * 64, "cycle": 1, "prev": "b" * 64,
-         "reason": "\x01" * 2000, "notes": "\x01" * 2000}
+         "reason": "\x01" * 2000, "notes": "\x01" * 4000}
     line = dl._journal_line({"event": "ledger", **e})
     assert line is not None and len(line.encode()) <= dl.JOURNAL_MAX < dl.JOURNAL_SIZE
     rec = _json.loads(line)
-    assert rec["kind"] == "override" and "2000 bytes, sha256" in rec["reason"] and "2000 bytes" in rec["notes"]
+    assert rec["kind"] == "override" and rec["reason"].endswith(dl.REASON_CUT) and "4000 bytes, sha256" in rec["notes"]
     assert _level(w.NEXTCLOUD_RULES, _dl(rec.pop("event"), **rec)) == (w.DOC_OVERRIDE_RULE, 12)

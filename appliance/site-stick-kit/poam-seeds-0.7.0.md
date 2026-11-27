@@ -1,8 +1,5 @@
 # POA&M seed items for the document server (ISO 0.7.0)
 
-**NIST requirement numbers PENDING OWNER CONFIRMATION.** The requirement column of T-08 to T-16 is a proposal (as in
-the template library's own comment above its table); do not treat it as final.
-
 These rows continue the appliance's seeded POA&M items. They use the same columns and wording as the template's
 `ITEMS` table (chp-templates, `rev2/templates/poam/frame.md`, items T-01 to T-07), so each row can be copied into
 a site's `poam.md` as it stands. The ids T-08 to T-16 are new in 0.7.0.

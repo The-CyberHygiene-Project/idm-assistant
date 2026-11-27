@@ -70,6 +70,8 @@ Internal test images for the CyberHygiene Project development team. Not an offic
 | `site-stick-kit-0.6.0/` | the site-stick kit for 0.6.0 (guide section: disks, the layout and the backup drive; `runbooks/`) | `site-stick-kit-0.6.0/SITE-STICK.md` |
 | `0.7.0/` | release 0.7.0: the installer ISO with the controlled-document workflow (NextCloud + ONLYOFFICE Desktop, check out, approve and publish through Kanidm, every step in a hash-chained Wazuh ledger), CUI and FCI marking checks, server-only time sync, signed repo 0.14.1, key | `0.7.0/VERIFY.md` |
 | `site-stick-kit-0.7.0/` | the site-stick kit for 0.7.0 (guide section: controlled documents; POA&M seed rows T-08 to T-16; `runbooks/`) | `site-stick-kit-0.7.0/SITE-STICK.md` |
+| `0.7.0-update1/` | package update: `chp-templates` as a signed release, POA&M seed numbers T-08 to T-16 confirmed by the owner, the ISSO override alert always names the person and the document (P3-D16) | `0.7.0-update1/UPDATE.md` |
+| `site-stick-kit-0.7.0-update1/` | the site-stick kit for 0.7.0 update 1 (POA&M seed rows without the "pending" notice) | `site-stick-kit-0.7.0-update1/SITE-STICK.md` |
 
 Each folder has its own `SHA256SUMS` and `SHA256SUMS.asc`, signed with the project release key. Check a folder as its
 release's `VERIFY.md` describes before you use anything in it.

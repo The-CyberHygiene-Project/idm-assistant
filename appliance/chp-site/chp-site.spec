@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        12.chp%{?dist}
+Release:        13.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,13 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Fri Nov 27 2026 The CyberHygiene Project - 0.14.0-13.chp
+- P3-D16: the document ledger's journal line (the one the Wazuh decoder reads) carries at most the first 400 bytes of an
+  entry's reason, cut on a UTF-8 boundary and ending "...[truncated; full text in the ledger]", so the level-12 alert for
+  rule 100643 (ISSO override) always expands the user and the path (a ~2000-byte reason left them as raw $(dstuser) and
+  $(path)). The ledger keeps the whole reason. If the line is still too long, the notes are shortened before the reason.
+  Nothing else changed.
+
 * Sun Nov 22 2026 The CyberHygiene Project - 0.14.0-12.chp
 - ISO 0.7.0 Plan 3 Task 14 (the final review's fix wave), the ledger appender: control characters refused in reason
   and notes (as chp_ledger 1.0.3 does); a journal line that logger --size would cut silently is shortened (reason and

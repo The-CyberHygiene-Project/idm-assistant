@@ -2,10 +2,11 @@
 # CyberHygiene Project Lab Installer — based on Rocky Linux 9.
 # Not an official Rocky Linux product.
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
-# CHP_TEMPLATES_RELEASE=<folder> build-rpm.sh (RUNS ON THE MAC): build chp-templates' noarch RPM on aero from the SIGNED
-# release (the folder holding chp-templates-$V.tar.gz, SHA256SUMS and SHA256SUMS.asc). The signature and the pinned
-# sha256 are checked BEFORE anything is copied to aero.
-# LAB CANDIDATE (explicit opt-in, ISO 0.7.0 Plan 3 Task 11b, owner decision 2026-11-20 option A):
+# DEFAULT (the release path, 1.4.0-4 onward): CHP_TEMPLATES_RELEASE=<folder> build-rpm.sh (RUNS ON THE MAC) builds
+# chp-templates' noarch RPM on aero from the SIGNED release (the folder holding chp-templates-$V.tar.gz, SHA256SUMS and
+# SHA256SUMS.asc, made by chp-templates tools/release.sh). The signature and the pinned sha256 are checked BEFORE
+# anything is copied to aero.
+# LAB CANDIDATE (explicit opt-in, kept for lab work only; ISO 0.7.0 Plan 3 Task 11b, owner decision 2026-11-20 option A):
 # CHP_TEMPLATES_TAG=<local chp-templates git repo> builds instead from `git archive` of the LOCAL tag templates-$V, and
 # refuses unless that archive's sha256 is the pin below. No signature provenance: the pin is the only input check (the
 # RPM is then signed into the repo by the owner's key). For a pre-release lab candidate only; the signed release
@@ -14,7 +15,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 V=1.4.0
 TAR=chp-templates-$V.tar.gz
-SHA=9af9dda9f44cd038ab21e12789b9002229da4dd4fd600a7ac65ae4ddc5d656c8   # templates-1.4.0 = git archive of the local tag at d015ba5 (content 1.2.8; re-tagged 2026-11-22 from 1d7b682, earlier 0a18aca; re-pin if the tag moves again)
+SHA=9798631987063dabd68cd766ee69e132e7313664a7647fafe7428ad8b9535df9   # templates-1.4.0 = git archive (tar.gz, prefix chp-templates-1.4.0/) of the tag at ab4392b (content 1.2.9; the tag is signed into the release by tools/release.sh; re-pin if the tag moves again)
 FPR=2DE0D71BF37D8F5E4201A590521276F43C908F8E
 t=""; w=""; trap 'rm -rf "$t" "$w"' EXIT
 if [[ -n ${CHP_TEMPLATES_TAG:-} ]]; then

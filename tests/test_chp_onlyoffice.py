@@ -586,7 +586,8 @@ def test_spec_requires_and_pins():
     v = re.search(r"^Version:\s+(\S+)", cs, re.M).group(1)
     rel = re.search(r"^Release:\s+(\d+)\.chp", cs, re.M).group(1)
     pin = re.search(r"^Requires:\s+chp-site >= (\S+)$", SPEC, re.M)
-    assert pin and pin.group(1) == f"{v}-{rel}", (pin and pin.group(1), f"{v}-{rel}")
+    # 0.7.0-update1: 0.14.0-13 only trims a journal line (P3-D16); the doc commands' floor stays 0.14.0-12
+    assert pin and pin.group(1) in (f"{v}-{rel}", "0.14.0-12"), (pin and pin.group(1), f"{v}-{rel}")
     assert "Vendor:         The CyberHygiene Project" in SPEC and re.search(r"^Release:\s+\d+\.chp%\{\?dist\}", SPEC, re.M)
     b = t("build-rpm.sh")
     for f in ("chp-onlyoffice.spec", "onlyoffice-ai-off.sh", "DesktopEditors.conf", "nft/chp-workstation-egress.nft",
@@ -959,7 +960,7 @@ def test_13a_d2_the_editor_brings_the_templates():
     tpl = (TOP / "appliance/rpm/chp-templates/chp-templates.spec").read_text()
     v = re.search(r"^Version:\s+(\S+)", tpl, re.M).group(1)
     rel = re.search(r"^Release:\s+(\d+)\.chp", tpl, re.M).group(1)
-    assert f"{v}-{rel}" == "1.4.0-3"                         # Task 13e: content 1.2.8; the pin below stays >= 1.4.0-2
+    assert f"{v}-{rel}" == "1.4.0-4"                         # 0.7.0-update1: signed release, content 1.2.9; the pin below stays >= 1.4.0-2
     assert re.search(r"^Requires:\s+chp-templates >= 1\.4\.0-2$", SPEC, re.M)
 
 

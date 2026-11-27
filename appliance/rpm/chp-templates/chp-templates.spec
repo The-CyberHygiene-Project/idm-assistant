@@ -3,7 +3,7 @@
 # Rocky Linux is a trademark of the Rocky Enterprise Software Foundation.
 Name:           chp-templates
 Version:        1.4.0
-Release:        3.chp%{?dist}
+Release:        4.chp%{?dist}
 Summary:        CyberHygiene SSP and POA&M templates (NIST SP 800-171 Rev 2), their renderer and document templates
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -50,6 +50,11 @@ find %{buildroot}%{_datadir}/chp-templates -type f -exec chmod 0644 {} +
 %{_datadir}/chp-templates/README.md
 
 %changelog
+* Fri Nov 27 2026 The CyberHygiene Project - 1.4.0-4.chp
+- chp-templates 1.4.0 as a SIGNED release (tools/release.sh; the pin in build-rpm.sh is the sha256 of the signed
+  tarball). Rev 2 content 1.2.9: the POA&M T-08 to T-16 requirement numbers are confirmed by the owner (2026-11-27) and
+  the "pending" comment is removed. Nothing else in the library changed from 1.2.8.
+
 * Sun Nov 22 2026 The CyberHygiene Project - 1.4.0-3.chp
 - Rev 2 content 1.2.8 (the final review's corrections): the SSP 3.4.3 and 3.1.3 alert-level conditions (level 12
   alerts reach ALERT_HOOK at once when SECURITY_ALERT_LEVEL is 12 or lower), the 3.1.3 DEGRADED wording, and
