@@ -1949,6 +1949,37 @@ def test_trust_check_alerts_when_either_side_is_missing(tmp_path):
     assert "trust" in keys(res)
 
 
+def _pinned_then_changed(tmp_path, extra):
+    """A check root whose config.php was pinned (as enable does), then gained `extra` before the closing paren."""
+    r = check_root(tmp_path)
+    cfg = r / "etc/nextcloud/config.php"
+    cfg.write_text("<?php\n$CONFIG = array (\n  'instanceid' => 'x',\n);\n")
+    size, sha = D._size_sha(cfg)
+    (r / "etc/fapolicyd/trust.d/nextcloud").write_text(f"{D.CONFIG_PHP} {size} {sha}\n")
+    cfg.write_text(cfg.read_text().replace("\n);\n", "\n" + extra + ");\n"))
+    return r
+
+
+def test_trust_check_accepts_the_maintenance_off_line_a_backup_leaves(tmp_path):
+    # 0.7.0-update1: occ maintenance:mode --on/--off (the nightly backup) leaves this one line in a config.php that was
+    # pinned without it; the 03:10 check then alerted every night on every new site
+    r = _pinned_then_changed(tmp_path, "  'maintenance' => false,\n")
+    _, res, _ = do_check(tmp_path, root=r)
+    assert "trust" not in keys(res), res["alerts"]
+
+
+@pytest.mark.parametrize("extra", [
+    "  'maintenance' => true,\n",
+    "  'maintenance' => false,\n  'trusted_domains' => array ('evil'),\n",
+    "  'maintenance' => false,\n  'maintenance' => false,\n",
+    "  'maintenance' => false, 'debug' => true,\n",
+])
+def test_trust_check_still_alerts_on_any_other_change(tmp_path, extra):
+    r = _pinned_then_changed(tmp_path, extra)
+    _, res, _ = do_check(tmp_path, root=r)
+    assert "trust" in keys(res)
+
+
 def test_token_output_never_in_an_alert(tmp_path):
     class Leaky(CanaryOcc):
         def __call__(self, argv, env=None):

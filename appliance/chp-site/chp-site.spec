@@ -1,6 +1,6 @@
 Name:           chp-site
 Version:        0.14.0
-Release:        13.chp%{?dist}
+Release:        14.chp%{?dist}
 Summary:        CyberHygiene site files tool and installer gate
 License:        Apache-2.0
 Vendor:         The CyberHygiene Project
@@ -42,6 +42,11 @@ install -Dm0644 %{SOURCE3} %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 %dir %{_sharedstatedir}/chp/repo
 
 %changelog
+* Sat Nov 28 2026 The CyberHygiene Project - 0.14.0-14.chp
+- The nightly documents check no longer reports config.php when the only difference from its fapolicyd trust entry is the
+  line 'maintenance' => false that the nightly backup's maintenance:mode --off leaves behind. On a new site that was a
+  false alert every night. Any other change is still reported. Found in the 0.7.0-update1 lab proof.
+
 * Fri Nov 27 2026 The CyberHygiene Project - 0.14.0-13.chp
 - P3-D16: the document ledger's journal line (the one the Wazuh decoder reads) carries at most the first 400 bytes of an
   entry's reason, cut on a UTF-8 boundary and ending "...[truncated; full text in the ledger]", so the level-12 alert for

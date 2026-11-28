@@ -1,4 +1,4 @@
-# Package update @VERSION@ (signed repo @REPO@): signed templates, confirmed POA&M numbers, a clearer ISSO override alert. No reinstall.
+# Package update @VERSION@ (signed repo @REPO@): signed templates, confirmed POA&M numbers, two alert fixes. No reinstall.
 
 Internal test release for the CyberHygiene Project development team. Not an official Rocky Linux product (`NOTICE.txt`).
 
@@ -12,6 +12,11 @@ This update is packages only. It needs no new ISO and changes no install step. I
 - **The POA&M numbers are confirmed.** The NIST requirement numbers on the document server's seed rows T-08 to T-16 were
   marked "pending owner confirmation" in 0.7.0. The owner confirmed them on 2026-11-27 and the notice is gone. The
   numbers themselves did not change. A site that copied the rows already has the right ones.
+- **The nightly document check no longer raises a false alert.** On a new 0.7.0 server the first nightly backup added
+  the line `'maintenance' => false` to NextCloud's `config.php`, and every 03:10 check after that alerted that the file
+  "does not match its fapolicyd trust entry". The check now accepts exactly that one added line. Any other change to the
+  file is still reported. You have nothing to run: the next check clears it. If you already re-ran
+  `chp-site documents enable` or `chp-site documents trust`, nothing changes for you.
 - **The ISSO override alert always says who and which document.** When an ISSO overrides the approval rule and gives a
   very long reason (about 2,000 bytes), the level-12 alert used to show raw placeholders (`$(dstuser)`, `$(path)`)
   instead of the name and the file. The alert did fire. Now the alert carries the first 400 bytes of the reason and ends
@@ -33,15 +38,19 @@ This update is packages only. It needs no new ISO and changes no install step. I
 
 ## Expect one AIDE alert, then accept it
 
-The next daily check reports the update. Expected changes:
-- **changed:** the upgraded `chp-site` files (on the server and, where installed, on workstations);
-  `/usr/share/chp-templates/rev2/` (the POA&M frame and its manifest) and `/etc/ld.so.cache`.
-- Nothing is added.
+The next daily check reports the update. Most entries show only a new inode, because the package files were rewritten.
+Expected changes:
+- **changed, every host:** `/usr/bin/chp-site`, `/usr/share/chp-site/chp-site.pyz`,
+  `/usr/share/licenses/chp-site/LICENSE`, and `RPM-GPG-KEY-cyberhygiene`, `RPM-GPG-KEY-EPEL-9` and `RPM-GPG-KEY-WAZUH`
+  in `/etc/pki/rpm-gpg/`.
+- **changed, where `chp-templates` is installed** (workstations; a server only if you installed it): the files under
+  `/usr/share/chp-templates/` (more than 100) and `/usr/share/licenses/chp-templates/LICENSE`.
+- Nothing is added or removed.
 
 Anything outside this list was not made by this update: investigate it before accepting. Accept as the ISSO or a named
 delegate:
 
-    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: signed templates, override alert text"
+    chp-site aide-accept --approver "Your Name" --reason "@VERSION@: signed templates, alert fixes"
 
 ## Known limits
 

@@ -332,6 +332,25 @@ def _size_sha(path):
         raise SiteError(f"could not read {path} ({e.strerror or e})") from None
 
 
+# The one line `occ maintenance:mode --on/--off` (chp-nextcloud-backup, every night) leaves in a config.php that did not
+# have it when enable pinned it. fapolicyd (integrity = none) does not care; the nightly check must not either.
+MAINTENANCE_OFF = b"  'maintenance' => false,\n"
+
+
+def _only_maintenance_off_added(path, entry):
+    """True when `path` is exactly the pinned (size, sha256) file plus that one line: removing its first occurrence
+    gives the pinned content back. Any other difference, `true`, or a second copy of the line is False."""
+    import hashlib
+    try:
+        b = path.read_bytes()
+    except OSError as e:
+        raise SiteError(f"could not read {path} ({e.strerror or e})") from None
+    if MAINTENANCE_OFF not in b:
+        return False
+    rest = b.replace(MAINTENANCE_OFF, b"", 1)
+    return (str(len(rest)), hashlib.sha256(rest).hexdigest()) == entry
+
+
 def _trust_lines(trust_file, target):
     """Every line of fapolicyd's trust file that is for `target`, as (size, sha256), or None for a line that names
     `target` but is malformed. Lines are "<path> <size> <sha256>", parsed from the right so a path may hold spaces;
@@ -2081,7 +2100,7 @@ def _check(root, c, run, sql, api, occ, t, chown):
         elif entry is None:
             alert("trust", f"{CONFIG_PHP} has no single valid fapolicyd trust entry in {tf} (none, malformed or "
                            "duplicated): re-run chp-site documents enable")
-        elif entry != have:
+        elif entry != have and not _only_maintenance_off_added(_p(root, CONFIG_PHP), entry):
             alert("trust", f"{CONFIG_PHP} does not match its fapolicyd trust entry (size/sha256): NextCloud changed it "
                            "since the last enable; check the change, then re-run chp-site documents enable")
     except SiteError as e:
